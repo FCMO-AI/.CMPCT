@@ -4,28 +4,28 @@
   "authority": {
     "canonical_release": "v0.29.0 / r24 on main",
     "active_frontier": "PR #175 agent/v030-r24-process-productization",
-    "source": "PR #175; canonical product 35563173856/10623735108; Logs scheduling run 35566703880 attempts 1-2"
+    "source": "PR #175; canonical product 35563173856/10623735108; Logs scheduling run 35566703880 attempts 1-2; shipping sequentialization head 22e63188bf49e3e6ed72c5a8564f4564e7cfe983"
   },
   "active_product_bottleneck": {
     "id": "v030-logs-parent-rss-overlap",
-    "observation": "Canonical-v2 has one remaining red: Logs parent pack RSS 1.35250x. Two exact-code A/B/C attempts causally replicate candidate overlap: attempt1 threaded/sequential parent-tree 168,828/140,132 KiB; attempt2 166,248/139,756 KiB. r24-child lowers parent but raises charged tree to 188,624/188,980 KiB. Within each attempt all arms are byte/admission identical.",
-    "next_discriminator": "Productize exact sequential r24 then Logs candidate materialization without changing admission or format, then run unchanged canonical-v2 and whole-tree authority."
+    "observation": "Canonical-v2 has one remaining red: Logs parent pack RSS 1.35250x. Two exact-code A/B/C attempts causally replicate candidate overlap: attempt1 threaded/sequential parent-tree 168,828/140,132 KiB; attempt2 166,248/139,756 KiB. r24-child lowers parent but raises charged tree to 188,624/188,980 KiB. Within each attempt all arms are byte/admission identical. Exact sequential r24->Logs scheduling is now installed at the release-product ownership seam on head 22e63188; canonical authority is pending.",
+    "next_discriminator": "Run unchanged canonical-v2 and whole-tree authority on the sequential shipping head; product evidence decides promotion or rollback."
   },
   "primary_question": {
     "id": "logs-sequential-productization",
     "family": "memory-ownership/candidate-scheduling",
-    "status": "REPLICATED_CAUSAL_AB_POSITIVE_PRODUCTIZATION_NEXT",
+    "status": "SHIPPING_MUTATION_LANDED_CANONICAL_PENDING",
     "evidence": [
       "35563173856/10623735108: Logs sole canonical-v2 red at 1.3525007x parent pack RSS; all timing gates and whole-tree authority green",
       "35566703880 attempt1 / artifact 10623994370: threaded 168,828 KiB; sequential 140,132 KiB (-17.0%); child tree 188,624 KiB",
       "35566703880 attempt2 / artifact 10625460038 / sha256:8c1b95b372bf5d88a906e9448104e3f77e44848720d7abc883fe93d8f086bf37: threaded 166,248 KiB; sequential 139,756 KiB (-15.9%); child tree 188,980 KiB",
-      "within each attempt all three arms preserve selected profile, format revision, archive bytes/SHA and admission; sequential local wall penalty replicated at +21.8% to +24.9% while CPU fell"
+      "22e63188bf49e3e6ed72c5a8564f4564e7cfe983: shipping release-product seam now materializes exact r24 then Logs sequentially; frozen candidate implementations/admission remain unchanged; regression assertion pins the promoted seam"
     ],
     "prediction": "Shipping sequential candidate materialization should close Logs parent RSS under <=1.25x with no archive-byte or process-tree regression and remain inside timing gates.",
     "kill": "If unchanged canonical-v2 fails RSS, bytes, or timing after exact sequential productization, canonical evidence wins and the mechanism is not promotable."
   },
   "frontier_candidates": [
-    {"id": "logs-sequential-exact-candidates", "status": "REPLICATED_CAUSAL_PRODUCTIZE", "evidence": "35566703880 attempts 1-2"},
+    {"id": "logs-sequential-exact-candidates", "status": "SHIPPING_CANONICAL_PENDING", "evidence": "35566703880 attempts 1-2; head 22e63188"},
     {"id": "logs-selector-r24-child-owner", "status": "REJECT_AS_FIRST_PRODUCT_ROUTE", "evidence": "both attempts: lower parent but ~189 MiB charged tree, worse than threaded/sequential"},
     {"id": "creator-import-cold-start", "status": "CONDITIONAL_ONLY", "evidence": "Logs extract green at 1.17642x on 35563173856"}
   ],
@@ -51,7 +51,9 @@
     {"lesson": "Parent-only RSS can reward exported process cost; charge the process tree before productizing ownership boundaries.", "evidence": "35566703880 attempts1-2"},
     {"lesson": "Within-run shared-source identity can prove a causal A/B even when runtime-generated filesystem metadata prevents cross-run physical SHA identity; cross-run claims need a persisted/normalized source fingerprint.", "evidence": "35566703880 attempts1-2"}
   ],
-  "pending_jobs": [],
-  "next_action": "Productize only exact sequential r24->Logs candidate scheduling, preserving the frozen threaded research control. Then run unchanged canonical-v2 plus whole-tree authority; do not alter thresholds/admission. Do not spend another activation tuning the research harness unless canonical product evidence contradicts the replicated result.",
-  "last_reconciled": "2026-09-21T06:17Z"
+  "pending_jobs": [
+    {"provider": "GitHub Actions", "source_sha": "22e63188bf49e3e6ed72c5a8564f4564e7cfe983", "question": "logs-sequential-productization", "expected": "exact-head tests plus canonical-v2 and whole-tree receipts", "decision_unlocked": "promote sequential scheduling if unchanged product gates close; otherwise rollback/re-attribute"}
+  ],
+  "next_action": "Consume exact-head authority for 22e63188 (or its state-only descendant). Do not tune thresholds/admission or the research harness while product evidence is pending. If canonical-v2 closes Logs and whole-tree remains green, retire this bottleneck and PARETOBONK the full product frontier; otherwise let the failing gate choose rollback or causal re-attribution.",
+  "last_reconciled": "2026-09-21T07:10Z"
 }
