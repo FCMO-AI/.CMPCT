@@ -1,6 +1,7 @@
 # ci-lane: research
 # ci-cancel-policy: latest-head
 # ci-pr-scope: latest-head-commit-gate
+# discriminator: owned-1.5.7 with explicit inherited pre-block-splitter semantics
 name: CMPCT Zstd container-pack byte oracle
 
 on:
