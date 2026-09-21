@@ -452,7 +452,11 @@ class CMPCT:
                         for idx in ids:
                             b=self._blob(idx);view=memoryview(b)
                             while view:
-                                n=os.pwrite(fd,view,q);view=view[n:];q+=n
+                                if hasattr(os,'pwrite'):
+                                    n=os.pwrite(fd,view,q)
+                                else:
+                                    os.lseek(fd,q,os.SEEK_SET);n=os.write(fd,view)
+                                view=view[n:];q+=n
                 finally:os.close(fd)
             else:
                 raw=self.read(rel)
