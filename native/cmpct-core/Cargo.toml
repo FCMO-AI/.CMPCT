@@ -37,4 +37,8 @@ serde_json = "1"
 sha2 = "0.10"
 thiserror = "2"
 zstd = "0.13"
+# Keep the exact one-shot libzstd semantics available at the package-owned native ABI boundary.
+# This is the same zstd-safe generation already selected transitively by zstd 0.13; making it
+# explicit does not add another codec implementation or opt into ambient pkg-config discovery.
+zstd-safe = { version = "7.2.4", default-features = false, features = ["std"] }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
