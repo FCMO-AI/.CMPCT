@@ -1,0 +1,99 @@
+# ci-lane: research
+# ci-cancel-policy: latest-head
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT Zstd container-pack byte oracle
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/zstd-container-pack-oracle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zstd-container-pack-oracle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Build package-owned core
+        working-directory: native/cmpct-core
+        run: cargo build --release --locked
+      - name: Compare exact nested container-pack bytes
+        run: |
+          python - <<'PY'
+          import ctypes, ctypes.util, hashlib
+          from pathlib import Path
+          from benchmarks import universal_bench as ub
+
+          ub.reset()
+          ub.make_corpora()
+          nested = ub.CORP / "nested"
+          pack = b"".join(p.read_bytes() for p in sorted(nested.glob("*.zip")))
+          print("pack_bytes", len(pack), "pack_sha256", hashlib.sha256(pack).hexdigest())
+
+          sz = ctypes.c_size_t
+          system_name = ctypes.util.find_library("zstd") or "libzstd.so"
+          system = ctypes.CDLL(system_name)
+          system.ZSTD_versionString.argtypes = []
+          system.ZSTD_versionString.restype = ctypes.c_char_p
+          system.ZSTD_compressBound.argtypes = [sz]
+          system.ZSTD_compressBound.restype = sz
+          system.ZSTD_compress.argtypes = [ctypes.c_void_p, sz, ctypes.c_void_p, sz, ctypes.c_int]
+          system.ZSTD_compress.restype = sz
+          system.ZSTD_isError.argtypes = [sz]
+          system.ZSTD_isError.restype = ctypes.c_uint
+          print("system_library", system_name, "system_zstd_version", system.ZSTD_versionString().decode())
+
+          core_path = Path("native/cmpct-core/target/release/libcmpct_core.so").resolve()
+          core = ctypes.CDLL(str(core_path))
+          core.cmpct_codec_zstd_compress_bound.argtypes = [sz]
+          core.cmpct_codec_zstd_compress_bound.restype = sz
+          core.cmpct_codec_zstd_compress.argtypes = [ctypes.c_void_p, sz, ctypes.c_int32, ctypes.c_void_p, sz, ctypes.POINTER(sz)]
+          core.cmpct_codec_zstd_compress.restype = ctypes.c_int32
+
+          src = ctypes.create_string_buffer(pack)
+          diverged = False
+          for level in (15, 12, 9):
+              cap = int(system.ZSTD_compressBound(len(pack)))
+              a = ctypes.create_string_buffer(cap)
+              na = int(system.ZSTD_compress(a, cap, src, len(pack), level))
+              if system.ZSTD_isError(na):
+                  raise RuntimeError(f"system Zstd failed at level {level}")
+              ambient = a.raw[:na]
+
+              b = ctypes.create_string_buffer(cap)
+              nb = sz()
+              status = int(core.cmpct_codec_zstd_compress(src, len(pack), level, b, cap, ctypes.byref(nb)))
+              if status != 0:
+                  raise RuntimeError(f"package Zstd failed at level {level}: status={status}")
+              owned = b.raw[:nb.value]
+              first = next((i for i,(x,y) in enumerate(zip(ambient,owned)) if x != y), None)
+              if first is None and len(ambient) != len(owned):
+                  first = min(len(ambient), len(owned))
+              equal = ambient == owned
+              diverged |= not equal
+              print(
+                  "level", level,
+                  "ambient_bytes", len(ambient), "owned_bytes", len(owned), "delta", len(owned)-len(ambient),
+                  "ambient_sha256", hashlib.sha256(ambient).hexdigest(),
+                  "owned_sha256", hashlib.sha256(owned).hexdigest(),
+                  "equal", equal, "first_diff", first,
+              )
+
+          # This is a diagnostic oracle, not a promotion gate. A divergence is decision-changing evidence
+          # and should remain a successful workflow with explicit `diverged=True` output rather than being
+          # confused with infrastructure failure.
+          print("container_pack_diverged", diverged)
+          PY
