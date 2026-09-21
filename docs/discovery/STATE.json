@@ -1,14 +1,86 @@
 {
-  "schema":"cmpct-discovery-state-v1","status":"ACTIVE",
-  "authority":{"canonical_release":"v0.29.0 / r24 on main","active_frontier":"agent/v030-authoritative-integration","source":"PR #56; PR #152 merged df30284; runtime classifier 7703bffd; exact-source runtime 35472343409 attempts 1-2"},
-  "active_product_bottleneck":{"id":"v030-parent-pack-rss","observation":"Runtime 35472343409 attempt 2 closes every frozen timing gate: median create 1.06202x, max create 1.23218x, median extract 0.96083x, max extract 1.18842x. Parent/self pack RSS remains red at 2.10496x against frozen 1.25x. The whole-tree companion reports 1.0x but explicitly has release_credit=false and cannot override the frozen parent/self release gate. PR #157 established a real Shifted r24 Builder memory owner: from the same prebuild high-water r24 added ~115,200 KiB versus r25 ~23,024 KiB. PR #158 preserves the product route: bounded ordered consumption, early raw release, deterministic disk record spool, streamed final assembly.","next_discriminator":"Reconcile the parked #158 streamed-r24-materialization seed against current authority and run the cheapest exact-byte product A/B on the confirmed Shifted r24 owner. Measure wall/CPU, parent/self peak RSS, temp bytes/I/O, exact archive SHA/bytes and failure ordering. Do not buy RSS with latency: attempt-2 timing is green and must remain green."},
-  "primary_question":{"id":"r24-streamed-materialization-rss","family":"execution-architecture/memory-ownership/materialization","status":"CONTROLLING_PRODUCT_MEMORY_LANE","evidence":["35472343409 attempt 2 @ 7703bffd: all timing green; parent/self max pack RSS 2.10496x red","PR #157 / run 35450870427: Shifted r24 incremental +115,200 KiB vs r25 +23,024 KiB from same prebuild high-water","PR #158: ordered_worker_iter seed + explicit spool/stream product hypothesis, not yet wired or credited","Whole-tree companion 1.0x is diagnostic only because its contract grants release_credit=false; do not rewrite release law to rescue the result"],"kill":"Retire/narrow streamed materialization if exact bytes/failure semantics change, if parent/self RSS does not materially fall on Shifted, if temp-I/O/RSS carrying cost erases the gain, or if create timing regresses enough to reopen the frozen 1.25 timing gate."},
-  "frontier_candidates":[{"id":"r24-streamed-materialization-rss","status":"PRIMARY_REOPEN_CONDITION_MET","evidence":"PR #157/#158 plus 35472343409 attempt 2"},{"id":"create-runtime-boundary","status":"CLOSED_GREEN_WITH_PRESERVED_NOISE","evidence":"Attempt 1 1.25909x red; unchanged attempt 2 1.23218x green."},{"id":"fastcdc-exact-loop-acceleration","status":"PARKED_RESEARCH_RESIDUE","evidence":"Not needed while parent create is green; local CPython 3.13 micro only, no product credit."},{"id":"whole-tree-rss-companion","status":"DIAGNOSTIC_ONLY","evidence":"1.0x whole-tree result is useful system-memory evidence but contract release_credit=false; cannot substitute for frozen parent/self gate."},{"id":"ci-long-lived-pr-fanout","status":"INFRASTRUCTURE_OWNER_ACTIVE","evidence":"Issue #159; existing-run rerun API was the proven route this activation."},{"id":"proof-carrying-admission","status":"QUEUED"}],
-  "protected_seeds":[{"id":"ml-pack-plan-compression-reuse","status":"MERGED_AUTHORITY_GREEN_CREATE","evidence":"PR #155; 35472343409 attempt 2"},{"id":"ml-bulk-one-byte-varint-table","status":"MERGED_PRODUCT_EXTRACTION_GREEN","evidence":"PR #152; 35472343409"},{"id":"r24-streamed-materialization","status":"PARKED_PRODUCT_SEED_REACTIVATED_BY_GATE","evidence":"PR #157/#158"}],
-  "retired_or_narrowed":[{"id":"extraction-session-fusion","reason":"~2.09% only"},{"id":"ml-one-byte-varint-fastpath","reason":"~3.30%; superseded"},{"id":"ml-selected-only-inverse-proof","reason":"~0.12%"},{"id":"ml-raw-payload-compression-memo","reason":"~160 MB retained state"},{"id":"rss-release-credit-reinterpretation","reason":"Rejected: companion contract is diagnostic/non-credit; frozen parent/self gate remains authority"},{"id":"fastcdc-productization-now","reason":"Attempt 2 closes create timing"}],
-  "decision_evidence":{"timing":"35472343409 attempt 2 closes all frozen create/extract timing gates; preserve attempt 1's ML create loss as noise evidence.","rss":"Frozen release gate remains parent/self pack RSS and is red at 2.10496x. PR #157 localizes a real r24 Builder materialization owner on Shifted. Whole-tree 1.0x does not carry release credit.","ci_topology":"Issue #159 remains open. Tool-originated pushes did not reliably instantiate new push workflows; existing-run rerun produced the decisive immutable-source repeat."},
-  "process_lessons":[{"lesson":"Do not reinterpret a diagnostic companion into release authority after seeing a favorable result; preserve the pre-existing contract and fix the measured product owner.","evidence":"PR #157 correction; 35472343409"},{"lesson":"Preserve noisy/negative timing repetitions; a later green repeat narrows persistent debt but does not erase the loss.","evidence":"35472343409 attempts 1-2"},{"lesson":"Memory diagnostics must record pre-operation high-water before assigning incremental ownership.","evidence":"PR #157"},{"lesson":"A configured trigger is not a receipt; existing-run rerun is a proven fallback when new tool-originated pushes do not wake CI.","evidence":"Issue #159; 35472343409 attempt 2"}],
-  "pending_jobs":[],
-  "next_action":"Resume the #158 product hypothesis from current authority without merging its unused primitive blindly: reconcile the old seed, then wire bounded ordered consumption + early raw release + deterministic disk record spool + streamed final assembly behind exact semantics. First earn a focused Shifted r24-only A/B with exact archive bytes, wall/CPU, parent/self RSS, temp-I/O and failure-order proof; only then return to unchanged whole-product runtime authority. Preserve green timing and frozen thresholds.",
-  "last_reconciled":"2026-09-19T23:20Z"
+  "schema": "cmpct-discovery-state-v1",
+  "status": "ACTIVE",
+  "authority": {
+    "canonical_release": "v0.29.0 / r24 on main",
+    "active_frontier": "PR #175 agent/v030-r24-process-productization",
+    "source": "PR #175 head 1023fb353af2cc60522c6a483a60618f0cf9f44d; canonical-v2 Logs probe run 35552595037"
+  },
+  "active_product_bottleneck": {
+    "id": "v030-residual-parent-pack-rss",
+    "observation": "#175 closes the promoted ML parent-RSS owner on shipping evidence. The exact-head Logs selector-r24 probe then drives the Logs row to 1.0x parent pack RSS with exact bytes, but the unchanged full gate remains red: Shifted 1.3653865x RSS; ML create 1.2760299x; Logs extract 1.2902087x. The probe has product_credit=false and therefore localizes mechanism without promoting it.",
+    "next_discriminator": "Treat Shifted parent-only RSS as the controlling memory question. Do not stack #166 blindly: its exact whole-product receipt 35515684113 already falsified bounded r24 materialization as standalone closure. Profile/localize the post-r24-child Shifted parent owner before another implementation. Preserve the Logs selector-r24 result as a proven local ownership mechanism, but do not spend the next expensive rung productizing it while Shifted remains the larger release blocker."
+  },
+  "primary_question": {
+    "id": "shifted-parent-owner-after-r24-child",
+    "family": "execution-architecture/memory-ownership/post-r24-parent-lifetime",
+    "status": "CONTROLLING_PRODUCT_MEMORY_LANE",
+    "evidence": [
+      "#175 shipping canonical-v2 receipt: ML parent RSS below 1.25x while Shifted/Logs remained red",
+      "run 35552595037: Logs selector-r24 child ownership yields Logs parent pack RSS 1.0x, exact 3,550,342 B archive, but unchanged suite still fails",
+      "#166 run 35515684113: bounded r24 materialization preserves timing/bytes but whole-product Shifted RSS remains 1.67015x; r24-local spooling is not the residual parent owner"
+    ],
+    "kill": "Retire any proposed Shifted fix that merely moves r24-local memory already child-owned, changes exact bytes/failure semantics, or fails to reduce the post-r24 parent high-water under unchanged canonical-v2 measurement."
+  },
+  "frontier_candidates": [
+    {
+      "id": "shifted-parent-owner-after-r24-child",
+      "status": "PRIMARY",
+      "evidence": "#175 + #166 whole-product receipts"
+    },
+    {
+      "id": "logs-selector-r24-child-owner",
+      "status": "MECHANISM_PROVEN_PRODUCTIZATION_DEFERRED",
+      "evidence": "35552595037 / artifact 10619510592: Logs parent pack RSS 1.0x, exact bytes; suite closure false"
+    },
+    {
+      "id": "logs-extract-latency",
+      "status": "QUEUED_SEPARATE_METRIC",
+      "evidence": "35552595037: Logs median extract 1.2902087x > frozen 1.25x workload ceiling"
+    }
+  ],
+  "protected_seeds": [
+    {
+      "id": "ml-r24-process-lifetime",
+      "status": "PR175_SHIPPING_PROVEN",
+      "evidence": "PR #175 canonical-v2 shipping receipt"
+    },
+    {
+      "id": "r24-streamed-materialization",
+      "status": "REUSABLE_SEED_NOT_CURRENT_RSS_OWNER",
+      "evidence": "PR #166 component win; whole-product falsifier 35515684113"
+    }
+  ],
+  "retired_or_narrowed": [
+    {
+      "id": "r24-streamed-materialization-as-standalone-rss-closure",
+      "reason": "35515684113 leaves whole-product Shifted 1.67015x; local Builder win does not control residual parent high-water"
+    },
+    {
+      "id": "logs-r24-child-as-suite-closure",
+      "reason": "35552595037 closes Logs parent RSS locally but unchanged suite still fails Shifted RSS and timing metrics"
+    },
+    {
+      "id": "rss-release-credit-reinterpretation",
+      "reason": "Diagnostic companions remain non-credit; frozen parent/self authority unchanged"
+    }
+  ],
+  "decision_evidence": {
+    "logs_probe": "35552595037 / artifact 10619510592 / sha256:366092688e72e7b48ea149a20dbc1dcc8f73de1f8ef526db1879e73e8cf583de: Logs RSS 1.0x; full gate false; no size regressions.",
+    "shifted": "35552595037 Shifted RSS 1.3653865x after #175; #166 whole-product 35515684113 falsifies r24-local spool as standalone closure.",
+    "timing": "35552595037 median create 1.05152x and median extract 0.94391x are green globally, but ML create 1.27603x and Logs extract 1.29021x exceed per-workload 1.25x in this repetition set. Preserve as measured evidence; do not threshold-garden."
+  },
+  "process_lessons": [
+    {
+      "lesson": "When a fail-honest full gate contains a strong local win and an overall red, separate mechanism localization from suite-level product credit instead of calling the experiment simply pass/fail.",
+      "evidence": "35552595037"
+    },
+    {
+      "lesson": "Mirror the canonical corpus dependency surface before dispatching an expensive frozen-matrix probe; serial missing-import repair wastes activations without scientific information.",
+      "evidence": "Logs probe infrastructure sequence culminating in 35552595037"
+    }
+  ],
+  "pending_jobs": [],
+  "next_action": "Profile the exact #175 Shifted parent process after r24 child isolation and identify the first phase that raises parent/self ru_maxrss above the inherited baseline. Use the cheapest phase-attribution instrument before implementation. Explicitly distinguish retained G0-G4/graph state, canonical verification, wrapper/import residency and output materialization. Do not re-open #166 or add another r24 process boundary unless the attribution points there.",
+  "last_reconciled": "2026-09-21T03:03Z"
 }
