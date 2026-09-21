@@ -35,11 +35,14 @@ jobs:
           if-no-files-found: warn
 
   # New research workflows can exist on a long-lived frontier before GitHub registers them from the
-  # default branch. Route R36 through this already-established PR workflow; R36's own exact-head
-  # classifier decides whether the material receipt runs, so ordinary synchronizations pay only the
-  # cheap classifier and all frozen scientific gates remain inside the called workflow.
+  # default branch. Route them through this already-established PR workflow; each called workflow owns
+  # an exact-head classifier, so ordinary synchronizations pay only the cheap classifier and preserved
+  # scientific receipts remain bound to the source SHA that admitted them.
   r36-project-wait-owner:
     uses: ./.github/workflows/v030-r36-project-wait-owner.yml
+
+  shifted-parent-phase-rss:
+    uses: ./.github/workflows/v030-shifted-parent-phase-rss.yml
 
 # Footnote: this gate validates that material work exposes a falsifiable evidence surface. It does not
 # assign a numeric “genius” score; benchmark, conformance, safety and expert review remain the actual
