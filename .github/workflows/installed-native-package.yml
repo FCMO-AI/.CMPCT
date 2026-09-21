@@ -44,6 +44,10 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
           "$PY" -m pip install --upgrade pip
           mkdir -p "$RUNNER_TEMP/wheels"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+            export ARCHFLAGS="-arch arm64 -arch x86_64"
+          fi
           "$PY" -m pip wheel --no-deps dist/*.tar.gz -w "$RUNNER_TEMP/wheels"
           "$PY" -m pip install "$RUNNER_TEMP"/wheels/cmpct-*.whl
           (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee installed-native-smoke.json
