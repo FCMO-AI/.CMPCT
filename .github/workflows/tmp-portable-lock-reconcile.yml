@@ -3,25 +3,34 @@ on:
   push:
     branches: [agent/v030-authoritative-integration]
     paths: ['.github/workflows/tmp-portable-lock-reconcile.yml']
+permissions:
+  contents: write
 jobs:
   reconcile:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-      - name: Regenerate portable lock with proven archive-identity Zstd generation
+        with:
+          ref: agent/v030-authoritative-integration
+      - name: Reconcile only stale Zstd entries in portable lock
         working-directory: native/cmpct-portable
         run: |
           set -euo pipefail
-          rm Cargo.lock
-          cargo generate-lockfile
+          cargo update -p zstd --precise 0.13.0
           cargo update -p zstd-safe --precise 7.0.0
           cargo update -p zstd-sys --precise '2.0.9+zstd.1.5.5'
           cargo check --locked
           grep -A5 '^name = "zstd"' Cargo.lock
           grep -A5 '^name = "zstd-safe"' Cargo.lock
           grep -A5 '^name = "zstd-sys"' Cargo.lock
-      - uses: actions/upload-artifact@v6
-        with:
-          name: portable-lock-${{ github.sha }}
-          path: native/cmpct-portable/Cargo.lock
-          retention-days: 1
+          git diff -- native/cmpct-portable/Cargo.lock
+      - name: Commit reconciled lock only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=no | grep -v '^ M native/cmpct-portable/Cargo.lock$' || true)"
+          git config user.name 'cmpct-ci'
+          git config user.email 'cmpct-ci@users.noreply.github.com'
+          git add native/cmpct-portable/Cargo.lock
+          git commit -m 'fix(android): reconcile portable locked Zstd generation'
+          git push origin HEAD:agent/v030-authoritative-integration
