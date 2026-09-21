@@ -1,0 +1,65 @@
+# ci-lane: deep
+name: CMPCT installed native package
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "MANIFEST.in"
+      - "native/cmpct-core/**"
+      - "tests/installed_native_package_smoke.py"
+      - ".github/workflows/installed-native-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-installed-native-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os }}
+  cancel-in-progress: true
+
+jobs:
+  installed-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build source distribution only
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --sdist
+      - name: Clean-install from sdist and smoke installed cdylib
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/cmpct-installed"
+          if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
+          "$PY" -m pip install --upgrade pip
+          "$PY" -m pip install dist/*.tar.gz
+          (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee installed-native-smoke.json
+      - name: Inspect installed dependency closure
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
+          LIB=$(cd "$RUNNER_TEMP" && "$PY" -c 'import importlib.util,pathlib; p=pathlib.Path(next(iter(importlib.util.find_spec("cmpct").submodule_search_locations))); print(next(x for x in p.glob("cmpct_core*") if x.is_file()))')
+          echo "library=$LIB" | tee installed-native-deps.txt
+          if [ "$RUNNER_OS" = "Linux" ]; then ldd "$LIB" | tee -a installed-native-deps.txt; ! ldd "$LIB" | grep -i 'libzstd'; fi
+          if [ "$RUNNER_OS" = "macOS" ]; then otool -L "$LIB" | tee -a installed-native-deps.txt; ! otool -L "$LIB" | grep -i 'libzstd'; fi
+          if [ "$RUNNER_OS" = "Windows" ]; then objdump -p "$LIB" | grep 'DLL Name:' | tee -a installed-native-deps.txt; ! objdump -p "$LIB" | grep -i 'libzstd'; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installed-native-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            installed-native-smoke.json
+            installed-native-deps.txt
+          if-no-files-found: error
+          retention-days: 14
