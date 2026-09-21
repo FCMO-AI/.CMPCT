@@ -20,12 +20,12 @@ Repository = "https://github.com/FCMO-AI/.CMPCT"
 
 [project.optional-dependencies]
 audio = ["numpy>=1.26", "soundfile>=0.12"]
-# The regression suite executes the deterministic neutral/hostile corpus producer directly.  Keep its
-# import-time document/image dependencies in the test environment so `pip install -e '.[test]'` is a
-# complete test contract rather than relying on workflow-specific packages to make one test importable.
+# The regression suite imports research engines that still use python-zstandard as an independent
+# comparator. Keep it test-only: the installed shipping product must not depend on it.
 test = [
   "pytest>=8",
   "numpy>=1.26",
+  "zstandard>=0.22",
   "pillow>=12.3.0",
   "reportlab>=5.0.0",
   "python-docx>=1.2.0",
