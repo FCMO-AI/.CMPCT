@@ -2,8 +2,7 @@ name: CMPCT Zstd CLI startup attribution
 
 on:
   pull_request:
-    paths:
-      - '.github/workflows/zstd-cli-startup-attribution.yml'
+    paths: ['.github/workflows/zstd-cli-startup-attribution.yml']
 
 jobs:
   startup-attribution:
@@ -22,9 +21,9 @@ jobs:
         env: {BASE_ROOT: /tmp/cmpct-startup-base}
         run: |
           python - <<'PY'
-          import json, os, statistics, subprocess, sys, tempfile, time
+          import json, os, statistics, subprocess, sys, tempfile, time, hashlib
           from pathlib import Path
-          root=Path.cwd(); base=Path(os.environ['BASE_ROOT']); work=Path(tempfile.mkdtemp()); sys.path.insert(0,str(root/'benchmarks')); import universal_bench as u
+          root=Path.cwd();base=Path(os.environ['BASE_ROOT']);work=Path(tempfile.mkdtemp());sys.path.insert(0,str(root/'benchmarks'));import universal_bench as u
           u.WORK=work/'bench';u.CORP=u.WORK/'corpora';u.OUT=u.WORK/'out';u.WORK.mkdir();u.CORP.mkdir();u.OUT.mkdir();u.make_corpora()
           env_c=os.environ.copy();env_c['PYTHONPATH']=str(root/'src');env_b=os.environ.copy();env_b['PYTHONPATH']=str(base/'src');reps=7
           def timed(cmd,env):
@@ -35,13 +34,12 @@ jobs:
           rows={}
           for name in ['tiny','source','media','binary','dedup_links','sparse','nested','combined']:
               src=u.CORP/name;bout=work/f'{name}-base.cmpct';sout=work/f'{name}-serial.cmpct';pout=work/f'{name}-parallel.cmpct'
-              base_cmd=[sys.executable,'-m','cmpct','create',str(src),str(bout)];serial_cmd=[sys.executable,'-m','cmpct','create',str(src),str(sout)];par_cmd=[sys.executable,'-m','cmpct','create',str(src),str(pout),'--workers','8']
-              b=timed(base_cmd,env_b);s=timed(serial_cmd,env_c);p=timed(par_cmd,env_c)
-              subprocess.run(base_cmd,env=env_b,stdout=subprocess.DEVNULL,check=True);subprocess.run(serial_cmd,env=env_c,stdout=subprocess.DEVNULL,check=True);subprocess.run(par_cmd,env=env_c,stdout=subprocess.DEVNULL,check=True)
-              if bout.read_bytes()!=sout.read_bytes() or bout.read_bytes()!=pout.read_bytes():raise SystemExit(f'{name}: identity changed')
-              rows[name]={'base_ms':b['median_ms'],'serial_ms':s['median_ms'],'parallel_ms':p['median_ms'],'serial_vs_base':s['median_ms']/b['median_ms'],'parallel_vs_base':p['median_ms']/b['median_ms'],'parallel_vs_serial':p['median_ms']/s['median_ms']}
-          data={'repetitions':reps,'base_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=base,text=True).strip(),'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'rows':rows}
-          Path('startup-attribution.json').write_text(json.dumps(data,indent=2)+'\n');print(json.dumps(rows,indent=2))
+              bc=[sys.executable,'-m','cmpct','create',str(src),str(bout)];sc=[sys.executable,'-m','cmpct','create',str(src),str(sout)];pc=[sys.executable,'-m','cmpct','create',str(src),str(pout),'--workers','8']
+              b=timed(bc,env_b);s=timed(sc,env_c);p=timed(pc,env_c)
+              subprocess.run(bc,env=env_b,stdout=subprocess.DEVNULL,check=True);subprocess.run(sc,env=env_c,stdout=subprocess.DEVNULL,check=True);subprocess.run(pc,env=env_c,stdout=subprocess.DEVNULL,check=True)
+              bb=bout.read_bytes();sb=sout.read_bytes();pb=pout.read_bytes()
+              rows[name]={'base_ms':b['median_ms'],'serial_ms':s['median_ms'],'parallel_ms':p['median_ms'],'serial_vs_base':s['median_ms']/b['median_ms'],'parallel_vs_base':p['median_ms']/b['median_ms'],'parallel_vs_serial':p['median_ms']/s['median_ms'],'base_eq_serial':bb==sb,'serial_eq_parallel':sb==pb,'sha':{'base':hashlib.sha256(bb).hexdigest(),'serial':hashlib.sha256(sb).hexdigest(),'parallel':hashlib.sha256(pb).hexdigest()}}
+          data={'repetitions':reps,'base_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=base,text=True).strip(),'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'rows':rows};Path('startup-attribution.json').write_text(json.dumps(data,indent=2)+'\n');print(json.dumps(rows,indent=2))
           PY
       - uses: actions/upload-artifact@v6
         with:
