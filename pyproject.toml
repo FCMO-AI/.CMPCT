@@ -49,6 +49,11 @@ where = ["src"]
 target = "cmpct.cmpct_core"
 path = "native/cmpct-core/Cargo.toml"
 binding = "NoBinding"
+# setuptools-rust intentionally defaults editable/in-place extensions to Cargo's dev profile. This
+# core is a shipping performance primitive and editable installs are used by the canonical ABBA gate;
+# forcing the extension itself to release semantics keeps editable and wheel execution comparable.
+# An explicit Cargo/profile override remains available for developers who actually want a debug core.
+debug = false
 cargo-manifest-args = ["--locked"]
 
 [tool.pytest.ini_options]
