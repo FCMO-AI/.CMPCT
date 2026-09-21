@@ -4,36 +4,37 @@
   "authority": {
     "canonical_release": "v0.29.0 / r24 on main",
     "active_frontier": "PR #175 creator-memory closure -> PR #180 Windows native-zstd ownership",
-    "source": "PR #175 canonical+tree authority 35571598470/10626681868; PR #180 caller-buffer codec ABI seed"
+    "source": "PR #175 canonical+tree authority 35571598470/10626681868; PR #180 shipping-linked caller-buffer codec ABI"
   },
   "active_product_bottleneck": {
     "id": "v030-release-convergence-after-memory-closure",
-    "observation": "Creator-memory is closed under unchanged canonical authority. Windows package ownership of Zstd remains active product debt. PR #180 now has an independently compiled caller-buffer codec ABI seed that preserves the frozen 119 B plain and 104 B raw-dictionary Zstd fingerprints, round-trips exactly, uses canonical CmpctStatus, and passed the complete native-core substantive matrix at source 555671fa. It is not yet linked into the shipping cdylib and has zero product credit.",
-    "next_discriminator": "Link PR #180 codec_abi into the existing cmpct_core cdylib, then prove the new symbols from a non-Rust caller. Any byte mismatch or native regression kills transparent substitution before packaging work."
+    "observation": "Creator-memory is closed under unchanged canonical authority. Windows package ownership of Zstd remains active product debt. PR #180 now compiles the exact caller-buffer codec ABI into the existing shipping cmpct_core cdylib. Exact-head native-core run 35592085805 at c585ea39 completed the full substantive native matrix green after linkage, including release build, dependency graph, existing non-Rust ABI, CLI and all committed archive goldens. Python still owns ambient Zstd and the new codec symbols have not yet earned external-caller/archive-identity/package-closure evidence.",
+    "next_discriminator": "Finish the exact-head shipping-symbol linkage gate at 0c25be327, then exercise the codec symbols from an external non-Rust caller and prove same-input archive SHA/size identity before any Python migration."
   },
   "primary_question": {
     "id": "windows-native-zstd-package-ownership",
     "family": "release-convergence/portability-evidence",
-    "status": "ABI_SEED_PROVEN_NOT_SHIPPING",
+    "status": "ABI_LINKED_EXTERNAL_CALLER_PENDING",
     "evidence": [
       "35571598470/10626681868: creator-memory canonical-v2 and whole-tree gates all pass; Windows ambient-zstd remains separate debt #176",
       "#178: low-level zstd_safe CCtx::compress_using_dict reproduces canonical dictionary bytes across Ubuntu/macOS/Windows",
-      "PR #180 run 35587023627: first independent caller-buffer module preserved 119 B plain / 104 B dictionary fingerprints and inherited native goldens",
-      "PR #180 run 35587724991 at source 555671fa: format, lint, Rust tests, release build, locked dependency graph, Python oracle, C ABI, CLI and all committed native goldens completed success after canonical-status refactor; workflow conclusion became cancelled only after those substantive steps because a later discovery-state-only head superseded it"
+      "PR #180 run 35587724991: independently compiled caller-buffer module preserved 119 B plain / 104 B dictionary fingerprints and inherited native goldens",
+      "PR #180 run 35592085805 at c585ea39: shipping-linked ABI passed fmt, lint, Rust tests, release build, locked dependency graph, Python oracle, existing non-Rust C ABI, CLI and all committed native goldens",
+      "PR #180 run 35592225342 at 0c25be327: shipping-symbol linkage gate pending; it declares the C symbols rather than compiling codec_abi.rs by path and requires the frozen 104 B dictionary fingerprint"
     ],
-    "prediction": "The same package-owned zstd already linked into cmpct_core can replace ambient Python ctypes ownership without changing compressed bytes; linking the staged module should preserve all native goldens.",
+    "prediction": "The package-owned zstd already linked into cmpct_core can replace ambient Python ctypes ownership without changing compressed bytes or archive identity.",
     "kill": "Any same-input compressed-byte mismatch, archive identity mismatch, native golden regression, or unavoidable exported dependency cost blocks transparent substitution; cross-decode alone is insufficient."
   },
   "frontier_candidates": [
-    {"id": "windows-native-zstd-package-ownership", "status": "ACTIVE_PRODUCT_DEBT", "evidence": "#176/#180; exact caller-buffer seed is green but not linked or packaged"},
-    {"id": "python-reader-ddict-ownership", "status": "NEW_SECOND_CONSUMER", "evidence": "reader.py caches ZSTD_DCtx/ZSTD_DDict from codec._z; writer-only migration cannot eliminate ambient zstd. After ABI linking, charge cached-DDict vs stateless package-owned decompress_using_dict before choosing stateful ABI debt."},
-    {"id": "release-evidence-custody", "status": "ACTIVE", "evidence": "#181: native public headers are outside V030_RELEASE_LOCK fingerprint_globs; #176 also records that strict release receipts do not yet explicitly assert clean installed desktop wheel codec closure"}
+    {"id": "windows-native-zstd-package-ownership", "status": "ACTIVE_PRODUCT_DEBT", "evidence": "#176/#180; exact ABI is shipping-linked and native-green, external caller/package closure pending"},
+    {"id": "python-reader-ddict-ownership", "status": "NEW_SECOND_CONSUMER", "evidence": "reader.py caches ZSTD_DCtx/ZSTD_DDict from codec._z; writer-only migration cannot eliminate ambient zstd. Charge cached-DDict vs stateless package-owned decompress_using_dict before choosing stateful ABI debt."},
+    {"id": "release-evidence-custody", "status": "ACTIVE", "evidence": "#181: native public headers are outside V030_RELEASE_LOCK fingerprint_globs; #176 records that strict release receipts do not yet explicitly assert clean installed desktop wheel codec closure"}
   ],
   "protected_seeds": [
     {"id": "shifted-hg-screen-buffer-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35557126948;35563483707;35563173856;35571598470"},
     {"id": "ml-r24-process-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35563173856;35571598470"},
     {"id": "logs-sequential-exact-candidates", "status": "SHIPPING_CONFIRMED", "evidence": "35566703880 attempts1-2;35571598470"},
-    {"id": "package-owned-zstd-caller-buffer-abi", "status": "PROVEN_SEED_NOT_LINKED", "evidence": "#178;PR#180;35587023627;35587724991"}
+    {"id": "package-owned-zstd-caller-buffer-abi", "status": "SHIPPING_LINKED_NATIVE_GREEN", "evidence": "#178;PR#180;35587724991;35592085805"}
   ],
   "retired_or_narrowed": [
     {"id": "v030-creator-parent-rss-as-open-bottleneck", "reason": "35571598470 closes Shifted, Logs and ML under unchanged canonical-v2"},
@@ -44,15 +45,17 @@
   "decision_evidence": {
     "canonical_runtime": "35571598470/10626681868 fingerprint d488f796...: canonical-v2 and whole-tree gates passed.",
     "zstd_exact_primitive": "#178 and PR #180: low-level zstd_safe preserves frozen plain/dictionary fingerprints; high-level substitutions do not.",
-    "abi_seed": "35587724991 source 555671fa: every substantive native-core step green after canonical-status refactor; cancellation occurred only after completion because discovery-state-only head advanced.",
-    "portability": "Linux/macOS focused process evidence is green; Windows ambient loader failure remains #176. PR #180 is implementation/evidence enablement only until linked and installed-package closure is proved."
+    "abi_linkage": "35592085805 source c585ea39: shipping-linked codec ABI preserves the full native substantive matrix; a symbol-level linkage test is pending at 0c25be327.",
+    "portability": "Linux/macOS focused process evidence is green; Windows ambient loader failure remains #176. PR #180 is implementation/evidence enablement until external caller, archive identity and installed-package closure are proved."
   },
   "process_lessons": [
     {"lesson": "Prefer deleting avoidable overlap/retention over process relocation when exact serial recomputation stays inside timing margin.", "evidence": "35557126948;35566703880 attempts1-2;35571598470"},
     {"lesson": "Parent-only RSS can reward exported process cost; charge the process tree before productizing ownership boundaries.", "evidence": "35566703880 attempts1-2;35571598470"},
     {"lesson": "For transparent codec ownership migration, exact compressed-byte identity is a stronger early discriminator than cross-decode compatibility.", "evidence": "#177;#178;PR#180"}
   ],
-  "pending_jobs": [],
-  "next_action": "Wire codec_abi into the existing cmpct_core cdylib and exercise the new symbols from a non-Rust caller; do not migrate Python yet. Then prove archive SHA/size identity. Separately measure reader cached-DDict vs stateless package-owned dictionary decode before deciding whether a stateful ABI is justified. Only after both writer and reader ownership are decision-complete should wheel-from-sdist packaging and Linux/macOS/Windows dependency-closure evidence begin. Correct #181 and machine-check desktop package closure before final release receipts.",
-  "last_reconciled": "2026-09-21T10:16Z"
+  "pending_jobs": [
+    {"provider": "github-actions", "run_id": "35592225342", "source_sha": "0c25be327ae84b4a4bf6156558a9a3b898526fc7", "question": "shipping codec ABI symbol linkage", "expected_artifact": "native-core exact-head conclusion", "decision_unlocked": "whether external-caller/archive-identity work is warranted"}
+  ],
+  "next_action": "Consume 35592225342. If the shipping-symbol linkage gate passes, exercise the new codec symbols from a true external non-Rust caller and prove archive SHA/size identity. Do not migrate Python yet. Then measure reader cached-DDict vs stateless package-owned dictionary decode before deciding whether a stateful ABI is justified. Only after writer and reader ownership are decision-complete should wheel-from-sdist packaging and Linux/macOS/Windows dependency-closure evidence begin. Correct #181 and machine-check desktop package closure before final release receipts.",
+  "last_reconciled": "2026-09-21T11:08Z"
 }
