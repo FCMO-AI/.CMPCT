@@ -83,7 +83,7 @@ jobs:
           from benchmarks import v030_release_performance as P
           root=Path('benchmark-artifacts/source-generator')
           corpora=P._build_corpora(root)
-          source=corpora[('neutral_hostile_v1','01_shifted_versions')]
+          source=corpora[('resemblance_hostile_v1','01_shifted_versions')]
           target=Path('benchmark-artifacts/shared-shifted-source')
           shutil.copytree(source,target,copy_function=shutil.copy2)
           print(target)
