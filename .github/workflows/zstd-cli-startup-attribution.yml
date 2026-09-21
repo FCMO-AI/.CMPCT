@@ -32,7 +32,7 @@ jobs:
                   t=time.perf_counter_ns();subprocess.run(cmd,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True);xs.append((time.perf_counter_ns()-t)/1e6)
               return {'median_ms':statistics.median(xs),'samples_ms':xs}
           rows={}
-          for name in ['tiny','source','media','binary','dedup-links','sparse','nested','combined']:
+          for name in ['tiny','source','media','binary','dedup_links','sparse','nested','combined']:
               src=u.CORP/name;bout=work/f'{name}-base.cmpct';sout=work/f'{name}-serial.cmpct';pout=work/f'{name}-parallel.cmpct'
               bc=[sys.executable,'-m','cmpct','create',str(src),str(bout)];sc=[sys.executable,'-m','cmpct','create',str(src),str(sout)];pc=[sys.executable,'-m','cmpct','create',str(src),str(pout),'--workers','8']
               b=timed(bc,env_b);s=timed(sc,env_c);p=timed(pc,env_c)
