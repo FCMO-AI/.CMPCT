@@ -1,0 +1,30 @@
+name: bounded stale Zstd wrapper removal
+on:
+  push:
+    branches: [agent/windows-zstd-native-abi]
+    paths: [.github/workflows/_remove-stale-zstd-wrapper.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: agent/windows-zstd-native-abi}
+      - shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/cmpct/codec.py'); s=p.read_text()
+          a=s.index('def _zck(n:int)->int:')
+          b=s.index('def sha(b:bytes)->bytes:',a)
+          s=s[:a]+s[b:]
+          assert '_z.' not in s
+          p.write_text(s)
+          PY
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/cmpct/codec.py
+          git commit -m 'portability: remove stale ambient Zstd wrappers'
+          git push origin HEAD:agent/windows-zstd-native-abi
