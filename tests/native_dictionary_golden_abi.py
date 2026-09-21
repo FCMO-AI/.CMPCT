@@ -7,6 +7,7 @@ import json
 import tempfile
 from pathlib import Path
 
+import cmpct.builder as builder_mod
 from cmpct.reader import CMPCT
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,11 +27,19 @@ def _load_lib():
     lib.cmpct_entry_read_range.restype = ctypes.c_int32
     lib.cmpct_close.argtypes = [ctypes.c_void_p]
 
-    # Package-owned codec ABI: this gate deliberately resolves the symbols from the shipping cdylib
-    # through ctypes rather than compiling codec_abi.rs into a Rust test crate. That makes symbol
-    # export/linkage part of the evidence and catches the exact installed-caller boundary #176 needs.
+    # Package-owned codec ABI: resolve symbols from the shipping cdylib through ctypes rather than
+    # compiling codec_abi.rs into a Rust test crate. Symbol export/linkage is therefore evidence.
     lib.cmpct_codec_zstd_compress_bound.argtypes = [ctypes.c_size_t]
     lib.cmpct_codec_zstd_compress_bound.restype = ctypes.c_size_t
+    lib.cmpct_codec_zstd_compress.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_int32,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.cmpct_codec_zstd_compress.restype = ctypes.c_int32
     lib.cmpct_codec_zstd_compress_using_dict.argtypes = [
         ctypes.c_void_p,
         ctypes.c_size_t,
@@ -77,27 +86,43 @@ def _read_range(lib, handle, offset: int, length: int):
     return status, got.value, out.raw[: got.value]
 
 
+def _native_zc(lib, data: bytes, level: int) -> bytes:
+    if not data:
+        return b""
+    capacity = lib.cmpct_codec_zstd_compress_bound(len(data))
+    out = ctypes.create_string_buffer(capacity)
+    out_len = ctypes.c_size_t()
+    status = lib.cmpct_codec_zstd_compress(data, len(data), level, out, capacity, ctypes.byref(out_len))
+    assert status == 0, status
+    return out.raw[: out_len.value]
+
+
+def _native_zcd(lib, data: bytes, dictionary: bytes, level: int) -> bytes:
+    if not data:
+        return b""
+    capacity = lib.cmpct_codec_zstd_compress_bound(len(data))
+    out = ctypes.create_string_buffer(capacity)
+    out_len = ctypes.c_size_t()
+    status = lib.cmpct_codec_zstd_compress_using_dict(
+        data,
+        len(data),
+        dictionary,
+        len(dictionary),
+        level,
+        out,
+        capacity,
+        ctypes.byref(out_len),
+    )
+    assert status == 0, status
+    return out.raw[: out_len.value]
+
+
 def _codec_abi_exact_dictionary_gate(lib) -> None:
     payload = b"structured-record\0" * 8192 + bytes(range(64)) * 128
     seed = b"alpha beta gamma delta structured-record\0"
     dictionary = (seed * ((4096 + len(seed) - 1) // len(seed)))[:4096]
 
-    capacity = lib.cmpct_codec_zstd_compress_bound(len(payload))
-    assert capacity >= 104
-    encoded = ctypes.create_string_buffer(capacity)
-    encoded_len = ctypes.c_size_t()
-    status = lib.cmpct_codec_zstd_compress_using_dict(
-        payload,
-        len(payload),
-        dictionary,
-        len(dictionary),
-        9,
-        encoded,
-        capacity,
-        ctypes.byref(encoded_len),
-    )
-    assert status == 0, status
-    compressed = encoded.raw[: encoded_len.value]
+    compressed = _native_zcd(lib, payload, dictionary, 9)
     assert len(compressed) == 104
     assert hashlib.sha256(compressed).hexdigest() == "0c265b0a03ec404b40749d13212420813cb546a6eecf5dcd0397f20ce15e23a6"
 
@@ -133,6 +158,39 @@ def _codec_abi_exact_dictionary_gate(lib) -> None:
     assert too_small_len.value == 0
 
 
+def _archive_identity_gate(lib, root: Path) -> None:
+    """Prove transparent writer substitution before changing shipping Python ownership."""
+    src = root / "identity-src"
+    src.mkdir()
+    common = ("timestamp=2026-09-21 level=INFO component=cmpct message=structured record\n" * 1024).encode()
+    for i in range(6):
+        (src / f"log-{i}.txt").write_bytes(common + (f"record={i}\n" * 2048).encode())
+    # A non-text member keeps ordinary Zstd in the same archive while the text family exercises the
+    # dictionary path when the builder's generic dictionary admission selects it.
+    (src / "payload.bin").write_bytes((bytes(range(251)) * 2048) + b"cmpct-tail")
+
+    ambient = root / "ambient.cmpct"
+    native = root / "native-codec.cmpct"
+    builder_mod.Builder(src, workers=1, reproducible=True).build(ambient)
+
+    old_zc, old_zcd = builder_mod.zc, builder_mod.zcd
+    try:
+        builder_mod.zc = lambda data, level: _native_zc(lib, data, level)
+        builder_mod.zcd = lambda data, dictionary, level: _native_zcd(lib, data, dictionary, level)
+        builder_mod.Builder(src, workers=1, reproducible=True).build(native)
+    finally:
+        builder_mod.zc, builder_mod.zcd = old_zc, old_zcd
+
+    ambient_bytes = ambient.read_bytes()
+    native_bytes = native.read_bytes()
+    assert native_bytes == ambient_bytes, (
+        len(ambient_bytes),
+        len(native_bytes),
+        hashlib.sha256(ambient_bytes).hexdigest(),
+        hashlib.sha256(native_bytes).hexdigest(),
+    )
+
+
 def main() -> None:
     vector = json.loads(VECTOR.read_text())["vector"]
     archive_bytes = base64.b64decode(vector["archive_base64"])
@@ -141,6 +199,7 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory(prefix="cmpct-native-dictionary-") as td:
         root = Path(td)
+        _archive_identity_gate(lib, root)
         archive = root / "dictionary.cmpct"
         archive.write_bytes(archive_bytes)
 
@@ -172,9 +231,8 @@ def main() -> None:
         finally:
             lib.cmpct_close(handle)
 
-        # Footnote: dictionary bytes are an authenticated dependency of codec 3. Corrupting only the
-        # dictionary payload must fail the member read even though the primary index and member frame
-        # still authenticate and the archive remains structurally openable.
+        # Dictionary bytes are an authenticated dependency of codec 3. Corrupting only the dictionary
+        # payload must fail the member read even though the primary index/member frame still authenticate.
         corrupt_dict = bytearray(archive_bytes)
         corrupt_dict[dict_pos + 64 + 17] ^= 1
         corrupt_dict_path = root / "dictionary-corrupt-payload.cmpct"
