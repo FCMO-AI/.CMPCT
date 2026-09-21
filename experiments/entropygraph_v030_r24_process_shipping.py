@@ -134,6 +134,8 @@ def install_into_release_base(base_impl, *, timeout_s: float | None = None) -> R
         r24_path = temp / "candidate-r24.cmpct"
         logs_path = temp / "candidate-logs.cmpct"
         started = time.perf_counter()
+        # Keep this order explicit: the replicated control tested r24 then Logs, not merely
+        # "no threads". Changing order is a new experiment and must earn its own evidence.
         r24 = logs_impl._build_r24(root, r24_path)
         logs = logs_impl._build_logs(root, logs_path)
         return r24, logs, r24_path, logs_path, time.perf_counter() - started
