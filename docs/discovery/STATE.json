@@ -4,17 +4,17 @@
   "authority": {
     "canonical_release": "v0.29.0 / r24 on main",
     "active_frontier": "PR #175 agent/v030-r24-process-productization",
-    "source": "PR #175; Logs receipt 35552595037; Shifted A/B source head 6295265e24ff2e0f9482eeca9c2b45c638863e96"
+    "source": "PR #175; Logs receipt 35552595037; Shifted A/B instrument latest on branch"
   },
   "active_product_bottleneck": {
     "id": "v030-residual-parent-pack-rss",
     "observation": "#175 closes the promoted ML parent-RSS owner on shipping evidence. The exact-head Logs selector-r24 probe drives Logs to 1.0x parent pack RSS with exact bytes. Shifted remains the controlling parent-memory red at 1.3653865x. The timing reds seen in that later probe are not yet stable debt: the earlier shipping receipt had ML create 1.23961x and Logs extract 1.16313x, so both straddle the 1.25x threshold across unchanged relevant code and require replication before causal work.",
-    "next_discriminator": "Consume the exact-head frozen-Shifted phase/A-B receipt dispatched at 6295265. It compares incumbent Hierarchical Geometry screening, which retains every screened transformed buffer, against exact recomputation of only the <=3 finalists while preserving nomination, inverse checks, sort/tie order and physical archive identity."
+    "next_discriminator": "Dispatch the ready frozen-Shifted phase/A-B instrument from the current branch. It compares incumbent Hierarchical Geometry screening, which retains every screened transformed buffer, against exact recomputation of only the <=3 finalists while preserving nomination, inverse checks, sort/tie order and physical archive identity."
   },
   "primary_question": {
     "id": "shifted-hg-screen-buffer-lifetime",
     "family": "memory-ownership/search-buffer-lifetime",
-    "status": "ACTIVE_AB_DISPATCHED",
+    "status": "READY_UNDISPATCHED",
     "evidence": [
       "35552595037: Shifted remains 1.3653865x parent pack RSS after r24 child isolation",
       "same receipt diagnostics: Shifted G0-G4 pre-overlay graph is 1,717,743 B and auditions 14 records, so current 4 MiB + 18-record process admission keeps it on the parent thread path",
@@ -28,8 +28,8 @@
   "frontier_candidates": [
     {
       "id": "shifted-hg-screen-buffer-lifetime",
-      "status": "PRIMARY_AB_PENDING",
-      "evidence": "run 35557277483 on source head 6295265"
+      "status": "PRIMARY_READY_UNDISPATCHED",
+      "evidence": "A/B instrument + exact-identity gate landed; no current provider/run identity exists yet"
     },
     {
       "id": "logs-selector-r24-child-owner",
@@ -81,18 +81,13 @@
     {
       "lesson": "Mirror the canonical corpus dependency surface and exact suite/workload key before dispatching an expensive frozen-matrix probe; serial environment/key repair wastes activations without scientific information.",
       "evidence": "Logs dependency sequence and Shifted run 35556654569 infrastructure-only KeyError"
-    }
-  ],
-  "pending_jobs": [
+    },
     {
-      "provider": "GitHub Actions",
-      "run_id": 35557277483,
-      "source_sha": "6295265e24ff2e0f9482eeca9c2b45c638863e96",
-      "question": "Does retaining all screened HG transformed buffers own Shifted parent high-water?",
-      "expected_artifact": "v030-shifted-parent-phase-rss-6295265e24ff2e0f9482eeca9c2b45c638863e96",
-      "decision_unlocked": "Promote bounded-screen lifetime only if exact archive SHA/selection is preserved and parent RSS materially improves; otherwise retire and follow the phase trace."
+      "lesson": "A workflow file plus a source SHA is not a pending job. Record provider/run identity only after the provider exposes a real run; fail closed rather than inventing dispatch state.",
+      "evidence": "Shifted A/B workflow corrections after 35556654569"
     }
   ],
-  "next_action": "Consume run 35557277483 when complete; do not babysit it. If bounded-screen wins exactly, validate whole-product timing/RSS before productization. If not, use its incumbent phase trace to select the next parent owner. Do not start Logs timing work from one red repetition set; first replicate the threshold straddlers.",
-  "last_reconciled": "2026-09-21T03:14Z"
+  "pending_jobs": [],
+  "next_action": "Dispatch the current exact-identity Shifted A/B workflow when a provider route exposes a real run identity. Until then the instrument is ready but unmeasured. Once measured: if bounded-screen wins exactly, validate whole-product timing/RSS before productization; if not, use its incumbent phase trace to select the next parent owner. Do not start Logs timing work from one red repetition set; first replicate the threshold straddlers.",
+  "last_reconciled": "2026-09-21T03:15Z"
 }
