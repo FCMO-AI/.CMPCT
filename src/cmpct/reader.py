@@ -444,7 +444,7 @@ class CMPCT:
             elif storage and storage[0]==S_SPARSE:
                 # Create the logical length first, then write only allocated data extents. The gaps
                 # remain filesystem holes instead of consuming disk blocks full of zeros.
-                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,mode or 0o666)
+                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_BINARY',0),mode or 0o666)
                 try:
                     os.ftruncate(fd,size)
                     for off,ln,ids in storage[1]:
@@ -456,7 +456,7 @@ class CMPCT:
                 finally:os.close(fd)
             else:
                 raw=self.read(rel)
-                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,mode or 0o666)
+                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_BINARY',0),mode or 0o666)
                 try:
                     view=memoryview(raw)
                     while view:
