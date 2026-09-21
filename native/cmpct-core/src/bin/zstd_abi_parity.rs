@@ -5,7 +5,7 @@
 //! byte-identical to the canonical one-shot libzstd calls on the frozen discriminator corpus.
 
 use std::process::ExitCode;
-use zstd_safe::{CCtx, DCtx};
+use zstd::zstd_safe::{self, CCtx, DCtx};
 
 fn payload() -> Vec<u8> {
     // Preserve the known #177 discriminator length while avoiding fixture-identity dependence: the
