@@ -18,8 +18,6 @@ def _known_hierarchical_win() -> bytes:
 
 def _cases() -> list[bytes]:
     rng = random.Random(0xC0A0C7)
-    # Cover direct-path boundary, incompressible-like control, delimiter-rich families, and the incumbent's
-    # independent golden workload that is known to select a real hierarchical transform.
     below = bytes(rng.randrange(256) for _ in range(HG.MIN_NODE_BYTES - 1))
     boundary = bytes(rng.randrange(256) for _ in range(HG.MIN_NODE_BYTES))
     randomish = bytes(rng.randrange(256) for _ in range(16 * 1024))
@@ -31,24 +29,24 @@ def _cases() -> list[bytes]:
     return [b"small-control", below, boundary, randomish, shifted, semicolon, _known_hierarchical_win()]
 
 
-def test_bounded_screen_probe_is_exact_audition_equivalent() -> None:
+def test_productized_bounded_screen_matches_proven_probe() -> None:
+    # The probe is now a frozen independent expression of the mechanism that earned productization.
+    # Keep it until the whole-product shipping gate lands so later edits cannot silently change semantics.
     for raw in _cases():
-        incumbent = HG.audition(raw)
-        bounded = PROBE.audition(raw)
-        assert bounded == incumbent
+        assert HG.audition(raw) == PROBE.audition(raw)
 
 
-def test_bounded_screen_probe_preserves_resource_counts() -> None:
+def test_productized_bounded_screen_preserves_resource_counts() -> None:
     raw = _cases()[-2]
-    incumbent = HG.audition(raw)
-    bounded = PROBE.audition(raw)
-    assert bounded["screened_candidates"] == incumbent["screened_candidates"]
-    assert bounded["exact_finalists"] == incumbent["exact_finalists"]
+    shipping = HG.audition(raw)
+    probe = PROBE.audition(raw)
+    assert shipping["screened_candidates"] == probe["screened_candidates"]
+    assert shipping["exact_finalists"] == probe["exact_finalists"]
 
 
-def test_bounded_screen_probe_preserves_known_hierarchical_winner() -> None:
+def test_productized_bounded_screen_preserves_known_hierarchical_winner() -> None:
     raw = _known_hierarchical_win()
-    incumbent = HG.audition(raw)
-    bounded = PROBE.audition(raw)
-    assert incumbent["kind"] == "hierarchical"
-    assert bounded == incumbent
+    shipping = HG.audition(raw)
+    probe = PROBE.audition(raw)
+    assert shipping["kind"] == "hierarchical"
+    assert shipping == probe
