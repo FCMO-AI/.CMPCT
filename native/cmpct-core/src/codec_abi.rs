@@ -211,14 +211,7 @@ mod tests {
     fn null_and_capacity_contract_is_fail_closed() {
         let mut n = 99usize;
         let result = unsafe {
-            cmpct_codec_zstd_compress(
-                std::ptr::null(),
-                1,
-                3,
-                std::ptr::null_mut(),
-                0,
-                &mut n,
-            )
+            cmpct_codec_zstd_compress(std::ptr::null(), 1, 3, std::ptr::null_mut(), 0, &mut n)
         };
         assert_eq!(result, status(CmpctStatus::Null));
         assert_eq!(n, 0);
