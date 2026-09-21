@@ -3,6 +3,7 @@ import ctypes, ctypes.util, hashlib, importlib.util, json
 from pathlib import Path
 
 spec=importlib.util.find_spec("cmpct"); assert spec and spec.submodule_search_locations
+assert importlib.util.find_spec("zstandard") is None,"clean installed product still depends on Python zstandard"
 pkg=Path(next(iter(spec.submodule_search_locations)))
 candidates=[p for p in pkg.glob("cmpct_core*") if p.is_file() and p.suffix.lower() in {".so",".dylib",".dll",".pyd"}]
 assert len(candidates)==1,(pkg,candidates); lib=ctypes.CDLL(str(candidates[0]))
@@ -18,8 +19,6 @@ rc=lib.cmpct_codec_zstd_compress_using_dict(payload,len(payload),dictionary,len(
 compressed=encoded.raw[:encoded_len.value]; expected_sha="0c265b0a03ec404b40749d13212420813cb546a6eecf5dcd0397f20ce15e23a6"; assert len(compressed)==104 and hashlib.sha256(compressed).hexdigest()==expected_sha
 out=ctypes.create_string_buffer(len(payload)); out_len=ctypes.c_size_t(); rc=lib.cmpct_codec_zstd_decompress_using_dict(compressed,len(compressed),dictionary,len(dictionary),out,len(payload),ctypes.byref(out_len)); assert rc==0 and out_len.value==len(payload) and out.raw==payload
 
-# Prove the installed *shipping Python path*, not merely direct ABI reachability. Any attempt to recover
-# ambient Zstd is fatal; optional libdeflate discovery remains allowed because it is not a format owner.
 real_find_library=ctypes.util.find_library
 def guarded_find_library(name):
     if str(name).lower()=="zstd": raise AssertionError("shipping Python attempted ambient Zstd discovery")
@@ -36,4 +35,4 @@ try:
 finally:
     ctypes.util.find_library=real_find_library
 
-print(json.dumps({"schema":"cmpct-installed-native-package-smoke-v3","library":str(candidates[0]),"symbols":"ok","dict_vector_bytes":104,"dict_vector_sha256":expected_sha,"roundtrip":True,"shipping_python_no_ambient_zstd":True}))
+print(json.dumps({"schema":"cmpct-installed-native-package-smoke-v3","library":str(candidates[0]),"symbols":"ok","dict_vector_bytes":104,"dict_vector_sha256":expected_sha,"roundtrip":True,"shipping_python_no_ambient_zstd":True,"python_zstandard_absent":True}))
