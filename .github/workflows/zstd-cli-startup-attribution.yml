@@ -1,0 +1,63 @@
+name: CMPCT Zstd CLI startup attribution
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/zstd-cli-startup-attribution.yml'
+      - 'src/cmpct/**'
+      - 'native/cmpct-core/**'
+      - 'pyproject.toml'
+
+jobs:
+  startup-attribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build optimized candidate editable package
+        run: python -m pip install -e .
+      - name: Materialize direct PR base
+        run: git worktree add /tmp/cmpct-startup-base ${{ github.event.pull_request.base.sha }}
+      - name: Measure process startup boundaries
+        env:
+          BASE_ROOT: /tmp/cmpct-startup-base
+        run: |
+          python - <<'PY'
+          import json, os, statistics, subprocess, sys, time
+          from pathlib import Path
+
+          root = Path.cwd()
+          base = Path(os.environ['BASE_ROOT'])
+          reps = 31
+
+          def run(cmd, env):
+              xs=[]
+              for _ in range(reps):
+                  t=time.perf_counter_ns()
+                  subprocess.run(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                  xs.append((time.perf_counter_ns()-t)/1e6)
+              return {'median_ms': statistics.median(xs), 'min_ms': min(xs), 'samples_ms': xs}
+
+          env_c=os.environ.copy(); env_c['PYTHONPATH']=str(root/'src')
+          env_b=os.environ.copy(); env_b['PYTHONPATH']=str(base/'src')
+          cases={
+              'python_empty':[sys.executable,'-c','pass'],
+              'import_cmpct_codec':[sys.executable,'-c','import cmpct.codec'],
+              'cli_help':[sys.executable,'-m','cmpct','--help'],
+          }
+          out={'repetitions':reps,'base_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=base,text=True).strip(),'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'cases':{}}
+          for name,cmd in cases.items():
+              b=run(cmd,env_b); c=run(cmd,env_c)
+              out['cases'][name]={'base':b,'candidate':c,'delta_ms':c['median_ms']-b['median_ms'],'ratio':c['median_ms']/b['median_ms']}
+          p=Path('startup-attribution.json'); p.write_text(json.dumps(out,indent=2)+'\n')
+          print(json.dumps({k:{'base_ms':v['base']['median_ms'],'candidate_ms':v['candidate']['median_ms'],'delta_ms':v['delta_ms'],'ratio':v['ratio']} for k,v in out['cases'].items()},indent=2))
+          PY
+      - uses: actions/upload-artifact@v6
+        with:
+          name: zstd-cli-startup-${{ github.sha }}
+          path: startup-attribution.json
