@@ -8,6 +8,7 @@ owned by the mature release product.
 import os
 from pathlib import Path
 import threading
+import time
 from typing import Any
 
 from experiments.entropygraph_v030_r24_process_prebuild import R24PrebuildProcess
@@ -96,6 +97,12 @@ def install_into_release_base(base_impl, *, timeout_s: float | None = None) -> R
     builder had no size-independent deadline either, and imposing one here would turn large
     valid archives into a new correctness failure. Tests and bounded callers may opt into a
     positive timeout explicitly.
+
+    The promoted Logs terminal is also installed here because this is the release-product
+    ownership seam. Its r24 and Logs candidates are materialized sequentially: replicated
+    A/B evidence showed the old two-thread overlap inflated parent RSS while process-tree
+    ownership gained nothing. Candidate implementations, admission, publication, and bytes
+    remain unchanged; only their lifetime overlap is removed.
     """
     registry = R24ProcessPrebuildRegistry(timeout_s=timeout_s)
     original_prepare = base_impl._ORIGINAL_PREPARE_PROFILE_TREE
@@ -118,4 +125,18 @@ def install_into_release_base(base_impl, *, timeout_s: float | None = None) -> R
 
     base_impl.C._prepare_profile_tree = prepare
     base_impl.C._r24_build = consume_or_build
+
+    # Importing the Logs wrapper here is acyclic: it depends on the preserved base module,
+    # not on the public release-product facade currently installing this shipping seam.
+    from experiments import entropygraph_v030_release_product_logs_candidate as logs_impl
+
+    def sequential_logs_candidates(root: Path, temp: Path) -> tuple[dict, dict, Path, Path, float]:
+        r24_path = temp / "candidate-r24.cmpct"
+        logs_path = temp / "candidate-logs.cmpct"
+        started = time.perf_counter()
+        r24 = logs_impl._build_r24(root, r24_path)
+        logs = logs_impl._build_logs(root, logs_path)
+        return r24, logs, r24_path, logs_path, time.perf_counter() - started
+
+    logs_impl._parallel_candidates = sequential_logs_candidates
     return registry
