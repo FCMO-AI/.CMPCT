@@ -38,7 +38,7 @@ jobs:
         run: |
           python -m pip install msgpack numpy soundfile
           cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
-          cp native/cmpct-core/target/release/libcmpct_core.so src/cmpct/
+          cp native/cmpct-core/target/release/libcmpct_core.so src/cmpct/cmpct_core.so
       - name: Localize source/tiny residual
         env:
           PYTHONPATH: src
