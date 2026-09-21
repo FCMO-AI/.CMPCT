@@ -2,37 +2,33 @@
 //!
 //! This intentionally exercises zstd-safe's low-level CCtx/DCtx dictionary calls rather than the
 //! higher-level zstd convenience API. Shipping ownership must not move unless these semantics remain
-//! byte-identical to the canonical one-shot libzstd calls on the frozen discriminator corpus.
+//! byte-identical to the canonical one-shot libzstd calls on the frozen #177 discriminator corpus.
 
 use sha2::{Digest, Sha256};
 use std::process::ExitCode;
 use zstd::zstd_safe::{self, CCtx, DCtx};
 
 fn payload() -> Vec<u8> {
-    // Preserve the known #177 discriminator length while avoiding fixture-identity dependence: the
-    // content combines repeated structure and deterministic perturbations so dictionary matching is
-    // material rather than accidental.
+    // Exact structured discriminator that exposed the 104 B vs 105 B dictionary mismatch in #177.
     let mut out = Vec::with_capacity(155_648);
-    let phrase = b"cmpct exact raw dictionary ownership boundary\0";
-    while out.len() < 155_648 {
-        let i = out.len();
-        out.extend_from_slice(phrase);
-        out.extend_from_slice(&(i as u64).to_le_bytes());
-        out.extend_from_slice(&phrase[..(i / 17) % phrase.len()]);
+    for _ in 0..8192 {
+        out.extend_from_slice(b"structured-record\0");
     }
-    out.truncate(155_648);
+    for _ in 0..128 {
+        out.extend(0u8..=63);
+    }
+    assert_eq!(out.len(), 155_648);
     out
 }
 
 fn dictionary() -> Vec<u8> {
-    let mut d = Vec::with_capacity(8192);
-    let seed = b"cmpct exact raw dictionary ownership boundary\0";
-    while d.len() < 8192 {
-        d.extend_from_slice(seed);
-        d.extend_from_slice(&(d.len() as u32).to_le_bytes());
+    let seed = b"alpha beta gamma delta structured-record\0";
+    let mut out = Vec::with_capacity(4096);
+    while out.len() < 4096 {
+        out.extend_from_slice(seed);
     }
-    d.truncate(8192);
-    d
+    out.truncate(4096);
+    out
 }
 
 fn probe() -> Result<(), String> {
