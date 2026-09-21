@@ -2,10 +2,10 @@ from __future__ import annotations
 
 """Research-only parent live-RSS phase attribution for frozen Shifted on the #175 product surface.
 
-This is observational and carries no release credit.  It intentionally reuses the frozen corpus generator and
-promoted release front door, then brackets the canonical r24/r25/verification boundaries while sampling the parent
-process at 2 ms.  The question is narrower than the release gate: after r24 allocation moved to a child, which
-remaining parent phase owns Shifted's high-water?
+This is observational and carries no release credit. It reuses the frozen corpus generator and promoted release
+front door, brackets canonical r24/r25/verification plus the retained-graph G0-G4 overlay, and samples the parent
+at 2 ms. The key discriminator is whether Shifted's sub-threshold G0-G4 graph stays on the parent thread path and
+owns the residual high-water after canonical r24 allocation moved to a child.
 """
 
 import argparse
@@ -36,6 +36,7 @@ def main() -> None:
     from experiments import entropygraph_v030_release_product as RP
 
     C = RP.C
+    shared = C.SHARED
     shutil.rmtree(args.work_root, ignore_errors=True)
     args.work_root.mkdir(parents=True)
     source = PERF._build_corpora(args.work_root / "corpus")[("neutral_hostile_v1", "01_shifted_versions")]
@@ -56,10 +57,12 @@ def main() -> None:
             **extra,
         })
 
-    originals = {name: getattr(C, name) for name in ("_r24_build", "_r25_build", "strong_verify")}
+    canonical_originals = {name: getattr(C, name) for name in ("_r24_build", "_r25_build", "strong_verify")}
+    overlay_original = shared._overlay_retained_graph
+    read_records_original = shared.strict._read_source_records
 
-    def wrap(name: str):
-        fn = originals[name]
+    def wrap_canonical(name: str):
+        fn = canonical_originals[name]
 
         def inner(*pos, **kw):
             mark(name + "_start")
@@ -74,8 +77,37 @@ def main() -> None:
 
         return inner
 
-    for name in originals:
-        setattr(C, name, wrap(name))
+    for name in canonical_originals:
+        setattr(C, name, wrap_canonical(name))
+
+    def read_records(*pos, **kw):
+        mark("g04_read_records_start")
+        out = read_records_original(*pos, **kw)
+        graph_records = out[3]
+        graph_path = Path(pos[0])
+        mark(
+            "g04_read_records_end",
+            graph_records=len(graph_records),
+            graph_archive_bytes=graph_path.stat().st_size,
+            process_pool_eligible=bool(RP._g04_process_pool_eligible(graph_path, graph_records)),
+            process_min_graph_bytes=int(RP.G04_PROCESS_MIN_GRAPH_BYTES),
+            process_min_records=int(RP.G04_PROCESS_MIN_RECORDS),
+        )
+        return out
+
+    def overlay(*pos, **kw):
+        mark("g04_overlay_start")
+        out = overlay_original(*pos, **kw)
+        mark(
+            "g04_overlay_end",
+            audition_workers=int(out.get("audition_workers", 0)),
+            audition_scheduler=out.get("audition_scheduler"),
+            records=len(out.get("records", [])),
+        )
+        return out
+
+    shared.strict._read_source_records = read_records
+    shared._overlay_retained_graph = overlay
 
     def sample() -> None:
         last_bucket = -1
@@ -84,7 +116,6 @@ def main() -> None:
             value = rss_kib()
             if value > peak["rss_kib"]:
                 peak.update(rss_kib=value, t=now)
-            # Persist a compact ~50 Hz trace while sampling the peak at 500 Hz.
             bucket = int(now * 50)
             if bucket != last_bucket:
                 samples.append({"t": now, "rss_kib": value})
@@ -101,13 +132,15 @@ def main() -> None:
     finally:
         stop.set()
         thread.join()
-        for name, fn in originals.items():
+        for name, fn in canonical_originals.items():
             setattr(C, name, fn)
+        shared._overlay_retained_graph = overlay_original
+        shared.strict._read_source_records = read_records_original
 
     result = {
-        "schema": "cmpct-v030-shifted-parent-phase-rss-v1",
+        "schema": "cmpct-v030-shifted-parent-phase-rss-v2",
         "release_credit": False,
-        "question": "which parent phase owns Shifted high-water after canonical r24 child isolation?",
+        "question": "does the parent-thread G0-G4 retained-graph overlay own Shifted high-water after r24 child isolation?",
         "selected": stats.get("selected") if stats else None,
         "format_revision": stats.get("format_revision") if stats else None,
         "archive_bytes": archive.stat().st_size if archive.exists() else None,
