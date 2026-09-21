@@ -1,13 +1,14 @@
 # ci-lane: research
 # ci-cancel-policy: latest-head
 # ci-pr-scope: latest-head-commit-gate
-# discriminator: separate Python buffer allocation/copy cost from package-owned Zstd call cost
+# discriminator: separate Python buffer cost from codec-owner cost, then reproduce it on real corpus shapes
 name: CMPCT Zstd writer-overhead oracle
 
 on:
   pull_request:
     paths:
       - ".github/workflows/zstd-residual-byte-oracle.yml"
+      - "src/cmpct/builder.py"
       - "src/cmpct/native_codec.py"
       - "native/cmpct-core/src/codec_abi.rs"
       - "native/cmpct-core/Cargo.toml"
@@ -34,7 +35,7 @@ jobs:
           python-version: "3.11"
       - name: Build package-owned core
         run: |
-          python -m pip install msgpack
+          python -m pip install msgpack numpy soundfile
           cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
           cp native/cmpct-core/target/release/libcmpct_core.so src/cmpct/cmpct_core.so
       - name: Charge writer boundary overhead
@@ -52,58 +53,76 @@ jobs:
           system.ZSTD_compressBound.argtypes=[sz]; system.ZSTD_compressBound.restype=sz
           system.ZSTD_compress.argtypes=[ctypes.c_void_p,sz,ctypes.c_void_p,sz,ctypes.c_int]; system.ZSTD_compress.restype=sz
           system.ZSTD_isError.argtypes=[sz]; system.ZSTD_isError.restype=ctypes.c_uint
-          version=system.ZSTD_versionString().decode()
-          print("inherited_zstd_version",version,flush=True)
-          assert version=="1.5.5", version
+          version=system.ZSTD_versionString().decode(); print("inherited_zstd_version",version,flush=True); assert version=="1.5.5"
 
           def inherited(data, level):
               src=ctypes.create_string_buffer(data); cap=int(system.ZSTD_compressBound(len(data))); dst=ctypes.create_string_buffer(cap)
-              n=int(system.ZSTD_compress(dst,cap,src,len(data),level)); assert not system.ZSTD_isError(n)
-              return dst.raw[:n]
+              n=int(system.ZSTD_compress(dst,cap,src,len(data),level)); assert not system.ZSTD_isError(n); return dst.raw[:n]
 
-          # This arm keeps source/destination buffers alive across calls. It therefore removes Python
-          # allocation/copy cost while preserving the exact Python->Rust ABI and bundled Zstd primitive.
           def owned_preallocated(data, level):
               src=ctypes.create_string_buffer(data); cap=int(nc._core.cmpct_codec_zstd_compress_bound(len(data))); dst=ctypes.create_string_buffer(cap); out=sz()
               def call():
-                  out.value=0
-                  status=int(nc._core.cmpct_codec_zstd_compress(src,len(data),level,dst,cap,ctypes.byref(out)))
-                  assert status==0
-                  return dst.raw[:out.value]
+                  out.value=0; status=int(nc._core.cmpct_codec_zstd_compress(src,len(data),level,dst,cap,ctypes.byref(out))); assert status==0; return dst.raw[:out.value]
               return call
 
-          payloads={
-              "tiny-1k": (b"abc123\n"*147)[:1024],
-              "source-16k": (b"def f(x): return (x * 2654435761) & 0xffffffff\n"*400)[:16384],
-              "mixed-256k": (b"CMPCT-zstd-boundary\0"*8192 + bytes(range(256))*512)[:262144],
-              "binary-1m": hashlib.shake_256(b"cmpct-writer-overhead-v1").digest(1048576),
-          }
+          payloads={"tiny-1k":(b"abc123\n"*147)[:1024],"source-16k":(b"def f(x): return (x * 2654435761) & 0xffffffff\n"*400)[:16384],"mixed-256k":(b"CMPCT-zstd-boundary\0"*8192+bytes(range(256))*512)[:262144],"binary-1m":hashlib.shake_256(b"cmpct-writer-overhead-v1").digest(1048576)}
           levels={"tiny-1k":9,"source-16k":9,"mixed-256k":12,"binary-1m":9}
-
           for name,data in payloads.items():
-              level=levels[name]
-              pre_call=owned_preallocated(data,level)
-              ref=inherited(data,level); owned=nc.compress(data,level); pre=pre_call()
-              assert owned==ref==pre, (name,len(ref),len(owned),len(pre))
-              loops=max(8,min(2000,8_000_000//len(data)))
-              arms={"inherited":lambda: inherited(data,level),"owned_python":lambda: nc.compress(data,level),"owned_prealloc":pre_call}
+              level=levels[name]; pre_call=owned_preallocated(data,level); ref=inherited(data,level); owned=nc.compress(data,level); pre=pre_call(); assert owned==ref==pre
+              loops=max(8,min(2000,8_000_000//len(data))); arms={"inherited":lambda: inherited(data,level),"owned_python":lambda: nc.compress(data,level),"owned_prealloc":pre_call}
               for fn in arms.values():
                   for _ in range(3): fn()
-              samples={k:[] for k in arms}
-              # Interleave arm order across rounds so runner drift cannot systematically favor one owner.
-              orders=[("inherited","owned_python","owned_prealloc"),("owned_prealloc","owned_python","inherited"),("owned_python","inherited","owned_prealloc")]
+              samples={k:[] for k in arms}; orders=[("inherited","owned_python","owned_prealloc"),("owned_prealloc","owned_python","inherited"),("owned_python","inherited","owned_prealloc")]
               for r in range(9):
-                  for key in orders[r%len(orders)]:
+                  for key in orders[r%3]:
                       fn=arms[key]; t0=time.perf_counter_ns()
                       for _ in range(loops): fn()
                       samples[key].append((time.perf_counter_ns()-t0)/loops)
               med={k:statistics.median(v) for k,v in samples.items()}
-              print(name,"bytes",len(data),"compressed",len(ref),"loops",loops,
-                    "inherited_ns",round(med["inherited"]),"owned_python_ns",round(med["owned_python"]),
-                    "owned_prealloc_ns",round(med["owned_prealloc"]),
-                    "owned_vs_inherited",round(med["owned_python"]/med["inherited"],4),
-                    "prealloc_vs_inherited",round(med["owned_prealloc"]/med["inherited"],4),
-                    "python_alloc_fraction",round(max(0.0,1-med["owned_prealloc"]/med["owned_python"]),4),flush=True)
+              print("micro",name,"bytes",len(data),"compressed",len(ref),"inherited_ns",round(med["inherited"]),"owned_python_ns",round(med["owned_python"]),"owned_prealloc_ns",round(med["owned_prealloc"]),"owned_vs_inherited",round(med["owned_python"]/med["inherited"],4),"prealloc_vs_inherited",round(med["owned_prealloc"]/med["inherited"],4),flush=True)
+          PY
+      - name: Charge codec owner inside real builder
+        env:
+          PYTHONPATH: src
+          CMPCT_ENCODE_WORKERS: "1"
+          CMPCT_DEFLATE_REUSE_MIN: "65536"
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee -a /tmp/writer-overhead-oracle.txt
+          import ctypes, ctypes.util, hashlib, statistics, tempfile, time
+          from pathlib import Path
+          from benchmarks import universal_bench as ub
+          import cmpct.builder as builder
+          from cmpct import native_codec as nc
+
+          z=ctypes.CDLL(ctypes.util.find_library("zstd") or "libzstd.so.1"); sz=ctypes.c_size_t
+          z.ZSTD_versionString.restype=ctypes.c_char_p; assert z.ZSTD_versionString().decode()=="1.5.5"
+          z.ZSTD_compressBound.argtypes=[sz]; z.ZSTD_compressBound.restype=sz
+          z.ZSTD_compress.argtypes=[ctypes.c_void_p,sz,ctypes.c_void_p,sz,ctypes.c_int]; z.ZSTD_compress.restype=sz
+          z.ZSTD_isError.argtypes=[sz]; z.ZSTD_isError.restype=ctypes.c_uint
+          z.ZSTD_createCCtx.argtypes=[]; z.ZSTD_createCCtx.restype=ctypes.c_void_p; z.ZSTD_freeCCtx.argtypes=[ctypes.c_void_p]; z.ZSTD_freeCCtx.restype=sz
+          z.ZSTD_compress_usingDict.argtypes=[ctypes.c_void_p,ctypes.c_void_p,sz,ctypes.c_void_p,sz,ctypes.c_void_p,sz,ctypes.c_int]; z.ZSTD_compress_usingDict.restype=sz
+          def inherited(data,level):
+              if not data:return b""
+              src=ctypes.create_string_buffer(data); cap=int(z.ZSTD_compressBound(len(data))); dst=ctypes.create_string_buffer(cap); n=int(z.ZSTD_compress(dst,cap,src,len(data),level)); assert not z.ZSTD_isError(n); return dst.raw[:n]
+          def inherited_dict(data,dictionary,level):
+              if not data:return b""
+              src=ctypes.create_string_buffer(data); db=ctypes.create_string_buffer(dictionary); cap=int(z.ZSTD_compressBound(len(data))); dst=ctypes.create_string_buffer(cap); ctx=z.ZSTD_createCCtx(); assert ctx
+              try:
+                  n=int(z.ZSTD_compress_usingDict(ctx,dst,cap,src,len(data),db,len(dictionary),level)); assert not z.ZSTD_isError(n); return dst.raw[:n]
+              finally:z.ZSTD_freeCCtx(ctx)
+
+          ub.reset(); ub.make_corpora()
+          with tempfile.TemporaryDirectory(prefix="cmpct-owner-ab-") as td:
+              td=Path(td)
+              for corpus in ("tiny","source","nested"):
+                  samples={"inherited":[],"owned":[]}; hashes={}
+                  for r in range(5):
+                      for owner,zc,zcd in (("inherited",inherited,inherited_dict),("owned",nc.compress,nc.compress_using_dict)) if r%2==0 else (("owned",nc.compress,nc.compress_using_dict),("inherited",inherited,inherited_dict)):
+                          builder.zc=zc; builder.zcd=zcd; out=td/f"{corpus}-{owner}-{r}.cmpct"; t0=time.perf_counter(); builder.Builder(ub.CORP/corpus,workers=1,reproducible=True).build(out); elapsed=time.perf_counter()-t0; payload=out.read_bytes(); samples[owner].append(elapsed); hashes.setdefault(owner,set()).add(hashlib.sha256(payload).hexdigest())
+                  assert len(hashes["inherited"])==1 and hashes["owned"]==hashes["inherited"], (corpus,hashes)
+                  a=statistics.median(samples["inherited"]); b=statistics.median(samples["owned"])
+                  print("builder",corpus,"inherited_s",round(a,6),"owned_s",round(b,6),"ratio",round(b/a,4),"sha256",next(iter(hashes["owned"])),flush=True)
           PY
       - name: Upload writer-overhead diagnostics
         if: always()
