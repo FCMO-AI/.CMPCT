@@ -14,10 +14,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-installed-native-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os }}
-  cancel-in-progress: true
-
 jobs:
   installed-package:
     strategy:
@@ -26,6 +22,9 @@ jobs:
         os: [ubuntu-24.04, macos-14, windows-2025]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    concurrency:
+      group: cmpct-installed-native-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v6
         with:
