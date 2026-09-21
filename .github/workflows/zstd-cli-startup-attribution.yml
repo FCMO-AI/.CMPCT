@@ -20,50 +20,35 @@ jobs:
         run: python -m pip install -e .
       - name: Materialize direct PR base
         run: git worktree add /tmp/cmpct-startup-base ${{ github.event.pull_request.base.sha }}
-      - name: Measure startup and serial-create boundaries
+      - name: Reproduce release binary corpus and test execution boundary
         env:
           BASE_ROOT: /tmp/cmpct-startup-base
         run: |
           python - <<'PY'
           import json, os, statistics, subprocess, sys, tempfile, time
           from pathlib import Path
-
-          root=Path.cwd(); base=Path(os.environ['BASE_ROOT']); work=Path(tempfile.mkdtemp()); src=work/'src'; src.mkdir()
-          # Deterministic mixed binary: compressible + pseudorandom-like bytes, large enough to expose serial codec cost.
-          src.joinpath('zeros.bin').write_bytes(bytes(8*1024*1024))
-          src.joinpath('pattern.bin').write_bytes((bytes(range(256))*32768))
-          reps=15
-          env_c=os.environ.copy(); env_c['PYTHONPATH']=str(root/'src')
-          env_b=os.environ.copy(); env_b['PYTHONPATH']=str(base/'src')
-
-          def proc(cmd,env,n=31):
+          root=Path.cwd(); base=Path(os.environ['BASE_ROOT']); work=Path(tempfile.mkdtemp())
+          sys.path.insert(0,str(root/'benchmarks')); import universal_bench as u
+          u.WORK=work/'bench'; u.CORP=u.WORK/'corpora'; u.OUT=u.WORK/'out'; u.WORK.mkdir(); u.CORP.mkdir(); u.OUT.mkdir(); u.make_corpora(); src=u.CORP/'binary'
+          reps=15; env_c=os.environ.copy(); env_c['PYTHONPATH']=str(root/'src'); env_b=os.environ.copy(); env_b['PYTHONPATH']=str(base/'src')
+          def proc(cmd,env,n=reps):
               xs=[]
               for _ in range(n):
                   t=time.perf_counter_ns(); subprocess.run(cmd,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True); xs.append((time.perf_counter_ns()-t)/1e6)
               return {'median_ms':statistics.median(xs),'samples_ms':xs}
-
-          def serial_script(out):
-              return "from pathlib import Path; from cmpct.builder import Builder; Builder(Path(%r),workers=1).build(Path(%r))"%(str(src),str(out))
-
-          cases={}
-          for name,cmd in {
-              'python_empty':[sys.executable,'-c','pass'],
-              'import_cmpct_codec':[sys.executable,'-c','import cmpct.codec'],
-              'cli_help':[sys.executable,'-m','cmpct','--help'],
-          }.items():
-              b=proc(cmd,env_b,31); c=proc(cmd,env_c,31); cases[name]={'base':b,'candidate':c,'delta_ms':c['median_ms']-b['median_ms'],'ratio':c['median_ms']/b['median_ms']}
-
-          # Fresh-process Builder(workers=1) and CLI create use the same source; subtract import medians only diagnostically,
-          # never as promotion evidence.
-          b=proc([sys.executable,'-c',serial_script(work/'base.cmpct')],env_b,reps); c=proc([sys.executable,'-c',serial_script(work/'cand.cmpct')],env_c,reps)
-          cases['serial_builder_process']={'base':b,'candidate':c,'delta_ms':c['median_ms']-b['median_ms'],'ratio':c['median_ms']/b['median_ms']}
-          b=proc([sys.executable,'-m','cmpct','create',str(src),str(work/'base-cli.cmpct')],env_b,reps); c=proc([sys.executable,'-m','cmpct','create',str(src),str(work/'cand-cli.cmpct')],env_c,reps)
-          cases['cli_create']={'base':b,'candidate':c,'delta_ms':c['median_ms']-b['median_ms'],'ratio':c['median_ms']/b['median_ms']}
-          if (work/'base.cmpct').read_bytes() != (work/'cand.cmpct').read_bytes(): raise SystemExit('serial archive identity changed')
-          if (work/'base-cli.cmpct').read_bytes() != (work/'cand-cli.cmpct').read_bytes(): raise SystemExit('CLI archive identity changed')
-          out={'repetitions':reps,'base_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=base,text=True).strip(),'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'cases':cases}
-          Path('startup-attribution.json').write_text(json.dumps(out,indent=2)+'\n')
-          print(json.dumps({k:{'base_ms':v['base']['median_ms'],'candidate_ms':v['candidate']['median_ms'],'delta_ms':v['delta_ms'],'ratio':v['ratio']} for k,v in cases.items()},indent=2))
+          def pair(name,bcmd,ccmd):
+              b=proc(bcmd,env_b); c=proc(ccmd,env_c); return {'base':b,'candidate':c,'delta_ms':c['median_ms']-b['median_ms'],'ratio':c['median_ms']/b['median_ms']}
+          out_b=work/'base.cmpct'; out_c=work/'cand.cmpct'; out_p=work/'cand-par.cmpct'
+          base_cmd=[sys.executable,'-m','cmpct','create',str(src),str(out_b)]
+          cand_cmd=[sys.executable,'-m','cmpct','create',str(src),str(out_c)]
+          par_cmd=[sys.executable,'-m','cmpct','create',str(src),str(out_p),'--workers','8']
+          cases={'binary_cli_serial':pair('binary_cli_serial',base_cmd,cand_cmd)}
+          serial=cases['binary_cli_serial']['candidate']; par=proc(par_cmd,env_c)
+          cases['candidate_workers8_vs_candidate_serial']={'base':serial,'candidate':par,'delta_ms':par['median_ms']-serial['median_ms'],'ratio':par['median_ms']/serial['median_ms']}
+          subprocess.run(base_cmd,env=env_b,stdout=subprocess.DEVNULL,check=True); subprocess.run(cand_cmd,env=env_c,stdout=subprocess.DEVNULL,check=True); subprocess.run(par_cmd,env=env_c,stdout=subprocess.DEVNULL,check=True)
+          if out_b.read_bytes()!=out_c.read_bytes() or out_b.read_bytes()!=out_p.read_bytes(): raise SystemExit('archive identity changed')
+          data={'repetitions':reps,'base_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=base,text=True).strip(),'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'logical_bytes':sum(p.stat().st_size for p in src.iterdir()),'cases':cases}
+          Path('startup-attribution.json').write_text(json.dumps(data,indent=2)+'\n'); print(json.dumps({k:{'base_ms':v['base']['median_ms'],'candidate_ms':v['candidate']['median_ms'],'delta_ms':v['delta_ms'],'ratio':v['ratio']} for k,v in cases.items()},indent=2))
           PY
       - uses: actions/upload-artifact@v6
         with:
