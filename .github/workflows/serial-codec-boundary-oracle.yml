@@ -1,0 +1,91 @@
+name: CMPCT research - serial codec boundary oracle
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/serial-codec-boundary-oracle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install candidate and benchmark dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zstd libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Materialize inherited engine
+        run: git worktree add --detach /tmp/cmpct-base "${{ github.event.pull_request.base.sha }}"
+      - name: Generate frozen binary corpus
+        run: |
+          python - <<'PY'
+          import os, sys, shutil, hashlib
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()/'benchmarks'))
+          import universal_bench as u
+          root=Path('/tmp/cmpct-boundary-corpus'); shutil.rmtree(root,ignore_errors=True); root.mkdir()
+          u.CORP=root; u.reset_rng(); u.make_corpora()
+          b=root/'binary'
+          print('logical',sum(p.stat().st_size for p in b.rglob('*') if p.is_file()))
+          h=hashlib.sha256()
+          for p in sorted(x for x in b.rglob('*') if x.is_file()): h.update(p.relative_to(b).as_posix().encode()); h.update(p.read_bytes())
+          print('fingerprint',h.hexdigest())
+          PY
+      - name: Measure inherited and package-owned serial codec boundary
+        env:
+          CORPUS: /tmp/cmpct-boundary-corpus/binary
+        run: |
+          cat > /tmp/measure.py <<'PY'
+          import hashlib,json,os,sys,tempfile,time
+          from pathlib import Path
+          repo=Path(sys.argv[1]); sys.path.insert(0,str(repo/'src'))
+          import cmpct.builder as bm
+          from cmpct.builder import Builder
+          stats={'zc_calls':0,'zcd_calls':0,'zc_ns':0,'zcd_ns':0,'zc_in':0,'zcd_in':0}
+          ozc,ozcd=bm.zc,bm.zcd
+          def zc(data,level):
+              t=time.perf_counter_ns(); out=ozc(data,level); dt=time.perf_counter_ns()-t
+              stats['zc_calls']+=1; stats['zc_ns']+=dt; stats['zc_in']+=len(data); return out
+          def zcd(data,dictionary,level):
+              t=time.perf_counter_ns(); out=ozcd(data,dictionary,level); dt=time.perf_counter_ns()-t
+              stats['zcd_calls']+=1; stats['zcd_ns']+=dt; stats['zcd_in']+=len(data); return out
+          bm.zc,bm.zcd=zc,zcd
+          out=Path(tempfile.mktemp(suffix='.cmpct')); t=time.perf_counter_ns(); Builder(Path(os.environ['CORPUS']),workers=1).build(out); total=time.perf_counter_ns()-t
+          print(json.dumps({'repo':str(repo),'total_ns':total,'archive_bytes':out.stat().st_size,'archive_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),**stats},sort_keys=True))
+          PY
+          rm -f /tmp/boundary.jsonl
+          for i in 1 2 3 4 5 6 7; do
+            PYTHONPATH= python /tmp/measure.py /tmp/cmpct-base | tee -a /tmp/boundary.jsonl
+            PYTHONPATH= python /tmp/measure.py "$GITHUB_WORKSPACE" | tee -a /tmp/boundary.jsonl
+          done
+          python - <<'PY'
+          import json,statistics
+          rows=[json.loads(x) for x in open('/tmp/boundary.jsonl')]
+          groups={}
+          for r in rows: groups.setdefault(r['repo'],[]).append(r)
+          assert len({r['archive_sha256'] for r in rows})==1, 'archive identity mismatch'
+          for repo,rs in groups.items():
+              print(repo)
+              for k in ('total_ns','zc_ns','zcd_ns','zc_calls','zcd_calls','zc_in','zcd_in'):
+                  print(k,statistics.median(r[k] for r in rs))
+          repos=list(groups); a,b=groups[repos[0]],groups[repos[1]]
+          for k in ('total_ns','zc_ns','zcd_ns'):
+              ma=statistics.median(r[k] for r in a); mb=statistics.median(r[k] for r in b)
+              print('delta',k,mb-ma,'ratio',mb/ma if ma else None)
+          PY
+      - uses: actions/upload-artifact@v6
+        with:
+          name: serial-codec-boundary-${{ github.sha }}
+          path: /tmp/boundary.jsonl
