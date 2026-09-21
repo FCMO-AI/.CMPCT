@@ -4,6 +4,7 @@
 //! higher-level zstd convenience API. Shipping ownership must not move unless these semantics remain
 //! byte-identical to the canonical one-shot libzstd calls on the frozen discriminator corpus.
 
+use sha2::{Digest, Sha256};
 use std::process::ExitCode;
 use zstd::zstd_safe::{self, CCtx, DCtx};
 
@@ -65,8 +66,9 @@ fn probe() -> Result<(), String> {
         if m != src.len() || decoded != src {
             return Err(format!("dictionary roundtrip mismatch at level {level}"));
         }
+        let digest = Sha256::digest(&compressed);
         println!(
-            "level={level} usize={} csize={}",
+            "level={level} usize={} csize={} sha256={digest:x}",
             src.len(),
             compressed.len()
         );
