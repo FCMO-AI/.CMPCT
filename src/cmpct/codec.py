@@ -37,23 +37,11 @@ S_BLOB=0; S_CHUNKS=1; S_VZIP=2; S_SPARSE=3; S_PACK=4; S_CDC=5
 CHUNK=256*1024
 CDC_MIN=128*1024; CDC_AVG=512*1024; CDC_MAX=2*1024*1024
 
-# --- Zstandard through the system library ----------------------------------
-_z=ctypes.CDLL(ctypes.util.find_library('zstd') or 'libzstd.so')
+# --- Package-owned Zstandard ------------------------------------------------
+# Zstd is a format dependency, so the Python package owns its codec engine instead of rediscovering
+# an ambient OS library.  The thin ctypes boundary keeps exact historical bytes while Rust owns Zstd.
+from .native_codec import compress as zc, decompress as zd, compress_using_dict as zcd
 _sz=ctypes.c_size_t
-_z.ZSTD_compressBound.argtypes=[_sz];_z.ZSTD_compressBound.restype=_sz
-_z.ZSTD_compress.argtypes=[ctypes.c_void_p,_sz,ctypes.c_void_p,_sz,ctypes.c_int];_z.ZSTD_compress.restype=_sz
-_z.ZSTD_decompress.argtypes=[ctypes.c_void_p,_sz,ctypes.c_void_p,_sz];_z.ZSTD_decompress.restype=_sz
-_z.ZSTD_isError.argtypes=[_sz];_z.ZSTD_isError.restype=ctypes.c_uint
-_z.ZSTD_getErrorName.argtypes=[_sz];_z.ZSTD_getErrorName.restype=ctypes.c_char_p
-_z.ZSTD_createCCtx.argtypes=[];_z.ZSTD_createCCtx.restype=ctypes.c_void_p
-_z.ZSTD_freeCCtx.argtypes=[ctypes.c_void_p];_z.ZSTD_freeCCtx.restype=_sz
-_z.ZSTD_createDCtx.argtypes=[];_z.ZSTD_createDCtx.restype=ctypes.c_void_p
-_z.ZSTD_freeDCtx.argtypes=[ctypes.c_void_p];_z.ZSTD_freeDCtx.restype=_sz
-_z.ZSTD_compress_usingDict.argtypes=[ctypes.c_void_p,ctypes.c_void_p,_sz,ctypes.c_void_p,_sz,ctypes.c_void_p,_sz,ctypes.c_int];_z.ZSTD_compress_usingDict.restype=_sz
-_z.ZSTD_decompress_usingDict.argtypes=[ctypes.c_void_p,ctypes.c_void_p,_sz,ctypes.c_void_p,_sz,ctypes.c_void_p,_sz];_z.ZSTD_decompress_usingDict.restype=_sz
-_z.ZSTD_createDDict.argtypes=[ctypes.c_void_p,_sz];_z.ZSTD_createDDict.restype=ctypes.c_void_p
-_z.ZSTD_freeDDict.argtypes=[ctypes.c_void_p];_z.ZSTD_freeDDict.restype=_sz
-_z.ZSTD_decompress_usingDDict.argtypes=[ctypes.c_void_p,ctypes.c_void_p,_sz,ctypes.c_void_p,_sz,ctypes.c_void_p];_z.ZSTD_decompress_usingDDict.restype=_sz
 
 # libdeflate is used only as a faster decoder for exact Deflate streams inherited from ZIP.
 # The stored bytes remain ordinary raw Deflate, so this is an implementation acceleration, not a new codec.
@@ -123,20 +111,6 @@ def cdc_chunks(data:bytes,min_size:int=CDC_MIN,avg_size:int=CDC_AVG,max_size:int
     if p!=len(data):out.append(data[p:])
     return out
 
-
-def zcd(data:bytes, dictionary:bytes, level:int)->bytes:
-    if not data:return b''
-    src=ctypes.create_string_buffer(data);db=ctypes.create_string_buffer(dictionary);cap=int(_z.ZSTD_compressBound(len(data)));dst=ctypes.create_string_buffer(cap);ctx=_z.ZSTD_createCCtx()
-    try:n=_zck(_z.ZSTD_compress_usingDict(ctx,dst,cap,src,len(data),db,len(dictionary),level));return dst.raw[:n]
-    finally:_z.ZSTD_freeCCtx(ctx)
-def zdd(data:bytes, usize:int, dictionary:bytes)->bytes:
-    if usize==0:return b''
-    src=ctypes.create_string_buffer(data);db=ctypes.create_string_buffer(dictionary);dst=ctypes.create_string_buffer(usize);ctx=_z.ZSTD_createDCtx()
-    try:
-        n=_zck(_z.ZSTD_decompress_usingDict(ctx,dst,usize,src,len(data),db,len(dictionary)))
-        if n!=usize:raise IOError(f'Zstd-dict size mismatch: {n} != {usize}')
-        return dst.raw[:n]
-    finally:_z.ZSTD_freeDCtx(ctx)
 
 def _audio_modules():
     # Heavy scientific/audio modules are imported only when a file actually selects the FLAC codec.
