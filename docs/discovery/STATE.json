@@ -4,56 +4,54 @@
   "authority": {
     "canonical_release": "v0.29.0 / r24 on main",
     "active_frontier": "PR #175 agent/v030-r24-process-productization",
-    "source": "PR #175; canonical product 35563173856/10623735108; Logs scheduling run 35566703880 attempts 1-2; shipping sequentialization head 22e63188bf49e3e6ed72c5a8564f4564e7cfe983"
+    "source": "PR #175; exact shipping head 4bdb6f761ea370b7f1c5a1bc11f2fa3ed0e79a8a; canonical+tree authority run 35571598470 artifact 10626681868"
   },
   "active_product_bottleneck": {
-    "id": "v030-logs-parent-rss-overlap",
-    "observation": "Canonical-v2 has one remaining red: Logs parent pack RSS 1.35250x. Two exact-code A/B/C attempts causally replicate candidate overlap: attempt1 threaded/sequential parent-tree 168,828/140,132 KiB; attempt2 166,248/139,756 KiB. r24-child lowers parent but raises charged tree to 188,624/188,980 KiB. Within each attempt all arms are byte/admission identical. Exact sequential r24->Logs scheduling is now installed at the release-product ownership seam on head 22e63188; canonical authority is pending.",
-    "next_discriminator": "Run unchanged canonical-v2 and whole-tree authority on the sequential shipping head; product evidence decides promotion or rollback."
+    "id": "v030-release-convergence-after-memory-closure",
+    "observation": "The sequential r24->Logs shipping mutation closed the final stable creator parent-RSS red under unchanged authority. Exact-head runtime-authority job 106244231094 passed. canonical-v2 passes all gates: Logs max parent pack RSS 1.001699x, Shifted 1.000x, ML 1.177117x; max create 1.231072x, max extract 1.152842x, zero size regressions. Whole-process-tree authority also passes: max tree RSS 1.0, max create 1.209960x, max extract 1.203647x. Candidate fingerprint d488f79621c59b6faec2168d732285680dc8beafb07fcc542fbd880d425c72fc.",
+    "next_discriminator": "Do not continue creator-memory tuning. Recompute release-convergence blockers from current repository authority, with Windows native-zstd packaging/portability issue #176 remaining explicit and separate from the now-closed memory mechanism."
   },
   "primary_question": {
-    "id": "logs-sequential-productization",
-    "family": "memory-ownership/candidate-scheduling",
-    "status": "SHIPPING_MUTATION_LANDED_CANONICAL_PENDING",
+    "id": "post-memory-release-convergence",
+    "family": "release-convergence/portability-evidence",
+    "status": "MEMORY_DEBT_CLOSED_REORIENT",
     "evidence": [
-      "35563173856/10623735108: Logs sole canonical-v2 red at 1.3525007x parent pack RSS; all timing gates and whole-tree authority green",
-      "35566703880 attempt1 / artifact 10623994370: threaded 168,828 KiB; sequential 140,132 KiB (-17.0%); child tree 188,624 KiB",
-      "35566703880 attempt2 / artifact 10625460038 / sha256:8c1b95b372bf5d88a906e9448104e3f77e44848720d7abc883fe93d8f086bf37: threaded 166,248 KiB; sequential 139,756 KiB (-15.9%); child tree 188,980 KiB",
-      "22e63188bf49e3e6ed72c5a8564f4564e7cfe983: shipping release-product seam now materializes exact r24 then Logs sequentially; frozen candidate implementations/admission remain unchanged; regression assertion pins the promoted seam"
+      "35571598470/10626681868: exact-head runtime authority passed canonical-v2 and whole-tree on shipping sequential r24->Logs",
+      "canonical-v2: Shifted 1.000x, Logs 1.001699x, ML 1.177117x max parent pack RSS; all byte/create/extract/RSS gates pass",
+      "whole-tree: Logs 0.467988x, Shifted 0.943981x, ML 0.590879x max pack RSS; all gates pass",
+      "35566703880 attempts 1-2 predicted the causal direction; shipping authority now confirms product credit"
     ],
-    "prediction": "Shipping sequential candidate materialization should close Logs parent RSS under <=1.25x with no archive-byte or process-tree regression and remain inside timing gates.",
-    "kill": "If unchanged canonical-v2 fails RSS, bytes, or timing after exact sequential productization, canonical evidence wins and the mechanism is not promotable."
+    "prediction": "Creator-memory rehabilitation should require no further mechanism changes; remaining work should be release/portability convergence rather than local RSS optimization.",
+    "kill": "Any exact same-candidate rerun that reproducibly reopens a byte, timing, parent-RSS, or whole-tree gate reopens causal diagnosis; otherwise do not spend discovery budget on this closed family."
   },
   "frontier_candidates": [
-    {"id": "logs-sequential-exact-candidates", "status": "SHIPPING_CANONICAL_PENDING", "evidence": "35566703880 attempts 1-2; head 22e63188"},
-    {"id": "logs-selector-r24-child-owner", "status": "REJECT_AS_FIRST_PRODUCT_ROUTE", "evidence": "both attempts: lower parent but ~189 MiB charged tree, worse than threaded/sequential"},
-    {"id": "creator-import-cold-start", "status": "CONDITIONAL_ONLY", "evidence": "Logs extract green at 1.17642x on 35563173856"}
+    {"id": "windows-native-zstd-package-ownership", "status": "ACTIVE_PRODUCT_DEBT", "evidence": "issue #176; Linux/macOS focused portability pass on 35571598470 while Windows fails the known ambient libzstd loader boundary"},
+    {"id": "release-evidence-convergence", "status": "NEXT", "evidence": "canonical-v2 and whole-tree are green at fingerprint d488f796...; discover remaining promotion law/evidence gaps before changing product code"},
+    {"id": "worldview-distance-representation-search", "status": "QUEUED_AFTER_RELEASE_CONVERGENCE", "evidence": "memory family is closed; reopen representation search only after current promotion debt is decision-complete"}
   ],
   "protected_seeds": [
-    {"id": "shifted-hg-screen-buffer-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35557126948;35563483707;35563173856"},
-    {"id": "ml-r24-process-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35563173856"}
+    {"id": "shifted-hg-screen-buffer-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35557126948;35563483707;35563173856;35571598470"},
+    {"id": "ml-r24-process-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35563173856;35571598470"},
+    {"id": "logs-sequential-exact-candidates", "status": "SHIPPING_CONFIRMED", "evidence": "35566703880 attempts1-2;35571598470/10626681868"}
   ],
   "retired_or_narrowed": [
-    {"id": "shifted-hg-screen-buffer-lifetime-as-open-bottleneck", "reason": "35563173856 closes Shifted"},
-    {"id": "logs-overlap-as-unproven-owner", "reason": "35566703880 attempts 1-2 causally replicate overlap"},
-    {"id": "logs-child-owner-as-preferred-fix", "reason": "both attempts expose ~189 MiB charged tree peak; process relocation hides parent cost"},
-    {"id": "timing-threshold-straddlers-as-current-blocker", "reason": "35563173856 all create/extract timing gates green"}
+    {"id": "v030-creator-parent-rss-as-open-bottleneck", "reason": "35571598470 closes Shifted, Logs and ML under unchanged canonical-v2"},
+    {"id": "logs-child-owner-as-preferred-fix", "reason": "replicated A/B exported cost to process tree; sequential shipping dominates"},
+    {"id": "logs-overlap-as-unproven-owner", "reason": "replicated A/B plus shipping canonical authority causally close the question"},
+    {"id": "timing-threshold-straddlers-as-current-blocker", "reason": "35571598470 all canonical-v2 and whole-tree timing gates pass"}
   ],
   "decision_evidence": {
-    "canonical_runtime": "35563173856/10623735108: only Logs parent RSS red; whole-tree passes.",
-    "logs_scheduling_ab": "35566703880 attempts1-2: sequential parent/tree reduction replicates at 17.0% and 15.9%; child tree cost replicates near 189 MiB; arm identity exact within each attempt.",
-    "cross_run_corpus_caveat": "Attempt1 archive 3,550,343 B/SHA 2b24a3d8...; attempt2 3,550,342 B/SHA c52a5100... on same code SHA. Runtime-generated source metadata is not physically deterministic across runs; never use cross-attempt archive SHA as corpus identity without normalizing/persisting the source.",
-    "shifted_shipping": "35563483707 plus 35563173856: exact identity and canonical closure.",
-    "shifted_causal_ab": "35557126948: live RSS -28.5%; ru_maxrss -27.4%; wall +0.38%."
+    "canonical_runtime": "35571598470/10626681868 fingerprint d488f796...: canonical-v2 gate passed; Logs parent RSS 1.001699x; max workload create 1.231072x; max extract 1.152842x; zero size regressions.",
+    "whole_tree": "35571598470/10626681868: tree gate passed; max pack RSS 1.0; max workload create 1.209960x; max extract 1.203647x.",
+    "logs_scheduling_ab": "35566703880 attempts1-2 predicted sequential parent/tree reduction at 17.0% and 15.9%; shipping authority confirms closure.",
+    "portability": "35571598470 focused Ubuntu/macOS pass; Windows failure remains issue #176 and is not evidence against the memory mechanism."
   },
   "process_lessons": [
-    {"lesson": "Prefer deleting avoidable overlap/retention over process relocation when exact serial recomputation stays inside timing margin.", "evidence": "35557126948 and 35566703880 attempts1-2"},
-    {"lesson": "Parent-only RSS can reward exported process cost; charge the process tree before productizing ownership boundaries.", "evidence": "35566703880 attempts1-2"},
-    {"lesson": "Within-run shared-source identity can prove a causal A/B even when runtime-generated filesystem metadata prevents cross-run physical SHA identity; cross-run claims need a persisted/normalized source fingerprint.", "evidence": "35566703880 attempts1-2"}
+    {"lesson": "Prefer deleting avoidable overlap/retention over process relocation when exact serial recomputation stays inside timing margin.", "evidence": "35557126948;35566703880 attempts1-2;35571598470"},
+    {"lesson": "Parent-only RSS can reward exported process cost; charge the process tree before productizing ownership boundaries.", "evidence": "35566703880 attempts1-2;35571598470"},
+    {"lesson": "A cheap causal A/B can accurately predict an expensive canonical product result when identity and exported costs are charged independently.", "evidence": "35566703880 attempts1-2 -> 35571598470"}
   ],
-  "pending_jobs": [
-    {"provider": "GitHub Actions", "source_sha": "22e63188bf49e3e6ed72c5a8564f4564e7cfe983", "question": "logs-sequential-productization", "expected": "exact-head tests plus canonical-v2 and whole-tree receipts", "decision_unlocked": "promote sequential scheduling if unchanged product gates close; otherwise rollback/re-attribute"}
-  ],
-  "next_action": "Consume exact-head authority for 22e63188 (or its state-only descendant). Do not tune thresholds/admission or the research harness while product evidence is pending. If canonical-v2 closes Logs and whole-tree remains green, retire this bottleneck and PARETOBONK the full product frontier; otherwise let the failing gate choose rollback or causal re-attribution.",
-  "last_reconciled": "2026-09-21T07:10Z"
+  "pending_jobs": [],
+  "next_action": "Re-orient from current authority and enumerate the remaining release-convergence blockers rather than touching creator-memory code. Treat #176 Windows native-zstd package ownership as active product debt; use an installed-package/wheel boundary and exact codec/archive evidence across Linux/macOS/Windows. In parallel, verify the candidate has every release-law artifact required for eventual v0.30 promotion. Do not reopen closed RSS families without contradictory exact-candidate evidence.",
+  "last_reconciled": "2026-09-21T07:59Z"
 }
