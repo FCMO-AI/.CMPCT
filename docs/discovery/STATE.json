@@ -1,67 +1,14 @@
 {
-  "schema": "cmpct-discovery-state-v1",
-  "status": "ACTIVE",
-  "authority": {
-    "canonical_release": "v0.29.0 / r24 on main",
-    "active_frontier": "PR #175 creator-memory closure -> PR #180 package-owned Zstd convergence",
-    "source": "PR #175 canonical+tree 35571598470/10626681868; PR #180 native/archive evidence through 35593116145; reader A/B 35597928936/10637810754"
-  },
-  "active_product_bottleneck": {
-    "id": "v030-release-convergence-after-memory-closure",
-    "observation": "Creator-memory is closed. PR #180 links package-owned Zstd writer and reusable reader ABIs into cmpct_core. Exact writer/archive identity is positive on Linux. The charged real-archive reader A/B now shows loaded-DCtx is not slower than ambient cached DDict+DCtx and has identical process peak RSS. The remaining immediate discriminator is clean installed-package ownership across Linux/macOS/Windows before Python shipping is migrated.",
-    "next_discriminator": "Build a wheel strictly from the sdist on Ubuntu/macOS/Windows, clean-install it, execute the frozen exact dictionary vector through the installed cdylib, and inspect ELF/Mach-O/PE closure for any ambient libzstd dependency."
-  },
-  "primary_question": {
-    "id": "windows-native-zstd-package-ownership",
-    "family": "release-convergence/portability-evidence",
-    "status": "READER_COST_PASS_INSTALLED_PACKAGE_PENDING",
-    "evidence": [
-      "35571598470/10626681868: creator-memory canonical-v2 and whole-tree gates pass",
-      "#178/35512913089: exact low-level zstd_safe usingDict vectors pass Ubuntu/macOS/Windows",
-      "35592085805@c585ea39: caller-buffer ABI linked into shipping cmpct_core; full native matrix green",
-      "35592651732@ce764fa7: Python ctypes caller resolves shipping codec symbols; frozen 104 B/SHA exact; complete reproducible archive bytes equal ambient writer",
-      "35593116145@02bac929: package-owned load-once dictionary decoder repeatedly decodes exact frozen bytes through Python ctypes; full native matrix green",
-      "35597928936/10637810754@95f6d2af: five isolated-process rounds, 120 cache-evicted reads + 15 extracts/arm; exact logical identity every operation; native/ambient read wall 0.9659x, read CPU 0.9636x, extract wall 0.9800x, extract CPU 0.9810x, RSS 1.000x"
-    ],
-    "prediction": "The same cmpct_core cdylib can be built from the Python sdist, installed cleanly on all three desktop OSes, preserve the frozen exact codec vector, and carry no ambient libzstd dependency.",
-    "kill": "Any installed exact-byte mismatch or external libzstd dependency kills package-ownership credit. Platform-specific packaging failure is a productization blocker until fixed; do not substitute checkout-local build success."
-  },
-  "frontier_candidates": [
-    {"id": "windows-native-zstd-package-ownership", "status": "ACTIVE_PRODUCT_DEBT", "evidence": "#176/#180; writer/archive identity and reader charged A/B pass; installed package matrix pending"},
-    {"id": "python-reader-ddict-ownership", "status": "DISCRIMINATOR_PASSED", "evidence": "35597928936: loaded-DCtx is 0.966x read wall, 0.980x extract wall, 1.000x RSS versus cached DDict+DCtx on frozen real codec-3 archive"},
-    {"id": "release-evidence-custody", "status": "ACTIVE", "evidence": "#181 public headers excluded from fingerprint_globs; #182 strict release lock lacks clean installed desktop package receipt"}
-  ],
-  "protected_seeds": [
-    {"id": "shifted-hg-screen-buffer-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35557126948;35563483707;35563173856;35571598470"},
-    {"id": "ml-r24-process-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35563173856;35571598470"},
-    {"id": "logs-sequential-exact-candidates", "status": "SHIPPING_CONFIRMED", "evidence": "35566703880 attempts1-2;35571598470"},
-    {"id": "package-owned-zstd-caller-buffer-abi", "status": "LINUX_ARCHIVE_IDENTITY_PASS", "evidence": "#178;PR#180;35592085805;35592651732"},
-    {"id": "package-owned-zstd-loaded-dctx", "status": "CHARGED_READER_PASS", "evidence": "PR#180;35593116145;35597928936/10637810754"}
-  ],
-  "retired_or_narrowed": [
-    {"id": "v030-creator-parent-rss-as-open-bottleneck", "reason": "35571598470 closes Shifted, Logs and ML under unchanged canonical-v2"},
-    {"id": "logs-child-owner-as-preferred-fix", "reason": "replicated A/B exported cost to process tree; sequential shipping dominates"},
-    {"id": "python-zstandard-as-transparent-dictionary-substitute", "reason": "#177/#178 exact compressed-byte mismatch; low-level package-owned zstd is the surviving route"},
-    {"id": "os-specific-libzstd-name-gardening", "reason": "does not solve installed-package dependency ownership and is dominated by package-owned core"},
-    {"id": "stateless-dictionary-reload-as-default-reader-plan", "reason": "upstream and cheap falsifier show load cost; stateful loaded-DCtx is simpler"},
-    {"id": "native-ddict-handle-as-required-reader-design", "reason": "35597928936 shows the simpler loaded-DCtx handle matches RSS and slightly beats cached DDict+DCtx on charged read/extract medians; extra state is not earned"}
-  ],
-  "decision_evidence": {
-    "canonical_runtime": "35571598470/10626681868 fingerprint d488f796...: canonical-v2 and whole-tree gates passed.",
-    "zstd_writer": "35592651732: shipping cdylib external caller preserves exact dictionary vector and complete reproducible archive bytes against ambient writer.",
-    "zstd_reader": "35597928936/10637810754: isolated-process charged A/B preserves exact logical identity; native loaded-DCtx has 0.966x read wall, 0.980x extract wall and 1.000x RSS versus ambient cached DDict+DCtx.",
-    "release_custody": "#181/#182 remain mandatory before final fingerprint/receipts: public headers are fingerprint-blind and installed desktop package closure is not yet release authority."
-  },
-  "process_lessons": [
-    {"lesson": "Prefer deleting avoidable overlap/retention over process relocation when exact serial recomputation stays inside timing margin.", "evidence": "35557126948;35566703880 attempts1-2;35571598470"},
-    {"lesson": "Parent-only RSS can reward exported process cost; charge the process tree before productizing ownership boundaries.", "evidence": "35566703880 attempts1-2;35571598470"},
-    {"lesson": "For transparent codec ownership migration, exact compressed-byte and complete-archive identity are stronger early discriminators than cross-decode compatibility.", "evidence": "#177;#178;35592651732"},
-    {"lesson": "Test a cdylib ABI through the produced dynamic library; a Cargo integration-test extern-C proxy links the rlib and can create a false harness failure.", "evidence": "PR#180 discarded 0c25be327 proxy;35592651732"},
-    {"lesson": "For RSS A/Bs, isolate arms in fresh processes; ru_maxrss is a lifetime high-water mark and same-process arm ordering contaminates the second measurement.", "evidence": "PR#180 reader harness correction before 35597928936"}
-  ],
-  "pending_jobs": [
-    {"provider":"GitHub Actions","run":"installed-native-package matrix on PR #180","source_sha":"dc9b79d274bd600d8a13d5b5c803a2bf608bfb66","question":"windows-native-zstd-package-ownership","expected_artifact":"installed wheel + installed-native-smoke.json + dependency closure per OS","decision_unlocked":"whether clean package ownership is viable before Python migration"}
-  ],
-  "next_action": "Consume the installed-package Linux/macOS/Windows matrix. If all three preserve the exact 104 B vector/roundtrip and show no external libzstd dependency, migrate Python writer+reader ownership together to the installed cmpct_core and run full archive/conformance/performance authority. If a platform fails, fix that packaging/closure cause without weakening the exact-byte or dependency gate. Coordinate #181/#182 before final release receipts.",
-  "last_reconciled": "2026-09-21T12:15Z"
+  "schema":"cmpct-discovery-state-v1","status":"ACTIVE",
+  "authority":{"canonical_release":"v0.29.0 / r24 on main","active_frontier":"PR #175 creator-memory closure -> PR #180 package-owned Zstd convergence","source":"35571598470/10626681868; PR #180 native/archive through 35593116145; reader A/B 35597928936/10637810754; installed package 35598806187@32d9d6e7"},
+  "active_product_bottleneck":{"id":"v030-release-convergence-after-memory-closure","observation":"Creator-memory is closed. Package-owned writer/archive identity, charged reader ownership, and clean sdist-built installed codec ownership now pass. Run 35598806187 proves Ubuntu/macOS/Windows wheels built strictly from the sdist preserve the frozen exact 104 B dictionary vector and roundtrip and the installed cmpct_core has no external libzstd dependency. macOS additionally proves a physical x86_64+arm64 universal2 binary.","next_discriminator":"Migrate shipping Python writer and reader ownership together to the installed cmpct_core ABI, remove ambient Zstd discovery from those paths, then rerun complete archive identity/conformance/performance authority before considering the Python zstandard dependency removable."},
+  "primary_question":{"id":"python-package-owned-zstd-shipping-migration","family":"release-convergence/portability-evidence","status":"INSTALLED_PACKAGE_PASS_MIGRATION_READY","evidence":["35592651732: exact writer/archive identity through built cdylib","35597928936/10637810754: loaded-DCtx charged reader A/B passes (read wall 0.9659x, extract wall 0.9800x, RSS 1.000x)","35598680734/106329324565: architecture gate correctly falsified a mislabeled macOS universal2 wheel whose binary was arm64-only","35598806187@32d9d6e7: corrected sdist-built installed package matrix passes Ubuntu/macOS/Windows; exact 104 B/SHA vector and roundtrip pass; no external libzstd; macOS lipo reports x86_64 arm64"],"prediction":"Replacing shipping codec.py and reader dictionary ownership with the proven installed ABI preserves complete archive bytes and inherited product gates while removing ambient libzstd ownership.","kill":"Any archive byte/SHA mismatch, reader semantic failure, material whole-product cost regression, or platform install/closure regression blocks migration; do not rescue by changing format, thresholds or evaluators."},
+  "frontier_candidates":[{"id":"python-package-owned-zstd-shipping-migration","status":"ACTIVE_PRODUCT_DEBT","evidence":"writer/archive, reader-cost and installed-package prerequisite rungs all pass"},{"id":"release-evidence-custody","status":"ACTIVE","evidence":"#181 public headers excluded from fingerprint_globs; #182 installed desktop package receipt still absent from strict final release lock"}],
+  "protected_seeds":[{"id":"shifted-hg-screen-buffer-lifetime","status":"SHIPPING_CONFIRMED","evidence":"35557126948;35563483707;35563173856;35571598470"},{"id":"ml-r24-process-lifetime","status":"SHIPPING_CONFIRMED","evidence":"35563173856;35571598470"},{"id":"logs-sequential-exact-candidates","status":"SHIPPING_CONFIRMED","evidence":"35566703880 attempts1-2;35571598470"},{"id":"package-owned-zstd-caller-buffer-abi","status":"INSTALLED_CROSS_PLATFORM_PASS","evidence":"#178;35592651732;35598806187"},{"id":"package-owned-zstd-loaded-dctx","status":"CHARGED_READER_PASS","evidence":"35593116145;35597928936/10637810754"}],
+  "retired_or_narrowed":[{"id":"v030-creator-parent-rss-as-open-bottleneck","reason":"35571598470 closes Shifted, Logs and ML"},{"id":"logs-child-owner-as-preferred-fix","reason":"exported cost to process tree; sequential shipping dominates"},{"id":"python-zstandard-as-transparent-dictionary-substitute","reason":"#177/#178 exact compressed-byte mismatch"},{"id":"os-specific-libzstd-name-gardening","reason":"dominated by package-owned core"},{"id":"stateless-dictionary-reload-as-default-reader-plan","reason":"load cost measured; stateful loaded-DCtx wins"},{"id":"native-ddict-handle-as-required-reader-design","reason":"35597928936 shows simpler loaded-DCtx matches RSS and slightly beats charged cached-DDict path"},{"id":"trust-wheel-universal2-filename","reason":"35598680734 showed universal2 tag with arm64-only native binary; physical lipo gate is required"}],
+  "decision_evidence":{"canonical_runtime":"35571598470/10626681868 passes canonical-v2 and whole-tree","zstd_writer":"35592651732 preserves exact vector and complete archive bytes","zstd_reader":"35597928936/10637810754 preserves identity and charged cost","installed_package":"35598806187@32d9d6e7: Ubuntu/macOS/Windows clean sdist->wheel install exact vector+roundtrip+no-libzstd; macOS physical universal2","release_custody":"#181/#182 remain mandatory before final fingerprint receipts"},
+  "process_lessons":[{"lesson":"Prefer deleting avoidable overlap/retention over process relocation when exact serial recomputation stays inside timing margin.","evidence":"35557126948;35566703880;35571598470"},{"lesson":"Parent-only RSS can reward exported process cost; charge the process tree.","evidence":"35566703880;35571598470"},{"lesson":"For transparent codec ownership migration, exact compressed-byte and complete-archive identity are stronger early discriminators than cross-decode compatibility.","evidence":"#177;#178;35592651732"},{"lesson":"Test a cdylib ABI through the produced dynamic library; Cargo integration-test extern-C can link the rlib and mislead.","evidence":"PR#180;35592651732"},{"lesson":"For RSS A/Bs, isolate arms in fresh processes because ru_maxrss is lifetime high-water.","evidence":"PR#180 harness correction;35597928936"},{"lesson":"Do not trust a wheel architecture tag as proof of its native binary slices; inspect the installed artifact physically.","evidence":"35598680734 failure then 35598806187 lipo pass"}],
+  "pending_jobs":[],
+  "next_action":"Implement the smallest shipping Python adapter that resolves package-local cmpct_core, route zc/zd/zcd and reader dictionary decode through the proven ABI, preserve exact archive identity and loaded-DCtx lifetime, then run inherited conformance/performance on all relevant platforms. Only after that remove ambient libzstd discovery/Python zstandard if repository-wide search and tests prove it unused. Coordinate #181/#182 before final release receipts.",
+  "last_reconciled":"2026-09-21T12:21Z"
 }
