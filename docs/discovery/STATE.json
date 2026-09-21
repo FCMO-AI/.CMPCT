@@ -4,29 +4,31 @@
   "authority": {
     "canonical_release": "v0.29.0 / r24 on main",
     "active_frontier": "PR #175 agent/v030-r24-process-productization",
-    "source": "PR #175 head 1023fb353af2cc60522c6a483a60618f0cf9f44d; canonical-v2 Logs probe run 35552595037"
+    "source": "PR #175; Logs receipt 35552595037; Shifted A/B source head 9a421b007c1fe13e7ddafb34ae961e7506ebbd53"
   },
   "active_product_bottleneck": {
     "id": "v030-residual-parent-pack-rss",
-    "observation": "#175 closes the promoted ML parent-RSS owner on shipping evidence. The exact-head Logs selector-r24 probe then drives the Logs row to 1.0x parent pack RSS with exact bytes, but the unchanged full gate remains red: Shifted 1.3653865x RSS; ML create 1.2760299x; Logs extract 1.2902087x. The probe has product_credit=false and therefore localizes mechanism without promoting it.",
-    "next_discriminator": "Treat Shifted parent-only RSS as the controlling memory question. Do not stack #166 blindly: its exact whole-product receipt 35515684113 already falsified bounded r24 materialization as standalone closure. Profile/localize the post-r24-child Shifted parent owner before another implementation. Preserve the Logs selector-r24 result as a proven local ownership mechanism, but do not spend the next expensive rung productizing it while Shifted remains the larger release blocker."
+    "observation": "#175 closes the promoted ML parent-RSS owner on shipping evidence. The exact-head Logs selector-r24 probe drives Logs to 1.0x parent pack RSS with exact bytes, but the unchanged full gate remains red: Shifted 1.3653865x RSS; ML create 1.2760299x; Logs extract 1.2902087x. Shifted is now the controlling parent-memory question.",
+    "next_discriminator": "Run the exact-head frozen-Shifted phase/A-B receipt already dispatched at 9a421b0. It compares incumbent Hierarchical Geometry screening, which retains every screened transformed buffer, against exact recomputation of only the <=3 finalists while preserving nomination, inverse checks, sort/tie order and archive identity."
   },
   "primary_question": {
-    "id": "shifted-parent-owner-after-r24-child",
-    "family": "execution-architecture/memory-ownership/post-r24-parent-lifetime",
-    "status": "CONTROLLING_PRODUCT_MEMORY_LANE",
+    "id": "shifted-hg-screen-buffer-lifetime",
+    "family": "memory-ownership/search-buffer-lifetime",
+    "status": "ACTIVE_AB_DISPATCHED",
     "evidence": [
-      "#175 shipping canonical-v2 receipt: ML parent RSS below 1.25x while Shifted/Logs remained red",
-      "run 35552595037: Logs selector-r24 child ownership yields Logs parent pack RSS 1.0x, exact 3,550,342 B archive, but unchanged suite still fails",
-      "#166 run 35515684113: bounded r24 materialization preserves timing/bytes but whole-product Shifted RSS remains 1.67015x; r24-local spooling is not the residual parent owner"
+      "35552595037: Shifted remains 1.3653865x parent pack RSS after r24 child isolation",
+      "same receipt diagnostics: Shifted G0-G4 pre-overlay graph is 1,717,743 B and auditions 14 records, so current 4 MiB + 18-record process admission keeps it on the parent thread path",
+      "same receipt diagnostics: four large Shifted records each screen 48 Hierarchical Geometry candidates; all 14 records ultimately select zero transforms",
+      "source inspection: incumbent HG.audition stores each full transformed candidate in the screened list before sorting, although only MAX_EXACT_FINALISTS=3 are exact-compressed"
     ],
-    "kill": "Retire any proposed Shifted fix that merely moves r24-local memory already child-owned, changes exact bytes/failure semantics, or fails to reduce the post-r24 parent high-water under unchanged canonical-v2 measurement."
+    "prediction": "If screened transformed-buffer retention is a material Shifted owner, the bounded-screen arm should preserve archive SHA/bytes/selection while materially lowering parent live-RSS peak, especially inside g04_overlay. If peak is unchanged, retire this mechanism and use the phase trace to move to the next owner.",
+    "kill": "Any archive SHA/selection difference, meaningful timing loss without commensurate memory value, or no material parent-RSS reduction kills productization. No threshold/evaluator changes."
   },
   "frontier_candidates": [
     {
-      "id": "shifted-parent-owner-after-r24-child",
-      "status": "PRIMARY",
-      "evidence": "#175 + #166 whole-product receipts"
+      "id": "shifted-hg-screen-buffer-lifetime",
+      "status": "PRIMARY_AB_PENDING",
+      "evidence": "run 35556654569 on source head 9a421b0"
     },
     {
       "id": "logs-selector-r24-child-owner",
@@ -67,7 +69,7 @@
   ],
   "decision_evidence": {
     "logs_probe": "35552595037 / artifact 10619510592 / sha256:366092688e72e7b48ea149a20dbc1dcc8f73de1f8ef526db1879e73e8cf583de: Logs RSS 1.0x; full gate false; no size regressions.",
-    "shifted": "35552595037 Shifted RSS 1.3653865x after #175; #166 whole-product 35515684113 falsifies r24-local spool as standalone closure.",
+    "shifted": "35552595037 Shifted RSS 1.3653865x after #175; G0-G4 pre-overlay 1,717,743 B, 14 auditions, thread-path admission; four records screen 48 HG candidates each and no transform wins.",
     "timing": "35552595037 median create 1.05152x and median extract 0.94391x are green globally, but ML create 1.27603x and Logs extract 1.29021x exceed per-workload 1.25x in this repetition set. Preserve as measured evidence; do not threshold-garden."
   },
   "process_lessons": [
@@ -80,7 +82,16 @@
       "evidence": "Logs probe infrastructure sequence culminating in 35552595037"
     }
   ],
-  "pending_jobs": [],
-  "next_action": "Profile the exact #175 Shifted parent process after r24 child isolation and identify the first phase that raises parent/self ru_maxrss above the inherited baseline. Use the cheapest phase-attribution instrument before implementation. Explicitly distinguish retained G0-G4/graph state, canonical verification, wrapper/import residency and output materialization. Do not re-open #166 or add another r24 process boundary unless the attribution points there.",
-  "last_reconciled": "2026-09-21T03:03Z"
+  "pending_jobs": [
+    {
+      "provider": "GitHub Actions",
+      "run_id": 35556654569,
+      "source_sha": "9a421b007c1fe13e7ddafb34ae961e7506ebbd53",
+      "question": "Does retaining all screened HG transformed buffers own Shifted parent high-water?",
+      "expected_artifact": "v030-shifted-parent-phase-rss-9a421b007c1fe13e7ddafb34ae961e7506ebbd53",
+      "decision_unlocked": "Promote bounded-screen lifetime only if exact archive identity is preserved and parent RSS materially improves; otherwise retire and follow the phase trace."
+    }
+  ],
+  "next_action": "Consume run 35556654569 when complete. Do not babysit it. If bounded-screen wins exactly, validate whole-product timing/RSS before productization; if not, use its incumbent phase trace to select the next parent owner. In parallel, avoid touching Logs memory: its measured remaining debt is extraction latency, not parent RSS.",
+  "last_reconciled": "2026-09-21T03:12Z"
 }
