@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-"""Research-only parent live-RSS phase attribution for frozen Shifted on the #175 product surface.
-
-This is observational and carries no release credit. It reuses the frozen corpus generator and promoted release
-front door, brackets canonical r24/r25/verification plus the retained-graph G0-G4 overlay, and samples the parent
-at 2 ms. The key discriminator is whether Shifted's sub-threshold G0-G4 graph stays on the parent thread path and
-owns the residual high-water after canonical r24 allocation moved to a child.
-"""
+"""Research-only parent live-RSS phase attribution/A-B for frozen Shifted on the #175 product surface."""
 
 import argparse
 import json
@@ -30,6 +24,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--work-root", type=Path, required=True)
     ap.add_argument("--output", type=Path, required=True)
+    ap.add_argument("--bounded-screen", action="store_true")
     args = ap.parse_args()
 
     from benchmarks import v030_release_performance as PERF
@@ -60,6 +55,11 @@ def main() -> None:
     canonical_originals = {name: getattr(C, name) for name in ("_r24_build", "_r25_build", "strong_verify")}
     overlay_original = shared._overlay_retained_graph
     read_records_original = shared.strict._read_source_records
+    hg_audition_original = shared.G.HG.audition
+
+    if args.bounded_screen:
+        from experiments import v030_hierarchical_bounded_screen_probe as BOUNDED
+        shared.G.HG.audition = BOUNDED.audition
 
     def wrap_canonical(name: str):
         fn = canonical_originals[name]
@@ -85,9 +85,6 @@ def main() -> None:
         out = read_records_original(*pos, **kw)
         graph_records = out[3]
         graph_path = Path(pos[0])
-        # Record tuples carry the authenticated uncompressed size in slot 1.  This is a decoder-visible fact,
-        # not an oracle: it lets the attribution compare compressed graph size with the raw bytes the parent-thread
-        # audition path may materialize.  No record is decoded merely for this diagnostic.
         declared_raw = [int(record[1]) for record in graph_records]
         mark(
             "g04_read_records_end",
@@ -130,7 +127,7 @@ def main() -> None:
 
     thread = threading.Thread(target=sample, daemon=True)
     thread.start()
-    mark("build_start")
+    mark("build_start", bounded_screen=bool(args.bounded_screen))
     stats = None
     try:
         stats = RP.build(source, archive)
@@ -142,22 +139,24 @@ def main() -> None:
             setattr(C, name, fn)
         shared._overlay_retained_graph = overlay_original
         shared.strict._read_source_records = read_records_original
+        shared.G.HG.audition = hg_audition_original
 
     result = {
-        "schema": "cmpct-v030-shifted-parent-phase-rss-v3",
+        "schema": "cmpct-v030-shifted-parent-phase-rss-v4",
         "release_credit": False,
-        "question": "does the parent-thread G0-G4 retained-graph overlay own Shifted high-water after r24 child isolation?",
+        "arm": "bounded-screen-recompute-finalists" if args.bounded_screen else "incumbent-retain-all-screened-transforms",
+        "question": "does retaining every screened Hierarchical Geometry transform own Shifted parent high-water?",
         "selected": stats.get("selected") if stats else None,
         "format_revision": stats.get("format_revision") if stats else None,
         "archive_bytes": archive.stat().st_size if archive.exists() else None,
         "peak": peak,
         "events": events,
         "samples": samples,
-        "claim_boundary": "Frozen Shifted promoted build; observational parent-only phase attribution; no evaluator or threshold change.",
+        "claim_boundary": "Frozen Shifted promoted build; research A/B changes only screening-buffer lifetime; no evaluator, format, nomination or admission change.",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"peak": peak, "events": events, "selected": result["selected"], "archive_bytes": result["archive_bytes"]}, indent=2))
+    print(json.dumps({"arm": result["arm"], "peak": peak, "events": events, "selected": result["selected"], "archive_bytes": result["archive_bytes"]}, indent=2))
 
 
 if __name__ == "__main__":
