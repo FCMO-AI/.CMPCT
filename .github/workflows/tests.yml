@@ -26,30 +26,24 @@ jobs:
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
           clean: true
-
       - name: Bind regression evidence to exact head
         run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
-
       - name: Guard public project surface
         run: python tools/check_public_surface.py
-
       - name: Install reference implementation and tests
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
-
       - name: Run regression suite
         run: |
           mkdir -p test-artifacts
           set -o pipefail
           python -m pytest -q 2>&1 | tee test-artifacts/pytest.txt
-
       - name: Retain regression diagnostic
         if: always()
         uses: actions/upload-artifact@v4
@@ -57,9 +51,75 @@ jobs:
           name: pytest-${{ env.EVIDENCE_HEAD }}
           path: test-artifacts/pytest.txt
           if-no-files-found: error
-
       - name: Smoke-test CLI surface
         run: python -m cmpct --help
+
+  serial-codec-boundary-oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CORPUS: /tmp/cmpct-boundary-corpus/binary
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install candidate and materialize inherited engine
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y zstd libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          git worktree add --detach /tmp/cmpct-base "${{ github.event.pull_request.base.sha }}"
+      - name: Generate frozen binary corpus
+        run: |
+          python - <<'PY'
+          import sys,shutil,hashlib
+          from pathlib import Path
+          sys.path.insert(0,str(Path.cwd()/'benchmarks')); import universal_bench as u
+          root=Path('/tmp/cmpct-boundary-corpus'); shutil.rmtree(root,ignore_errors=True); root.mkdir(); u.CORP=root; u.reset_rng(); u.make_corpora(); b=root/'binary'
+          logical=sum(p.stat().st_size for p in b.rglob('*') if p.is_file()); assert logical==50331648,logical
+          h=hashlib.sha256()
+          for p in sorted(x for x in b.rglob('*') if x.is_file()): h.update(p.relative_to(b).as_posix().encode()); h.update(p.read_bytes())
+          print('logical',logical,'fingerprint',h.hexdigest())
+          PY
+      - name: Charge serial codec boundary
+        run: |
+          cat > /tmp/measure.py <<'PY'
+          import hashlib,json,os,sys,tempfile,time
+          from pathlib import Path
+          repo=Path(sys.argv[1]); sys.path.insert(0,str(repo/'src'))
+          import cmpct.builder as bm
+          from cmpct.builder import Builder
+          s={'zc_calls':0,'zcd_calls':0,'zc_ns':0,'zcd_ns':0,'zc_in':0,'zcd_in':0}; ozc,ozcd=bm.zc,bm.zcd
+          def zc(data,level):
+              t=time.perf_counter_ns(); out=ozc(data,level); s['zc_ns']+=time.perf_counter_ns()-t; s['zc_calls']+=1; s['zc_in']+=len(data); return out
+          def zcd(data,dictionary,level):
+              t=time.perf_counter_ns(); out=ozcd(data,dictionary,level); s['zcd_ns']+=time.perf_counter_ns()-t; s['zcd_calls']+=1; s['zcd_in']+=len(data); return out
+          bm.zc,bm.zcd=zc,zcd
+          out=Path(tempfile.mktemp(suffix='.cmpct')); t=time.perf_counter_ns(); Builder(Path(os.environ['CORPUS']),workers=1).build(out); total=time.perf_counter_ns()-t
+          print(json.dumps({'repo':str(repo),'total_ns':total,'archive_bytes':out.stat().st_size,'archive_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),**s},sort_keys=True))
+          PY
+          rm -f /tmp/boundary.jsonl
+          for i in 1 2 3 4 5 6 7; do PYTHONPATH= python /tmp/measure.py /tmp/cmpct-base | tee -a /tmp/boundary.jsonl; PYTHONPATH= python /tmp/measure.py "$GITHUB_WORKSPACE" | tee -a /tmp/boundary.jsonl; done
+          python - <<'PY'
+          import json,statistics
+          rows=[json.loads(x) for x in open('/tmp/boundary.jsonl')]; assert len({r['archive_sha256'] for r in rows})==1
+          g={}
+          for r in rows:g.setdefault(r['repo'],[]).append(r)
+          for repo,rs in g.items():
+              print(repo,{k:statistics.median(r[k] for r in rs) for k in ('total_ns','zc_ns','zcd_ns','zc_calls','zcd_calls','zc_in','zcd_in')})
+          repos=list(g)
+          for k in ('total_ns','zc_ns','zcd_ns'):
+              a=statistics.median(r[k] for r in g[repos[0]]); b=statistics.median(r[k] for r in g[repos[1]]); print('delta',k,b-a,'ratio',b/a if a else None)
+          PY
+      - uses: actions/upload-artifact@v6
+        with:
+          name: serial-codec-boundary-${{ env.EVIDENCE_HEAD }}
+          path: /tmp/boundary.jsonl
 
 # Footnote: correctness and disclosure safety are both release prerequisites. Audio extras are
 # installed here because codec-2 WAV/FLAC is part of revision 24 and its fixed conformance archive
