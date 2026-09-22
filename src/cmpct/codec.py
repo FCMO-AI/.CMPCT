@@ -153,7 +153,7 @@ def _compressed_payload(ap:Path, zi:zipfile.ZipInfo)->bytes:
         f.seek(zi.header_offset);v=LFH.unpack(f.read(LFH.size));nl,xl=v[-2],v[-1];f.seek(nl+xl,1);return f.read(zi.compress_size)
 
 def deflate_level_for(raw:bytes, target:bytes):
-    for level in range(10):
+    for level in (0,1,2,6,3,4,5,7,8,9):
         co=zlib.compressobj(level,zlib.DEFLATED,-15);got=co.compress(raw)+co.flush()
         if got==target:return level
     return None
