@@ -8,14 +8,19 @@ on:
     paths:
       - 'benchmarks/v030_content_zip_fast_search_integration.py'
       - '.github/workflows/v030-content-zip-fast-search-integration.yml'
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_content_zip_fast_search_integration.py'
+      - '.github/workflows/v030-content-zip-fast-search-integration.yml'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: cmpct-v030-content-zip-fast-search-${{ github.sha }}
+  group: cmpct-v030-content-zip-fast-search-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 env:
-  EVIDENCE_HEAD: ${{ github.sha }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
   PYTHONPATH: ${{ github.workspace }}
 jobs:
   integration:
