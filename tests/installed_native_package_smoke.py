@@ -5,7 +5,7 @@ from pathlib import Path
 spec=importlib.util.find_spec("cmpct"); assert spec and spec.submodule_search_locations
 assert importlib.util.find_spec("zstandard") is None,"clean installed product still depends on Python zstandard"
 requires_python=importlib.metadata.metadata("cmpct").get("Requires-Python")
-assert requires_python==">=3.10,<3.15",requires_python
+assert requires_python and {part.strip() for part in requires_python.split(",")}=={">=3.10","<3.15"},requires_python
 pkg=Path(next(iter(spec.submodule_search_locations)))
 candidates=[p for p in pkg.glob("cmpct_core*") if p.is_file() and p.suffix.lower() in {".so",".dylib",".dll",".pyd"}]
 assert len(candidates)==1,(pkg,candidates); lib=ctypes.CDLL(str(candidates[0]))
