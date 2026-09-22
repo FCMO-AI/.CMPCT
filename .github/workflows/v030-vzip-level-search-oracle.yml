@@ -16,6 +16,7 @@ concurrency:
   cancel-in-progress: false
 env:
   EVIDENCE_HEAD: ${{ github.sha }}
+  PYTHONPATH: ${{ github.workspace }}
 jobs:
   oracle:
     runs-on: ubuntu-24.04
