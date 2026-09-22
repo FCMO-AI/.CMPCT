@@ -1,9 +1,11 @@
 from __future__ import annotations
-import ctypes, ctypes.util, hashlib, importlib.util, json, tempfile
+import ctypes, ctypes.util, hashlib, importlib.metadata, importlib.util, json, tempfile
 from pathlib import Path
 
 spec=importlib.util.find_spec("cmpct"); assert spec and spec.submodule_search_locations
 assert importlib.util.find_spec("zstandard") is None,"clean installed product still depends on Python zstandard"
+requires_python=importlib.metadata.metadata("cmpct").get("Requires-Python")
+assert requires_python==">=3.10,<3.15",requires_python
 pkg=Path(next(iter(spec.submodule_search_locations)))
 candidates=[p for p in pkg.glob("cmpct_core*") if p.is_file() and p.suffix.lower() in {".so",".dylib",".dll",".pyd"}]
 assert len(candidates)==1,(pkg,candidates); lib=ctypes.CDLL(str(candidates[0]))
@@ -53,4 +55,4 @@ try:
 finally:
     ctypes.util.find_library=real_find_library
 
-print(json.dumps({"schema":"cmpct-installed-native-package-smoke-v4","library":str(candidates[0]),"symbols":"ok","dict_vector_bytes":104,"dict_vector_sha256":expected_sha,"roundtrip":True,"representative_archive_create_read_extract":True,"representative_archive_sha256":archive_sha,"shipping_python_no_ambient_zstd":True,"python_zstandard_absent":True}))
+print(json.dumps({"schema":"cmpct-installed-native-package-smoke-v5","library":str(candidates[0]),"symbols":"ok","requires_python":requires_python,"dict_vector_bytes":104,"dict_vector_sha256":expected_sha,"roundtrip":True,"representative_archive_create_read_extract":True,"representative_archive_sha256":archive_sha,"shipping_python_no_ambient_zstd":True,"python_zstandard_absent":True}))
