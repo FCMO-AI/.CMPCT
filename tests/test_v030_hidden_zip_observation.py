@@ -37,6 +37,16 @@ def test_unique_metadata_descriptors_do_not_read_compressed_payloads(tmp_path):
     assert obs.verification_bytes_read == 0
 
 
+def test_global_file_budget_fails_closed_before_partial_admission(tmp_path):
+    payload = _payload()
+    _hidden_zip(tmp_path / "a.bin", payload)
+    _hidden_zip(tmp_path / "b.bin", payload)
+    obs = observe_hidden_zip_admission(tmp_path, max_observation_files=1)
+    assert obs.admitted == ()
+    assert obs.verification_bytes_read == 0
+    assert ("observation_file_budget", 1) in obs.rejects
+
+
 def test_global_descriptor_budget_fails_closed_before_exact_payload_verification(tmp_path):
     payload = _payload()
     _hidden_zip(tmp_path / "a.bin", payload)
