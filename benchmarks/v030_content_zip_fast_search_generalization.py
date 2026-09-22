@@ -32,18 +32,27 @@ def _pack_locality(work:Path):
                         checks.append([suite,wd.name,name,start,ln])
     return checks
 
-def _child(i:int,root:str,q):
+def _child(i:int,root:str,conn):
     work=Path(root)/f'rep-{i}';old=codec.deflate_level_for;codec.deflate_level_for=_search
     try:d=YIELD.run(work);packs=_pack_locality(work)
     finally:codec.deflate_level_for=old
-    q.put({'rep':i,'result':d,'peak_rss_kib':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,'pack_range_checks':packs})
+    try:conn.send({'rep':i,'result':d,'peak_rss_kib':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,'pack_range_checks':packs})
+    finally:conn.close()
 
 def run(root:Path):
     shutil.rmtree(root,ignore_errors=True);root.mkdir(parents=True);ctx=mp.get_context('spawn');reps=[]
     for i in range(REPS):
-        q=ctx.Queue();p=ctx.Process(target=_child,args=(i,str(root),q));p.start();p.join()
+        # Do not join before draining the IPC payload. The full matrix result is larger than a
+        # typical pipe buffer: Queue.put() + parent join() can deadlock after the child has finished
+        # all scientific work but before it can flush the result. A one-way Pipe lets the parent
+        # receive concurrently, while poll() still preserves fail-fast child-exit diagnostics.
+        parent,child=ctx.Pipe(duplex=False);p=ctx.Process(target=_child,args=(i,str(root),child));p.start();child.close()
+        while not parent.poll(1.0):
+            if not p.is_alive():
+                p.join();raise RuntimeError(f'rep {i} exited before evidence payload: {p.exitcode}')
+        payload=parent.recv();parent.close();p.join()
         if p.exitcode!=0:raise RuntimeError(f'rep {i} failed: {p.exitcode}')
-        reps.append(q.get())
+        reps.append(payload)
     keys=[(r['suite'],r['name']) for r in reps[0]['result']['rows']]
     if any([(r['suite'],r['name']) for r in x['result']['rows']]!=keys for x in reps):raise RuntimeError('row identity drift')
     rows=[];reg=[]
