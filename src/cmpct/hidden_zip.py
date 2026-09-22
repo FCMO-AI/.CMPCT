@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Bounded, fail-closed discovery for optional hidden-ZIP virtualization.
 
-This module is deliberately not a second ZIP parser.  It cheaply rejects ordinary
+This module is deliberately not a second ZIP parser. It cheaply rejects ordinary
 files before any EOCD-tail read, proves only a bounded conventional ZIP envelope,
-and uses exact compressed-payload identity to estimate reusable structure.  Any
+and uses exact compressed-payload identity to estimate reusable structure. Any
 rejection means "store normally", never "fail the build".
 """
 
@@ -164,6 +164,8 @@ def _exact_stream_descriptors(path: Path):
                 if i.file_size <= 0:
                     continue
                 payload = _compressed_payload(path, i)
+                if len(payload) != i.compress_size:
+                    return None, "compressed_payload_bounds", read + len(payload)
                 read += len(payload)
                 descriptors.add((int(i.compress_type), len(payload), hashlib.sha256(payload).digest()))
             if not descriptors:
@@ -176,17 +178,16 @@ def _exact_stream_descriptors(path: Path):
 def observe_hidden_zip_admission(root: Path, *, min_verified_reuse: int = MIN_VERIFIED_REUSE) -> HiddenZipObservation:
     """Discover hidden candidates with bounded memory and exact repeated-stream identity.
 
-    The two passes intentionally trade candidate-only re-reading for bounded whole-tree memory: pass one
+    Two passes intentionally trade candidate-only re-reading for bounded whole-tree memory: pass one
     retains one compact owner state per exact stream, never per-path descriptor graphs; pass two recomputes
     each candidate locally to derive its verified reusable bytes and admission record.
     """
     root = Path(root)
     owners: dict[tuple[int, int, bytes], object] = {}
     rejects: Counter[str] = Counter()
-    files = parsed = head_bytes = tail_bytes = verification_bytes = 0
+    parsed = head_bytes = tail_bytes = verification_bytes = 0
 
     candidates = list(_physical_hidden_files(root))
-    files = len(candidates)
     for path, rel, stamp in candidates:
         pf = hidden_zip_preflight(path)
         head_bytes += pf.head_bytes_read
@@ -223,5 +224,17 @@ def observe_hidden_zip_admission(root: Path, *, min_verified_reuse: int = MIN_VE
             admitted.append(HiddenZipAdmission(rel, stamp, reuse))
 
     return HiddenZipObservation(
-        tuple(admitted), files, parsed, head_bytes, tail_bytes, verification_bytes, tuple(sorted(rejects.items()))
+        tuple(admitted), len(candidates), parsed, head_bytes, tail_bytes, verification_bytes, tuple(sorted(rejects.items()))
     )
+
+
+def admission_is_current(root: Path, admission: HiddenZipAdmission) -> bool:
+    """Revalidate the physical first-owner stamp immediately before canonical storage selection."""
+    try:
+        st = os.stat(Path(root) / admission.rel, follow_symlinks=False)
+    except OSError:
+        return False
+    if not stat.S_ISREG(st.st_mode):
+        return False
+    current = (int(st.st_dev), int(st.st_ino), int(st.st_size), int(st.st_mtime_ns))
+    return current == admission.stamp
