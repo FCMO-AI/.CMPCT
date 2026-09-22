@@ -14,6 +14,7 @@ MAX_OBSERVATION_FILES=262144;MAX_OBSERVATION_DESCRIPTORS=131072;MAX_OBSERVATION_
 ZIP64_U16=0xFFFF;ZIP64_U32=0xFFFFFFFF
 SUPPORTED_METHODS=frozenset((zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED));EXPLICIT_SUFFIXES=frozenset((".zip",".whl"));MIN_VERIFIED_REUSE=2176
 
+class _ObservationFileBudget(Exception):pass
 @dataclass(frozen=True)
 class HiddenZipPreflight:
     eligible:bool;reason:str;file_size:int;head_bytes_read:int;tail_bytes_read:int
@@ -74,10 +75,19 @@ def hidden_zip_preflight(path:Path)->HiddenZipPreflight:
         except OSError:size=0
         return HiddenZipPreflight(False,'io_or_structure_error',size,head_read,0)
 
-def _physical_observation_files(root:Path):
-    seen:set[tuple[int,int]]=set()
+def _physical_observation_files(root:Path,max_entries:int):
+    # Count directory entries before retaining/sorting them. This preserves Builder's lexical
+    # first-hardlink-owner rule without allowing a million aliases in one directory to allocate first.
+    seen:set[tuple[int,int]]=set();visited=0
     def walk(absdir:Path,prefix:str=''):
-        with os.scandir(absdir) as it:entries=sorted(it,key=lambda e:e.name)
+        nonlocal visited
+        entries=[]
+        with os.scandir(absdir) as it:
+            for e in it:
+                visited+=1
+                if visited>int(max_entries):raise _ObservationFileBudget
+                entries.append(e)
+        entries.sort(key=lambda e:e.name)
         for e in entries:
             rel=f'{prefix}/{e.name}' if prefix else e.name;st=e.stat(follow_symlinks=False)
             if stat.S_ISDIR(st.st_mode):yield from walk(Path(e.path),rel);continue
@@ -116,21 +126,24 @@ def _verify_stream(path:Path,descriptor:tuple[int,int,int,int]):
 
 def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED_REUSE,max_observation_files:int=MAX_OBSERVATION_FILES,max_observation_descriptors:int=MAX_OBSERVATION_DESCRIPTORS,max_observation_central_directory_bytes:int=MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES,max_candidate_logical_bytes:int=MAX_CANDIDATE_LOGICAL_BYTES)->HiddenZipObservation:
     root=Path(root);rejects:Counter[str]=Counter();stamps={};hidden=set();parsed=head_bytes=tail_bytes=verification_bytes=descriptor_count=files_observed=central_directory_bytes=0;candidates=[];metadata_owners:Counter[tuple[int,int,int,int]]=Counter()
-    for path,rel,stamp,explicit in _physical_observation_files(root):
-        files_observed+=1
-        if files_observed>int(max_observation_files):rejects['observation_file_budget']+=1;return HiddenZipObservation((),files_observed,parsed,head_bytes,tail_bytes,0,tuple(sorted(rejects.items())))
-        pf=hidden_zip_preflight(path);head_bytes+=pf.head_bytes_read;tail_bytes+=pf.tail_bytes_read
-        if not pf.eligible:rejects[('explicit_' if explicit else '')+pf.reason]+=1;continue
-        central_directory_bytes+=pf.central_directory_size
-        if central_directory_bytes>int(max_observation_central_directory_bytes):rejects['observation_central_directory_budget']+=1;return HiddenZipObservation((),files_observed,parsed,head_bytes,tail_bytes,0,tuple(sorted(rejects.items())))
-        descriptors,entries,logical,reason=_metadata_descriptors(path)
-        if descriptors is None:rejects[('explicit_' if explicit else '')+(reason or 'exact_parse_rejected')]+=1;continue
-        if logical>int(max_candidate_logical_bytes):rejects[('explicit_' if explicit else '')+'logical_work_budget']+=1;continue
-        descriptor_count+=entries
-        if descriptor_count>int(max_observation_descriptors):rejects['observation_descriptor_budget']+=1;return HiddenZipObservation((),files_observed,parsed,head_bytes,tail_bytes,0,tuple(sorted(rejects.items())))
-        stamps[rel]=stamp
-        if not explicit:hidden.add(rel)
-        parsed+=1;candidates.append((path,rel,explicit,descriptors));metadata_owners.update(descriptors)
+    try:
+        for path,rel,stamp,explicit in _physical_observation_files(root,max_observation_files):
+            files_observed+=1
+            pf=hidden_zip_preflight(path);head_bytes+=pf.head_bytes_read;tail_bytes+=pf.tail_bytes_read
+            if not pf.eligible:rejects[('explicit_' if explicit else '')+pf.reason]+=1;continue
+            central_directory_bytes+=pf.central_directory_size
+            if central_directory_bytes>int(max_observation_central_directory_bytes):rejects['observation_central_directory_budget']+=1;return HiddenZipObservation((),files_observed,parsed,head_bytes,tail_bytes,0,tuple(sorted(rejects.items())))
+            descriptors,entries,logical,reason=_metadata_descriptors(path)
+            if descriptors is None:rejects[('explicit_' if explicit else '')+(reason or 'exact_parse_rejected')]+=1;continue
+            if logical>int(max_candidate_logical_bytes):rejects[('explicit_' if explicit else '')+'logical_work_budget']+=1;continue
+            descriptor_count+=entries
+            if descriptor_count>int(max_observation_descriptors):rejects['observation_descriptor_budget']+=1;return HiddenZipObservation((),files_observed,parsed,head_bytes,tail_bytes,0,tuple(sorted(rejects.items())))
+            stamps[rel]=stamp
+            if not explicit:hidden.add(rel)
+            parsed+=1;candidates.append((path,rel,explicit,descriptors));metadata_owners.update(descriptors)
+    except _ObservationFileBudget:
+        rejects['observation_file_budget']+=1
+        return HiddenZipObservation((),files_observed,parsed,head_bytes,tail_bytes,0,tuple(sorted(rejects.items())))
     repeated={d for d,count in metadata_owners.items() if count>=2};exact_owners={};content_hashes={}
     for path,rel,_explicit,descriptors in candidates:
         hints=descriptors&repeated
@@ -149,9 +162,7 @@ def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED
     evidence=tuple(HiddenZipEvidenceState(rel,stamps[rel],content_hashes[rel]) for rel in sorted(content_hashes))
     return HiddenZipObservation(admitted,files_observed,parsed,head_bytes,tail_bytes,verification_bytes,tuple(sorted(rejects.items())),evidence)
 
-def admission_is_current(root:Path,admission:HiddenZipAdmission)->bool:
-    return _state_current(Path(root),admission.rel,admission.stamp,admission.content_sha256)
-
+def admission_is_current(root:Path,admission:HiddenZipAdmission)->bool:return _state_current(Path(root),admission.rel,admission.stamp,admission.content_sha256)
 def observation_is_current(root:Path,observation:HiddenZipObservation)->bool:
     """Require every physical owner used by the reuse proof to remain byte-identical."""
     return all(_state_current(Path(root),e.rel,e.stamp,e.content_sha256) for e in observation.evidence)
