@@ -4,6 +4,7 @@
 The historical Python worktree is not executable after cmpct_core became package-owned unless
 its own native payload is built. Build through normal isolated PEP 517 so setuptools-rust from
 build-system.requires is honored; --no-build-isolation can silently produce a pure wheel.
+The optional receipt makes source, wheel, native payload and physical ownership auditable.
 """
 from __future__ import annotations
 
