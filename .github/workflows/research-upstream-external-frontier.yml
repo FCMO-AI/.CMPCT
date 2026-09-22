@@ -45,13 +45,11 @@ jobs:
           SEVEN="$(find /tmp/upstream/src -type f -name 7zz -perm -u+x | head -1)"
           test -n "$SEVEN"
           install -m 0755 "$SEVEN" /tmp/upstream/bin/7z
-
           curl -fL --retry 3 -o /tmp/upstream/zstd.tar.gz https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz
           echo 'eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3  /tmp/upstream/zstd.tar.gz' | sha256sum -c -
           tar -xzf /tmp/upstream/zstd.tar.gz -C /tmp/upstream/src
           make -C /tmp/upstream/src/zstd-1.5.7 -j"$(nproc)" zstd
           install -m 0755 /tmp/upstream/src/zstd-1.5.7/programs/zstd /tmp/upstream/bin/zstd
-
           /tmp/upstream/bin/7z i | head -n 4
           /tmp/upstream/bin/zstd --version
           {
@@ -62,17 +60,14 @@ jobs:
             /tmp/upstream/bin/7z i | head -n 4
             /tmp/upstream/bin/zstd --version
           } > /tmp/upstream/provenance.txt
+          echo '/tmp/upstream/bin' >> "$GITHUB_PATH"
       - name: Preflight unchanged strict scoreboard
-        env:
-          PATH: /tmp/upstream/bin:${{ env.PATH }}
         run: |
           set -euo pipefail
           test "$(command -v 7z)" = /tmp/upstream/bin/7z
           test "$(command -v zstd)" = /tmp/upstream/bin/zstd
           python -m pytest -q tests/test_v030_external_competitor_scoreboard.py
       - name: Run unchanged 15-workload matrix with upstream comparators
-        env:
-          PATH: /tmp/upstream/bin:${{ env.PATH }}
         run: |
           mkdir -p benchmark-artifacts
           cp /tmp/upstream/provenance.txt benchmark-artifacts/upstream-provenance.txt
