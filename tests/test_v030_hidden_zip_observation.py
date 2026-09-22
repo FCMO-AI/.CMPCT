@@ -107,3 +107,20 @@ def test_mutation_after_observation_revokes_admission(tmp_path):
     with a.open("ab") as f:
         f.write(b"changed-after-observation")
     assert not admission_is_current(tmp_path, admission)
+
+
+def test_same_size_same_mtime_rewrite_still_revokes_content_bound_admission(tmp_path):
+    payload = _payload()
+    a = tmp_path / "a.bin"
+    _hidden_zip(a, payload)
+    _hidden_zip(tmp_path / "b.bin", payload)
+    obs = observe_hidden_zip_admission(tmp_path)
+    admission = next(x for x in obs.admitted if x.rel == "a.bin")
+    st = a.stat()
+    raw = bytearray(a.read_bytes())
+    raw[0] ^= 1
+    a.write_bytes(raw)
+    os.utime(a, ns=(st.st_atime_ns, st.st_mtime_ns))
+    assert a.stat().st_size == admission.stamp[2]
+    assert a.stat().st_mtime_ns == admission.stamp[3]
+    assert not admission_is_current(tmp_path, admission)
