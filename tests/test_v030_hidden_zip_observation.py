@@ -7,8 +7,8 @@ import zipfile
 from cmpct.hidden_zip import MIN_VERIFIED_REUSE, admission_is_current, observe_hidden_zip_admission
 
 
-def _payload() -> bytes:
-    rng = random.Random(204)
+def _payload(seed: int = 204) -> bytes:
+    rng = random.Random(seed)
     return bytes(rng.randrange(256) for _ in range(16 * 1024))
 
 
@@ -26,6 +26,15 @@ def test_two_physical_hidden_archives_can_earn_verified_reuse(tmp_path):
     assert all(a.verified_reuse_bytes >= MIN_VERIFIED_REUSE for a in obs.admitted)
     assert all(admission_is_current(tmp_path, a) for a in obs.admitted)
     assert obs.verification_bytes_read > 0
+
+
+def test_unique_metadata_descriptors_do_not_read_compressed_payloads(tmp_path):
+    _hidden_zip(tmp_path / "a.bin", _payload(1))
+    _hidden_zip(tmp_path / "b.bin", _payload(2))
+    obs = observe_hidden_zip_admission(tmp_path)
+    assert obs.admitted == ()
+    assert obs.candidates_parsed == 2
+    assert obs.verification_bytes_read == 0
 
 
 def test_hardlink_alias_cannot_fake_two_physical_owners(tmp_path):
