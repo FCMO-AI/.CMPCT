@@ -1,6 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 content-ZIP fast-search integration
 on:
   push:
@@ -16,14 +16,14 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: cmpct-v030-content-zip-fast-search-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
   PYTHONPATH: ${{ github.workspace }}
 jobs:
   latest-head-impact:
+    concurrency:
+      group: cmpct-v030-content-zip-fast-search-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -45,6 +45,9 @@ jobs:
   integration:
     needs: latest-head-impact
     if: needs.latest-head-impact.outputs.run_deep == 'true'
+    concurrency:
+      group: cmpct-v030-content-zip-fast-search-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
