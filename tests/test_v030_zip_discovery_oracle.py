@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# These tests exercise controlled inputs only. Hostile ZIP inflation budgets are an explicit PR #195 completion gate.
 from pathlib import Path
 import zipfile
 
