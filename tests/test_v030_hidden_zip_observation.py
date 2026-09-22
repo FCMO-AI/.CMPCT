@@ -51,11 +51,17 @@ def test_global_io_budget_also_bounds_exact_stream_verification(tmp_path):
     preflight_bytes=probe.head_bytes_read+probe.tail_bytes_read
     metadata_parser_bytes=probe.parser_bytes_read//2
     file_bytes=sum((tmp_path/name).stat().st_size for name in ('a.bin','b.bin'))
-    # Leave room for preflight + metadata parse + both content hashes, but not the second parser open
-    # required before exact compressed-stream verification.
     obs=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=preflight_bytes+metadata_parser_bytes+file_bytes+1)
     assert obs.admitted==();assert ('observation_io_budget',1) in obs.rejects
     assert obs.verification_bytes_read==file_bytes
+
+def test_revalidation_shares_the_aggregate_io_ceiling(tmp_path):
+    payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload)
+    obs=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=10**9);assert obs.admitted
+    already_used=obs.head_bytes_read+obs.tail_bytes_read+obs.parser_bytes_read+obs.verification_bytes_read
+    assert not observation_is_current(tmp_path,obs,max_io_bytes=already_used)
+    evidence_bytes=sum(e.stamp[2] for e in obs.evidence)
+    assert observation_is_current(tmp_path,obs,max_io_bytes=already_used+evidence_bytes)
 
 def test_hardlink_alias_cannot_fake_two_physical_owners(tmp_path):
     payload=_payload();first=tmp_path/'a.bin';_hidden_zip(first,payload);os.link(first,tmp_path/'b.bin');assert observe_hidden_zip_admission(tmp_path).admitted==()
