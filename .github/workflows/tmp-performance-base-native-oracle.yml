@@ -30,7 +30,10 @@ jobs:
           echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
           git worktree add --detach /tmp/cmpct-performance-base "$BASE_SHA"
           mkdir -p /tmp/base-wheel
-          python -m pip wheel --no-deps --no-build-isolation /tmp/cmpct-performance-base -w /tmp/base-wheel
+          # Keep PEP 517 build isolation: candidate's editable build installs setuptools-rust only in
+          # its ephemeral build env. Disabling isolation silently produced a py3-none-any wheel with
+          # no cmpct_core payload in the first oracle attempt.
+          python -m pip wheel --no-deps /tmp/cmpct-performance-base -w /tmp/base-wheel
           python - <<'PY'
           from pathlib import Path
           import zipfile
@@ -38,10 +41,11 @@ jobs:
           dst=Path('/tmp/cmpct-performance-base/src/cmpct')
           with zipfile.ZipFile(wheel) as z:
               members=[n for n in z.namelist() if n.startswith('cmpct/cmpct_core') and n.rsplit('/',1)[-1].startswith('cmpct_core')]
-              assert len(members)==1, members
+              assert len(members)==1, (wheel.name, members)
               member=members[0]
               out=dst/Path(member).name
               out.write_bytes(z.read(member))
+              print('base_wheel', wheel.name)
               print('base_native', out, out.stat().st_size)
           PY
       - name: Prove base and candidate resolve distinct source-local native owners
