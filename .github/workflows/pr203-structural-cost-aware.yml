@@ -1,0 +1,32 @@
+name: PR203 apply structural cost-aware Deflate search
+on:
+  push:
+    branches: [agent/v030-deflate-bounded-regret-productization]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/v030-deflate-bounded-regret-productization
+          fetch-depth: 0
+      - name: Apply structural search policy and self-delete
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/cmpct/codec.py'); s=p.read_text()
+          old='    for level in (0,6,1,2,3,4,5,7,8,9):\n'
+          new='    levels = range(10) if not target or ((target[0] >> 1) & 0b11) == 0 else (6,0,1,2,3,4,5,7,8,9)\n    for level in levels:\n'
+          if s.count(old)!=1: raise SystemExit(f'expected one static cost-aware loop, found {s.count(old)}')
+          p.write_text(s.replace(old,new,1))
+          PY
+          rm .github/workflows/pr203-structural-cost-aware.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/cmpct/codec.py .github/workflows/pr203-structural-cost-aware.yml
+          git commit -m 'perf: accelerate only compressed Deflate blocks'
+          git push origin HEAD:agent/v030-deflate-bounded-regret-productization
