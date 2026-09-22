@@ -119,7 +119,7 @@ def hidden_zip_preflight(path: Path) -> HiddenZipPreflight:
         return HiddenZipPreflight(False, "io_or_structure_error", size, head_read, 0)
 
 
-def _physical_hidden_files(root: Path):
+def _physical_observation_files(root: Path):
     """Yield lexical first-inode owners, mirroring Builder's hardlink ownership boundary."""
     root = Path(root)
     seen: set[tuple[int, int]] = set()
@@ -140,9 +140,8 @@ def _physical_hidden_files(root: Path):
                 if ik in seen:
                     continue
                 seen.add(ik)
-            if Path(e.name).suffix.lower() in EXPLICIT_SUFFIXES:
-                continue
-            yield Path(e.path), rel, (ik[0], ik[1], int(st.st_size), int(st.st_mtime_ns))
+            explicit = Path(e.name).suffix.lower() in EXPLICIT_SUFFIXES
+            yield Path(e.path), rel, (ik[0], ik[1], int(st.st_size), int(st.st_mtime_ns)), explicit
 
     yield from walk(root)
 
@@ -176,55 +175,54 @@ def _exact_stream_descriptors(path: Path):
 
 
 def observe_hidden_zip_admission(root: Path, *, min_verified_reuse: int = MIN_VERIFIED_REUSE) -> HiddenZipObservation:
-    """Discover hidden candidates with bounded memory and exact repeated-stream identity.
+    """Discover hidden candidates in one streaming pass with exact stream identity.
 
-    Two passes intentionally trade candidate-only re-reading for bounded whole-tree memory: pass one
-    retains one compact owner state per exact stream, never per-path descriptor graphs; pass two recomputes
-    each candidate locally to derive its verified reusable bytes and admission record.
+    Explicit ZIP/WHL first-owners participate only as reuse evidence; they can never be returned as hidden
+    admissions. Per-path state is one integer reuse counter plus a physical stamp, not a descriptor graph.
     """
     root = Path(root)
     owners: dict[tuple[int, int, bytes], object] = {}
+    reuse: Counter[str] = Counter()
     rejects: Counter[str] = Counter()
+    stamps: dict[str, tuple[int, int, int, int]] = {}
+    hidden: set[str] = set()
     parsed = head_bytes = tail_bytes = verification_bytes = 0
 
-    candidates = list(_physical_hidden_files(root))
-    for path, rel, stamp in candidates:
-        pf = hidden_zip_preflight(path)
-        head_bytes += pf.head_bytes_read
-        tail_bytes += pf.tail_bytes_read
-        if not pf.eligible:
-            rejects[pf.reason] += 1
-            continue
+    files = list(_physical_observation_files(root))
+    for path, rel, stamp, explicit in files:
+        stamps[rel] = stamp
+        if not explicit:
+            hidden.add(rel)
+            pf = hidden_zip_preflight(path)
+            head_bytes += pf.head_bytes_read
+            tail_bytes += pf.tail_bytes_read
+            if not pf.eligible:
+                rejects[pf.reason] += 1
+                continue
         descriptors, reason, read = _exact_stream_descriptors(path)
         verification_bytes += read
         if descriptors is None:
-            rejects[reason or "exact_parse_rejected"] += 1
+            rejects[("explicit_" if explicit else "") + (reason or "exact_parse_rejected")] += 1
             continue
         parsed += 1
         for d in descriptors:
             prior = owners.get(d)
             if prior is None:
                 owners[d] = rel
+            elif prior is _REPEATED:
+                reuse[rel] += d[1]
             elif prior != rel:
+                reuse[str(prior)] += d[1]
+                reuse[rel] += d[1]
                 owners[d] = _REPEATED
 
-    admitted: list[HiddenZipAdmission] = []
-    for path, rel, stamp in candidates:
-        pf = hidden_zip_preflight(path)
-        head_bytes += pf.head_bytes_read
-        tail_bytes += pf.tail_bytes_read
-        if not pf.eligible:
-            continue
-        descriptors, reason, read = _exact_stream_descriptors(path)
-        verification_bytes += read
-        if descriptors is None:
-            continue
-        reuse = sum(d[1] for d in descriptors if owners.get(d) is _REPEATED)
-        if reuse >= int(min_verified_reuse):
-            admitted.append(HiddenZipAdmission(rel, stamp, reuse))
-
+    admitted = tuple(
+        HiddenZipAdmission(rel, stamps[rel], int(reuse[rel]))
+        for rel in sorted(hidden)
+        if reuse[rel] >= int(min_verified_reuse)
+    )
     return HiddenZipObservation(
-        tuple(admitted), len(candidates), parsed, head_bytes, tail_bytes, verification_bytes, tuple(sorted(rejects.items()))
+        admitted, len(files), parsed, head_bytes, tail_bytes, verification_bytes, tuple(sorted(rejects.items()))
     )
 
 
