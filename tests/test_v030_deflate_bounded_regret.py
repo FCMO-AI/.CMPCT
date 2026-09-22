@@ -6,6 +6,8 @@ import zlib
 from cmpct import codec
 
 
+# Cost-tier policy: keep cheap 0/1/2 probes at zero added search depth, then try the
+# common level 6 before the expensive 3/4/5 middle tail. Search remains exhaustive.
 ORDER = (0, 1, 2, 6, 3, 4, 5, 7, 8, 9)
 
 
