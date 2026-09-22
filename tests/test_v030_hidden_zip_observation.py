@@ -37,6 +37,27 @@ def test_unique_metadata_descriptors_do_not_read_compressed_payloads(tmp_path):
     assert obs.verification_bytes_read == 0
 
 
+def test_global_descriptor_budget_fails_closed_before_exact_payload_verification(tmp_path):
+    payload = _payload()
+    _hidden_zip(tmp_path / "a.bin", payload)
+    _hidden_zip(tmp_path / "b.bin", payload)
+    obs = observe_hidden_zip_admission(tmp_path, max_observation_descriptors=1)
+    assert obs.admitted == ()
+    assert obs.verification_bytes_read == 0
+    assert ("observation_descriptor_budget", 1) in obs.rejects
+
+
+def test_descriptor_budget_counts_entries_not_unique_metadata_values(tmp_path):
+    payload = _payload()
+    with zipfile.ZipFile(tmp_path / "many.bin", "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        for i in range(4):
+            z.writestr(f"same-{i}.bin", payload)
+    obs = observe_hidden_zip_admission(tmp_path, max_observation_descriptors=3)
+    assert obs.admitted == ()
+    assert obs.verification_bytes_read == 0
+    assert ("observation_descriptor_budget", 1) in obs.rejects
+
+
 def test_hardlink_alias_cannot_fake_two_physical_owners(tmp_path):
     payload = _payload()
     first = tmp_path / "a.bin"
