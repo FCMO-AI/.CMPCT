@@ -47,12 +47,13 @@ jobs:
           python - <<'PY'
           import json,os
           d=json.load(open('benchmark-artifacts/vzip-level-search.json'))
-          assert d['schema']=='cmpct-v030-vzip-level-search-oracle-v1'
+          assert d['schema']=='cmpct-v030-vzip-level-search-oracle-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
-          assert d['rows'] and d['contract']['diagnostic_only']
-          assert d['contract']['archive_semantics_changed'] is False
+          assert d['rows'] and d['contract']['diagnostic_only'] and not d['contract']['product_code_changed']
           assert d['contract']['all_levels_exhausted_before_failure']
           assert d['contract']['exact_stream_equality_required']
+          assert d['contract']['reproducibility_classification_must_match']
+          assert d['contract']['equivalent_level_aliases_allowed']
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-vzip-level-search-oracle.yml
