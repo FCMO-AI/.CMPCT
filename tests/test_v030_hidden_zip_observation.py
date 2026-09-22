@@ -38,6 +38,22 @@ def test_descriptor_budget_counts_entries_not_unique_metadata_values(tmp_path):
         for i in range(4):z.writestr(f'same-{i}.bin',payload)
     obs=observe_hidden_zip_admission(tmp_path,max_observation_descriptors=3);assert obs.admitted==();assert obs.verification_bytes_read==0;assert ('observation_descriptor_budget',1) in obs.rejects
 
+def test_global_io_budget_fails_closed_before_content_hashing(tmp_path):
+    payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload)
+    probe=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=10**9)
+    preflight_bytes=probe.head_bytes_read+probe.tail_bytes_read
+    obs=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=preflight_bytes+1)
+    assert obs.admitted==();assert obs.verification_bytes_read==0;assert ('observation_io_budget',1) in obs.rejects
+
+def test_global_io_budget_also_bounds_exact_stream_verification(tmp_path):
+    payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload)
+    probe=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=10**9)
+    preflight_bytes=probe.head_bytes_read+probe.tail_bytes_read
+    file_bytes=sum((tmp_path/name).stat().st_size for name in ('a.bin','b.bin'))
+    obs=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=preflight_bytes+file_bytes+1)
+    assert obs.admitted==();assert ('observation_io_budget',1) in obs.rejects
+    assert obs.verification_bytes_read==file_bytes
+
 def test_hardlink_alias_cannot_fake_two_physical_owners(tmp_path):
     payload=_payload();first=tmp_path/'a.bin';_hidden_zip(first,payload);os.link(first,tmp_path/'b.bin');assert observe_hidden_zip_admission(tmp_path).admitted==()
 
