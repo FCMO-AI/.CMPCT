@@ -53,7 +53,9 @@ def test_global_io_budget_also_bounds_exact_stream_verification(tmp_path):
     file_bytes=sum((tmp_path/name).stat().st_size for name in ('a.bin','b.bin'))
     obs=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=preflight_bytes+metadata_parser_bytes+file_bytes+1)
     assert obs.admitted==();assert ('observation_io_budget',1) in obs.rejects
-    assert obs.verification_bytes_read==file_bytes
+    # The fail-closed order spends one evidence-owner hash, then refuses the verification parser open.
+    # It need not burn the remaining budget hashing the second owner merely to reach the same decision.
+    assert obs.verification_bytes_read==(tmp_path/'a.bin').stat().st_size
 
 def test_revalidation_shares_the_aggregate_io_ceiling(tmp_path):
     payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload)
