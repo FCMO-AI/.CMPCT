@@ -1,0 +1,47 @@
+name: TEMP Python 3.15 wheel oracle
+on:
+  push:
+    branches: [agent/wheel-tag-py315-oracle]
+    paths: ['.github/workflows/tmp-py315-wheel-oracle.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  py315:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build sdist-first explicit-minor wheel including CPython 3.15
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip build wheel
+          python -m build --sdist
+          mkdir -p "$RUNNER_TEMP/original" "$RUNNER_TEMP/wheel"
+          python -m pip wheel --no-deps dist/*.tar.gz -w "$RUNNER_TEMP/original"
+          cp "$RUNNER_TEMP"/original/cmpct-*.whl "$RUNNER_TEMP/wheel/"
+          cd "$RUNNER_TEMP/wheel"
+          ORIGINAL=$(echo cmpct-*.whl)
+          python -m wheel tags --python-tag=cp310.cp311.cp312.cp313.cp314.cp315 --abi-tag=none --remove "$ORIGINAL"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.15.0-rc.2'
+      - name: Install identical wheel on Python 3.15 RC2 and exercise shipping product
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version
+          python -m pip install --upgrade pip
+          python -m pip install "$RUNNER_TEMP"/wheel/cmpct-*.whl
+          (cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee py315-smoke.json
+          python - <<'PY'
+          import json
+          s=json.load(open('py315-smoke.json'))
+          assert s['representative_archive_create_read_extract'] is True
+          assert s['dict_vector_bytes']==104
+          assert s['shipping_python_no_ambient_zstd'] is True
+          print(s)
+          PY
