@@ -1,0 +1,91 @@
+name: TEMP explicit CPython tag full matrix
+
+on:
+  push:
+    branches: [agent/wheel-tag-full-matrix]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-wheel:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build one sdist-first wheel and retag to explicit supported CPython minors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip build wheel
+          python -m build --sdist
+          python -m venv "$RUNNER_TEMP/build"
+          if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/build/Scripts/python.exe"; else PY="$RUNNER_TEMP/build/bin/python"; fi
+          "$PY" -m pip install --upgrade pip wheel
+          mkdir -p "$RUNNER_TEMP/original" "$RUNNER_TEMP/retagged"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+            export ARCHFLAGS="-arch arm64 -arch x86_64"
+          fi
+          "$PY" -m pip wheel --no-deps dist/*.tar.gz -w "$RUNNER_TEMP/original"
+          WHEEL=$(find "$RUNNER_TEMP/original" -name 'cmpct-*.whl' -type f -print -quit)
+          "$PY" -m wheel tags --python-tag cp310.cp311.cp312.cp313.cp314 --abi-tag none --remove "$WHEEL"
+          RETAGGED=$(find "$RUNNER_TEMP/original" -name 'cmpct-*.whl' -type f -print -quit)
+          cp "$RETAGGED" "$RUNNER_TEMP/retagged/"
+          python - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          wheels=list((Path(os.environ['RUNNER_TEMP'])/'retagged').glob('cmpct-*.whl'))
+          assert len(wheels)==1,wheels
+          p=wheels[0]
+          print(p.name)
+          print(hashlib.sha256(p.read_bytes()).hexdigest())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: explicit-minor-wheel-${{ matrix.os }}
+          path: ${{ runner.temp }}/retagged/cmpct-*.whl
+          if-no-files-found: error
+
+  test-wheel:
+    needs: build-wheel
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+        python: ['3.10','3.11','3.12','3.13','3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: explicit-minor-wheel-${{ matrix.os }}
+          path: wheel
+      - name: Install identical per-OS artifact and exercise shipping product
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHEEL=$(find wheel -name 'cmpct-*.whl' -type f -print -quit)
+          test -n "$WHEEL"
+          python -m pip install --upgrade pip
+          python -m pip install "$WHEEL"
+          (cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee smoke.json
+          python - <<'PY'
+          import json
+          s=json.load(open('smoke.json'))
+          assert s['representative_archive_create_read_extract'] is True
+          assert s['shipping_python_no_ambient_zstd'] is True
+          assert s['python_zstandard_absent'] is True
+          assert s['dict_vector_bytes']==104
+          print('PASS', s['representative_archive_sha256'], s['dict_vector_sha256'])
+          PY
