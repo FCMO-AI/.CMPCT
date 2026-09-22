@@ -45,15 +45,18 @@ def _state_current(root:Path,rel:str,stamp:tuple[int,int,int,int],digest:bytes)-
         return current==stamp and _file_sha256(path)==digest
     except OSError:return False
 
-def hidden_zip_preflight(path:Path)->HiddenZipPreflight:
+def hidden_zip_preflight(path:Path,*,max_read_bytes:int|None=None)->HiddenZipPreflight:
     path=Path(path);head_read=0
     try:
         size=path.stat().st_size
         if size<EOCD_MIN:return HiddenZipPreflight(False,'too_small',size,0,0)
+        if max_read_bytes is not None and int(max_read_bytes)<4:return HiddenZipPreflight(False,'io_budget',size,0,0)
         with path.open('rb') as f:
             head=f.read(4);head_read=len(head)
             if head!=LOCAL_SIG:return HiddenZipPreflight(False,'local_signature_miss',size,head_read,0)
-            tail_n=min(size,MAX_TAIL);f.seek(size-tail_n);tail=f.read(tail_n)
+            tail_n=min(size,MAX_TAIL)
+            if max_read_bytes is not None and head_read+tail_n>int(max_read_bytes):return HiddenZipPreflight(False,'io_budget',size,head_read,0)
+            f.seek(size-tail_n);tail=f.read(tail_n)
         pos=len(tail)
         while True:
             idx=tail.rfind(EOCD_SIG,0,pos)
@@ -135,14 +138,12 @@ def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED
     try:
         for path,rel,stamp,explicit in _physical_observation_files(root,max_observation_files):
             files_observed+=1
-            pf=hidden_zip_preflight(path);head_bytes+=pf.head_bytes_read;tail_bytes+=pf.tail_bytes_read
-            if total_io()>int(max_observation_io_bytes):return failed_io_budget()
+            remaining=int(max_observation_io_bytes)-total_io()
+            pf=hidden_zip_preflight(path,max_read_bytes=remaining);head_bytes+=pf.head_bytes_read;tail_bytes+=pf.tail_bytes_read
+            if pf.reason=='io_budget':return failed_io_budget()
             if not pf.eligible:rejects[('explicit_' if explicit else '')+pf.reason]+=1;continue
             central_directory_bytes+=pf.central_directory_size
             if central_directory_bytes>int(max_observation_central_directory_bytes):rejects['observation_central_directory_budget']+=1;return result()
-            # CPython ZipFile re-reads the EOCD/comment window and central directory when opened.
-            # Charge that conservative parser cost before invoking it so optional discovery cannot
-            # hide metadata I/O outside the observation budget.
             parser_charge=pf.tail_bytes_read+pf.central_directory_size
             if total_io()+parser_charge>int(max_observation_io_bytes):return failed_io_budget()
             parser_bytes+=parser_charge
@@ -165,8 +166,6 @@ def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED
         if total_io()+file_size>int(max_observation_io_bytes):return failed_io_budget()
         try:content_hashes[rel]=_file_sha256(path);verification_bytes+=file_size
         except OSError:rejects['admission_hash_io']+=1;continue
-        # Verify every repeated descriptor for this owner under one ZipFile open. This prevents
-        # descriptor-count x central-directory amplification while keeping payload identity exact.
         if total_io()+parser_charge>int(max_observation_io_bytes):return failed_io_budget()
         parser_bytes+=parser_charge
         remaining=int(max_observation_io_bytes)-total_io()
@@ -184,6 +183,17 @@ def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED
     return result(admitted,evidence)
 
 def admission_is_current(root:Path,admission:HiddenZipAdmission)->bool:return _state_current(Path(root),admission.rel,admission.stamp,admission.content_sha256)
-def observation_is_current(root:Path,observation:HiddenZipObservation)->bool:
-    """Require every physical owner used by the reuse proof to remain byte-identical."""
-    return all(_state_current(Path(root),e.rel,e.stamp,e.content_sha256) for e in observation.evidence)
+def observation_is_current(root:Path,observation:HiddenZipObservation,*,max_io_bytes:int=MAX_OBSERVATION_IO_BYTES)->bool:
+    """Revalidate every proof owner without escaping the same aggregate discovery-I/O ceiling."""
+    used=observation.head_bytes_read+observation.tail_bytes_read+observation.parser_bytes_read+observation.verification_bytes_read
+    for e in observation.evidence:
+        path=Path(root)/e.rel
+        try:
+            st=os.stat(path,follow_symlinks=False)
+            current=(int(st.st_dev),int(st.st_ino),int(st.st_size),int(st.st_mtime_ns))
+            if not stat.S_ISREG(st.st_mode) or current!=e.stamp:return False
+            if used+int(st.st_size)>int(max_io_bytes):return False
+            if _file_sha256(path)!=e.content_sha256:return False
+            used+=int(st.st_size)
+        except OSError:return False
+    return True
