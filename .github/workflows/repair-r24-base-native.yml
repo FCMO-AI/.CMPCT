@@ -1,0 +1,66 @@
+name: Verify r24 base native materializer
+
+on:
+  pull_request:
+    paths:
+      - 'tools/materialize_performance_base_native.py'
+      - '.github/workflows/repair-r24-base-native.yml'
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  ownership:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install candidate
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Materialize direct base and prove distinct ownership
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/cmpct-performance-base "$BASE_SHA"
+          mkdir -p benchmark-artifacts
+          python tools/materialize_performance_base_native.py /tmp/cmpct-performance-base --receipt benchmark-artifacts/base-native.json
+          BASE_NATIVE="$(PYTHONPATH=/tmp/cmpct-performance-base/src python -c 'from cmpct import native_codec; print(native_codec._library_path().resolve())')"
+          CANDIDATE_NATIVE="$(PYTHONPATH="$GITHUB_WORKSPACE/src" python -c 'from cmpct import native_codec; print(native_codec._library_path().resolve())')"
+          case "$BASE_NATIVE" in /tmp/cmpct-performance-base/src/cmpct/*) ;; *) echo "bad base ownership: $BASE_NATIVE" >&2; exit 1;; esac
+          case "$CANDIDATE_NATIVE" in "$GITHUB_WORKSPACE"/src/cmpct/*) ;; *) echo "bad candidate ownership: $CANDIDATE_NATIVE" >&2; exit 1;; esac
+          test "$BASE_NATIVE" != "$CANDIDATE_NATIVE"
+          BASE_FRAME="$(PYTHONPATH=/tmp/cmpct-performance-base/src python - <<'PY'
+          from cmpct.codec import zc
+          import hashlib
+          b=zc(b'cmpct-r24-base-native-control'*256, 3)
+          print(len(b), hashlib.sha256(b).hexdigest())
+          PY
+          )"
+          CANDIDATE_FRAME="$(PYTHONPATH="$GITHUB_WORKSPACE/src" python - <<'PY'
+          from cmpct.codec import zc
+          import hashlib
+          b=zc(b'cmpct-r24-base-native-control'*256, 3)
+          print(len(b), hashlib.sha256(b).hexdigest())
+          PY
+          )"
+          printf 'base_native=%s\ncandidate_native=%s\nbase_frame=%s\ncandidate_frame=%s\n' "$BASE_NATIVE" "$CANDIDATE_NATIVE" "$BASE_FRAME" "$CANDIDATE_FRAME" | tee benchmark-artifacts/ownership.txt
+          test "$BASE_FRAME" = "$CANDIDATE_FRAME"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: r24-base-native-materializer-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
