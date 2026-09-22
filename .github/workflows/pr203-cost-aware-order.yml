@@ -1,0 +1,32 @@
+name: PR203 apply cost-aware bounded-regret order
+on:
+  push:
+    branches: [agent/v030-deflate-bounded-regret-productization]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/v030-deflate-bounded-regret-productization
+          fetch-depth: 0
+      - name: Apply exact cost-aware order and self-delete
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/cmpct/codec.py'); s=p.read_text()
+          old='    for level in (6,0,1,2,3,4,5,7,8,9):\n'
+          new='    for level in (0,6,1,2,3,4,5,7,8,9):\n'
+          if s.count(old)!=1: raise SystemExit(f'expected one 6-first loop, found {s.count(old)}')
+          p.write_text(s.replace(old,new,1))
+          PY
+          rm .github/workflows/pr203-cost-aware-order.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/cmpct/codec.py .github/workflows/pr203-cost-aware-order.yml
+          git commit -m 'perf: preserve cheap level-zero Deflate probe first'
+          git push origin HEAD:agent/v030-deflate-bounded-regret-productization
