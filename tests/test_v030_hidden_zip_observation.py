@@ -37,12 +37,13 @@ def test_hardlink_alias_cannot_fake_two_physical_owners(tmp_path):
     assert obs.admitted == ()
 
 
-def test_explicit_zip_is_outside_optional_hidden_observation(tmp_path):
+def test_explicit_zip_can_supply_reuse_without_becoming_hidden_admission(tmp_path):
     payload = _payload()
     _hidden_zip(tmp_path / "explicit.zip", payload)
     _hidden_zip(tmp_path / "hidden.bin", payload)
     obs = observe_hidden_zip_admission(tmp_path)
-    assert obs.admitted == ()
+    assert [a.rel for a in obs.admitted] == ["hidden.bin"]
+    assert obs.admitted[0].verified_reuse_bytes >= MIN_VERIFIED_REUSE
 
 
 def test_mutation_after_observation_revokes_admission(tmp_path):
