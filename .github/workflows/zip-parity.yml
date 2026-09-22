@@ -16,6 +16,7 @@ on:
       - "tests/**"
       - "tools/check_performance_regression.py"
       - "tools/aggregate_parity_runs.py"
+      - "tools/materialize_performance_base_native.py"
       - "pyproject.toml"
       - ".github/workflows/zip-parity.yml"
   push:
@@ -27,6 +28,7 @@ on:
       - "tests/**"
       - "tools/check_performance_regression.py"
       - "tools/aggregate_parity_runs.py"
+      - "tools/materialize_performance_base_native.py"
       - "pyproject.toml"
       - ".github/workflows/zip-parity.yml"
   workflow_dispatch:
@@ -65,7 +67,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(src/|native/|benchmarks/|tests/|tools/(check_performance_regression|aggregate_parity_runs)\.py|pyproject\.toml|\.github/workflows/zip-parity\.yml)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/|native/|benchmarks/|tests/|tools/(check_performance_regression|aggregate_parity_runs|materialize_performance_base_native)\.py|pyproject\.toml|\.github/workflows/zip-parity\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_performance=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_performance=false' >> "$GITHUB_OUTPUT"
@@ -145,6 +147,12 @@ jobs:
 
       - name: Materialize base engine worktree
         run: git worktree add --detach /tmp/cmpct-performance-base "${{ steps.base.outputs.sha }}"
+
+      - name: Materialize historical base native payload
+        run: |
+          mkdir -p benchmark-artifacts
+          python tools/materialize_performance_base_native.py /tmp/cmpct-performance-base \
+            --receipt benchmark-artifacts/base-native.json | tee benchmark-artifacts/native-ownership.txt
 
       - name: Generate one immutable release corpus
         run: |
