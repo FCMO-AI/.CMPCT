@@ -10,11 +10,11 @@ def _hidden_zip(path,payload:bytes):
 
 def test_two_physical_hidden_archives_can_earn_verified_reuse(tmp_path):
     payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload);obs=observe_hidden_zip_admission(tmp_path)
-    assert [a.rel for a in obs.admitted]==['a.bin','b.bin'];assert all(a.verified_reuse_bytes>=MIN_VERIFIED_REUSE for a in obs.admitted);assert all(admission_is_current(tmp_path,a) for a in obs.admitted);assert observation_is_current(tmp_path,obs);assert obs.verification_bytes_read>0
+    assert [a.rel for a in obs.admitted]==['a.bin','b.bin'];assert all(a.verified_reuse_bytes>=MIN_VERIFIED_REUSE for a in obs.admitted);assert all(admission_is_current(tmp_path,a) for a in obs.admitted);assert observation_is_current(tmp_path,obs);assert obs.verification_bytes_read>0;assert obs.parser_bytes_read>0
 
 def test_unique_metadata_descriptors_do_not_read_compressed_payloads(tmp_path):
     _hidden_zip(tmp_path/'a.bin',_payload(1));_hidden_zip(tmp_path/'b.bin',_payload(2));obs=observe_hidden_zip_admission(tmp_path)
-    assert obs.admitted==();assert obs.candidates_parsed==2;assert obs.verification_bytes_read==0
+    assert obs.admitted==();assert obs.candidates_parsed==2;assert obs.verification_bytes_read==0;assert obs.parser_bytes_read>0
 
 def test_logical_work_budget_rejects_before_exact_payload_verification(tmp_path):
     payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload);obs=observe_hidden_zip_admission(tmp_path,max_candidate_logical_bytes=1)
@@ -41,16 +41,19 @@ def test_descriptor_budget_counts_entries_not_unique_metadata_values(tmp_path):
 def test_global_io_budget_fails_closed_before_content_hashing(tmp_path):
     payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload)
     probe=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=10**9)
-    preflight_bytes=probe.head_bytes_read+probe.tail_bytes_read
-    obs=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=preflight_bytes+1)
+    metadata_bytes=probe.head_bytes_read+probe.tail_bytes_read+probe.parser_bytes_read//2
+    obs=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=metadata_bytes+1)
     assert obs.admitted==();assert obs.verification_bytes_read==0;assert ('observation_io_budget',1) in obs.rejects
 
 def test_global_io_budget_also_bounds_exact_stream_verification(tmp_path):
     payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload)
     probe=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=10**9)
     preflight_bytes=probe.head_bytes_read+probe.tail_bytes_read
+    metadata_parser_bytes=probe.parser_bytes_read//2
     file_bytes=sum((tmp_path/name).stat().st_size for name in ('a.bin','b.bin'))
-    obs=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=preflight_bytes+file_bytes+1)
+    # Leave room for preflight + metadata parse + both content hashes, but not the second parser open
+    # required before exact compressed-stream verification.
+    obs=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=preflight_bytes+metadata_parser_bytes+file_bytes+1)
     assert obs.admitted==();assert ('observation_io_budget',1) in obs.rejects
     assert obs.verification_bytes_read==file_bytes
 
