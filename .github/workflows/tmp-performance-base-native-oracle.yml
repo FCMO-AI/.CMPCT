@@ -1,0 +1,86 @@
+name: TEMP performance base native ownership oracle
+on:
+  pull_request:
+    branches: [agent/wheel-tag-full-matrix]
+    paths: ['.github/workflows/tmp-performance-base-native-oracle.yml']
+permissions:
+  contents: read
+jobs:
+  prove-base-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build candidate package exactly as performance gate does
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Materialize authoritative direct base and build shipping-profile wheel
+        run: |
+          set -euo pipefail
+          git fetch origin agent/v030-authoritative-integration
+          BASE_SHA=$(git rev-parse origin/agent/v030-authoritative-integration)
+          echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
+          git worktree add --detach /tmp/cmpct-performance-base "$BASE_SHA"
+          mkdir -p /tmp/base-wheel
+          python -m pip wheel --no-deps --no-build-isolation /tmp/cmpct-performance-base -w /tmp/base-wheel
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          wheel=next(Path('/tmp/base-wheel').glob('cmpct-*.whl'))
+          dst=Path('/tmp/cmpct-performance-base/src/cmpct')
+          with zipfile.ZipFile(wheel) as z:
+              members=[n for n in z.namelist() if n.startswith('cmpct/cmpct_core') and n.rsplit('/',1)[-1].startswith('cmpct_core')]
+              assert len(members)==1, members
+              member=members[0]
+              out=dst/Path(member).name
+              out.write_bytes(z.read(member))
+              print('base_native', out, out.stat().st_size)
+          PY
+      - name: Prove base and candidate resolve distinct source-local native owners
+        run: |
+          set -euo pipefail
+          BASE_PATH=$(PYTHONPATH=/tmp/cmpct-performance-base/src python - <<'PY'
+          from cmpct.native_codec import _library_path
+          print(_library_path().resolve())
+          PY
+          )
+          CANDIDATE_PATH=$(PYTHONPATH="$GITHUB_WORKSPACE/src" python - <<'PY'
+          from cmpct.native_codec import _library_path
+          print(_library_path().resolve())
+          PY
+          )
+          echo "base=$BASE_PATH"
+          echo "candidate=$CANDIDATE_PATH"
+          [[ "$BASE_PATH" == /tmp/cmpct-performance-base/src/cmpct/* ]]
+          [[ "$CANDIDATE_PATH" == "$GITHUB_WORKSPACE"/src/cmpct/* ]]
+          [[ "$BASE_PATH" != "$CANDIDATE_PATH" ]]
+      - name: Smoke both exact engines on identical codec input
+        run: |
+          set -euo pipefail
+          BASE=$(PYTHONPATH=/tmp/cmpct-performance-base/src python - <<'PY'
+          import hashlib
+          from cmpct.native_codec import compress
+          x=(b'cmpct-performance-base-native-oracle\n'*4096)
+          y=compress(x,9)
+          print(len(y), hashlib.sha256(y).hexdigest())
+          PY
+          )
+          CANDIDATE=$(PYTHONPATH="$GITHUB_WORKSPACE/src" python - <<'PY'
+          import hashlib
+          from cmpct.native_codec import compress
+          x=(b'cmpct-performance-base-native-oracle\n'*4096)
+          y=compress(x,9)
+          print(len(y), hashlib.sha256(y).hexdigest())
+          PY
+          )
+          echo "base=$BASE"
+          echo "candidate=$CANDIDATE"
+          test "$BASE" = "$CANDIDATE"
