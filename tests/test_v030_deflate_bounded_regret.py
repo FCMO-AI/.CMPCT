@@ -5,7 +5,7 @@ import zlib
 from cmpct import codec
 
 
-# Cost-aware product policy: preserve cheap level-0 first, then try the common exact level.
+# Cost-aware product policy: preserve the cheapest exact level-0 probe, then try common level 6.
 ORDER = (0, 6, 1, 2, 3, 4, 5, 7, 8, 9)
 
 
