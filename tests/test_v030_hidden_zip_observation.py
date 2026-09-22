@@ -4,7 +4,7 @@ import os
 import random
 import zipfile
 
-from cmpct.hidden_zip import MIN_VERIFIED_REUSE, observe_hidden_zip_admission
+from cmpct.hidden_zip import MIN_VERIFIED_REUSE, admission_is_current, observe_hidden_zip_admission
 
 
 def _payload() -> bytes:
@@ -24,6 +24,7 @@ def test_two_physical_hidden_archives_can_earn_verified_reuse(tmp_path):
     obs = observe_hidden_zip_admission(tmp_path)
     assert [a.rel for a in obs.admitted] == ["a.bin", "b.bin"]
     assert all(a.verified_reuse_bytes >= MIN_VERIFIED_REUSE for a in obs.admitted)
+    assert all(admission_is_current(tmp_path, a) for a in obs.admitted)
     assert obs.verification_bytes_read > 0
 
 
@@ -42,3 +43,16 @@ def test_explicit_zip_is_outside_optional_hidden_observation(tmp_path):
     _hidden_zip(tmp_path / "hidden.bin", payload)
     obs = observe_hidden_zip_admission(tmp_path)
     assert obs.admitted == ()
+
+
+def test_mutation_after_observation_revokes_admission(tmp_path):
+    payload = _payload()
+    a = tmp_path / "a.bin"
+    b = tmp_path / "b.bin"
+    _hidden_zip(a, payload)
+    _hidden_zip(b, payload)
+    obs = observe_hidden_zip_admission(tmp_path)
+    admission = next(x for x in obs.admitted if x.rel == "a.bin")
+    with a.open("ab") as f:
+        f.write(b"changed-after-observation")
+    assert not admission_is_current(tmp_path, admission)
