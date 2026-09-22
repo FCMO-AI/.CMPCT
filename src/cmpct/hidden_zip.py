@@ -220,13 +220,16 @@ def observe_hidden_zip_admission(
         if files_observed > int(max_observation_files):
             rejects["observation_file_budget"] += 1
             return HiddenZipObservation((), files_observed, parsed, head_bytes, tail_bytes, 0, tuple(sorted(rejects.items())))
-        if not explicit:
-            pf = hidden_zip_preflight(path)
-            head_bytes += pf.head_bytes_read
-            tail_bytes += pf.tail_bytes_read
-            if not pf.eligible:
-                rejects[pf.reason] += 1
-                continue
+
+        # Explicit ZIP/WHL files are only evidence providers here, not admissions. They still pass the
+        # same optional envelope bounds so a giant explicit archive cannot bypass discovery limits.
+        pf = hidden_zip_preflight(path)
+        head_bytes += pf.head_bytes_read
+        tail_bytes += pf.tail_bytes_read
+        if not pf.eligible:
+            rejects[("explicit_" if explicit else "") + pf.reason] += 1
+            continue
+
         descriptors, entries, reason = _metadata_descriptors(path)
         if descriptors is None:
             rejects[("explicit_" if explicit else "") + (reason or "exact_parse_rejected")] += 1
