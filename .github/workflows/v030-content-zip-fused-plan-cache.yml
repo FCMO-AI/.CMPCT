@@ -8,6 +8,7 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_content_zip_fused_plan_cache.py'
+      - 'benchmarks/v030_content_zip_fused_hostiles.py'
       - '.github/workflows/v030-content-zip-fused-plan-cache.yml'
   workflow_dispatch:
 permissions:
@@ -37,7 +38,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_content_zip_fused_plan_cache\.py|\.github/workflows/v030-content-zip-fused-plan-cache\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -Eq '^(benchmarks/v030_content_zip_fused_(plan_cache|hostiles)\.py|\.github/workflows/v030-content-zip-fused-plan-cache\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
   evidence:
     needs: latest-head-impact
     if: needs.latest-head-impact.outputs.run_deep == 'true'
@@ -63,25 +64,30 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - run: python -m py_compile benchmarks/v030_content_zip_fused_plan_cache.py
+      - run: python -m py_compile benchmarks/v030_content_zip_fused_plan_cache.py benchmarks/v030_content_zip_fused_hostiles.py
       - name: Run final-form fused-plan falsifier
         run: python benchmarks/v030_content_zip_fused_plan_cache.py --output benchmark-artifacts/fused-plan-cache.json
+      - name: Run fused inherited + hardlink hostiles
+        run: python benchmarks/v030_content_zip_fused_hostiles.py --output benchmark-artifacts/fused-hostiles.json
       - name: Enforce preregistered contract
         run: |
           python - <<'PY'
           import json, os
-          d=json.load(open('benchmark-artifacts/fused-plan-cache.json')); s=d['summary']
-          assert d['source_commit'] == os.environ['EVIDENCE_HEAD']
+          d=json.load(open('benchmark-artifacts/fused-plan-cache.json')); h=json.load(open('benchmark-artifacts/fused-hostiles.json')); s=d['summary']
+          assert d['source_commit'] == os.environ['EVIDENCE_HEAD'] == h['source_commit']
           assert d['hypothesis']['supported_for_full_matrix_next_rung'], (s,d['hostiles'])
+          assert h['inherited_hostiles_pass'], h
           assert s['archive_delta_bytes'] <= 0
           assert s['rss_ratio'] <= 1.10
-          print(json.dumps(s,indent=2))
+          print(json.dumps({'summary':s,'hardlink':h['hardlink_owner_discriminator']},indent=2))
           PY
       - run: python tools/check_ci_topology.py .github/workflows/v030-content-zip-fused-plan-cache.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: v030-content-zip-fused-plan-cache-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/fused-plan-cache.json
+          path: |
+            benchmark-artifacts/fused-plan-cache.json
+            benchmark-artifacts/fused-hostiles.json
           if-no-files-found: error
           retention-days: 90
