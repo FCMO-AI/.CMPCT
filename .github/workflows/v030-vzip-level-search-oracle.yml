@@ -40,8 +40,9 @@ jobs:
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Measure exact level-search ownership
         run: |
+          set -o pipefail
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_vzip_level_search_oracle.py --output benchmark-artifacts/vzip-level-search.json
+          python benchmarks/v030_vzip_level_search_oracle.py --output benchmark-artifacts/vzip-level-search.json 2>&1 | tee benchmark-artifacts/run.log
       - name: Enforce diagnostic contract
         run: |
           python - <<'PY'
@@ -61,6 +62,6 @@ jobs:
         if: always()
         with:
           name: v030-vzip-level-search-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/vzip-level-search.json
+          path: benchmark-artifacts/
           if-no-files-found: error
           retention-days: 30
