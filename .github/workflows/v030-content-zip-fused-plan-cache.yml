@@ -1,61 +1,86 @@
-name: CMPCT v0.30 content-ZIP fused plan/cache
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 content-ZIP fused plan/cache
 on:
-  workflow_dispatch:
   pull_request:
     branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_content_zip_fused_plan_cache.py'
       - '.github/workflows/v030-content-zip-fused-plan-cache.yml'
-concurrency:
-  group: v030-content-zip-fused-plan-cache-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
-  classify:
+  latest-head-impact:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: v030-fused-plan-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
-      run: ${{ steps.c.outputs.run }}
-      sha: ${{ steps.c.outputs.sha }}
+      run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
-      - id: c
-        env:
-          EVENT: ${{ github.event_name }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          echo "run=true" >> "$GITHUB_OUTPUT"
-          echo "sha=${HEAD:-$GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-  evidence:
-    needs: classify
-    if: needs.classify.outputs.run == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.classify.outputs.sha }}
-      - uses: actions/setup-python@v5
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_content_zip_fused_plan_cache\.py|\.github/workflows/v030-content-zip-fused-plan-cache\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+  evidence:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: v030-fused-plan-receipt-${{ env.EVIDENCE_HEAD }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - run: python -m pip install -e .
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_content_zip_fused_plan_cache.py
       - name: Run final-form fused-plan falsifier
-        env:
-          EVIDENCE_HEAD: ${{ needs.classify.outputs.sha }}
-          PYTHONHASHSEED: '0'
         run: python benchmarks/v030_content_zip_fused_plan_cache.py --output benchmark-artifacts/fused-plan-cache.json
       - name: Enforce preregistered contract
         run: |
           python - <<'PY'
-          import json
-          p='benchmark-artifacts/fused-plan-cache.json'; d=json.load(open(p)); s=d['summary']
-          assert d['source_commit'] == '${{ needs.classify.outputs.sha }}'
+          import json, os
+          d=json.load(open('benchmark-artifacts/fused-plan-cache.json')); s=d['summary']
+          assert d['source_commit'] == os.environ['EVIDENCE_HEAD']
           assert d['hypothesis']['supported_for_full_matrix_next_rung'], (s,d['hostiles'])
           assert s['archive_delta_bytes'] <= 0
           assert s['rss_ratio'] <= 1.10
           print(json.dumps(s,indent=2))
           PY
-      - uses: actions/upload-artifact@v4
+      - run: python tools/check_ci_topology.py .github/workflows/v030-content-zip-fused-plan-cache.yml
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-content-zip-fused-plan-cache-${{ needs.classify.outputs.sha }}
-          path: benchmark-artifacts/
+          name: v030-content-zip-fused-plan-cache-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/fused-plan-cache.json
           if-no-files-found: error
+          retention-days: 90
