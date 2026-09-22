@@ -2,7 +2,7 @@
 
 These instructions apply to `.github/**` and are subordinate to the root `AGENTS.md` quality/evidence rules.
 
-Before editing a workflow, read `docs/CI_ARCHITECTURE.md`.
+Before editing a workflow, read `docs/CI_ARCHITECTURE.md`. If the workflow preserves a long-running exact-source receipt behind a newest-head classifier, also read `docs/CI_SPLIT_RECEIPT_CUSTODY.md`.
 
 ## CI is a scarce execution surface
 
@@ -33,6 +33,7 @@ For workflows that consume GitHub-hosted runners:
 5. Never use one global concurrency group to serialize unrelated PRs or unrelated research hypotheses.
 6. Historical one-shot publishers become `workflow_dispatch`-only after the durable target exists.
 7. Keep GitHub Pages serving independent from heavyweight CI. `gh-pages` is the static serving branch; Actions validate source/evidence and GitHub's own Pages deployment may still consume a runner slot.
+8. For a long-running deep/release receipt that must survive newer source, do not put both the cheap classifier and expensive receipt under workflow-level exact-SHA non-cancelling concurrency. Use the split classifier/receipt custody model so obsolete routing work is cancellable while result-bearing exact receipts remain protected.
 
 ## Fast / deep / release separation
 
@@ -48,7 +49,7 @@ Run:
 python tools/check_ci_topology.py <changed workflow paths...>
 ```
 
-The PR workflow `.github/workflows/ci-topology.yml` runs the same policy against changed workflow files.
+The PR workflow `.github/workflows/ci-topology.yml` runs the same policy against changed workflow files, including the focused split-receipt custody tests.
 
 Do not bypass the checker with a vague exemption comment. If an automatic workflow genuinely cannot use cancellation/path routing, explain the exact authority/invariant next to the trigger and update the checker deliberately if the architecture truly requires it.
 

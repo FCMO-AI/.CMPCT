@@ -1,0 +1,156 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 ZIP-factor recovery semantic-owner in-memory verify
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/.v030-research-trigger'
+      - 'benchmarks/v030_zipfactor_recovery_inmemory_verify_frontier.py'
+      - 'benchmarks/v030_zipfactor_recovery_inmemory_verify_frontier_v2.py'
+      - 'benchmarks/v030_zipfactor_recovery_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
+      - '.github/workflows/v030-zipfactor-recovery-inmemory-verify-frontier-v2.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/.v030-research-trigger'
+      - 'benchmarks/v030_zipfactor_recovery_inmemory_verify_frontier.py'
+      - 'benchmarks/v030_zipfactor_recovery_inmemory_verify_frontier_v2.py'
+      - 'benchmarks/v030_zipfactor_recovery_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
+      - '.github/workflows/v030-zipfactor-recovery-inmemory-verify-frontier-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zf-recovery-inmemory-v2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/\.v030-research-trigger|benchmarks/v030_zipfactor_recovery_inmemory_verify_frontier(_v2)?\.py|benchmarks/v030_zipfactor_recovery_oracle\.py|benchmarks/v030_external_competitors\.py|experiments/entropygraph_v030_zipfactor_compact_v3(_fused_finalize)?\.py|\.github/workflows/v030-zipfactor-recovery-inmemory-verify-frontier-v2\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect this terminal ZIP-factor verifier frontier; skipping replay.'
+          fi
+
+  semantic-owner-in-memory-frontier:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$EVIDENCE_HEAD"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact comparator dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile semantic-owner frontier
+        run: python -m py_compile benchmarks/v030_zipfactor_recovery_inmemory_verify_frontier_v2.py
+      - name: Run exact semantic-owner in-memory verification frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_zipfactor_recovery_inmemory_verify_frontier_v2 \
+            --work-root "$RUNNER_TEMP/v030-zf-recovery-inmemory-v2" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-recovery-inmemory-v2.json"
+      - name: Ratchet exact evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          e=json.loads(Path('benchmark-artifacts/v030-zf-recovery-inmemory-v2.json').read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-recovery-inmemory-verify-frontier-v2'
+          c=e['contract']
+          assert c['rounds']==9 and c['level']==3 and c['group_size']==7
+          assert c['archive_bytes_changed'] is False
+          assert c['recovery_semantics_changed'] is False
+          assert c['legacy_verifier_cross_checked_each_round'] is True
+          assert c['duplicated_v3_parser_in_benchmark'] is False
+          assert c['v3_verify_and_identities_is_single_semantic_owner'] is True
+          assert c['filesystem_roundtrip_removed'] is True
+          assert c['path_read_boundary_scoped_and_restored'] is True
+          assert c['ties_fail'] is True
+          assert c['selector_change'] is False and c['release_credit'] is False
+          assert e['release_credit'] is False
+          assert e['experiment_valid'] is True
+          assert len(e['samples_s']['cmpct'])==len(e['samples_s']['zip'])==len(e['samples_s']['zstd19'])==9
+          assert e['sizes']['cmpct'] < e['sizes']['zip']
+          assert e['sizes']['cmpct'] < e['sizes']['zstd19']
+          assert e['promotion_signal'] is e['strict_four_way_win']
+          if e['promotion_signal']:
+              assert e['medians_s']['cmpct'] < e['medians_s']['zip']
+              assert e['medians_s']['cmpct'] < e['medians_s']['zstd19']
+          PY
+      - name: Record candidate fingerprint
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-zf-recovery-inmemory-v2-candidate.txt
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-inmemory-verify-frontier-v2.yml
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zipfactor-recovery-inmemory-v2-${{ steps.candidate.outputs.sha }}
+          path: |
+            benchmark-artifacts/v030-zf-recovery-inmemory-v2.json
+            benchmark-artifacts/v030-zf-recovery-inmemory-v2-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only verifier-cost boundary. The benchmark owns no V3 parser: reconstructed bytes are served to the
+# existing V3 semantic owner in memory, legacy recovery verification is cross-checked every round, and archive/
+# recovery/comparator semantics are unchanged. No selector/native/Android/release credit is granted here.

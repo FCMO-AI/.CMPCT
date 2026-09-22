@@ -1,0 +1,111 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 Office admission same-input v0.29
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_frozen_v029_product_worker.py'
+      - 'benchmarks/v030_r4_office_admission_same_input_v029_referee.py'
+      - '.github/workflows/v030-r4-office-admission-same-input-v029.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+  V029_SHA: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+
+concurrency:
+  group: cmpct-v030-r4-office-same-input-v029-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env: {EVENT_NAME: '${{ github.event_name }}'}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo run_deep=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_r4_frozen_v029_product_worker\.py|benchmarks/v030_r4_office_admission_same_input_v029_referee\.py|\.github/workflows/v030-r4-office-admission-same-input-v029\.yml)$' /tmp/files; then echo run_deep=true >> "$GITHUB_OUTPUT"; else echo run_deep=false >> "$GITHUB_OUTPUT"; fi
+
+  same-input-referee:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - name: Prepare frozen v0.29 checkout
+        run: |
+          set -euo pipefail
+          git cat-file -e "$V029_SHA^{commit}"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$V029_SHA"
+          test "$(git -C "$RUNNER_TEMP/cmpct-v029" rev-parse HEAD)" = "$V029_SHA"
+      - run: |
+          python -m py_compile \
+            benchmarks/v030_r4_frozen_v029_product_worker.py \
+            benchmarks/v030_r4_office_admission_same_input_v029_referee.py
+      - name: Run same-input source-sealed referee
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_admission_same_input_v029_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/same-input-work" \
+            --v029-checkout "$RUNNER_TEMP/cmpct-v029" \
+            --worker "$GITHUB_WORKSPACE/benchmarks/v030_r4_frozen_v029_product_worker.py" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-same-input-v029.json"
+      - name: Assert source-seal and exact semantics only
+        run: |
+          python - <<'PY'
+          import json, os
+          p=json.load(open('benchmark-artifacts/v030-r4-office-same-input-v029.json'))
+          h=p['hypothesis']
+          assert p['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert h['one_identical_input_tree']
+          assert h['current_candidate_byte_deterministic']
+          assert h['current_exact'] and h['all_eight_derived_views_preserved']
+          assert h['frozen_v029_source_sealed'] and h['frozen_v029_exact']
+          # Deliberately do not assert the density verdict.  A measured density loss is
+          # scientific evidence, not infrastructure failure.
+          print(json.dumps({'density_hypothesis':h['current_smaller_than_frozen_v029_same_input']},sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-admission-same-input-v029.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-same-input-v029-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-same-input-v029.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green means the same-input, source-sealed comparison executed faithfully. Density PASS/FAIL lives in the receipt.

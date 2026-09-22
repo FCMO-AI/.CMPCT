@@ -1,0 +1,97 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 candidate process-isolation RSS A/B v2
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'docs/v030-rnd/R25_CANDIDATE_PROCESS_ISOLATION_RSS_V2_PREREG.md'
+      - '.github/workflows/v030-r25-candidate-process-isolation-rss-v2.yml'
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-r25-candidate-process-isolation-rss-v2-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  candidate-process-isolation-rss-v2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install canonical diagnostic dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Prove V1 instruments remain immutable and compile
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r25_candidate_process_isolation_rss_worker.py \
+            benchmarks/v030_r25_candidate_process_isolation_rss_oracle.py
+      - name: Run unchanged whole-process-tree process-isolation A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r25_candidate_process_isolation_rss_oracle.py \
+            --work-root benchmark-artifacts/v030-r25-candidate-process-isolation-rss-v2-work \
+            --output benchmark-artifacts/v030-r25-candidate-process-isolation-rss-v2.json
+      - name: Ratchet unchanged scientific contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/v030-r25-candidate-process-isolation-rss-v2.json').read_text())
+          assert data['source_commit'] == os.environ['EVIDENCE_HEAD']
+          assert data['schema'] == 'cmpct-v030-r25-candidate-process-isolation-rss-v1'
+          assert data['experiment_valid'] is True
+          assert data['release_credit'] is False
+          assert data['worker_failures'] == []
+          c=data['contract']
+          assert c['whole_process_tree_rss_decisive'] is True
+          assert c['parent_ru_maxrss_diagnostic_only'] is True
+          assert c['exact_product_identity_required'] is True
+          assert c['prefixgraph_process_exit_before_g04'] is True
+          assert c['production_source_changed'] is False
+          assert c['candidate_semantics_changed'] is False
+          assert c['release_thresholds_changed'] is False
+          assert c['decision_thresholds'] == {'support': 0.20, 'retire': 0.10, 'major_wall_debt': 1.15}
+          assert data['arm_counts'] == {'shipping-control': 2, 'isolated-serialized-pg': 2}
+          assert data['decision'] in {
+              'PROCESS_LIFETIME_BOUNDARY_SUPPORTED',
+              'PROCESS_LIFETIME_BOUNDARY_SUPPORTED_WITH_MAJOR_CREATE_DEBT',
+              'PROCESS_ISOLATION_RETIRED_AS_PRIMARY',
+              'PROCESS_ISOLATION_AMBIGUOUS',
+          }
+          for row in data['rows']:
+              assert row['tree_samples'] >= 100
+              assert row['tree_sampler_errors'] == []
+              assert row['tree_sampler_interval_s'] <= 0.01
+              assert row['semantic_owners']['identity_exact'] is True
+              assert row['executor_restored'] is True
+          PY
+      - name: V2 CI topology custody self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r25-candidate-process-isolation-rss-v2.yml
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-r25-candidate-process-isolation-rss-v2-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r25-candidate-process-isolation-rss-v2.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Custody-only supersession. Scientific question, instruments, thresholds and production behavior are unchanged from V1.

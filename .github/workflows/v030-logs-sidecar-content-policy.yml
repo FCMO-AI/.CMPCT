@@ -1,0 +1,137 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
+name: CMPCT v0.30 Logs sidecar content-policy productization
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_logs_inverse_edge_sidecar_pack_content_policy.py'
+      - 'benchmarks/v030_logs_inverse_edge_sidecar_pack_oracle.py'
+      - 'tests/test_v030_logs_sidecar_content_policy.py'
+      - '.github/workflows/v030-logs-sidecar-content-policy.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_logs_inverse_edge_sidecar_pack_content_policy.py'
+      - 'benchmarks/v030_logs_inverse_edge_sidecar_pack_oracle.py'
+      - 'tests/test_v030_logs_sidecar_content_policy.py'
+      - '.github/workflows/v030-logs-sidecar-content-policy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-logs-sidecar-content-policy-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_logs_inverse_edge_sidecar_pack_(content_policy|oracle)\.py|tests/test_v030_logs_sidecar_content_policy\.py|\.github/workflows/v030-logs-sidecar-content-policy\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  content-policy:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: cmpct-v030-logs-sidecar-content-policy-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Prove filename/path invariance locally
+        run: |
+          python -m py_compile benchmarks/v030_logs_inverse_edge_sidecar_pack_content_policy.py
+          python -m pytest -q tests/test_v030_logs_sidecar_content_policy.py
+      - name: Run exact strict four-way content-policy oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_inverse_edge_sidecar_pack_content_policy.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-content-policy-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-content-policy.json"
+      - name: Enforce productization boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-logs-content-policy.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-content-policy.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-sidecar-content-policy-v1'
+          assert d['uses_path_or_suffix_for_admission'] is False
+          assert d['release_credit'] is False
+          assert d['edge_detection']['uses_path_or_suffix_for_codec_admission'] is False
+          assert d['summary']['all_tree_verified'] is True
+          assert d['summary']['all_locality_green'] is True
+          a=d['domination_audit']
+          assert a['diagnosis']=='D5' and a['radicality']=='R2' and 'S6' in a['saturation_triggers']
+          if d['summary']['release_floor_four_way_win']:
+              b=d['summary']['best']
+              assert b['viable'] is True
+              assert all(b[k] for k in ('beats_zip_size','beats_zstd19_size','beats_zip_create','beats_zstd19_create','no_regression_vs_v029','locality_green','tree_verified'))
+              assert a['terminal_decision']=='PROMOTE_NEXT_PREREQUISITE'
+          else:
+              assert a['terminal_decision']=='REHABILITATE_DEBT'
+          PY
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-sidecar-content-policy-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-logs-content-policy.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-sidecar-content-policy.yml
+
+# D5/S6 boundary: only a path-invariant strict four-way win may advance toward canonical grammar.
+# This workflow itself grants no release credit. Classifier routing is cancellable by PR/ref while an admitted
+# exact-source content-policy receipt is preserved independently, so unrelated integration commits do not consume
+# durable classifier queue slots.

@@ -1,0 +1,162 @@
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 r24 prebuild process portability
+
+on:
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - experiments/entropygraph_v030_release_product.py
+      - experiments/entropygraph_v030_r24_process_prebuild.py
+      - experiments/entropygraph_v030_r24_process_shipping.py
+      - experiments/entropygraph_v030_hierarchical_geometry.py
+      - tests/test_v030_r24_process_prebuild.py
+      - tests/test_v030_r24_process_shipping.py
+      - .github/workflows/v030-r24-process-prebuild-portability.yml
+  push:
+    branches: [agent/v030-r24-process-productization]
+    paths:
+      - experiments/entropygraph_v030_release_product.py
+      - experiments/entropygraph_v030_r24_process_prebuild.py
+      - experiments/entropygraph_v030_r24_process_shipping.py
+      - experiments/entropygraph_v030_hierarchical_geometry.py
+      - tests/test_v030_r24_process_prebuild.py
+      - tests/test_v030_r24_process_shipping.py
+      - .github/workflows/v030-r24-process-prebuild-portability.yml
+  workflow_dispatch:
+
+permissions: {contents: read}
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: ${{ github.workflow }}-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Admit only latest-head process/runtime-authority changes
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$files"
+          if printf '%s\n' "$files" | grep -Eq '^(experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_hierarchical_geometry\.py|experiments/entropygraph_v030_r24_process_(prebuild|shipping)\.py|tests/test_v030_r24_process_(prebuild|shipping)\.py|\.github/workflows/v030-r24-process-prebuild-portability\.yml)$'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  focused-portability:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
+    strategy:
+      fail-fast: false
+      matrix: {os: [ubuntu-24.04, macos-15, windows-2025]}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    concurrency:
+      group: ${{ github.workflow }}-receipt-${{ github.event.pull_request.head.sha || github.sha }}-${{ matrix.os }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Bind exact candidate head
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Expose zstd shared library on macOS
+        if: matrix.os == 'macos-15'
+        shell: bash
+        run: |
+          brew list zstd >/dev/null 2>&1 || brew install zstd
+          ln -sf "$(brew --prefix zstd)/lib/libzstd.dylib" "$RUNNER_TEMP/libzstd.so"
+          echo "DYLD_LIBRARY_PATH=$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Install focused test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Compile process boundary
+        run: python -m py_compile experiments/entropygraph_v030_r24_process_prebuild.py experiments/entropygraph_v030_r24_process_shipping.py tests/test_v030_r24_process_prebuild.py tests/test_v030_r24_process_shipping.py
+      - name: Run focused process-boundary tests
+        run: python -m pytest -q tests/test_v030_r24_process_prebuild.py tests/test_v030_r24_process_shipping.py
+
+  runtime-authority:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    concurrency:
+      group: ${{ github.workflow }}-runtime-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Bind exact candidate head
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Install canonical authority dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Build native core exactly as canonical authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path native/cmpct-core/Cargo.toml --release
+          cp native/cmpct-core/target/release/libcmpct_core.so src/cmpct/
+      - name: Run canonical v2 and preserve whole-tree receipt
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p benchmark-artifacts
+          v2_rc=0
+          tree_rc=0
+          python benchmarks/v030_release_performance_v2.py --work-root benchmark-artifacts/runtime-v2-work --output benchmark-artifacts/runtime-v2.json || v2_rc=$?
+          python benchmarks/v030_release_performance_tree_rss.py --work-root benchmark-artifacts/runtime-tree-rss-work --output benchmark-artifacts/runtime-tree-rss.json || tree_rc=$?
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('runtime-v2.json','runtime-tree-rss.json'):
+              data=json.loads((Path('benchmark-artifacts')/name).read_text())
+              print(name, json.dumps(data['totals'], sort_keys=True))
+              assert data['engine']=='experiments/entropygraph_v030_release_product.py'
+              assert data['release_facade']=='cmpct-v030-release-product-v1'
+          tree=json.loads(Path('benchmark-artifacts/runtime-tree-rss.json').read_text())
+          assert tree['rss_accounting']=='whole-process-tree-vmrss-10ms-with-parent-rumaxrss-floor'
+          expected_receipts=sum(len(row['repetitions']) * 2 * 3 for row in tree['rows'])
+          assert len(tree['tree_rss_receipts']) == expected_receipts
+          for row in tree['tree_rss_receipts']:
+              assert row['decisive_peak_rss_kib'] >= row['parent_peak_rss_kib']
+              assert row['decisive_peak_rss_kib'] >= row['sampled_tree_peak_rss_kib']
+          PY
+          if [ "$v2_rc" -ne 0 ] || [ "$tree_rc" -ne 0 ]; then
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-process-authority-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/runtime-v2.json
+            benchmark-artifacts/runtime-tree-rss.json
+          if-no-files-found: error
+          retention-days: 90

@@ -1,0 +1,126 @@
+name: CMPCT v0.30 adaptive effort residual
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - benchmarks/v030_adaptive_effort_residual_referee.py
+      - benchmarks/v030_physical_effort_attribution.py
+      - benchmarks/v030_office_physical_economics_referee.py
+      - benchmarks/v030_current15_stable_corpus.py
+      - experiments/entropygraph_v030_federated_adaptive_effort_candidate_v8.py
+      - experiments/entropygraph_v030_federated_embedded_fs_candidate_v5.py
+      - docs/V030_ADAPTIVE_EFFORT_RESIDUAL_MISSION_LOCK_2026-09-13.md
+      - .github/workflows/v030-adaptive-effort-residual.yml
+
+permissions:
+  contents: read
+
+jobs:
+  adaptive-effort-residual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install current15 system dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Install exact-head benchmark dependencies
+        run: python -m pip install -e '.[test]'
+
+      - name: Syntax check
+        run: python -m py_compile benchmarks/v030_adaptive_effort_residual_referee.py
+
+      - name: Run H-EFFORT-2 fixed-geometry referee
+        id: referee
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p evidence
+          set +e
+          python -m benchmarks.v030_adaptive_effort_residual_referee \
+            --out evidence/adaptive-effort-residual.json \
+            > >(tee evidence/stdout.txt) \
+            2> >(tee evidence/stderr.txt >&2)
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Bind and classify receipt
+        id: classify
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          out=Path(os.environ['GITHUB_OUTPUT'])
+          receipt=Path('evidence/adaptive-effort-residual.json')
+          stderr=Path('evidence/stderr.txt')
+          code=int('${{ steps.referee.outputs.exit_code || 1 }}')
+          if receipt.exists():
+              d=json.loads(receipt.read_text())
+              d['candidate_sha']=os.environ['GITHUB_SHA']
+              d['candidate_ref']=os.environ['GITHUB_REF_NAME']
+              receipt.write_text(json.dumps(d,indent=2,sort_keys=True))
+              verdict=str(d.get('verdict','UNKNOWN'))
+              parts=[]
+              for row in d.get('rows',[]):
+                  raw_name=str(row.get('name','unknown'))
+                  name='off' if raw_name.startswith('02_') else ('ana' if raw_name.startswith('04_') else raw_name[:4])
+                  share=float(row.get('policy_share_of_level19_oracle',0.0))*100.0
+                  ratio=float(row.get('policy_vs_level19_cpu_ratio',0.0))*100.0
+                  residual=row.get('policy_residual_vs_level19_bytes','na')
+                  stop_n=row.get('stop_rule_missed_pack_count','na')
+                  stop_b=row.get('stop_rule_missed_bytes','na')
+                  obs_n=row.get('observation_only_9_15_better_pack_count','na')
+                  obs_b=row.get('observation_only_9_15_missed_bytes','na')
+                  hot=row.get('hot_residual_bytes','na')
+                  cold=row.get('cold_residual_bytes','na')
+                  top5=float(row.get('top5_residual_share',0.0))*100.0
+                  parts.append(
+                      f"{name}-sh{share:.1f}-cpu{ratio:.1f}-r{residual}"
+                      f"-hot{hot}-cold{cold}-stop{stop_n}.{stop_b}"
+                      f"-obs{obs_n}.{obs_b}-top5{top5:.1f}"
+                  )
+              label=verdict+'-'+'-'.join(parts)
+          else:
+              lines=[x.strip() for x in stderr.read_text(errors='replace').splitlines() if x.strip()] if stderr.exists() else []
+              msg=lines[-1] if lines else 'no-receipt-no-stderr'
+              msg=re.sub(r'[^A-Za-z0-9_.-]+','-',msg).strip('-')[:110]
+              label='HARNESS_FAIL-'+msg
+          label=re.sub(r'[^A-Za-z0-9_.-]+','-',label)[:190]
+          with out.open('a') as f:
+              f.write(f"label={label}\n")
+              f.write(f"exit_code={code}\n")
+          PY
+
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-adaptive-effort-${{ steps.classify.outputs.label }}-${{ github.sha }}
+          path: |
+            evidence/adaptive-effort-residual.json
+            evidence/stdout.txt
+            evidence/stderr.txt
+          if-no-files-found: error
+
+      - name: Enforce scientific referee exit
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.classify.outputs.exit_code }}" = "0"

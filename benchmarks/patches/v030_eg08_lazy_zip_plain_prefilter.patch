@@ -1,0 +1,19 @@
+diff --git a/experiments/entropygraph_v025.py b/experiments/entropygraph_v025.py
+--- a/experiments/entropygraph_v025.py
++++ b/experiments/entropygraph_v025.py
+@@ -32,2 +32,3 @@ def build():
+  t0=time.perf_counter();files=sorted(p for p in ROOT.rglob('*') if p.is_file());rels={p:p.relative_to(ROOT).as_posix() for p in files};raws={p:p.read_bytes() for p in files}
++ top_plain_cheap={(len(raw),binascii.crc32(raw)&0xffffffff) for raw in raws.values()}
+  # 1) Federate ZIP-like compressed member streams across the *whole archive*, not just inside one file.
+@@ -41,4 +42,6 @@ def build():
+   if not raw.startswith(b'PK\x03\x04') or len(raw)<4096:continue
+   try:
+-   with zipfile.ZipFile(p) as ar: infos=sorted([i for i in ar.infolist() if not i.is_dir()],key=lambda x:x.header_offset);plain_by_offset={i.header_offset:ar.read(i) for i in infos if i.compress_type in (zipfile.ZIP_DEFLATED,zipfile.ZIP_STORED)}
++   with zipfile.ZipFile(p) as ar:
++    infos=sorted([i for i in ar.infolist() if not i.is_dir()],key=lambda x:x.header_offset)
++    plain_by_offset={i.header_offset:ar.read(i) for i in infos if i.compress_type in (zipfile.ZIP_DEFLATED,zipfile.ZIP_STORED) and (int(i.file_size),int(i.CRC)&0xffffffff) in top_plain_cheap}
+    spans=[];sids=[];local={};members=[]
+@@ -54 +57,2 @@ def build():
+-     pb=plain_by_offset[zi.header_offset];ph=H(pb);member_plain.setdefault(ph,[]).append((p,hh,zi.compress_type,len(pb),len(b)));members.append((ph,hh,zi.compress_type,len(pb),len(b)))
++     pb=plain_by_offset.get(zi.header_offset)
++     if pb is not None:ph=H(pb);member_plain.setdefault(ph,[]).append((p,hh,zi.compress_type,len(pb),len(b)));members.append((ph,hh,zi.compress_type,len(pb),len(b)))

@@ -1,0 +1,157 @@
+{
+  "schema": "cmpct-discovery-state-v1",
+  "status": "ACTIVE",
+  "authority": {
+    "canonical_release": "v0.29.0 / r24 on main",
+    "active_frontier": "agent/v030-authoritative-integration",
+    "source": "V030_EFFICIENCY_RECOVERY ACTIVE; repository/run truth outranks this staleable cache"
+  },
+  "active_product_bottleneck": {
+    "id": "efficiency-recovery",
+    "observation": "Current-upstream 35681729751 is product-red at 4/15 strict joint wins. Content-ZIP remains full-matrix supported research (#201). #203 productization exposed a new general-purpose hostile: pure level-6-first can make large level-0 streams far slower despite +1 attempt boundedness. The stronger cost-aware candidate preserves level 0 first and moves level 6 second; exact head 401abba1 contains canonical order (0,6,1,2,3,4,5,7,8,9) plus fail-closed tests. Fresh exact-head regression/performance evidence is pending.",
+    "next_discriminator": "Consume #203 cost-aware exact-head regression 35738603879 and unchanged r24 performance gate 35738603723 on 401abba1. Promote only if exactness, archive-size/timing gates and the new level-0 tail-cost safety survive; then productize hidden-ZIP information-yield admission separately under #204."
+  },
+  "primary_question": {
+    "id": "generic-zip-ownership",
+    "family": "representation-discovery+execution",
+    "hypothesis": "A cost-aware exhaustive order that keeps level 0 first and moves common exact level 6 second can retain most supported Office search benefit without the large level-0 CPU tail regression discovered against pure 6-first.",
+    "status": "PRODUCTIZATION_COST_AWARE_CODEC_LANDED_EVIDENCE_PENDING",
+    "evidence": [
+      "34641565421/10280436333: information-yield -9,370,606 B, zero regressions; Office 6,074,838 B; hostiles pass",
+      "35690107132/10678438469: 180/180 exact streams; 1074 -> 180 attempts; CPU 2.22968 -> 0.56799 s",
+      "35694344404/10680097003: Office 6,074,842 -> 6,074,824 B; CPU 1.544365 -> 0.628505; wall 1.343497 -> 0.426692; exact/hostiles pass",
+      "35719088885/10690274379 source 9d324c39: three fresh 15-workload matrices; median-sum 181603782 -> 172233160 B; -9370622 B; zero regressed rows; Office admission=5; 14400 S_PACK range checks; artifact sha256 114260a8be4a31a1a9228902a000707e2206d64ac4ac980429c1a34de16e3e63",
+      "#203 exact head 401abba1: canonical cost-aware order (0,6,1,2,3,4,5,7,8,9); local 32 MiB level-0 hostile narrowed pure 6-first (~3.18x zeros, ~19.7x incompressible random CPU vs canonical); fresh product gates pending"
+    ],
+    "prediction": "(0,6,1,2,3,4,5,7,8,9) should preserve exact VZIP semantics and avoid the level-0 CPU cliff while retaining a large common-stream create-work reduction; hidden-ZIP admission remains a separate later seam.",
+    "kill": "Any canonical exact-stream/VZIP regression, archive-byte regression, confirmed create regression, unacceptable tail-cost regression, per-arm RSS debt, or locality failure blocks promotion. Pure 6-first is retired as a product candidate after the 32 MiB level-0 hostile."
+  },
+  "frontier_candidates": [
+    {
+      "id": "bounded-regret-deflate-productization",
+      "family": "execution",
+      "status": "COST_AWARE_IMPLEMENTED_EVIDENCE_PENDING",
+      "evidence": "#203 exact head 401abba1; cost-aware canonical codec mutation landed after pure 6-first tail-cost falsifier; regression/performance gates running"
+    },
+    {
+      "id": "content-zip-information-yield-admission",
+      "family": "representation-discovery",
+      "status": "SUPPORTED_QUEUED_AFTER_203",
+      "evidence": "#201 / 35719088885 / 10690274379; #204 decision-complete"
+    },
+    {
+      "id": "r24-performance-harness-repair",
+      "family": "evidence-enablement",
+      "status": "CONVERGENCE_PR_BLOCKED_WORKFLOW_PERMISSION",
+      "evidence": "#202; helper mechanism proven 35681662327; release fingerprint landed; attempted canonical workflow mutation rejected because GitHub App token lacks workflows permission; no ABBA claim"
+    },
+    {
+      "id": "r25-publishability-pruning",
+      "family": "execution-architecture",
+      "status": "ADJACENT",
+      "evidence": "#194; ML +116 B pre-overlay becomes -161843 B winner, mandatory hostile"
+    },
+    {
+      "id": "serious-corpus-efficiency",
+      "family": "product-efficiency",
+      "status": "QUEUED",
+      "evidence": "#192"
+    }
+  ],
+  "saturated_families": [
+    {
+      "family": "content-ZIP mirror/original-path/full-matrix rediscovery",
+      "reason": "historical ladder + #201 decide these rungs"
+    },
+    {
+      "family": "positive-shared-bytes gate v1",
+      "reason": "falsified 34640661646; repaired 34641565421"
+    },
+    {
+      "family": "heuristic frequency-sorted Deflate search order",
+      "reason": "adversarial replay exposed large level-0/2 regret"
+    },
+    {
+      "family": "raw 0..9 Deflate level search",
+      "reason": "#196/#199 establish stronger bounded-regret exact search"
+    },
+    {
+      "family": "level-6-first research generalization",
+      "reason": "supported 35719088885; next evidence is canonical productization"
+    },
+    {
+      "family": "content-ZIP traversal fusion",
+      "reason": "35703345978 final-form A/B failed CPU+wall improvement gate"
+    },
+    {
+      "family": "upstream-comparator-provenance-only-fix",
+      "reason": "completed/falsified as product explanation by 35681729751; #101 closed"
+    },
+    {
+      "family": "preflate rediscovery/reintegration",
+      "reason": "repository reconciliation shows authoritative native preflate bridge and historical evidence already exist; consume existing evidence before any new oracle"
+    },
+    {
+      "family": "scheduler-only-r25-speedup",
+      "reason": "multi-second work remains vs sub-second budgets"
+    },
+    {
+      "family": "pure level-6-first Deflate product order",
+      "reason": "32 MiB level-0 hostile showed attempt-count boundedness does not bound CPU: ~3.18x zeros and ~19.7x incompressible random vs canonical; superseded by 0-first/6-second control"
+    }
+  ],
+  "decision_evidence": {
+    "upstream_external": "35681729751 strict joint 4/15; CMPCT 149956581 B vs 7z 139911068 / zstd19 143849013 / zpaq5 138169739; #101 closed completed",
+    "content_zip_fast_generalization": "35719088885/10690274379: median-sum 181603782->172233160 B (-9370622); zero regressed rows; Office admission 5; 14400 S_PACK range checks; CPU 9.302890297 s; wall 5.112833589 s; whole-process RSS 480120 KiB",
+    "scan_fusion_negative": "35703345978/10683147417: bytes/RSS identical, CPU/wall not improved",
+    "r25_bound_hostile": "35681729751 ML g04 pre=13836789, v029 floor=13836673 (+116 B), overlay=13674830 (-161843 B)",
+    "r24_abba": "#202; helper proof 35681662327; canonical workflow mutation currently blocked by GitHub App workflows permission; ABBA still unmeasured",
+    "ci_fanout": "coordination-only abbd7e7... again instantiated a broad historical workflow wave; #128"
+  },
+  "process_lessons": [
+    {
+      "lesson": "Inspect complete historical workflow/run ladders before declaring the next rung.",
+      "evidence": "content-ZIP ladder recovery and 2026-09-22 preflate duplicate corrected against #26 history"
+    },
+    {
+      "lesson": "Measure final admitted archive before optimizing isolated search microbenchmarks.",
+      "evidence": "#199"
+    },
+    {
+      "lesson": "A cleaner execution boundary dies when final-form CPU/wall do not improve.",
+      "evidence": "#200 / 35703345978"
+    },
+    {
+      "lesson": "For multiprocessing evidence harnesses, never join a child before draining a potentially pipe-buffer-sized result payload.",
+      "evidence": "#201 35703931885 -> 9bcba9d9"
+    },
+    {
+      "lesson": "Do not require byte identity across independently regenerated corpora; test mechanism semantics within each paired exact input unless corpus identity itself is frozen and proven.",
+      "evidence": "#201 35713728064 -> 35719088885"
+    },
+    {
+      "lesson": "Normative discovery doctrine should not duplicate temporal project state already owned by reconciled STATE/repository evidence.",
+      "evidence": "#191 stale bootstrap; structural repair proposed"
+    }
+  ],
+  "pending_jobs": [
+    {
+      "provider": "github-actions",
+      "run": "35738603879",
+      "source_sha": "401abba1ba4a86c673db1c914033795c276afc6e",
+      "question": "#203 cost-aware exact-head full regression",
+      "expected_artifact": "test result/diagnostic",
+      "decision_unlocked": "whether cost-aware canonical search preserves full regression"
+    },
+    {
+      "provider": "github-actions",
+      "run": "35738603723",
+      "source_sha": "401abba1ba4a86c673db1c914033795c276afc6e",
+      "question": "#203 cost-aware unchanged r24 performance gate",
+      "expected_artifact": "ABBA release benchmark evidence",
+      "decision_unlocked": "whether cost-aware canonical search earns product promotion"
+    }
+  ],
+  "next_action": "Consume #203 exact-head runs 35738603879 and 35738603723. Do not promote obsolete pure 6-first evidence. If cost-aware exactness/product gates survive, advance #204 content-driven information-yield admission as the next separate causal slice. Keep #202 nonblocking until a workflow-authorized route can land canonical zip-parity wiring.",
+  "last_reconciled": "2026-09-22T14:12Z"
+}

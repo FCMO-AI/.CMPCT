@@ -1,0 +1,1 @@
+`agent/v030-authoritative-integration` is the sole convergence branch for the current v0.30 completion campaign. Research branches remain evidence/prototype sources; `main` remains released v0.29 until all gates close.

@@ -36,5 +36,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 thiserror = "2"
-zstd = "0.13"
+# Archive identity was established by the inherited Zstd 1.5.5 encoder. Keep that generation explicit
+# inside the package-owned core: 1.5.7 changes real source/tiny/nested payload bytes even after its new
+# pre-block splitter is disabled. Comparator freshness remains independent of this format-stability pin.
+zstd = "=0.13.0"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }

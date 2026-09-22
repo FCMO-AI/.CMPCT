@@ -1,0 +1,90 @@
+# ci-lane: focused
+name: CMPCT v0.30 Office splice upper-bound oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_office_splice_upper_bound_oracle.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill.py'
+      - 'experiments/entropygraph_v025.py'
+      - '.github/workflows/v030-office-splice-upper-bound.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-office-splice-upper-bound-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  exact-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_office_splice_upper_bound_oracle.py
+      - name: Run alternating exact splice-graph A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_office_splice_upper_bound_oracle \
+            --work-root "$RUNNER_TEMP/v030-office-splice-bound" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-office-splice-bound.json"
+      - name: Enforce exact graph and generic terminal contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-office-splice-bound.json').read_text())
+          assert d['schema']=='cmpct-v030-office-splice-upper-bound-v1'
+          assert d['rounds']==11
+          assert d['exact_splice_graph_identity'] is True
+          c=d['contract']
+          assert c['minimum_object_bytes']==32*1024
+          assert c['minimum_selected_coverage_bytes']==128*1024
+          assert c['terminal_is_size_upper_bound_only'] is True
+          assert c['benchmark_identity_used'] is False
+          assert c['path_identity_used'] is False
+          assert d['candidate_find_calls'] <= d['baseline_find_calls']
+          expected=(d['find_call_reduction_fraction']>=c['minimum_find_call_reduction_fraction'] and d['search_time_reduction_fraction']>=c['minimum_time_reduction_fraction'])
+          assert d['promotion_signal'] is expected
+          assert d['release_credit'] is False
+          PY
+      - name: Record exact fingerprint
+        run: printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/v030-office-splice-bound-candidate.txt
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-office-splice-upper-bound.yml
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-office-splice-bound-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-office-splice-bound.json
+            benchmark-artifacts/v030-office-splice-bound-candidate.txt
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only. A pass can authorize engine-level exact-byte/generalization testing only; never release credit.

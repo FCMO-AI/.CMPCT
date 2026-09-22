@@ -1,0 +1,196 @@
+name: CMPCT v0.30 r24 selective Deflate oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - '.github/workflows/v030-r24-selective-deflate-oracle.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install exact oracle dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd libzstd1 libdeflate0 ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Compare retain-all, mature cutoff and selected-member retention
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+          import json, tempfile, zipfile
+          from pathlib import Path
+
+          from benchmarks import v030_release_generalization as B
+          from benchmarks import mosaic_v029_generalization_bench as V029
+          from cmpct.reader import CMPCT
+          from cmpct import codec as R24
+          import cmpct.builder as BM
+          from experiments import entropygraph_v030_release_product_base as BASE
+          from experiments import entropygraph_v030_r24_dead_dictionary as DEAD
+
+          MATURE_MIN = 65536
+          ORIGINAL_BUILDER = BASE.C.Builder
+          ORIGINAL_MIN = BASE.R24_RELEASE_DEFLATE_REUSE_MIN_BYTES
+
+          class SelectedMemberDeflateBuilder(ORIGINAL_BUILDER):
+              """Retain small exact Deflate streams only when the selected r24 member needs them for locality."""
+              def _selected_stream_hashes(self):
+                  regular = [row for row in self.files if row[1] == R24.K_FILE]
+                  if not regular:
+                      return set()
+                  selected = max(regular, key=lambda row: (int(row[4]), str(row[0])))
+                  storage = selected[6]
+                  if not storage or storage[0] != R24.S_VZIP:
+                      return set()
+                  recipe = self.recipes[int(storage[1])]
+                  forced = set()
+                  for _rawref, method, stream_hash, _csize, _level in recipe[2]:
+                      if method == zipfile.ZIP_DEFLATED:
+                          forced.add(bytes(stream_hash))
+                  return forced
+
+              def _prepare_deflate_reuse(self):
+                  forced = self._selected_stream_hashes()
+                  additions = []
+                  for rh, c in list(self.cands.items()):
+                      if not c.deflates:
+                          continue
+                      chosen_hash, (chosen_bytes, _chosen_count) = max(
+                          c.deflates.items(), key=lambda kv: (kv[1][1], -len(kv[1][0]))
+                      )
+                      if len(chosen_bytes) >= self.deflate_reuse_min or chosen_hash in forced:
+                          self.canonical_deflate[rh] = chosen_hash
+                      for sh, (stream, _count) in c.deflates.items():
+                          if sh == chosen_hash:
+                              continue
+                          if len(stream) >= self.deflate_reuse_min or sh in forced:
+                              additions.append((sh, stream))
+                  for sh, stream in additions:
+                      if sh not in self.cands:
+                          self.cands[sh] = BM.Candidate(stream, {'.opaque-deflate'}, {})
+                      else:
+                          self.cands[sh].hints.add('.opaque-deflate')
+                      self.secondary_stream_hashes.add(sh)
+                  self._selected_deflate_force_count = len(forced)
+
+          def locality_amp(path: Path):
+              class Tracking(CMPCT):
+                  def __init__(self, p):
+                      super().__init__(p)
+                      self.observed = set()
+                  def _blob(self, idx):
+                      self.observed.add(int(idx))
+                      return super()._blob(idx)
+              with Tracking(path) as reader:
+                  regular = [row for row in reader.files if row[1] == R24.K_FILE]
+                  if not regular:
+                      return 1.0
+                  row = max(regular, key=lambda item: (int(item[4]), str(item[0])))
+                  reader.observed.clear()
+                  raw = bytes(reader.read(row[0]))
+                  decoded = sum(int(reader.blobs[idx][1]) for idx in reader.observed)
+                  return max(len(raw), decoded) / max(1, len(raw))
+
+          def build_variant(root: Path, out: Path, *, threshold: int, builder_cls):
+              BASE.R24_RELEASE_DEFLATE_REUSE_MIN_BYTES = threshold
+              BASE.C.Builder = builder_cls
+              try:
+                  stats = dict(BASE._locality_bounded_r24_build(root, out))
+              finally:
+                  BASE.C.Builder = ORIGINAL_BUILDER
+                  BASE.R24_RELEASE_DEFLATE_REUSE_MIN_BYTES = ORIGINAL_MIN
+              dead = DEAD.elide_dead_dictionary_in_place(out)
+              stats['archive_bytes_after_dead_dictionary'] = out.stat().st_size
+              stats['dead_dictionary_saving_bytes'] = int(dead.get('saving_bytes', 0))
+              return stats
+
+          accepted = B._accepted_v029_rows()
+          with tempfile.TemporaryDirectory(prefix='cmpct-r24-selective-deflate-oracle-') as td:
+              root = Path(td)
+              neutral = V029._load(V029.ROOT / 'benchmarks' / 'neutral_hostile_corpus_v1.py', 'cmpct_v030_oracle_neutral')
+              hostile = V029._load(V029.ROOT / 'benchmarks' / 'resemblance_hostile_corpus_v1.py', 'cmpct_v030_oracle_hostile')
+              repair = V029._load(V029.REPAIR_PATH, 'cmpct_v030_oracle_repair_v6')
+              repair.install_generation_hooks(neutral)
+              rows = []
+              for label, corpus, corpus_root in (
+                  ('neutral_hostile_v1', neutral, root / 'neutral'),
+                  ('resemblance_hostile_v1', hostile, root / 'resemblance'),
+              ):
+                  corpus.build(corpus_root)
+                  if label == 'neutral_hostile_v1':
+                      repair.normalize_root(corpus_root)
+                  for workload in sorted(p for p in corpus_root.iterdir() if p.is_dir()):
+                      outdir = root / 'archives' / label / workload.name
+                      outdir.mkdir(parents=True, exist_ok=True)
+                      current = outdir / 'retain-all.cmpct'
+                      mature = outdir / 'mature-64k.cmpct'
+                      selective = outdir / 'selected-member.cmpct'
+                      build_variant(workload, current, threshold=0, builder_cls=ORIGINAL_BUILDER)
+                      build_variant(workload, mature, threshold=MATURE_MIN, builder_cls=ORIGINAL_BUILDER)
+                      build_variant(workload, selective, threshold=MATURE_MIN, builder_cls=SelectedMemberDeflateBuilder)
+                      with CMPCT(selective) as reader:
+                          verified_files = int(reader.verify())
+                      row = {
+                          'suite': label,
+                          'name': workload.name,
+                          'accepted_v029_bytes': int(accepted[(label, workload.name)]['accepted_v029_bytes']),
+                          'retain_all_bytes': current.stat().st_size,
+                          'retain_all_amp': locality_amp(current),
+                          'mature_64k_bytes': mature.stat().st_size,
+                          'mature_64k_amp': locality_amp(mature),
+                          'selective_bytes': selective.stat().st_size,
+                          'selective_amp': locality_amp(selective),
+                          'selective_verified_files': verified_files,
+                      }
+                      row['selective_saving_vs_retain_all_bytes'] = row['retain_all_bytes'] - row['selective_bytes']
+                      row['selective_saving_vs_v029_bytes'] = row['accepted_v029_bytes'] - row['selective_bytes']
+                      rows.append(row)
+                      print(json.dumps(row), flush=True)
+              result = {
+                  'schema': 'cmpct-v030-r24-selective-deflate-oracle-v1',
+                  'policy': {
+                      'control_retain_all_min_bytes': 0,
+                      'control_mature_min_bytes': MATURE_MIN,
+                      'candidate': 'mature cutoff plus exact streams referenced by largest regular selected S_VZIP member',
+                      'locality_ceiling': 8.0,
+                      'fixture_identity_inputs': False,
+                  },
+                  'rows': rows,
+                  'totals': {
+                      'workloads': len(rows),
+                      'retain_all_bytes': sum(r['retain_all_bytes'] for r in rows),
+                      'mature_64k_bytes': sum(r['mature_64k_bytes'] for r in rows),
+                      'selective_bytes': sum(r['selective_bytes'] for r in rows),
+                      'accepted_v029_bytes': sum(r['accepted_v029_bytes'] for r in rows),
+                      'selective_saving_vs_retain_all_bytes': sum(r['selective_saving_vs_retain_all_bytes'] for r in rows),
+                      'selective_locality_failures': sum(r['selective_amp'] > 8.0 for r in rows),
+                      'mature_locality_failures': sum(r['mature_64k_amp'] > 8.0 for r in rows),
+                  },
+              }
+              Path('benchmark-artifacts').mkdir(exist_ok=True)
+              Path('benchmark-artifacts/v030-r24-selective-deflate-oracle.json').write_text(json.dumps(result, indent=2) + '\n')
+              print(json.dumps(result['totals'], indent=2), flush=True)
+              if result['totals']['selective_locality_failures']:
+                  raise SystemExit('selective exact-Deflate policy violated <=8x locality')
+          PY
+      - name: Upload oracle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-r24-selective-deflate-oracle
+          path: benchmark-artifacts/v030-r24-selective-deflate-oracle.json
+          if-no-files-found: error

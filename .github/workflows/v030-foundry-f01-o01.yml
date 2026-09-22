@@ -1,0 +1,86 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 Foundry F-01 O0.1 compiler oracle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact post-freeze candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile frozen F-01 oracle and decisive evidence wrapper
+        run: |
+          python -m py_compile experiments/entropygraph_v030_reversible_structure_compiler_o01.py
+          python -m py_compile experiments/entropygraph_v030_reversible_structure_compiler_o01_decisive.py
+      - name: Verify frozen preregistration is present
+        run: |
+          grep -F 'F-01 / O0.1' docs/v030-rnd/REVERSIBLE_STRUCTURE_COMPILER_O01_PREREG.md
+          grep -F 'F-01' docs/ACTIVE_RESEARCH_THESIS.md
+      - name: Execute decisive composition oracle with exact replay head seed
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m experiments.entropygraph_v030_reversible_structure_compiler_o01_decisive \
+            --seed "$EVIDENCE_HEAD" \
+            --output benchmark-artifacts/v030-foundry-f01-o01.json
+      - name: Independently enforce O0 evidence honesty
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == os.environ['EVIDENCE_HEAD']
+          d=json.loads(Path('benchmark-artifacts/v030-foundry-f01-o01.json').read_text())
+          assert d['schema']=='cmpct-v030-foundry-f01-o01-v2'
+          assert d['oracle']=='O0.1 composition-only'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert len(d['corpus_fingerprint'])==64 and d['corpus_manifest']
+          assert d['search_optimality']=='proven-within-frozen-grid-grammar'
+          assert d['search_states']['heuristic_pruned']==0
+          assert d['oracle_gift_ledger']['never_gifted']
+          assert d['oracle_gift_ledger']['deferred_debt']
+          assert all(c['exact_reconstruction'] for c in d['cases'])
+          assert all(c['synthesized_bytes']==c['control_bytes']+c['terminal_payload_bytes'] for c in d['cases'])
+          assert set(d['operator_space']) >= {'DIRECT','LANE','DELIM','SPLIT'}
+          assert d['decision'] in {'ADVANCE_COMPOSITION','DISCOVER_PRIMITIVE','MANUAL_FRONTIER_CONFIRMED','SEARCH_INCONCLUSIVE','RETIRE_F01'}
+          if d['decision'] in {'ADVANCE_COMPOSITION','DISCOVER_PRIMITIVE'}:
+              assert len(d['material_discovery_structural_signatures']) >= 2
+              assert d['transfer_wins'] >= 1
+              assert d['hostile_false_wins'] == 0
+          assert any(c['role']=='transfer' and c['case']=='transfer_generator_distinct_matrix' for c in d['cases'])
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-foundry-f01-o01.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-foundry-f01-o01-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-foundry-f01-o01.json
+          if-no-files-found: error
+          retention-days: 90
+
+# F-01 is retired in docs/ACTIVE_RESEARCH_THESIS.md. The frozen O0.1 instrument
+# remains manually replayable for custody/reopening evidence, but it no longer consumes
+# automatic convergence-PR runner capacity or grants canonical/release credit.

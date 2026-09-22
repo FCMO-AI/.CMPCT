@@ -1,0 +1,103 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 ZIP-factor recovery in-memory verify frontier
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_zipfactor_recovery_inmemory_verify_frontier.py'
+      - 'benchmarks/v030_zipfactor_recovery_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
+      - '.github/workflows/v030-zipfactor-recovery-inmemory-verify-frontier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zf-recovery-inmemory-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  in-memory-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        shell: bash
+        run: |
+          ACTUAL="$(git rev-parse HEAD)"
+          test "$ACTUAL" = "$EVIDENCE_HEAD"
+          printf '%s\n' "$ACTUAL" > "$RUNNER_TEMP/v030-zf-recovery-inmemory-candidate-sha.txt"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile frontier
+        run: python -m py_compile benchmarks/v030_zipfactor_recovery_inmemory_verify_frontier.py
+      - name: Run exact in-memory verification frontier
+        run: |
+          python -m benchmarks.v030_zipfactor_recovery_inmemory_verify_frontier \
+            --work-root "$RUNNER_TEMP/v030-zf-recovery-inmemory" \
+            --output "$RUNNER_TEMP/v030-zf-recovery-inmemory.json"
+      - name: Bind evidence to exact candidate and ratchet boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          evidence=root/'v030-zf-recovery-inmemory.json'
+          e=json.loads(evidence.read_text())
+          sha=(root/'v030-zf-recovery-inmemory-candidate-sha.txt').read_text().strip()
+          e['candidate_git_sha']=sha
+          evidence.write_text(json.dumps(e, indent=2)+'\n')
+          assert e['schema']=='cmpct-v030-zipfactor-recovery-inmemory-verify-frontier-v1'
+          c=e['contract']
+          assert c['rounds']==9 and c['level']==3 and c['group_size']==7
+          assert c['archive_bytes_changed'] is False
+          assert c['recovery_semantics_changed'] is False
+          assert c['legacy_verifier_cross_checked_each_round'] is True
+          assert c['ties_fail'] is True
+          assert c['selector_change'] is False and c['release_credit'] is False
+          assert e['release_credit'] is False
+          assert e['experiment_valid'] is True
+          assert len(e['samples_s']['cmpct'])==len(e['samples_s']['zip'])==len(e['samples_s']['zstd19'])==9
+          assert e['sizes']['cmpct'] < e['sizes']['zip']
+          assert e['sizes']['cmpct'] < e['sizes']['zstd19']
+          assert e['promotion_signal'] is e['strict_four_way_win']
+          if e['promotion_signal']:
+              assert e['medians_s']['cmpct'] < e['medians_s']['zip']
+              assert e['medians_s']['cmpct'] < e['medians_s']['zstd19']
+          PY
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zipfactor-recovery-inmemory-${{ env.EVIDENCE_HEAD }}
+          path: |
+            ${{ runner.temp }}/v030-zf-recovery-inmemory.json
+            ${{ runner.temp }}/v030-zf-recovery-inmemory-candidate-sha.txt
+          if-no-files-found: error
+          retention-days: 90
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-inmemory-verify-frontier.yml
+
+# Research-only verifier-cost boundary. Relevant semantic changes re-run it; unrelated integration commits do not.
+# Exact receipts are preserved rather than canceled. It removes only a temporary-file round trip and cross-checks
+# every in-memory result against the existing recovery verifier. No selector or release credit is granted.

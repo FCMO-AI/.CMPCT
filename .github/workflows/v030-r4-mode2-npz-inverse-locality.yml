@@ -1,0 +1,62 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 mode2 NPZ inverse locality
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_mode2_npz_inverse_locality_oracle.py'
+      - 'benchmarks/v030_r4_npz_mode2_owner_inversion.py'
+      - '.github/workflows/v030-r4-mode2-npz-inverse-locality.yml'
+  workflow_dispatch:
+permissions: {contents: read}
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-mode2-npz-locality-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  locality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ env.EVIDENCE_HEAD }}'}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile inverse-view falsifier
+        run: python -m py_compile benchmarks/v030_r4_mode2_npz_inverse_locality_oracle.py
+      - name: Run mode2 NPZ inverse-view locality falsifier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_mode2_npz_inverse_locality_oracle.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-mode2-npz-locality-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-mode2-npz-locality.json"
+      - name: Enforce receipt integrity only
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-mode2-npz-locality.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-mode2-npz-inverse-locality-v1'
+          c=d['contract']; assert c['diagnostic_only'] and not c['release_credit'] and c['exact_existing_mode2_semantic'] and c['ideal_source_io_assumed'] and c['reconstruction_work_only_not_physical_io'] and c['no_threshold_sweep']
+          assert len(d['requests'])==3
+          print(json.dumps({'max_source_reconstruction_work_amplification':d['max_source_reconstruction_work_amplification'],'hypothesis':d['hypothesis'],'requests':d['requests']},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-mode2-npz-inverse-locality-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-mode2-npz-locality.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity only; scientific red is a preserved negative.

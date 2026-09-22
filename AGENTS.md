@@ -1,49 +1,63 @@
-# FCMO v1 parent doctrine
-
-Before applying the repository-specific orientation below, read **`AGI_ENGINEERING_OPERATIONS_STANDARD.md`**. It is the universal parent doctrine for agent behavior in CMPCT. For user-facing work, its delegated communication discipline is pinned locally at **`COMMUNICATION_SURFACE_INTELLIGENCE_STANDARD.md`**.
-
-This is an adoption layer, **not a replacement of CMPCT's existing engineering system**. `docs/AGI_ENGINEERING_STANDARD.md` remains the binding CMPCT specialization for quality ratchets, invention, benchmark ethics, breakthrough rehabilitation, independent oracles, format/portability rules, and promotion gates. The exact release and public-surface contracts below remain in force.
-
-Interpret the hierarchy as:
-
-1. legitimate higher-order constraints and authority;
-2. FCMO AGI Engineering & Operations Standard v1.0 for universal agent behavior;
-3. this `AGENTS.md` and CMPCT's local engineering/release standards for repository-specific execution.
-
-In the pinned v1 text, **Prime Directive** is shorthand for Section 0's governing aim: seek the maximum justified real outcome under reality, legitimate authority, evidence, consequence, actual capability, and real constraints. It creates no additional scope or permission.
-
-If a local mechanism is stricter or more concrete, preserve it. Do not delete proven CMPCT machinery merely to make wording resemble the FCMO parent. If there is a genuine semantic conflict, surface and resolve it rather than silently weakening either side.
-
----
-
 # Agent instructions
 
 This repository is the canonical CMPCT project.
+
+## Continuous Discovery Engine
+
+For autonomous/recurrent research activations, `docs/discovery/DISCOVERY_ENGINE.md` and `docs/discovery/STATE.json` are the persistent scientific-search layer. They do not replace repository authority, current convergence/release law, or evidence records. Use them to PARETOBONK competing research actions, select the cheapest decisive falsification, preserve negative knowledge, and make successive activations compound. Reconcile `STATE.json` against current GitHub truth before trusting it; project truth always wins.
 
 ## Required orientation before development
 
 Before changing format behavior, encoder policy, performance, portability or the public site, read:
 
 1. `docs/AGI_ENGINEERING_STANDARD.md` — mandatory quality ratchet, invention protocol, evidence hierarchy and completion standard;
-2. `README.md`;
-3. `docs/CURRENT_STATE.md`;
-4. the newest applicable note under `docs/releases/`;
-5. `docs/PERFORMANCE_RELEASE_GATE.md`;
-6. `docs/BREAKTHROUGH_REHABILITATION.md` — how to preserve a miracle-grade research gain while paying any regression debt before promotion;
-7. `docs/HARDENING.md`;
-8. `docs/PORTABILITY.md`;
-9. `docs/NATIVE_CORE.md` when native/portability work is in scope;
-10. `docs/FORMAT.md`;
-11. `docs/HISTORY.md`;
-12. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md`;
-13. `docs/BENCHMARKS.md`;
-14. `docs/PUBLIC_SURFACE.md`;
-15. `docs/ROADMAP.md`.
+2. `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md` — normative Foundry law for breakthrough-first, thesis-driven research and the separation between invention and convergence;
+3. `docs/ASSUMPTION_LEDGER.md` — living map of current information-model assumptions, inversion questions and fundamental research opportunities;
+4. `docs/ACTIVE_RESEARCH_THESIS.md` — current persistent Foundry thesis, exact state, oracle ladder and next decisive question;
+5. `docs/RND_DOMINATION_RUBRIC.md` — normative Forge/convergence law for diagnosing and closing strict product/benchmark reds without micro-optimization drift;
+6. `README.md`;
+7. `docs/CURRENT_STATE.md`;
+8. the newest applicable note under `docs/releases/`;
+9. `docs/PERFORMANCE_RELEASE_GATE.md`;
+10. `docs/BREAKTHROUGH_REHABILITATION.md` — how to preserve a miracle-grade research gain while paying any regression debt before promotion;
+11. `docs/HARDENING.md`;
+12. `docs/PORTABILITY.md`;
+13. `docs/NATIVE_CORE.md` when native/portability work is in scope;
+14. `docs/FORMAT.md`;
+15. `docs/HISTORY.md`;
+16. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md`;
+17. `docs/BENCHMARKS.md`;
+18. `docs/PUBLIC_SURFACE.md`;
+19. `docs/ROADMAP.md`.
 
 Do not depend on inaccessible chat history, private corpora, unrelated internal projects, or private
 artifact provenance for project-critical context. If a conclusion matters to future CMPCT work, put
 the generalized technical conclusion in this repository without importing unrelated confidential
 context.
+
+## Fundamental research and convergence are different control loops
+
+CMPCT deliberately separates the **Foundry** from the **Forge**.
+
+The Foundry generates and falsifies fundamental theses about information: new relationships, reversible
+structures, reconstruction models, physical ownership models and proof/search abstractions. Its North
+Star is to expand what CMPCT can represent and exploit across arbitrary computer data. A Foundry thesis
+must be expressible without naming the benchmark that motivated it. The frozen benchmark matrix remains
+a court of product truth and a falsifier; it is not the sole generator of scientific questions.
+
+The Forge takes mechanisms with evidence and makes the real product strictly stronger: D0–D5 diagnosis,
+R0–R4 implementation/search/representation repair, exact competitor-gap closure, rehabilitation,
+generic admission, canonical semantics, recovery/locality/native/platform work and release authority.
+`docs/RND_DOMINATION_RUBRIC.md` is normative Forge law.
+
+Do not let easy Forge work permanently starve fundamental invention. Do not let novelty theater strand a
+mechanism that already has a reproducible strict win and honest D5 debt. `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`
+defines the three-frontier model (Oracle -> Research -> Product), R5 information-model invention, persistent
+Fundamental Theses, structural transfer and the Assumption Ledger.
+
+Hourly scheduling is a continuity mechanism, not the natural unit of thought. Recover and continue
+`docs/ACTIVE_RESEARCH_THESIS.md` across activations instead of restarting strategy every hour. One decisive
+oracle, impossibility proof or structural-transfer result can be more valuable than several unrelated commits.
 
 ## AGI-grade engineering is the default, not a special mode
 
@@ -124,6 +138,10 @@ miracle away; preserve it and attack the exported cost as the next engineering m
 - For substantial representation work, account for archive bytes, creation/extraction cost, peak memory, selective-read bytes/decoded work, dependency depth, integrity/recovery work and portability burden. Do not optimize one scalar by silently exporting cost elsewhere.
 - A breakthrough seed that improves one strategic metric dramatically while regressing another must open explicit regression debt. First attempt adaptive portfolio/fallback selection, then isolate exported cost, then change representation boundaries or invent a counter-mechanism. Do not optimize the breakthrough back out merely to make an intermediate matrix green.
 - Before completion, perform the adversarial self-review and completion dossier defined in `docs/AGI_ENGINEERING_STANDARD.md`.
+
+## Recursive discovery discipline
+
+For material research/experiment selection, read and apply `docs/RECURSIVE_DISCOVERY_ENGINE.md`. It is a thin meta-science layer over the existing CMPCT evidence system, not a second project-state database. Use `research/discovery_episodes.jsonl` only for material prediction/outcome/counterfactual episodes; preserve predictions before observing results, distinguish product/science/discovery evidence, use cheap honest oracle rungs to kill low-headroom families early, and use counterfactual replay only when it yields a prospectively recognizable transferable decision rule. Never award product credit to oracle/replay evidence, optimize a scalar research score, or create ledger activity for its own sake. PARETOBONK the mechanism itself if carrying cost exceeds demonstrated research leverage.
 
 ## Benchmark rule
 

@@ -1,0 +1,104 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Shifted attempt-5 phase ownership
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_shifted_attempt5_phase_ownership.py'
+      - 'docs/v030-rnd/R25_SHIFTED_ATTEMPT5_PHASE_OWNERSHIP_V1_PREREG.md'
+      - 'experiments/entropygraph_v029_residual_fast.py'
+      - 'experiments/entropygraph_v029_residual_pack.py'
+      - 'experiments/entropygraph_v029_mosaic_strict.py'
+      - 'experiments/entropygraph_v029_mosaic_placement.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - '.github/workflows/v030-shifted-attempt5-phase-ownership.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-shifted-attempt5-phase-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  phase-ownership:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact evidence head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Compile frozen attribution oracle
+        run: python -m py_compile benchmarks/v030_shifted_attempt5_phase_ownership.py
+      - name: Run Shifted attempt-5 phase ownership oracle
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_shifted_attempt5_phase_ownership \
+            --work-root "$RUNNER_TEMP/v030-shifted-attempt5-phase" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-attempt5-phase.json"
+      - name: Enforce frozen decision grammar
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d = json.loads(Path('benchmark-artifacts/v030-shifted-attempt5-phase.json').read_text())
+          assert d['schema'] == 'cmpct-v030-shifted-attempt5-phase-ownership-v1'
+          assert d['diagnosis'] == 'D2/D3'
+          assert d['instrument_radicality'] == 'R0'
+          assert d['saturation_trigger'] == 'S5'
+          assert d['post_placement_fraction_ceiling'] == 0.15
+          assert d['repetitions'] == 2 and len(d['rows']) == 2
+          assert d['archive_identity_stable'] is True
+          assert d['release_credit'] is False
+          assert d['decision'] in {
+              'POST_PLACEMENT_STOPPING_SEAM_RETIRED',
+              'POST_PLACEMENT_STOPPING_SEAM_REMAINS_PLAUSIBLE',
+          }
+          for row in d['rows']:
+              assert row['strong_verify_ok'] is True
+              assert row['tree_sha256'] == d['tree_sha256']
+              assert row['attempt5_total_s'] > 0
+              assert 0 <= row['post_placement_tail_fraction'] <= 1
+          if d['decision'] == 'POST_PLACEMENT_STOPPING_SEAM_RETIRED':
+              assert all(row['post_placement_tail_fraction'] < 0.15 for row in d['rows'])
+          else:
+              assert any(row['post_placement_tail_fraction'] >= 0.15 for row in d['rows'])
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-shifted-attempt5-phase-ownership.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact attribution evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-attempt5-phase-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-attempt5-phase.json
+          if-no-files-found: error
+          retention-days: 90
+
+# R0 only. This lane times exact inherited phase owners and grants no product/release credit.

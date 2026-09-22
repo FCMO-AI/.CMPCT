@@ -1,0 +1,77 @@
+# ci-lane: deep
+name: CMPCT v0.30 R4 sparse-anchor DEFLATE oracle
+
+# Historical lower-bound research oracle. Its hypothesis and durable result are preserved,
+# but it is not current v0.30 product/release authority. Avoid long-lived-PR admission;
+# retain a narrow push route while this workflow is absent from the default branch, because
+# GitHub only honors workflow_dispatch when the workflow file exists on the default branch.
+on:
+  push:
+    branches:
+      - 'agent/v030-*'
+    paths:
+      - 'benchmarks/v030_r4_deflate_sparse_anchor_oracle.py'
+      - '.github/workflows/v030-r4-deflate-sparse-anchor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r4-sparse-anchor-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  sparse-anchor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_r4_deflate_sparse_anchor_oracle.py
+      - name: Run sparse anchor locality oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_deflate_sparse_anchor_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-sparse-anchor-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-sparse-anchor.json"
+      - name: Enforce lower-bound evidence contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-sparse-anchor.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-deflate-sparse-anchor-oracle-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['parser']['exact_raw_match']
+          c=d['contract']; assert c['diagnostic_only'] and not c['release_credit'] and c['lower_bound_only'] and c['no_page_size_sweep']
+          print(json.dumps({'member':d['member'],'parser':d['parser'],'sparse_anchor':d['sparse_anchor'],'economics':d['economics'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-deflate-sparse-anchor.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-sparse-anchor-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-sparse-anchor.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Lower-bound architecture falsifier only. Green means receipt integrity, never promotion.

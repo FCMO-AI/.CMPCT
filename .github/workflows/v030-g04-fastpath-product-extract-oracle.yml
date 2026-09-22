@@ -1,0 +1,69 @@
+name: CMPCT v0.30 G04 complete-product extract oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_g04_fastpath_product_extract_oracle.py
+      - .github/workflows/v030-g04-fastpath-product-extract-oracle.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  product-extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact oracle head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact runtime/corpus dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile focused product oracle
+        run: python -m py_compile benchmarks/v030_g04_fastpath_product_extract_oracle.py benchmarks/v030_perf_worker.py
+      - name: Run fresh-process complete-product extraction comparison
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_fastpath_product_extract_oracle.py \
+            --work-root "$RUNNER_TEMP/v030-g04-product-extract" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/g04-fastpath-product-extract.json"
+      - name: Validate evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/g04-fastpath-product-extract.json').read_text())
+          assert d['status']=='PASS', d.get('error')
+          assert d['product_release_credit'] is False
+          c=d['contract']; q=d['comparison']
+          assert c['fresh_process_each_extract'] is True
+          assert c['frozen_runtime_thresholds_changed'] is False
+          assert c['full_runtime_gate_replaced'] is False
+          assert len(d['samples']['v029'])==3 and len(d['samples']['v030'])==3
+          assert q['v030_over_v029_extract_ratio'] > 0
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-g04-fastpath-product-extract-${{ github.sha }}
+          path: benchmark-artifacts/g04-fastpath-product-extract.json
+          if-no-files-found: error
+          retention-days: 90

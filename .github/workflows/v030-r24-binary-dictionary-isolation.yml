@@ -1,0 +1,143 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 r24 binary dictionary isolation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'benchmarks/v030_r24_binary_dictionary_isolation_oracle.py'
+      - 'benchmarks/v030_r24_medium_binary_pack_generalization.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'tests/test_v030_r24_binary_dictionary_isolation.py'
+      - '.github/workflows/v030-r24-binary-dictionary-isolation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-binary-dict-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.scope.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(src/cmpct/builder\.py|experiments/entropygraph_v030_release_product(_base)?\.py|benchmarks/v030_r24_(binary_dictionary_isolation_oracle|medium_binary_pack_generalization|compact_control_oracle)\.py|benchmarks/(neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1)\.py|tests/test_v030_r24_binary_dictionary_isolation\.py|\.github/workflows/v030-r24-binary-dictionary-isolation\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'relevant=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect the binary-dictionary oracle.'
+          fi
+
+  binary-dictionary-isolation:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.relevant == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus/compressor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile and run policy-isolation ratchet
+        run: |
+          python -m py_compile benchmarks/v030_r24_binary_dictionary_isolation_oracle.py
+          python -m py_compile benchmarks/v030_r24_medium_binary_pack_generalization.py
+          python -m py_compile experiments/entropygraph_v030_release_product_base.py
+          python -m pytest -q tests/test_v030_r24_binary_dictionary_isolation.py
+      - name: Run exact target and all-15 A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_binary_dictionary_isolation_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-binary-dict-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-binary-dict.json"
+      - name: Enforce evidence validity and promotion boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-binary-dict.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-binary-dictionary-isolation-v1'
+          assert d['contract']['format_revision']==24
+          assert d['contract']['archive_grammar_changed'] is False
+          assert d['contract']['micro_pack_binary_admission_changed'] is False
+          assert d['contract']['strong_verification_required'] is True
+          repair=d['identity_domain_repair']
+          assert repair['historical_source_digest_role']=='frozen corpus provenance only'
+          assert repair['canonical_product_digest_role']=='shipping-vs-candidate semantic tree equivalence'
+          assert repair['threshold_changed'] is False
+          t=d['target']
+          assert t['rounds']==5
+          assert t['same_verified_tree'] is True
+          assert t['shipping']['archive_bytes'] >= t['candidate']['archive_bytes']
+          assert t['saving_bytes']==t['shipping']['archive_bytes']-t['candidate']['archive_bytes']
+          a=d['all15']
+          assert len(a['rows'])==15
+          assert a['gate']['exact_workload_count'] is True
+          assert a['gate']['all_source_and_candidate_trees_match'] is True
+          assert a['gate']['historical_source_digest_not_misused_as_product_digest'] is True
+          # A byte regression is valid negative evidence, not permission to promote. CI remains useful for
+          # measuring the hypothesis while the explicit promotion_candidate fact stays fail-closed.
+          if a['gate']['promotion_candidate']:
+              assert a['gate']['zero_byte_regressions'] is True
+              assert a['gate']['at_least_one_strict_improvement'] is True
+              assert a['candidate_total_bytes'] < a['shipping_total_bytes']
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-binary-dict-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r24-binary-dict.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research/promotion evidence only. This lane cannot alter the shipping selector, accepted v0.29 bytes,
+# ZIP/Zstd contract, locality/recovery law, native/Android requirements, or final release authority.
+# On the long-lived integration PR, pull_request.paths is cumulative. The exact-HEAD classifier prevents an
+# unrelated newest commit from spending up to 180 runner-minutes on this deep oracle while preserving manual replay.

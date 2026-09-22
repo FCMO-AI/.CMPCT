@@ -1,0 +1,46 @@
+{
+  "schema": "cmpct-v030-generalization-fallback-cliff-oracle-v1",
+  "recorded_date": "2026-09-14",
+  "status": "PASS",
+  "evidence_class": "research-oracle-direct-current-substrate",
+  "product_release_credit": false,
+  "source": {
+    "repository": "FCMO-AI/.CMPCT",
+    "branch": "agent/v030-authoritative-integration",
+    "experiment_head_sha": "20856a9e1296e1c5d3f60182bc7d2cef1ee365c4",
+    "workflow_run_id": 34838096677,
+    "workflow_job_id": 103956477715,
+    "artifact_id": 10344858078,
+    "artifact_name": "v030-generalization-fallback-cliff-20856a9e1296e1c5d3f60182bc7d2cef1ee365c4",
+    "artifact_sha256": "5a1657440179983e6df17b3e9b712070902c45293f08aa9a4133092bc4c6d210"
+  },
+  "contract": {
+    "target_rows": 6,
+    "frozen_source_identity_required": true,
+    "product_dispatch_changed": false,
+    "release_thresholds_changed": false,
+    "benchmark_identity_used_only_for_oracle_selection": true
+  },
+  "rows": [
+    {"suite":"neutral_hostile_v1","name":"01_developer_repository","historical_tree_sha256":"d1706c497de75764b6bd0f49c5d8bdde251694eea40fc683dcbbfed5027c2f49","accepted_v029_bytes":744337,"filesystem_manifest_bytes":139634,"filesystem_manifest_entries":1516,"staged_v029_base_bytes":750639,"staging_exported_cost_vs_original_v029_bytes":6302,"raw_g04_overlay_bytes":844062,"raw_overlay_delta_vs_staged_base_bytes":93423,"strict_inner_win_bridge_bytes":93424,"inner_selected":"v029-fallback","inner_selected_bytes":750639,"transformed_records":1,"delimiter_records":1,"hierarchical_total_records":0,"max_selected_member_read_amplification":1.0,"overlay_meta_raw_bytes":178934,"overlay_meta_comp_bytes":82908},
+    {"suite":"neutral_hostile_v1","name":"02_office_workspace","historical_tree_sha256":"aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57","accepted_v029_bytes":5954026,"filesystem_manifest_bytes":1798,"filesystem_manifest_entries":21,"staged_v029_base_bytes":5954330,"staging_exported_cost_vs_original_v029_bytes":304,"raw_g04_overlay_bytes":11633028,"raw_overlay_delta_vs_staged_base_bytes":5678698,"strict_inner_win_bridge_bytes":5678699,"inner_selected":"v029-fallback","inner_selected_bytes":5954330,"transformed_records":1,"delimiter_records":0,"hierarchical_total_records":1,"max_selected_member_read_amplification":1.0,"overlay_meta_raw_bytes":8615,"overlay_meta_comp_bytes":6417},
+    {"suite":"neutral_hostile_v1","name":"04_analytics_and_database","historical_tree_sha256":"6d0854fe058a95258588b89dca653ac8f00c61f815c6127b179e86cc58b1789d","accepted_v029_bytes":6135172,"filesystem_manifest_bytes":504,"filesystem_manifest_entries":5,"staged_v029_base_bytes":6135344,"staging_exported_cost_vs_original_v029_bytes":172,"raw_g04_overlay_bytes":9479147,"raw_overlay_delta_vs_staged_base_bytes":3343803,"strict_inner_win_bridge_bytes":3343804,"inner_selected":"v029-fallback","inner_selected_bytes":6135344,"transformed_records":14,"delimiter_records":10,"hierarchical_total_records":1,"max_selected_member_read_amplification":1.0,"overlay_meta_raw_bytes":9962,"overlay_meta_comp_bytes":8119},
+    {"suite":"neutral_hostile_v1","name":"07_incompressible_and_encrypted_like","historical_tree_sha256":"da4f37ac1d7a6751c4adcaabb50cc2cd6f2ffbed7bd2100d34b9ef597f7d1d80","accepted_v029_bytes":10193958,"filesystem_manifest_bytes":106591,"filesystem_manifest_entries":1426,"staged_v029_base_bytes":10198486,"staging_exported_cost_vs_original_v029_bytes":4528,"raw_g04_overlay_bytes":10329172,"raw_overlay_delta_vs_staged_base_bytes":130686,"strict_inner_win_bridge_bytes":130687,"inner_selected":"v029-fallback","inner_selected_bytes":10198486,"transformed_records":0,"delimiter_records":0,"hierarchical_total_records":0,"max_selected_member_read_amplification":1.0,"overlay_meta_raw_bytes":163401,"overlay_meta_comp_bytes":70122},
+    {"suite":"neutral_hostile_v1","name":"08_many_tiny_files","historical_tree_sha256":"a62a03735deaaaebadacb961326c760aff09c1a4e031a44df02a9e95f8f5093f","accepted_v029_bytes":420318,"filesystem_manifest_bytes":455767,"filesystem_manifest_entries":6890,"staged_v029_base_bytes":442273,"staging_exported_cost_vs_original_v029_bytes":21955,"raw_g04_overlay_bytes":873023,"raw_overlay_delta_vs_staged_base_bytes":430750,"strict_inner_win_bridge_bytes":430751,"inner_selected":"v029-fallback","inner_selected_bytes":442273,"transformed_records":0,"delimiter_records":0,"hierarchical_total_records":0,"max_selected_member_read_amplification":1.0,"overlay_meta_raw_bytes":587300,"overlay_meta_comp_bytes":242865},
+    {"suite":"resemblance_hostile_v1","name":"04_deflate_family","historical_tree_sha256":"527a9e356e923e5bcc26566a8f677a7f7277af1577493e09c2bdca1b6d17154a","accepted_v029_bytes":14597,"filesystem_manifest_bytes":1152,"filesystem_manifest_entries":14,"staged_v029_base_bytes":14836,"staging_exported_cost_vs_original_v029_bytes":239,"raw_g04_overlay_bytes":20608,"raw_overlay_delta_vs_staged_base_bytes":5772,"strict_inner_win_bridge_bytes":5773,"inner_selected":"v029-fallback","inner_selected_bytes":14836,"transformed_records":0,"delimiter_records":0,"hierarchical_total_records":0,"max_selected_member_read_amplification":1.0,"overlay_meta_raw_bytes":2696,"overlay_meta_comp_bytes":1500}
+  ],
+  "totals": {
+    "accepted_v029_bytes": 23462408,
+    "staged_v029_base_bytes": 23495908,
+    "raw_g04_overlay_bytes": 33179040,
+    "staging_exported_cost_vs_original_v029_bytes": 33500,
+    "raw_overlay_delta_vs_staged_base_bytes": 9683132,
+    "strict_inner_win_bridge_bytes": 9683138
+  },
+  "adjudication": {
+    "result": "PRIOR_NEAR_FLOOR_INTERPRETATION_FALSIFIED",
+    "reason": "The prior derived view compared the *selected inner v0.29 fallback* to accepted v0.29 and therefore understated the representation gap. Direct raw-candidate measurement shows the six G04 overlays are 9,683,132 bytes above their staged v0.29 bases in aggregate. Filesystem staging contributes only 33,500 bytes versus the original accepted v0.29 floors. Office alone needs 5,678,699 bytes of raw-overlay improvement to strictly win its staged base; Analytics needs 3,343,804 bytes. The later outer r24 fallback still amplifies the visible product loss, but the dominant scientific problem is real representation/compression debt rather than a tiny canonicality bridge.",
+    "causal_partition": "Rows with zero transforms (incompressible, tiny-files, deflate-family) expose pure overlay/meta/framing carry cost; Office and Analytics expose hierarchical/transform representation debt; Developer includes one delimiter transform but remains 93,424 bytes from a strict inner win.",
+    "next_target": "Attack the dominant raw-overlay owners separately: quantify why the hierarchical transform is +5.68 MB on Office and +3.34 MB on Analytics, while treating zero-transform rows as an overhead/framing problem. Do not weaken strict admission or tie policy."
+  }
+}
