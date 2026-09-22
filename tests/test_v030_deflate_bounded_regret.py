@@ -73,5 +73,6 @@ def test_search_remains_exhaustive_for_all_zlib_level_outputs():
 
 
 def test_cost_tier_order_is_complete_and_unique():
+    assert ORDER[:4] == (0, 1, 2, 6)
     assert len(ORDER) == 10
     assert set(ORDER) == set(range(10))
