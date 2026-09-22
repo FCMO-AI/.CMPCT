@@ -26,6 +26,10 @@ MAX_COMMENT = 65535
 MAX_TAIL = EOCD_MIN + MAX_COMMENT
 MAX_ENTRIES = 8192
 MAX_CENTRAL_DIRECTORY = 16 * 1024 * 1024
+# Optional discovery must have a tree-wide ceiling as well as per-container bounds.
+# Crossing it disables the optimization for the whole observation rather than
+# retaining an attacker-controlled owner graph or changing ordinary storage.
+MAX_OBSERVATION_DESCRIPTORS = 131072
 ZIP64_U16 = 0xFFFF
 ZIP64_U32 = 0xFFFFFFFF
 SUPPORTED_METHODS = frozenset((zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED))
@@ -151,21 +155,21 @@ def _metadata_descriptors(path: Path):
         with zipfile.ZipFile(path) as z:
             infos = [i for i in z.infolist() if not i.is_dir()]
             if not infos:
-                return None, "empty_members"
+                return None, 0, "empty_members"
             if any(i.flag_bits & 1 for i in infos):
-                return None, "encrypted"
+                return None, len(infos), "encrypted"
             if any(i.compress_type not in SUPPORTED_METHODS for i in infos):
-                return None, "unsupported_method"
+                return None, len(infos), "unsupported_method"
             descriptors = {
                 (int(i.compress_type), int(i.compress_size), int(i.file_size), int(i.CRC))
                 for i in infos
                 if i.file_size > 0
             }
             if not descriptors:
-                return None, "no_payload_members"
-            return descriptors, None
+                return None, len(infos), "no_payload_members"
+            return descriptors, len(infos), None
     except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, struct.error):
-        return None, "exact_parse_rejected"
+        return None, 0, "exact_parse_rejected"
 
 
 def _verify_stream(path: Path, descriptor: tuple[int, int, int, int]):
@@ -190,17 +194,24 @@ def _verify_stream(path: Path, descriptor: tuple[int, int, int, int]):
         return None, read
 
 
-def observe_hidden_zip_admission(root: Path, *, min_verified_reuse: int = MIN_VERIFIED_REUSE) -> HiddenZipObservation:
+def observe_hidden_zip_admission(
+    root: Path,
+    *,
+    min_verified_reuse: int = MIN_VERIFIED_REUSE,
+    max_observation_descriptors: int = MAX_OBSERVATION_DESCRIPTORS,
+) -> HiddenZipObservation:
     """Discover hidden candidates with metadata pruning followed by exact stream proof.
 
     Metadata equality is only a necessary condition for equal compressed streams. It can trigger SHA work,
     never admission. Explicit ZIP/WHL first-owners may supply reuse evidence but are never hidden admissions.
+    A tree-wide descriptor ceiling makes the optional optimization fail closed before owner state can grow
+    without bound; ordinary archive construction remains available to the caller.
     """
     root = Path(root)
     rejects: Counter[str] = Counter()
     stamps: dict[str, tuple[int, int, int, int]] = {}
     hidden: set[str] = set()
-    parsed = head_bytes = tail_bytes = verification_bytes = 0
+    parsed = head_bytes = tail_bytes = verification_bytes = descriptor_count = 0
     files = list(_physical_observation_files(root))
 
     candidates: list[tuple[Path, str, bool, set[tuple[int, int, int, int]]]] = []
@@ -215,10 +226,17 @@ def observe_hidden_zip_admission(root: Path, *, min_verified_reuse: int = MIN_VE
             if not pf.eligible:
                 rejects[pf.reason] += 1
                 continue
-        descriptors, reason = _metadata_descriptors(path)
+        descriptors, entries, reason = _metadata_descriptors(path)
         if descriptors is None:
             rejects[("explicit_" if explicit else "") + (reason or "exact_parse_rejected")] += 1
             continue
+        descriptor_count += entries
+        if descriptor_count > int(max_observation_descriptors):
+            rejects["observation_descriptor_budget"] += 1
+            # The budget is global, so a partial owner graph must never produce partial admissions.
+            return HiddenZipObservation(
+                (), len(files), parsed, head_bytes, tail_bytes, 0, tuple(sorted(rejects.items()))
+            )
         parsed += 1
         candidates.append((path, rel, explicit, descriptors))
         metadata_owners.update(descriptors)
