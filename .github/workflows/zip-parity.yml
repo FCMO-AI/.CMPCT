@@ -16,6 +16,7 @@ on:
       - "tests/**"
       - "tools/check_performance_regression.py"
       - "tools/aggregate_parity_runs.py"
+      - "tools/materialize_performance_base_native.py"
       - "pyproject.toml"
       - ".github/workflows/zip-parity.yml"
   push:
@@ -27,6 +28,7 @@ on:
       - "tests/**"
       - "tools/check_performance_regression.py"
       - "tools/aggregate_parity_runs.py"
+      - "tools/materialize_performance_base_native.py"
       - "pyproject.toml"
       - ".github/workflows/zip-parity.yml"
   workflow_dispatch:
@@ -65,7 +67,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(src/|native/|benchmarks/|tests/|tools/(check_performance_regression|aggregate_parity_runs)\.py|pyproject\.toml|\.github/workflows/zip-parity\.yml)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/|native/|benchmarks/|tests/|tools/(check_performance_regression|aggregate_parity_runs|materialize_performance_base_native)\.py|pyproject\.toml|\.github/workflows/zip-parity\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_performance=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_performance=false' >> "$GITHUB_OUTPUT"
@@ -77,11 +79,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      # Each engine is run twice in ABBA order. Seven repetitions/run yields fourteen timed
-      # observations per metric per engine. The deeper sample is deliberate: the exact-head tiny
-      # diagnostic has shown that a six-observation aggregate can falsely report a >10% regression
-      # while a 28-observation focused ABBA on the same candidate/base pair is neutral-to-faster.
-      # Thresholds are unchanged; only the evidence resolution is increased.
       CMPCT_PARITY_REPS: "7"
       CMPCT_RELEASE_CORPUS: /tmp/cmpct-release-corpus
     steps:
@@ -89,8 +86,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          # PR workflows normally check out a synthetic merge commit. Performance evidence should
-          # identify and execute the actual candidate head while still comparing against the PR base.
           ref: ${{ env.EVIDENCE_HEAD }}
 
       - name: Bind checkout to exact evidence head
@@ -110,10 +105,7 @@ jobs:
           if ! sudo apt-get update; then
             echo "Initial apt update failed; retrying without runner-provided Microsoft feeds" >&2
             shopt -s nullglob
-            microsoft_lists=(
-              /etc/apt/sources.list.d/microsoft*.list
-              /etc/apt/sources.list.d/azure-cli*.list
-            )
+            microsoft_lists=(/etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/azure-cli*.list)
             if ((${#microsoft_lists[@]} == 0)); then
               echo "apt update failed and no known irrelevant Microsoft feed was present" >&2
               exit 1
@@ -146,54 +138,39 @@ jobs:
       - name: Materialize base engine worktree
         run: git worktree add --detach /tmp/cmpct-performance-base "${{ steps.base.outputs.sha }}"
 
+      - name: Materialize historical base native payload
+        run: |
+          mkdir -p benchmark-artifacts
+          python tools/materialize_performance_base_native.py /tmp/cmpct-performance-base \
+            --receipt benchmark-artifacts/base-native.json | tee benchmark-artifacts/native-ownership.txt
+
       - name: Generate one immutable release corpus
         run: |
           mkdir -p benchmark-artifacts
           python - <<'PY'
           import hashlib, json, os, shutil, sys
           from pathlib import Path
-
-          root = Path.cwd()
-          sys.path.insert(0, str(root / 'benchmarks'))
-          import universal_bench as universal
-
-          corpus = Path(os.environ['CMPCT_RELEASE_CORPUS'])
-          shutil.rmtree(corpus, ignore_errors=True)
-          corpus.mkdir(parents=True)
-          universal.CORP = corpus
-          universal.reset_rng()
-          universal.make_corpora()
-
-          # CMPCT preserves richer metadata than ZIP. Identical payload bytes alone therefore do not
-          # define identical archive input; freeze controllable timestamps before either engine runs.
-          fixed_ns = 1767225600 * 1_000_000_000  # 2026-01-01T00:00:00Z
+          root = Path.cwd(); sys.path.insert(0, str(root / 'benchmarks')); import universal_bench as universal
+          corpus = Path(os.environ['CMPCT_RELEASE_CORPUS']); shutil.rmtree(corpus, ignore_errors=True); corpus.mkdir(parents=True)
+          universal.CORP = corpus; universal.reset_rng(); universal.make_corpora()
+          fixed_ns = 1767225600 * 1_000_000_000
           paths = sorted(corpus.rglob('*'), key=lambda p: (len(p.parts), p.as_posix()), reverse=True)
           for path in paths:
-              try:
-                  os.utime(path, ns=(fixed_ns, fixed_ns), follow_symlinks=False)
+              try: os.utime(path, ns=(fixed_ns, fixed_ns), follow_symlinks=False)
               except (NotImplementedError, OSError):
-                  if not path.is_symlink():
-                      raise
+                  if not path.is_symlink(): raise
           os.utime(corpus, ns=(fixed_ns, fixed_ns))
-
           h = hashlib.sha256(); files = 0; logical = 0
           for path in sorted(corpus.rglob('*')):
-              rel = path.relative_to(corpus).as_posix().encode(); st = path.lstat()
-              h.update(len(rel).to_bytes(4, 'little')); h.update(rel)
-              h.update((st.st_mode & 0o177777).to_bytes(4, 'little'))
-              h.update(st.st_mtime_ns.to_bytes(8, 'little', signed=True))
+              rel = path.relative_to(corpus).as_posix().encode(); st = path.lstat(); h.update(len(rel).to_bytes(4,'little')); h.update(rel)
+              h.update((st.st_mode & 0o177777).to_bytes(4,'little')); h.update(st.st_mtime_ns.to_bytes(8,'little',signed=True))
               if path.is_symlink():
-                  target = os.readlink(path).encode(); h.update(b'L')
-                  h.update(len(target).to_bytes(4, 'little')); h.update(target)
+                  target=os.readlink(path).encode(); h.update(b'L'); h.update(len(target).to_bytes(4,'little')); h.update(target)
               elif path.is_file():
-                  data = path.read_bytes(); files += 1; logical += len(data); h.update(b'F')
-                  h.update(len(data).to_bytes(8, 'little')); h.update(data)
-              elif path.is_dir():
-                  h.update(b'D')
-          manifest = {'tree_sha256': h.hexdigest(), 'files': files, 'logical_bytes': logical,
-                      'fixed_mtime_ns': fixed_ns}
-          Path('benchmark-artifacts/corpus.json').write_text(json.dumps(manifest, indent=2) + '\n')
-          print(json.dumps(manifest, indent=2))
+                  data=path.read_bytes(); files+=1; logical+=len(data); h.update(b'F'); h.update(len(data).to_bytes(8,'little')); h.update(data)
+              elif path.is_dir(): h.update(b'D')
+          manifest={'tree_sha256':h.hexdigest(),'files':files,'logical_bytes':logical,'fixed_mtime_ns':fixed_ns}
+          Path('benchmark-artifacts/corpus.json').write_text(json.dumps(manifest,indent=2)+'\n'); print(json.dumps(manifest,indent=2))
           PY
 
       - name: Capture shared-runner provenance
@@ -252,10 +229,8 @@ jobs:
 
       - name: Aggregate symmetric ABBA runs
         run: |
-          python tools/aggregate_parity_runs.py --out benchmark-artifacts/base.json \
-            benchmark-artifacts/base-a.json benchmark-artifacts/base-b.json
-          python tools/aggregate_parity_runs.py --out benchmark-artifacts/candidate.raw.json \
-            benchmark-artifacts/candidate-a.json benchmark-artifacts/candidate-b.json
+          python tools/aggregate_parity_runs.py --out benchmark-artifacts/base.json benchmark-artifacts/base-a.json benchmark-artifacts/base-b.json
+          python tools/aggregate_parity_runs.py --out benchmark-artifacts/candidate.raw.json benchmark-artifacts/candidate-a.json benchmark-artifacts/candidate-b.json
 
       - name: Enrich candidate benchmark record
         env:
@@ -266,50 +241,16 @@ jobs:
           from datetime import date
           from pathlib import Path
           from cmpct.codec import VERSION
-
-          root = Path.cwd()
-          data = json.loads((root / 'benchmark-artifacts/candidate.raw.json').read_text())
-          corpus = json.loads((root / 'benchmark-artifacts/corpus.json').read_text())
-          with (root / 'pyproject.toml').open('rb') as fh:
-              version = tomllib.load(fh)['project']['version']
-          data.update({
-              'project_version': version,
-              'source_commit': subprocess.check_output(['git','rev-parse','HEAD'], cwd=root, text=True).strip(),
-              'evidence_head': os.environ['EVIDENCE_HEAD'],
-              'date': date.today().isoformat(),
-              'record_kind': 'r24_core_zip_regression_evidence',
-              'harness': 'benchmarks/zip_parity_bench.py',
-              'release_design': 'ABBA; median of two 7-repetition run medians per engine',
-              'format_revision': VERSION,
-              'comparison_base_commit': os.environ.get('BASE_SHA',''),
-              'corpus_manifest': corpus,
-              'claim_boundary': (
-                  'canonical r24 src/cmpct core and ZIP parity only; does not measure the promoted v0.30 '
-                  'r24/r25 product selector or satisfy v0.30 external creation-speed dominance'
-              ),
-              'environment': {
-                  'python': platform.python_version(),
-                  'platform': platform.platform(),
-                  'cpu_count': os.cpu_count(),
-                  'cpu_model': subprocess.check_output(
-                      "lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1",
-                      shell=True, text=True,
-                  ).strip(),
-                  'zstd': subprocess.check_output(['zstd','--version'], text=True).splitlines()[0],
-              },
-          })
-          if data['source_commit'] != data['evidence_head']:
-              raise SystemExit(f"candidate/evidence head mismatch: {data['source_commit']} != {data['evidence_head']}")
-          (root / 'benchmark-artifacts/candidate.json').write_text(json.dumps(data, indent=2) + '\n')
+          root=Path.cwd(); data=json.loads((root/'benchmark-artifacts/candidate.raw.json').read_text()); corpus=json.loads((root/'benchmark-artifacts/corpus.json').read_text())
+          with (root/'pyproject.toml').open('rb') as fh: version=tomllib.load(fh)['project']['version']
+          data.update({'project_version':version,'source_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'evidence_head':os.environ['EVIDENCE_HEAD'],'date':date.today().isoformat(),'record_kind':'r24_core_zip_regression_evidence','harness':'benchmarks/zip_parity_bench.py','release_design':'ABBA; median of two 7-repetition run medians per engine','format_revision':VERSION,'comparison_base_commit':os.environ.get('BASE_SHA',''),'corpus_manifest':corpus,'claim_boundary':'canonical r24 src/cmpct core and ZIP parity only; does not measure the promoted v0.30 r24/r25 product selector or satisfy v0.30 external creation-speed dominance','environment':{'python':platform.python_version(),'platform':platform.platform(),'cpu_count':os.cpu_count(),'cpu_model':subprocess.check_output("lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1",shell=True,text=True).strip(),'zstd':subprocess.check_output(['zstd','--version'],text=True).splitlines()[0]}})
+          if data['source_commit'] != data['evidence_head']: raise SystemExit(f"candidate/evidence head mismatch: {data['source_commit']} != {data['evidence_head']}")
+          (root/'benchmark-artifacts/candidate.json').write_text(json.dumps(data,indent=2)+'\n')
           PY
 
       - name: Reject performance regressions
         run: |
-          python tools/check_performance_regression.py \
-            --base benchmark-artifacts/base.json \
-            --candidate benchmark-artifacts/candidate.json \
-            --max-time-regression 0.05 \
-            --max-size-regression 0.01
+          python tools/check_performance_regression.py --base benchmark-artifacts/base.json --candidate benchmark-artifacts/candidate.json --max-time-regression 0.05 --max-size-regression 0.01
 
       - name: Publish performance summary
         if: always()
@@ -318,20 +259,13 @@ jobs:
           import json, os
           from pathlib import Path
           bp=Path('benchmark-artifacts/base.json'); cp=Path('benchmark-artifacts/candidate.json')
-          if not bp.exists() or not cp.exists():
-              raise SystemExit('missing r24 ZIP parity evidence for summary')
-          b=json.load(bp.open()); c=json.load(cp.open())
-          lines=['## CMPCT r24 core / ZIP performance gate','',
-                 '> This is canonical r24 core regression evidence, not promoted-v0.30 selector evidence.', '',
-                 '| Corpus | Metric | Base | Candidate | Delta |','|---|---|---:|---:|---:|']
+          if not bp.exists() or not cp.exists(): raise SystemExit('missing r24 ZIP parity evidence for summary')
+          b=json.load(bp.open()); c=json.load(cp.open()); lines=['## CMPCT r24 core / ZIP performance gate','', '> This is canonical r24 core regression evidence, not promoted-v0.30 selector evidence.','', '| Corpus | Metric | Base | Candidate | Delta |','|---|---|---:|---:|---:|']
           for n in b['corpora']:
               for m in ('bytes','create_s_median','extract_s_median'):
-                  x=b['corpora'][n]['library']['cmpct'][m]; y=c['corpora'][n]['library']['cmpct'][m]
-                  d=(y-x)/x*100 if x else 0
+                  x=b['corpora'][n]['library']['cmpct'][m]; y=c['corpora'][n]['library']['cmpct'][m]; d=(y-x)/x*100 if x else 0
                   lines.append(f'| {n} | {m} | {x:.6g} | {y:.6g} | {d:+.2f}% |')
-          text='\n'.join(lines)+'\n'
-          Path('benchmark-artifacts/PERFORMANCE_GATE.md').write_text(text)
-          summary=os.environ.get('GITHUB_STEP_SUMMARY')
+          text='\n'.join(lines)+'\n'; Path('benchmark-artifacts/PERFORMANCE_GATE.md').write_text(text); summary=os.environ.get('GITHUB_STEP_SUMMARY')
           if summary: Path(summary).write_text(text)
           PY
 
