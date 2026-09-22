@@ -5,6 +5,7 @@ import zlib
 from cmpct import codec
 
 
+# Product policy under test: common level first, then the complete bounded-regret fallback.
 ORDER = (6, 0, 1, 2, 3, 4, 5, 7, 8, 9)
 
 
