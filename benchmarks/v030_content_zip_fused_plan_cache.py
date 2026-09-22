@@ -47,7 +47,8 @@ class FusedInformationYieldBuilder(CZ.ContentZipBuilder):
                     if ik in self.inode_first:
                         self.files.append([rel,B.K_HARDLINK,mode,st.st_mtime_ns,st.st_size,None,[self.inode_first[ik]]]); continue
                     self.inode_first[ik]=rel
-                files+=1; p=Path(e.path); rp=p.resolve(); ext=p.suffix.lower(); ok=False
+                files+=1; self.content_zip_observed_files+=1; self.content_zip_sniffed_bytes+=min(4096,st.st_size)
+                p=Path(e.path); rp=p.resolve(); ext=p.suffix.lower(); ok=False
                 try:
                     if ext not in EXPLICIT:
                         pf=hidden_zip_preflight(p)
@@ -58,7 +59,11 @@ class FusedInformationYieldBuilder(CZ.ContentZipBuilder):
                         if infos and all(i.compress_type in CZ.SUPPORTED for i in infos):
                             descriptors[rp]={(int(i.CRC),int(i.file_size),int(i.compress_type),int(i.compress_size)) for i in infos if i.file_size>0}; ok=True
                 except Exception: ok=False
-                valid[rp]=ok; plan.append((p,rel,st,mode,ext))
+                valid[rp]=ok
+                if ok:
+                    self.content_zip_valid+=1
+                    if ext not in EXPLICIT:self.content_zip_hidden+=1
+                plan.append((p,rel,st,mode,ext))
         walk(os.fspath(self.root))
         owners=defaultdict(set)
         for p,ds in descriptors.items():
@@ -83,7 +88,6 @@ class FusedInformationYieldBuilder(CZ.ContentZipBuilder):
                 parts=B.cdc_chunks(raw); entries=[[len(part),self.add_content(part,ext)] for part in parts]; storage=[B.S_CDC,entries]
             else: storage=[B.S_BLOB,self.add_content(raw,ext)]
             self.files.append([rel,B.K_FILE,mode,st.st_mtime_ns,len(raw),B.sha(raw),storage])
-        # Information-yield currently admits <8 containers on the target corpus; retain inherited pack law exactly.
         if len(deferred)>=8:
             buf=bytearray(); packed=[]
             for p,rel,st,mode in deferred:
