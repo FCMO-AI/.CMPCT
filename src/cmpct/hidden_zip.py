@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-"""Bounded, fail-closed discovery for optional hidden-ZIP virtualization.
-
-This is deliberately not a second ZIP parser. It cheaply rejects ordinary files,
-proves only a bounded conventional ZIP envelope, and uses exact compressed-payload
-identity to estimate reusable structure. Rejection means "store normally".
-"""
+"""Bounded, fail-closed discovery for optional hidden-ZIP virtualization."""
 
 from collections import Counter
 from dataclasses import dataclass
@@ -25,10 +20,7 @@ MAX_COMMENT = 65535
 MAX_TAIL = EOCD_MIN + MAX_COMMENT
 MAX_ENTRIES = 8192
 MAX_CENTRAL_DIRECTORY = 16 * 1024 * 1024
-# Match the existing reader hardening ceiling: optional discovery must never route a
-# candidate requiring more logical materialization than one directly decoded object.
 MAX_CANDIDATE_LOGICAL_BYTES = 256 * 1024 * 1024
-# Tree-wide ceilings bound optional observation state independently of per-ZIP limits.
 MAX_OBSERVATION_FILES = 262144
 MAX_OBSERVATION_DESCRIPTORS = 131072
 ZIP64_U16 = 0xFFFF
@@ -56,6 +48,7 @@ class HiddenZipAdmission:
     rel: str
     stamp: tuple[int, int, int, int]
     verified_reuse_bytes: int
+    content_sha256: bytes
 
 
 @dataclass(frozen=True)
@@ -67,6 +60,16 @@ class HiddenZipObservation:
     tail_bytes_read: int
     verification_bytes_read: int
     rejects: tuple[tuple[str, int], ...]
+
+
+def _file_sha256(path: Path) -> bytes:
+    h = hashlib.sha256()
+    with Path(path).open("rb") as f:
+        while True:
+            chunk = f.read(1024 * 1024)
+            if not chunk:
+                return h.digest()
+            h.update(chunk)
 
 
 def hidden_zip_preflight(path: Path) -> HiddenZipPreflight:
@@ -85,20 +88,16 @@ def hidden_zip_preflight(path: Path) -> HiddenZipPreflight:
             tail_n = min(size, MAX_TAIL)
             f.seek(size - tail_n)
             tail = f.read(tail_n)
-
         pos = len(tail)
         while True:
             idx = tail.rfind(EOCD_SIG, 0, pos)
             if idx < 0:
                 return HiddenZipPreflight(False, "eocd_not_found", size, head_read, len(tail))
             if idx + EOCD_MIN <= len(tail):
-                disk, cd_disk, n_disk, n_total, cd_size, cd_off, comment_len = struct.unpack_from(
-                    "<HHHHIIH", tail, idx + 4
-                )
+                disk, cd_disk, n_disk, n_total, cd_size, cd_off, comment_len = struct.unpack_from("<HHHHIIH", tail, idx + 4)
                 if idx + EOCD_MIN + comment_len == len(tail):
                     break
             pos = idx
-
         absolute = size - tail_n + idx
         if disk != 0 or cd_disk != 0 or n_disk != n_total:
             return HiddenZipPreflight(False, "multi_disk", size, head_read, len(tail), n_total, cd_size, cd_off, absolute)
@@ -123,9 +122,7 @@ def hidden_zip_preflight(path: Path) -> HiddenZipPreflight:
 
 def _physical_observation_files(root: Path):
     """Yield lexical first-inode owners, mirroring Builder's hardlink ownership boundary."""
-    root = Path(root)
     seen: set[tuple[int, int]] = set()
-
     def walk(absdir: Path, prefix: str = ""):
         with os.scandir(absdir) as it:
             entries = sorted(it, key=lambda e: e.name)
@@ -144,8 +141,7 @@ def _physical_observation_files(root: Path):
                 seen.add(ik)
             explicit = Path(e.name).suffix.lower() in EXPLICIT_SUFFIXES
             yield Path(e.path), rel, (ik[0], ik[1], int(st.st_size), int(st.st_mtime_ns)), explicit
-
-    yield from walk(root)
+    yield from walk(Path(root))
 
 
 def _metadata_descriptors(path: Path):
@@ -160,11 +156,7 @@ def _metadata_descriptors(path: Path):
                 return None, len(infos), logical_bytes, "encrypted"
             if any(i.compress_type not in SUPPORTED_METHODS for i in infos):
                 return None, len(infos), logical_bytes, "unsupported_method"
-            descriptors = {
-                (int(i.compress_type), int(i.compress_size), int(i.file_size), int(i.CRC))
-                for i in infos
-                if i.file_size > 0
-            }
+            descriptors = {(int(i.compress_type), int(i.compress_size), int(i.file_size), int(i.CRC)) for i in infos if i.file_size > 0}
             if not descriptors:
                 return None, len(infos), logical_bytes, "no_payload_members"
             return descriptors, len(infos), logical_bytes, None
@@ -173,16 +165,13 @@ def _metadata_descriptors(path: Path):
 
 
 def _verify_stream(path: Path, descriptor: tuple[int, int, int, int]):
-    """Hash only payloads matching a repeated metadata hint."""
     method, compressed_size, _file_size, _crc = descriptor
     identities: set[tuple[int, int, bytes]] = set()
     read = 0
     try:
         with zipfile.ZipFile(path) as z:
             for info in z.infolist():
-                if info.is_dir() or (
-                    int(info.compress_type), int(info.compress_size), int(info.file_size), int(info.CRC)
-                ) != descriptor:
+                if info.is_dir() or (int(info.compress_type), int(info.compress_size), int(info.file_size), int(info.CRC)) != descriptor:
                     continue
                 payload = _compressed_payload(path, info)
                 read += len(payload)
@@ -206,6 +195,7 @@ def observe_hidden_zip_admission(
     root = Path(root)
     rejects: Counter[str] = Counter()
     stamps: dict[str, tuple[int, int, int, int]] = {}
+    paths: dict[str, Path] = {}
     hidden: set[str] = set()
     parsed = head_bytes = tail_bytes = verification_bytes = descriptor_count = files_observed = 0
     candidates: list[tuple[Path, str, bool, set[tuple[int, int, int, int]]]] = []
@@ -216,22 +206,15 @@ def observe_hidden_zip_admission(
         if files_observed > int(max_observation_files):
             rejects["observation_file_budget"] += 1
             return HiddenZipObservation((), files_observed, parsed, head_bytes, tail_bytes, 0, tuple(sorted(rejects.items())))
-
-        # Evidence providers obey the same optional envelope as hidden candidates; explicit storage
-        # semantics are untouched because rejection only removes this file from reuse evidence.
         pf = hidden_zip_preflight(path)
-        head_bytes += pf.head_bytes_read
-        tail_bytes += pf.tail_bytes_read
+        head_bytes += pf.head_bytes_read; tail_bytes += pf.tail_bytes_read
         if not pf.eligible:
             rejects[("explicit_" if explicit else "") + pf.reason] += 1
             continue
-
         descriptors, entries, logical_bytes, reason = _metadata_descriptors(path)
         if descriptors is None:
             rejects[("explicit_" if explicit else "") + (reason or "exact_parse_rejected")] += 1
             continue
-        # Canonical VZIP recipe construction fully decompresses members. Reject from metadata before
-        # that future path can turn a tiny compressed candidate into unbounded logical materialization.
         if logical_bytes > int(max_candidate_logical_bytes):
             rejects[("explicit_" if explicit else "") + "logical_work_budget"] += 1
             continue
@@ -239,49 +222,47 @@ def observe_hidden_zip_admission(
         if descriptor_count > int(max_observation_descriptors):
             rejects["observation_descriptor_budget"] += 1
             return HiddenZipObservation((), files_observed, parsed, head_bytes, tail_bytes, 0, tuple(sorted(rejects.items())))
-        stamps[rel] = stamp
-        if not explicit:
-            hidden.add(rel)
-        parsed += 1
-        candidates.append((path, rel, explicit, descriptors))
-        metadata_owners.update(descriptors)
+        stamps[rel] = stamp; paths[rel] = path
+        if not explicit: hidden.add(rel)
+        parsed += 1; candidates.append((path, rel, explicit, descriptors)); metadata_owners.update(descriptors)
 
     repeated_hints = {d for d, count in metadata_owners.items() if count >= 2}
     exact_owners: dict[tuple[int, int, bytes], set[str]] = {}
     for path, rel, _explicit, descriptors in candidates:
         for descriptor in descriptors & repeated_hints:
-            identities, read = _verify_stream(path, descriptor)
-            verification_bytes += read
+            identities, read = _verify_stream(path, descriptor); verification_bytes += read
             if identities is None:
-                rejects["verification_rejected"] += 1
-                continue
-            for identity in identities:
-                exact_owners.setdefault(identity, set()).add(rel)
+                rejects["verification_rejected"] += 1; continue
+            for identity in identities: exact_owners.setdefault(identity, set()).add(rel)
 
     reuse: Counter[str] = Counter()
     for identity, rels in exact_owners.items():
-        if len(rels) < 2:
-            continue
-        for rel in rels:
-            reuse[rel] += identity[1]
+        if len(rels) >= 2:
+            for rel in rels: reuse[rel] += identity[1]
 
-    admitted = tuple(
-        HiddenZipAdmission(rel, stamps[rel], int(reuse[rel]))
-        for rel in sorted(hidden)
-        if reuse[rel] >= int(min_verified_reuse)
-    )
-    return HiddenZipObservation(
-        admitted, files_observed, parsed, head_bytes, tail_bytes, verification_bytes, tuple(sorted(rejects.items()))
-    )
+    # Hash only winners. This closes the same-size/same-mtime rewrite hole without exporting a full-file
+    # hash over every rejected candidate. The future transactional recipe probe must still revalidate at use.
+    admitted = []
+    for rel in sorted(hidden):
+        if reuse[rel] < int(min_verified_reuse):
+            continue
+        try:
+            digest = _file_sha256(paths[rel])
+        except OSError:
+            rejects["admission_hash_io"] += 1
+            continue
+        admitted.append(HiddenZipAdmission(rel, stamps[rel], int(reuse[rel]), digest))
+    return HiddenZipObservation(tuple(admitted), files_observed, parsed, head_bytes, tail_bytes, verification_bytes, tuple(sorted(rejects.items())))
 
 
 def admission_is_current(root: Path, admission: HiddenZipAdmission) -> bool:
-    """Revalidate the physical first-owner stamp immediately before canonical storage selection."""
+    """Revalidate metadata and content immediately before canonical storage selection."""
+    path = Path(root) / admission.rel
     try:
-        st = os.stat(Path(root) / admission.rel, follow_symlinks=False)
+        st = os.stat(path, follow_symlinks=False)
+        if not stat.S_ISREG(st.st_mode):
+            return False
+        current = (int(st.st_dev), int(st.st_ino), int(st.st_size), int(st.st_mtime_ns))
+        return current == admission.stamp and _file_sha256(path) == admission.content_sha256
     except OSError:
         return False
-    if not stat.S_ISREG(st.st_mode):
-        return False
-    current = (int(st.st_dev), int(st.st_ino), int(st.st_size), int(st.st_mtime_ns))
-    return current == admission.stamp
