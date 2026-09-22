@@ -26,6 +26,27 @@ def test_conventional_hidden_zip_reaches_bounded_tail_gate(tmp_path):
     assert pf.entries == 1
 
 
+def test_preflight_budget_refuses_tail_before_crossing_cap(tmp_path):
+    p = tmp_path / "document.bin"
+    with zipfile.ZipFile(p, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("shared.txt", b"cmpct" * 4096)
+    pf = hidden_zip_preflight(p, max_read_bytes=4)
+    assert not pf.eligible
+    assert pf.reason == "io_budget"
+    assert pf.head_bytes_read == 4
+    assert pf.tail_bytes_read == 0
+
+
+def test_preflight_budget_can_refuse_even_head_read(tmp_path):
+    p = tmp_path / "document.bin"
+    with zipfile.ZipFile(p, "w") as z:z.writestr("x", b"y")
+    pf = hidden_zip_preflight(p, max_read_bytes=3)
+    assert not pf.eligible
+    assert pf.reason == "io_budget"
+    assert pf.head_bytes_read == 0
+    assert pf.tail_bytes_read == 0
+
+
 def test_prefixed_zip_is_intentionally_false_negative(tmp_path):
     ordinary = tmp_path / "ordinary.zip"
     with zipfile.ZipFile(ordinary, "w", compression=zipfile.ZIP_DEFLATED) as z:
