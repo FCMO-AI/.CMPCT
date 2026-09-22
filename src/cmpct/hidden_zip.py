@@ -2,10 +2,9 @@ from __future__ import annotations
 
 """Bounded, fail-closed discovery for optional hidden-ZIP virtualization.
 
-This module is deliberately not a second ZIP parser. It cheaply rejects ordinary
-files before any EOCD-tail read, proves only a bounded conventional ZIP envelope,
-and uses exact compressed-payload identity to estimate reusable structure. Any
-rejection means "store normally", never "fail the build".
+This is deliberately not a second ZIP parser. It cheaply rejects ordinary files,
+proves only a bounded conventional ZIP envelope, and uses exact compressed-payload
+identity to estimate reusable structure. Rejection means "store normally".
 """
 
 from collections import Counter
@@ -26,9 +25,9 @@ MAX_COMMENT = 65535
 MAX_TAIL = EOCD_MIN + MAX_COMMENT
 MAX_ENTRIES = 8192
 MAX_CENTRAL_DIRECTORY = 16 * 1024 * 1024
-# Optional discovery must have a tree-wide ceiling as well as per-container bounds.
-# Crossing it disables the optimization for the whole observation rather than
-# retaining an attacker-controlled owner graph or changing ordinary storage.
+# Tree-wide ceilings bound optional observation state independently of per-ZIP limits.
+# Exhaustion disables this optimization; it never changes ordinary storage semantics.
+MAX_OBSERVATION_FILES = 262144
 MAX_OBSERVATION_DESCRIPTORS = 131072
 ZIP64_U16 = 0xFFFF
 ZIP64_U32 = 0xFFFFFFFF
@@ -79,8 +78,7 @@ def hidden_zip_preflight(path: Path) -> HiddenZipPreflight:
         with path.open("rb") as f:
             head = f.read(4)
             head_read = len(head)
-            # Optional discovery deliberately ignores prefixed/self-extracting ZIPs. Exactness is
-            # unaffected because rejected files continue through ordinary opaque storage.
+            # Prefixed/self-extracting ZIPs are intentional false negatives of this optional path.
             if head != LOCAL_SIG:
                 return HiddenZipPreflight(False, "local_signature_miss", size, head_read, 0)
             tail_n = min(size, MAX_TAIL)
@@ -150,7 +148,7 @@ def _physical_observation_files(root: Path):
 
 
 def _metadata_descriptors(path: Path):
-    """Return cheap necessary-condition descriptors without reading member payloads."""
+    """Return necessary-condition descriptors without reading member payloads."""
     try:
         with zipfile.ZipFile(path) as z:
             infos = [i for i in z.infolist() if not i.is_dir()]
@@ -173,8 +171,8 @@ def _metadata_descriptors(path: Path):
 
 
 def _verify_stream(path: Path, descriptor: tuple[int, int, int, int]):
-    """Hash only payloads matching a repeated metadata hint; return exact identities and bytes read."""
-    method, compressed_size, file_size, crc = descriptor
+    """Hash only payloads matching a repeated metadata hint."""
+    method, compressed_size, _file_size, _crc = descriptor
     identities: set[tuple[int, int, bytes]] = set()
     read = 0
     try:
@@ -198,28 +196,31 @@ def observe_hidden_zip_admission(
     root: Path,
     *,
     min_verified_reuse: int = MIN_VERIFIED_REUSE,
+    max_observation_files: int = MAX_OBSERVATION_FILES,
     max_observation_descriptors: int = MAX_OBSERVATION_DESCRIPTORS,
 ) -> HiddenZipObservation:
-    """Discover hidden candidates with metadata pruning followed by exact stream proof.
+    """Discover hidden candidates with bounded metadata pruning then exact stream proof.
 
-    Metadata equality is only a necessary condition for equal compressed streams. It can trigger SHA work,
-    never admission. Explicit ZIP/WHL first-owners may supply reuse evidence but are never hidden admissions.
-    A tree-wide descriptor ceiling makes the optional optimization fail closed before owner state can grow
-    without bound; ordinary archive construction remains available to the caller.
+    Metadata equality can trigger SHA work but never admission. Explicit ZIP/WHL first-owners may
+    supply reuse evidence but are never hidden admissions. Global budget exhaustion returns zero
+    admissions so a partial owner graph can never become a partial optimization decision.
     """
     root = Path(root)
     rejects: Counter[str] = Counter()
     stamps: dict[str, tuple[int, int, int, int]] = {}
     hidden: set[str] = set()
-    parsed = head_bytes = tail_bytes = verification_bytes = descriptor_count = 0
-    files = list(_physical_observation_files(root))
-
+    parsed = head_bytes = tail_bytes = verification_bytes = descriptor_count = files_observed = 0
     candidates: list[tuple[Path, str, bool, set[tuple[int, int, int, int]]]] = []
     metadata_owners: Counter[tuple[int, int, int, int]] = Counter()
-    for path, rel, stamp, explicit in files:
-        stamps[rel] = stamp
+
+    # Stream the tree rather than retaining every physical file. The file ceiling also bounds the
+    # hardlink first-owner set inside the generator because every new physical owner is yielded once.
+    for path, rel, stamp, explicit in _physical_observation_files(root):
+        files_observed += 1
+        if files_observed > int(max_observation_files):
+            rejects["observation_file_budget"] += 1
+            return HiddenZipObservation((), files_observed, parsed, head_bytes, tail_bytes, 0, tuple(sorted(rejects.items())))
         if not explicit:
-            hidden.add(rel)
             pf = hidden_zip_preflight(path)
             head_bytes += pf.head_bytes_read
             tail_bytes += pf.tail_bytes_read
@@ -233,16 +234,14 @@ def observe_hidden_zip_admission(
         descriptor_count += entries
         if descriptor_count > int(max_observation_descriptors):
             rejects["observation_descriptor_budget"] += 1
-            # The budget is global, so a partial owner graph must never produce partial admissions.
-            return HiddenZipObservation(
-                (), len(files), parsed, head_bytes, tail_bytes, 0, tuple(sorted(rejects.items()))
-            )
+            return HiddenZipObservation((), files_observed, parsed, head_bytes, tail_bytes, 0, tuple(sorted(rejects.items())))
+        stamps[rel] = stamp
+        if not explicit:
+            hidden.add(rel)
         parsed += 1
         candidates.append((path, rel, explicit, descriptors))
         metadata_owners.update(descriptors)
 
-    # Unique metadata descriptors cannot possibly contribute cross-container reuse. Hash only hints that
-    # occur under at least two physical first-owners; SHA-256 remains the sufficient admission proof.
     repeated_hints = {d for d, count in metadata_owners.items() if count >= 2}
     exact_owners: dict[tuple[int, int, bytes], set[str]] = {}
     for path, rel, _explicit, descriptors in candidates:
@@ -268,7 +267,7 @@ def observe_hidden_zip_admission(
         if reuse[rel] >= int(min_verified_reuse)
     )
     return HiddenZipObservation(
-        admitted, len(files), parsed, head_bytes, tail_bytes, verification_bytes, tuple(sorted(rejects.items()))
+        admitted, files_observed, parsed, head_bytes, tail_bytes, verification_bytes, tuple(sorted(rejects.items()))
     )
 
 
