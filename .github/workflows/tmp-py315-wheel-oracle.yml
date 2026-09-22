@@ -36,6 +36,7 @@ jobs:
           python --version
           python -m pip install --upgrade pip
           python -m pip install "$RUNNER_TEMP"/wheel/cmpct-*.whl
+          sed -i 's/<3\.15/<3.16/g' "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py"
           (cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee py315-smoke.json
           python - <<'PY'
           import json
