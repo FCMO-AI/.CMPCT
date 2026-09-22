@@ -31,7 +31,6 @@ ZIP64_U32 = 0xFFFFFFFF
 SUPPORTED_METHODS = frozenset((zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED))
 EXPLICIT_SUFFIXES = frozenset((".zip", ".whl"))
 MIN_VERIFIED_REUSE = 2176
-_REPEATED = object()
 
 
 @dataclass(frozen=True)
@@ -146,49 +145,66 @@ def _physical_observation_files(root: Path):
     yield from walk(root)
 
 
-def _exact_stream_descriptors(path: Path):
-    """Return exact compressed-stream identities or a fail-closed rejection reason."""
+def _metadata_descriptors(path: Path):
+    """Return cheap necessary-condition descriptors without reading member payloads."""
     try:
         with zipfile.ZipFile(path) as z:
             infos = [i for i in z.infolist() if not i.is_dir()]
             if not infos:
-                return None, "empty_members", 0
+                return None, "empty_members"
             if any(i.flag_bits & 1 for i in infos):
-                return None, "encrypted", 0
+                return None, "encrypted"
             if any(i.compress_type not in SUPPORTED_METHODS for i in infos):
-                return None, "unsupported_method", 0
-            descriptors = set()
-            read = 0
-            for i in infos:
-                if i.file_size <= 0:
-                    continue
-                payload = _compressed_payload(path, i)
-                if len(payload) != i.compress_size:
-                    return None, "compressed_payload_bounds", read + len(payload)
-                read += len(payload)
-                descriptors.add((int(i.compress_type), len(payload), hashlib.sha256(payload).digest()))
+                return None, "unsupported_method"
+            descriptors = {
+                (int(i.compress_type), int(i.compress_size), int(i.file_size), int(i.CRC))
+                for i in infos
+                if i.file_size > 0
+            }
             if not descriptors:
-                return None, "no_payload_members", read
-            return descriptors, None, read
+                return None, "no_payload_members"
+            return descriptors, None
     except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, struct.error):
-        return None, "exact_parse_rejected", 0
+        return None, "exact_parse_rejected"
+
+
+def _verify_stream(path: Path, descriptor: tuple[int, int, int, int]):
+    """Hash only payloads matching a repeated metadata hint; return exact identities and bytes read."""
+    method, compressed_size, file_size, crc = descriptor
+    identities: set[tuple[int, int, bytes]] = set()
+    read = 0
+    try:
+        with zipfile.ZipFile(path) as z:
+            for info in z.infolist():
+                if info.is_dir() or (
+                    int(info.compress_type), int(info.compress_size), int(info.file_size), int(info.CRC)
+                ) != descriptor:
+                    continue
+                payload = _compressed_payload(path, info)
+                read += len(payload)
+                if len(payload) != compressed_size:
+                    return None, read
+                identities.add((method, compressed_size, hashlib.sha256(payload).digest()))
+        return identities or None, read
+    except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, struct.error):
+        return None, read
 
 
 def observe_hidden_zip_admission(root: Path, *, min_verified_reuse: int = MIN_VERIFIED_REUSE) -> HiddenZipObservation:
-    """Discover hidden candidates in one streaming pass with exact stream identity.
+    """Discover hidden candidates with metadata pruning followed by exact stream proof.
 
-    Explicit ZIP/WHL first-owners participate only as reuse evidence; they can never be returned as hidden
-    admissions. Per-path state is one integer reuse counter plus a physical stamp, not a descriptor graph.
+    Metadata equality is only a necessary condition for equal compressed streams. It can trigger SHA work,
+    never admission. Explicit ZIP/WHL first-owners may supply reuse evidence but are never hidden admissions.
     """
     root = Path(root)
-    owners: dict[tuple[int, int, bytes], object] = {}
-    reuse: Counter[str] = Counter()
     rejects: Counter[str] = Counter()
     stamps: dict[str, tuple[int, int, int, int]] = {}
     hidden: set[str] = set()
     parsed = head_bytes = tail_bytes = verification_bytes = 0
-
     files = list(_physical_observation_files(root))
+
+    candidates: list[tuple[Path, str, bool, set[tuple[int, int, int, int]]]] = []
+    metadata_owners: Counter[tuple[int, int, int, int]] = Counter()
     for path, rel, stamp, explicit in files:
         stamps[rel] = stamp
         if not explicit:
@@ -199,22 +215,34 @@ def observe_hidden_zip_admission(root: Path, *, min_verified_reuse: int = MIN_VE
             if not pf.eligible:
                 rejects[pf.reason] += 1
                 continue
-        descriptors, reason, read = _exact_stream_descriptors(path)
-        verification_bytes += read
+        descriptors, reason = _metadata_descriptors(path)
         if descriptors is None:
             rejects[("explicit_" if explicit else "") + (reason or "exact_parse_rejected")] += 1
             continue
         parsed += 1
-        for d in descriptors:
-            prior = owners.get(d)
-            if prior is None:
-                owners[d] = rel
-            elif prior is _REPEATED:
-                reuse[rel] += d[1]
-            elif prior != rel:
-                reuse[str(prior)] += d[1]
-                reuse[rel] += d[1]
-                owners[d] = _REPEATED
+        candidates.append((path, rel, explicit, descriptors))
+        metadata_owners.update(descriptors)
+
+    # Unique metadata descriptors cannot possibly contribute cross-container reuse. Hash only hints that
+    # occur under at least two physical first-owners; SHA-256 remains the sufficient admission proof.
+    repeated_hints = {d for d, count in metadata_owners.items() if count >= 2}
+    exact_owners: dict[tuple[int, int, bytes], set[str]] = {}
+    for path, rel, _explicit, descriptors in candidates:
+        for descriptor in descriptors & repeated_hints:
+            identities, read = _verify_stream(path, descriptor)
+            verification_bytes += read
+            if identities is None:
+                rejects["verification_rejected"] += 1
+                continue
+            for identity in identities:
+                exact_owners.setdefault(identity, set()).add(rel)
+
+    reuse: Counter[str] = Counter()
+    for identity, rels in exact_owners.items():
+        if len(rels) < 2:
+            continue
+        for rel in rels:
+            reuse[rel] += identity[1]
 
     admitted = tuple(
         HiddenZipAdmission(rel, stamps[rel], int(reuse[rel]))
