@@ -1,6 +1,7 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
 # ci-cancel-policy: preserve-running-exact-receipt
+# research-only: no promotion or product credit from this workflow
 name: CMPCT v0.30 content-ZIP fused plan/cache
 on:
   pull_request:
