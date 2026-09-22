@@ -4,7 +4,7 @@ import os
 import random
 import zipfile
 
-from cmpct.hidden_zip import MIN_VERIFIED_REUSE, admission_is_current, observe_hidden_zip_admission
+from cmpct.hidden_zip import MIN_VERIFIED_REUSE, admission_is_current, observation_is_current, observe_hidden_zip_admission
 
 
 def _payload(seed: int = 204) -> bytes:
@@ -18,109 +18,75 @@ def _hidden_zip(path, payload: bytes):
 
 
 def test_two_physical_hidden_archives_can_earn_verified_reuse(tmp_path):
-    payload = _payload()
-    _hidden_zip(tmp_path / "a.bin", payload)
-    _hidden_zip(tmp_path / "b.bin", payload)
+    payload = _payload(); _hidden_zip(tmp_path / "a.bin", payload); _hidden_zip(tmp_path / "b.bin", payload)
     obs = observe_hidden_zip_admission(tmp_path)
     assert [a.rel for a in obs.admitted] == ["a.bin", "b.bin"]
     assert all(a.verified_reuse_bytes >= MIN_VERIFIED_REUSE for a in obs.admitted)
     assert all(admission_is_current(tmp_path, a) for a in obs.admitted)
+    assert observation_is_current(tmp_path, obs)
     assert obs.verification_bytes_read > 0
 
 
 def test_unique_metadata_descriptors_do_not_read_compressed_payloads(tmp_path):
-    _hidden_zip(tmp_path / "a.bin", _payload(1))
-    _hidden_zip(tmp_path / "b.bin", _payload(2))
+    _hidden_zip(tmp_path / "a.bin", _payload(1)); _hidden_zip(tmp_path / "b.bin", _payload(2))
     obs = observe_hidden_zip_admission(tmp_path)
-    assert obs.admitted == ()
-    assert obs.candidates_parsed == 2
-    assert obs.verification_bytes_read == 0
+    assert obs.admitted == (); assert obs.candidates_parsed == 2; assert obs.verification_bytes_read == 0
 
 
 def test_logical_work_budget_rejects_before_exact_payload_verification(tmp_path):
-    payload = _payload()
-    _hidden_zip(tmp_path / "a.bin", payload)
-    _hidden_zip(tmp_path / "b.bin", payload)
+    payload = _payload(); _hidden_zip(tmp_path / "a.bin", payload); _hidden_zip(tmp_path / "b.bin", payload)
     obs = observe_hidden_zip_admission(tmp_path, max_candidate_logical_bytes=1)
-    assert obs.admitted == ()
-    assert obs.verification_bytes_read == 0
-    assert ("logical_work_budget", 2) in obs.rejects
+    assert obs.admitted == (); assert obs.verification_bytes_read == 0; assert ("logical_work_budget", 2) in obs.rejects
 
 
 def test_global_file_budget_fails_closed_before_partial_admission(tmp_path):
-    payload = _payload()
-    _hidden_zip(tmp_path / "a.bin", payload)
-    _hidden_zip(tmp_path / "b.bin", payload)
+    payload = _payload(); _hidden_zip(tmp_path / "a.bin", payload); _hidden_zip(tmp_path / "b.bin", payload)
     obs = observe_hidden_zip_admission(tmp_path, max_observation_files=1)
-    assert obs.admitted == ()
-    assert obs.verification_bytes_read == 0
-    assert ("observation_file_budget", 1) in obs.rejects
+    assert obs.admitted == (); assert obs.verification_bytes_read == 0; assert ("observation_file_budget", 1) in obs.rejects
 
 
 def test_global_descriptor_budget_fails_closed_before_exact_payload_verification(tmp_path):
-    payload = _payload()
-    _hidden_zip(tmp_path / "a.bin", payload)
-    _hidden_zip(tmp_path / "b.bin", payload)
+    payload = _payload(); _hidden_zip(tmp_path / "a.bin", payload); _hidden_zip(tmp_path / "b.bin", payload)
     obs = observe_hidden_zip_admission(tmp_path, max_observation_descriptors=1)
-    assert obs.admitted == ()
-    assert obs.verification_bytes_read == 0
-    assert ("observation_descriptor_budget", 1) in obs.rejects
+    assert obs.admitted == (); assert obs.verification_bytes_read == 0; assert ("observation_descriptor_budget", 1) in obs.rejects
 
 
 def test_descriptor_budget_counts_entries_not_unique_metadata_values(tmp_path):
     payload = _payload()
     with zipfile.ZipFile(tmp_path / "many.bin", "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-        for i in range(4):
-            z.writestr(f"same-{i}.bin", payload)
+        for i in range(4): z.writestr(f"same-{i}.bin", payload)
     obs = observe_hidden_zip_admission(tmp_path, max_observation_descriptors=3)
-    assert obs.admitted == ()
-    assert obs.verification_bytes_read == 0
-    assert ("observation_descriptor_budget", 1) in obs.rejects
+    assert obs.admitted == (); assert obs.verification_bytes_read == 0; assert ("observation_descriptor_budget", 1) in obs.rejects
 
 
 def test_hardlink_alias_cannot_fake_two_physical_owners(tmp_path):
-    payload = _payload()
-    first = tmp_path / "a.bin"
-    _hidden_zip(first, payload)
-    os.link(first, tmp_path / "b.bin")
-    obs = observe_hidden_zip_admission(tmp_path)
-    assert obs.admitted == ()
+    payload = _payload(); first = tmp_path / "a.bin"; _hidden_zip(first, payload); os.link(first, tmp_path / "b.bin")
+    assert observe_hidden_zip_admission(tmp_path).admitted == ()
 
 
 def test_explicit_zip_can_supply_reuse_without_becoming_hidden_admission(tmp_path):
-    payload = _payload()
-    _hidden_zip(tmp_path / "explicit.zip", payload)
-    _hidden_zip(tmp_path / "hidden.bin", payload)
+    payload = _payload(); _hidden_zip(tmp_path / "explicit.zip", payload); _hidden_zip(tmp_path / "hidden.bin", payload)
     obs = observe_hidden_zip_admission(tmp_path)
-    assert [a.rel for a in obs.admitted] == ["hidden.bin"]
-    assert obs.admitted[0].verified_reuse_bytes >= MIN_VERIFIED_REUSE
+    assert [a.rel for a in obs.admitted] == ["hidden.bin"]; assert obs.admitted[0].verified_reuse_bytes >= MIN_VERIFIED_REUSE
+
+
+def test_mutating_explicit_evidence_owner_revokes_observation_proof(tmp_path):
+    payload = _payload(); explicit = tmp_path / "explicit.zip"; _hidden_zip(explicit, payload); _hidden_zip(tmp_path / "hidden.bin", payload)
+    obs = observe_hidden_zip_admission(tmp_path); assert observation_is_current(tmp_path, obs)
+    with explicit.open("ab") as f: f.write(b"changed-evidence-owner")
+    assert not observation_is_current(tmp_path, obs)
 
 
 def test_mutation_after_observation_revokes_admission(tmp_path):
-    payload = _payload()
-    a = tmp_path / "a.bin"
-    b = tmp_path / "b.bin"
-    _hidden_zip(a, payload)
-    _hidden_zip(b, payload)
-    obs = observe_hidden_zip_admission(tmp_path)
-    admission = next(x for x in obs.admitted if x.rel == "a.bin")
-    with a.open("ab") as f:
-        f.write(b"changed-after-observation")
+    payload = _payload(); a = tmp_path / "a.bin"; _hidden_zip(a, payload); _hidden_zip(tmp_path / "b.bin", payload)
+    obs = observe_hidden_zip_admission(tmp_path); admission = next(x for x in obs.admitted if x.rel == "a.bin")
+    with a.open("ab") as f: f.write(b"changed-after-observation")
     assert not admission_is_current(tmp_path, admission)
 
 
 def test_same_size_same_mtime_rewrite_still_revokes_content_bound_admission(tmp_path):
-    payload = _payload()
-    a = tmp_path / "a.bin"
-    _hidden_zip(a, payload)
-    _hidden_zip(tmp_path / "b.bin", payload)
-    obs = observe_hidden_zip_admission(tmp_path)
-    admission = next(x for x in obs.admitted if x.rel == "a.bin")
-    st = a.stat()
-    raw = bytearray(a.read_bytes())
-    raw[0] ^= 1
-    a.write_bytes(raw)
-    os.utime(a, ns=(st.st_atime_ns, st.st_mtime_ns))
-    assert a.stat().st_size == admission.stamp[2]
-    assert a.stat().st_mtime_ns == admission.stamp[3]
-    assert not admission_is_current(tmp_path, admission)
+    payload = _payload(); a = tmp_path / "a.bin"; _hidden_zip(a, payload); _hidden_zip(tmp_path / "b.bin", payload)
+    obs = observe_hidden_zip_admission(tmp_path); admission = next(x for x in obs.admitted if x.rel == "a.bin"); st = a.stat()
+    raw = bytearray(a.read_bytes()); raw[0] ^= 1; a.write_bytes(raw); os.utime(a, ns=(st.st_atime_ns, st.st_mtime_ns))
+    assert a.stat().st_size == admission.stamp[2]; assert a.stat().st_mtime_ns == admission.stamp[3]
+    assert not admission_is_current(tmp_path, admission); assert not observation_is_current(tmp_path, obs)
