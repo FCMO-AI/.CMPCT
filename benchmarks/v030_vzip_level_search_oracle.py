@@ -36,24 +36,25 @@ def run(work:Path)->dict:
     neutral=V029._load(V029.ROOT/'benchmarks'/'neutral_hostile_corpus_v1.py','cmpct_v030_vzip_level_neutral')
     repair=V029._load(V029.REPAIR_PATH,'cmpct_v030_vzip_level_repair'); repair.install_generation_hooks(neutral)
     root=work/'neutral'; neutral.build(root); repair.normalize_root(root)
-    rows=[]
+    rows=[]; rejected=[]
     for family in ('02_office_workspace','04_analytics_and_database'):
         src=root/family
         for ap in sorted(p for p in src.rglob('*') if p.is_file()):
+            with ap.open('rb') as f:
+                if f.read(4)!=b'PK\x03\x04':continue
             try:
-                with ap.open('rb') as f:
-                    if f.read(4)!=b'PK\x03\x04':continue
-                with zipfile.ZipFile(ap) as z:
-                    for zi in z.infolist():
-                        if zi.is_dir() or zi.compress_type!=zipfile.ZIP_DEFLATED:continue
-                        raw=z.read(zi); target=_payload(ap,zi)
-                        a=_search(raw,target,CURRENT_ORDER); b=_search(raw,target,LIKELY_ORDER)
-                        if a[0]!=b[0]:raise RuntimeError('search order changed exact-level result')
-                        rows.append({'family':family,'container':ap.relative_to(src).as_posix(),'member':zi.filename,'raw_bytes':len(raw),'deflate_bytes':len(target),'level':a[0],'current_attempts':a[1],'likely_attempts':b[1],'current_cpu_s':a[2],'likely_cpu_s':b[2]})
-            except (zipfile.BadZipFile,RuntimeError):
-                continue
+                z=zipfile.ZipFile(ap)
+            except zipfile.BadZipFile:
+                rejected.append(ap.relative_to(src).as_posix());continue
+            with z:
+                for zi in z.infolist():
+                    if zi.is_dir() or zi.compress_type!=zipfile.ZIP_DEFLATED:continue
+                    raw=z.read(zi); target=_payload(ap,zi)
+                    a=_search(raw,target,CURRENT_ORDER); b=_search(raw,target,LIKELY_ORDER)
+                    if a[0]!=b[0]:raise RuntimeError('search order changed exact-level result')
+                    rows.append({'family':family,'container':ap.relative_to(src).as_posix(),'member':zi.filename,'raw_bytes':len(raw),'deflate_bytes':len(target),'level':a[0],'current_attempts':a[1],'likely_attempts':b[1],'current_cpu_s':a[2],'likely_cpu_s':b[2]})
     cur=sum(r['current_cpu_s'] for r in rows); likely=sum(r['likely_cpu_s'] for r in rows)
-    return {'schema':'cmpct-v030-vzip-level-search-oracle-v1','source_commit':os.environ.get('EVIDENCE_HEAD'),'rows':rows,'summary':{'members':len(rows),'reproducible':sum(r['level'] is not None for r in rows),'current_attempts':sum(r['current_attempts'] for r in rows),'likely_attempts':sum(r['likely_attempts'] for r in rows),'current_cpu_s':cur,'likely_cpu_s':likely,'cpu_saved_s':cur-likely,'speedup':cur/likely if likely else None},'contract':{'diagnostic_only':True,'archive_semantics_changed':False,'all_levels_exhausted_before_failure':True,'exact_stream_equality_required':True},'decision':'If common-first ordering materially reduces CPU with identical level results, use it as the first semantics-preserving VZIP productization speed repair; otherwise retire search order and profile inflate/recipe ownership.'}
+    return {'schema':'cmpct-v030-vzip-level-search-oracle-v1','source_commit':os.environ.get('EVIDENCE_HEAD'),'rows':rows,'rejected_pk_like':rejected,'summary':{'members':len(rows),'reproducible':sum(r['level'] is not None for r in rows),'current_attempts':sum(r['current_attempts'] for r in rows),'likely_attempts':sum(r['likely_attempts'] for r in rows),'current_cpu_s':cur,'likely_cpu_s':likely,'cpu_saved_s':cur-likely,'speedup':cur/likely if likely else None},'contract':{'diagnostic_only':True,'archive_semantics_changed':False,'all_levels_exhausted_before_failure':True,'exact_stream_equality_required':True,'search_disagreement_fails_run':True},'decision':'If common-first ordering materially reduces CPU with identical level results, use it as the first semantics-preserving VZIP productization speed repair; otherwise retire search order and profile inflate/recipe ownership.'}
 
 if __name__=='__main__':
     import argparse
