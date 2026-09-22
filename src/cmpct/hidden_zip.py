@@ -5,17 +5,12 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-import hashlib
-import os
-import stat
-import struct
-import zipfile
-
+import hashlib, os, stat, struct, zipfile
 from .codec import _compressed_payload
 
 LOCAL_SIG=b"PK\x03\x04";EOCD_SIG=b"PK\x05\x06";EOCD_MIN=22;MAX_COMMENT=65535;MAX_TAIL=EOCD_MIN+MAX_COMMENT
 MAX_ENTRIES=8192;MAX_CENTRAL_DIRECTORY=16*1024*1024;MAX_CANDIDATE_LOGICAL_BYTES=256*1024*1024
-MAX_OBSERVATION_FILES=262144;MAX_OBSERVATION_DESCRIPTORS=131072
+MAX_OBSERVATION_FILES=262144;MAX_OBSERVATION_DESCRIPTORS=131072;MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES=256*1024*1024
 ZIP64_U16=0xFFFF;ZIP64_U32=0xFFFFFFFF
 SUPPORTED_METHODS=frozenset((zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED));EXPLICIT_SUFFIXES=frozenset((".zip",".whl"));MIN_VERIFIED_REUSE=2176
 
@@ -23,15 +18,12 @@ SUPPORTED_METHODS=frozenset((zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED));EXPLICIT_
 class HiddenZipPreflight:
     eligible:bool;reason:str;file_size:int;head_bytes_read:int;tail_bytes_read:int
     entries:int=0;central_directory_size:int=0;central_directory_offset:int=0;eocd_offset:int=0
-
 @dataclass(frozen=True)
 class HiddenZipAdmission:
     rel:str;stamp:tuple[int,int,int,int];verified_reuse_bytes:int;content_sha256:bytes
-
 @dataclass(frozen=True)
 class HiddenZipEvidenceState:
     rel:str;stamp:tuple[int,int,int,int];content_sha256:bytes
-
 @dataclass(frozen=True)
 class HiddenZipObservation:
     admitted:tuple[HiddenZipAdmission,...];files_observed:int;candidates_parsed:int;head_bytes_read:int;tail_bytes_read:int;verification_bytes_read:int;rejects:tuple[tuple[str,int],...]
@@ -122,13 +114,15 @@ def _verify_stream(path:Path,descriptor:tuple[int,int,int,int]):
         return identities or None,read
     except (OSError,ValueError,zipfile.BadZipFile,RuntimeError,struct.error):return None,read
 
-def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED_REUSE,max_observation_files:int=MAX_OBSERVATION_FILES,max_observation_descriptors:int=MAX_OBSERVATION_DESCRIPTORS,max_candidate_logical_bytes:int=MAX_CANDIDATE_LOGICAL_BYTES)->HiddenZipObservation:
-    root=Path(root);rejects:Counter[str]=Counter();stamps={};hidden=set();parsed=head_bytes=tail_bytes=verification_bytes=descriptor_count=files_observed=0;candidates=[];metadata_owners:Counter[tuple[int,int,int,int]]=Counter()
+def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED_REUSE,max_observation_files:int=MAX_OBSERVATION_FILES,max_observation_descriptors:int=MAX_OBSERVATION_DESCRIPTORS,max_observation_central_directory_bytes:int=MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES,max_candidate_logical_bytes:int=MAX_CANDIDATE_LOGICAL_BYTES)->HiddenZipObservation:
+    root=Path(root);rejects:Counter[str]=Counter();stamps={};hidden=set();parsed=head_bytes=tail_bytes=verification_bytes=descriptor_count=files_observed=central_directory_bytes=0;candidates=[];metadata_owners:Counter[tuple[int,int,int,int]]=Counter()
     for path,rel,stamp,explicit in _physical_observation_files(root):
         files_observed+=1
         if files_observed>int(max_observation_files):rejects['observation_file_budget']+=1;return HiddenZipObservation((),files_observed,parsed,head_bytes,tail_bytes,0,tuple(sorted(rejects.items())))
         pf=hidden_zip_preflight(path);head_bytes+=pf.head_bytes_read;tail_bytes+=pf.tail_bytes_read
         if not pf.eligible:rejects[('explicit_' if explicit else '')+pf.reason]+=1;continue
+        central_directory_bytes+=pf.central_directory_size
+        if central_directory_bytes>int(max_observation_central_directory_bytes):rejects['observation_central_directory_budget']+=1;return HiddenZipObservation((),files_observed,parsed,head_bytes,tail_bytes,0,tuple(sorted(rejects.items())))
         descriptors,entries,logical,reason=_metadata_descriptors(path)
         if descriptors is None:rejects[('explicit_' if explicit else '')+(reason or 'exact_parse_rejected')]+=1;continue
         if logical>int(max_candidate_logical_bytes):rejects[('explicit_' if explicit else '')+'logical_work_budget']+=1;continue
@@ -152,8 +146,6 @@ def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED
         if len(rels)>=2:
             for rel in rels:reuse[rel]+=identity[1]
     admitted=tuple(HiddenZipAdmission(rel,stamps[rel],int(reuse[rel]),content_hashes[rel]) for rel in sorted(hidden) if reuse[rel]>=int(min_verified_reuse) and rel in content_hashes)
-    # All repeated-hint owners participate in the economic proof, including explicit ZIP evidence.
-    # Bind them once in the observation so a later same-size/same-mtime rewrite invalidates the cohort.
     evidence=tuple(HiddenZipEvidenceState(rel,stamps[rel],content_hashes[rel]) for rel in sorted(content_hashes))
     return HiddenZipObservation(admitted,files_observed,parsed,head_bytes,tail_bytes,verification_bytes,tuple(sorted(rejects.items())),evidence)
 
