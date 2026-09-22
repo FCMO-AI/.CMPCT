@@ -14,6 +14,9 @@ on:
 permissions:
   contents: read
 
+env:
+  CMPCT_WHEEL_PYTHON_TAG: cp310.cp311.cp312.cp313.cp314
+
 jobs:
   installed-package:
     strategy:
@@ -37,18 +40,28 @@ jobs:
         run: |
           python -m pip install --upgrade pip build
           python -m build --sdist
-      - name: Build wheel strictly from sdist, clean-install, smoke installed cdylib
+      - name: Build wheel strictly from sdist and retag to supported CPython minors
         shell: bash
         run: |
+          set -euo pipefail
           python -m venv "$RUNNER_TEMP/cmpct-installed"
           if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
-          "$PY" -m pip install --upgrade pip
-          mkdir -p "$RUNNER_TEMP/wheels"
+          "$PY" -m pip install --upgrade pip wheel
+          mkdir -p "$RUNNER_TEMP/wheels-original" "$RUNNER_TEMP/wheels"
           if [ "$RUNNER_OS" = "macOS" ]; then
             rustup target add aarch64-apple-darwin x86_64-apple-darwin
             export ARCHFLAGS="-arch arm64 -arch x86_64"
           fi
-          "$PY" -m pip wheel --no-deps dist/*.tar.gz -w "$RUNNER_TEMP/wheels"
+          "$PY" -m pip wheel --no-deps dist/*.tar.gz -w "$RUNNER_TEMP/wheels-original"
+          cp "$RUNNER_TEMP"/wheels-original/cmpct-*.whl "$RUNNER_TEMP/wheels/"
+          cd "$RUNNER_TEMP/wheels"
+          ORIGINAL=$(echo cmpct-*.whl)
+          "$PY" -m wheel tags --python-tag="$CMPCT_WHEEL_PYTHON_TAG" --abi-tag=none --remove "$ORIGINAL"
+          test "$(find . -maxdepth 1 -name 'cmpct-*.whl' | wc -l)" -eq 1
+      - name: Clean-install and smoke installed cdylib
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
           "$PY" -m pip install "$RUNNER_TEMP"/wheels/cmpct-*.whl
           (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee installed-native-smoke.json
       - name: Inspect installed dependency closure
@@ -76,8 +89,46 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  desktop-package-evidence:
+  python-compatibility:
     needs: installed-package
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+        python: ['3.10','3.11','3.12','3.13','3.14']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: installed-native-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: installed-artifact
+      - name: Install identical per-OS wheel and exercise shipping product
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHEEL=$(find installed-artifact -name 'cmpct-*.whl' -type f -print -quit)
+          test -n "$WHEEL"
+          python -m pip install --upgrade pip
+          python -m pip install "$WHEEL"
+          (cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee python-compat-smoke.json
+          python - <<'PY'
+          import json
+          s=json.load(open('python-compat-smoke.json'))
+          assert s['representative_archive_create_read_extract'] is True
+          assert s['shipping_python_no_ambient_zstd'] is True
+          assert s['python_zstandard_absent'] is True
+          assert s['dict_vector_bytes']==104
+          PY
+
+  desktop-package-evidence:
+    needs: [installed-package, python-compatibility]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -129,6 +180,7 @@ jobs:
               assert s['dict_vector_bytes']==104
               assert dep_files[0].read_text().strip()
               wheel=wheels[0]
+              assert '-cp310.cp311.cp312.cp313.cp314-none-' in wheel.name,wheel.name
               platform[os_name]={
                   'archive_sha256':s['representative_archive_sha256'],
                   'dict_vector_sha256':s['dict_vector_sha256'],
@@ -148,6 +200,9 @@ jobs:
                   'canonical_codec_vectors_green':True,
                   'no_ambient_zstd_dependency':True,
                   'platform_dependency_inspection_recorded':True,
+                  'same_artifact_cpython_310_through_314_green':True,
+                  'wheel_python_tag':'cp310.cp311.cp312.cp313.cp314',
+                  'wheel_abi_tag':'none',
               },
               'platform':platform,
           }
