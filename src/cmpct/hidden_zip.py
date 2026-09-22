@@ -25,8 +25,10 @@ MAX_COMMENT = 65535
 MAX_TAIL = EOCD_MIN + MAX_COMMENT
 MAX_ENTRIES = 8192
 MAX_CENTRAL_DIRECTORY = 16 * 1024 * 1024
+# Match the existing reader hardening ceiling: optional discovery must never route a
+# candidate requiring more logical materialization than one directly decoded object.
+MAX_CANDIDATE_LOGICAL_BYTES = 256 * 1024 * 1024
 # Tree-wide ceilings bound optional observation state independently of per-ZIP limits.
-# Exhaustion disables this optimization; it never changes ordinary storage semantics.
 MAX_OBSERVATION_FILES = 262144
 MAX_OBSERVATION_DESCRIPTORS = 131072
 ZIP64_U16 = 0xFFFF
@@ -78,7 +80,6 @@ def hidden_zip_preflight(path: Path) -> HiddenZipPreflight:
         with path.open("rb") as f:
             head = f.read(4)
             head_read = len(head)
-            # Prefixed/self-extracting ZIPs are intentional false negatives of this optional path.
             if head != LOCAL_SIG:
                 return HiddenZipPreflight(False, "local_signature_miss", size, head_read, 0)
             tail_n = min(size, MAX_TAIL)
@@ -148,26 +149,27 @@ def _physical_observation_files(root: Path):
 
 
 def _metadata_descriptors(path: Path):
-    """Return necessary-condition descriptors without reading member payloads."""
+    """Return necessary-condition descriptors and declared logical work without payload reads."""
     try:
         with zipfile.ZipFile(path) as z:
             infos = [i for i in z.infolist() if not i.is_dir()]
             if not infos:
-                return None, 0, "empty_members"
+                return None, 0, 0, "empty_members"
+            logical_bytes = sum(max(0, int(i.file_size)) for i in infos)
             if any(i.flag_bits & 1 for i in infos):
-                return None, len(infos), "encrypted"
+                return None, len(infos), logical_bytes, "encrypted"
             if any(i.compress_type not in SUPPORTED_METHODS for i in infos):
-                return None, len(infos), "unsupported_method"
+                return None, len(infos), logical_bytes, "unsupported_method"
             descriptors = {
                 (int(i.compress_type), int(i.compress_size), int(i.file_size), int(i.CRC))
                 for i in infos
                 if i.file_size > 0
             }
             if not descriptors:
-                return None, len(infos), "no_payload_members"
-            return descriptors, len(infos), None
+                return None, len(infos), logical_bytes, "no_payload_members"
+            return descriptors, len(infos), logical_bytes, None
     except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, struct.error):
-        return None, 0, "exact_parse_rejected"
+        return None, 0, 0, "exact_parse_rejected"
 
 
 def _verify_stream(path: Path, descriptor: tuple[int, int, int, int]):
@@ -198,13 +200,9 @@ def observe_hidden_zip_admission(
     min_verified_reuse: int = MIN_VERIFIED_REUSE,
     max_observation_files: int = MAX_OBSERVATION_FILES,
     max_observation_descriptors: int = MAX_OBSERVATION_DESCRIPTORS,
+    max_candidate_logical_bytes: int = MAX_CANDIDATE_LOGICAL_BYTES,
 ) -> HiddenZipObservation:
-    """Discover hidden candidates with bounded metadata pruning then exact stream proof.
-
-    Metadata equality can trigger SHA work but never admission. Explicit ZIP/WHL first-owners may
-    supply reuse evidence but are never hidden admissions. Global budget exhaustion returns zero
-    admissions so a partial owner graph can never become a partial optimization decision.
-    """
+    """Discover hidden candidates with bounded metadata pruning then exact stream proof."""
     root = Path(root)
     rejects: Counter[str] = Counter()
     stamps: dict[str, tuple[int, int, int, int]] = {}
@@ -213,16 +211,14 @@ def observe_hidden_zip_admission(
     candidates: list[tuple[Path, str, bool, set[tuple[int, int, int, int]]]] = []
     metadata_owners: Counter[tuple[int, int, int, int]] = Counter()
 
-    # Stream the tree rather than retaining every physical file. The file ceiling also bounds the
-    # hardlink first-owner set inside the generator because every new physical owner is yielded once.
     for path, rel, stamp, explicit in _physical_observation_files(root):
         files_observed += 1
         if files_observed > int(max_observation_files):
             rejects["observation_file_budget"] += 1
             return HiddenZipObservation((), files_observed, parsed, head_bytes, tail_bytes, 0, tuple(sorted(rejects.items())))
 
-        # Explicit ZIP/WHL files are only evidence providers here, not admissions. They still pass the
-        # same optional envelope bounds so a giant explicit archive cannot bypass discovery limits.
+        # Evidence providers obey the same optional envelope as hidden candidates; explicit storage
+        # semantics are untouched because rejection only removes this file from reuse evidence.
         pf = hidden_zip_preflight(path)
         head_bytes += pf.head_bytes_read
         tail_bytes += pf.tail_bytes_read
@@ -230,9 +226,14 @@ def observe_hidden_zip_admission(
             rejects[("explicit_" if explicit else "") + pf.reason] += 1
             continue
 
-        descriptors, entries, reason = _metadata_descriptors(path)
+        descriptors, entries, logical_bytes, reason = _metadata_descriptors(path)
         if descriptors is None:
             rejects[("explicit_" if explicit else "") + (reason or "exact_parse_rejected")] += 1
+            continue
+        # Canonical VZIP recipe construction fully decompresses members. Reject from metadata before
+        # that future path can turn a tiny compressed candidate into unbounded logical materialization.
+        if logical_bytes > int(max_candidate_logical_bytes):
+            rejects[("explicit_" if explicit else "") + "logical_work_budget"] += 1
             continue
         descriptor_count += entries
         if descriptor_count > int(max_observation_descriptors):
