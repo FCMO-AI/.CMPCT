@@ -10,7 +10,7 @@ from .codec import _compressed_payload
 
 LOCAL_SIG=b"PK\x03\x04";EOCD_SIG=b"PK\x05\x06";EOCD_MIN=22;MAX_COMMENT=65535;MAX_TAIL=EOCD_MIN+MAX_COMMENT
 MAX_ENTRIES=8192;MAX_CENTRAL_DIRECTORY=16*1024*1024;MAX_CANDIDATE_LOGICAL_BYTES=256*1024*1024
-MAX_OBSERVATION_FILES=262144;MAX_OBSERVATION_DESCRIPTORS=131072;MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES=256*1024*1024
+MAX_OBSERVATION_FILES=262144;MAX_OBSERVATION_DESCRIPTORS=131072;MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES=256*1024*1024;MAX_OBSERVATION_IO_BYTES=512*1024*1024
 ZIP64_U16=0xFFFF;ZIP64_U32=0xFFFFFFFF
 SUPPORTED_METHODS=frozenset((zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED));EXPLICIT_SUFFIXES=frozenset((".zip",".whl"));MIN_VERIFIED_REUSE=2176
 
@@ -76,8 +76,6 @@ def hidden_zip_preflight(path:Path)->HiddenZipPreflight:
         return HiddenZipPreflight(False,'io_or_structure_error',size,head_read,0)
 
 def _physical_observation_files(root:Path,max_entries:int):
-    # Count directory entries before retaining/sorting them. This preserves Builder's lexical
-    # first-hardlink-owner rule without allowing a million aliases in one directory to allocate first.
     seen:set[tuple[int,int]]=set();visited=0
     def walk(absdir:Path,prefix:str=''):
         nonlocal visited
@@ -112,24 +110,29 @@ def _metadata_descriptors(path:Path):
             return descriptors,len(infos),logical,None
     except (OSError,ValueError,zipfile.BadZipFile,RuntimeError,struct.error):return None,0,0,'exact_parse_rejected'
 
-def _verify_stream(path:Path,descriptor:tuple[int,int,int,int]):
+def _verify_stream(path:Path,descriptor:tuple[int,int,int,int],max_bytes:int):
     method,compressed_size,_file_size,_crc=descriptor;identities=set();read=0
     try:
         with zipfile.ZipFile(path) as z:
             for info in z.infolist():
                 if info.is_dir() or (int(info.compress_type),int(info.compress_size),int(info.file_size),int(info.CRC))!=descriptor:continue
+                if read+compressed_size>int(max_bytes):return None,read,True
                 payload=_compressed_payload(path,info);read+=len(payload)
-                if len(payload)!=compressed_size:return None,read
+                if len(payload)!=compressed_size:return None,read,False
                 identities.add((method,compressed_size,hashlib.sha256(payload).digest()))
-        return identities or None,read
-    except (OSError,ValueError,zipfile.BadZipFile,RuntimeError,struct.error):return None,read
+        return identities or None,read,False
+    except (OSError,ValueError,zipfile.BadZipFile,RuntimeError,struct.error):return None,read,False
 
-def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED_REUSE,max_observation_files:int=MAX_OBSERVATION_FILES,max_observation_descriptors:int=MAX_OBSERVATION_DESCRIPTORS,max_observation_central_directory_bytes:int=MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES,max_candidate_logical_bytes:int=MAX_CANDIDATE_LOGICAL_BYTES)->HiddenZipObservation:
+def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED_REUSE,max_observation_files:int=MAX_OBSERVATION_FILES,max_observation_descriptors:int=MAX_OBSERVATION_DESCRIPTORS,max_observation_central_directory_bytes:int=MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES,max_candidate_logical_bytes:int=MAX_CANDIDATE_LOGICAL_BYTES,max_observation_io_bytes:int=MAX_OBSERVATION_IO_BYTES)->HiddenZipObservation:
     root=Path(root);rejects:Counter[str]=Counter();stamps={};hidden=set();parsed=head_bytes=tail_bytes=verification_bytes=descriptor_count=files_observed=central_directory_bytes=0;candidates=[];metadata_owners:Counter[tuple[int,int,int,int]]=Counter()
+    def failed_io_budget():
+        rejects['observation_io_budget']+=1
+        return HiddenZipObservation((),files_observed,parsed,head_bytes,tail_bytes,verification_bytes,tuple(sorted(rejects.items())))
     try:
         for path,rel,stamp,explicit in _physical_observation_files(root,max_observation_files):
             files_observed+=1
             pf=hidden_zip_preflight(path);head_bytes+=pf.head_bytes_read;tail_bytes+=pf.tail_bytes_read
+            if head_bytes+tail_bytes+verification_bytes>int(max_observation_io_bytes):return failed_io_budget()
             if not pf.eligible:rejects[('explicit_' if explicit else '')+pf.reason]+=1;continue
             central_directory_bytes+=pf.central_directory_size
             if central_directory_bytes>int(max_observation_central_directory_bytes):rejects['observation_central_directory_budget']+=1;return HiddenZipObservation((),files_observed,parsed,head_bytes,tail_bytes,0,tuple(sorted(rejects.items())))
@@ -148,10 +151,14 @@ def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED
     for path,rel,_explicit,descriptors in candidates:
         hints=descriptors&repeated
         if not hints:continue
-        try:content_hashes[rel]=_file_sha256(path);verification_bytes+=stamps[rel][2]
+        file_size=stamps[rel][2]
+        if head_bytes+tail_bytes+verification_bytes+file_size>int(max_observation_io_bytes):return failed_io_budget()
+        try:content_hashes[rel]=_file_sha256(path);verification_bytes+=file_size
         except OSError:rejects['admission_hash_io']+=1;continue
         for descriptor in hints:
-            identities,read=_verify_stream(path,descriptor);verification_bytes+=read
+            remaining=int(max_observation_io_bytes)-(head_bytes+tail_bytes+verification_bytes)
+            identities,read,exhausted=_verify_stream(path,descriptor,remaining);verification_bytes+=read
+            if exhausted:return failed_io_budget()
             if identities is None:rejects['verification_rejected']+=1;continue
             for identity in identities:exact_owners.setdefault(identity,set()).add(rel)
     reuse:Counter[str]=Counter()
