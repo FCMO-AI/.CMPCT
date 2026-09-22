@@ -1,6 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 content-ZIP fast-search generalization
 on:
   pull_request:
@@ -33,10 +33,9 @@ jobs:
     needs: classify
     if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
-    # The first exact-head run reached all 15 row-level byte/exactness checks and then hit the
-    # 60-minute job cap during repeated timing/generalization work. Preserve the evaluator and give
-    # the already-running final-form experiment enough wall-clock to emit its durable receipt.
-    timeout-minutes: 90
+    # The scientific matrix completes in roughly four minutes after the IPC repair. Keep a bounded
+    # margin for hosted-runner variance; a long silent run should fail rather than hide another harness deadlock.
+    timeout-minutes: 15
     concurrency:
       group: v030-fast-generalization-receipt-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
