@@ -33,7 +33,10 @@ jobs:
     needs: classify
     if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # The first exact-head run reached all 15 row-level byte/exactness checks and then hit the
+    # 60-minute job cap during repeated timing/generalization work. Preserve the evaluator and give
+    # the already-running final-form experiment enough wall-clock to emit its durable receipt.
+    timeout-minutes: 90
     concurrency:
       group: v030-fast-generalization-receipt-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
