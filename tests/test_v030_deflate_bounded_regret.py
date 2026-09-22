@@ -47,6 +47,17 @@ def test_rare_level_has_bounded_regret_and_remains_exact(monkeypatch):
     assert _raw_deflate(raw, got) == target
 
 
+def test_search_remains_exhaustive_for_all_zlib_level_outputs():
+    # The optimization may reorder attempts but must never turn a stream that canonical zlib can
+    # reproduce into a false negative. Aliased levels are fine: only exact target bytes matter.
+    raw = (bytes(range(251)) * 2048) + (b"0123456789abcdef" * 8192) + bytes(range(97)) * 257
+    for source_level in range(10):
+        target = _raw_deflate(raw, source_level)
+        got = codec.deflate_level_for(raw, target)
+        assert got is not None, source_level
+        assert _raw_deflate(raw, got) == target
+
+
 def test_search_order_is_complete_and_unique():
     assert len(ORDER) == 10
     assert set(ORDER) == set(range(10))
