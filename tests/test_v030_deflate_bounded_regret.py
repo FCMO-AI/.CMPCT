@@ -5,8 +5,8 @@ import zlib
 from cmpct import codec
 
 
-# Product policy under test: common level first, then the complete bounded-regret fallback.
-ORDER = (6, 0, 1, 2, 3, 4, 5, 7, 8, 9)
+# Cost-aware product policy: preserve cheap level-0 first, then try the common exact level.
+ORDER = (0, 6, 1, 2, 3, 4, 5, 7, 8, 9)
 
 
 def _raw_deflate(raw: bytes, level: int) -> bytes:
@@ -14,7 +14,7 @@ def _raw_deflate(raw: bytes, level: int) -> bytes:
     return co.compress(raw) + co.flush()
 
 
-def test_common_level_is_one_attempt_and_exact(monkeypatch):
+def test_common_level_is_two_bounded_attempts_and_exact(monkeypatch):
     raw = (b"cmpct bounded regret " * 8192) + bytes(range(256)) * 16
     target = _raw_deflate(raw, 6)
     real = zlib.compressobj
@@ -27,11 +27,11 @@ def test_common_level_is_one_attempt_and_exact(monkeypatch):
     monkeypatch.setattr(codec.zlib, "compressobj", observed)
     got = codec.deflate_level_for(raw, target)
     assert got == 6
-    assert attempts == [6]
+    assert attempts == [0, 6]
     assert _raw_deflate(raw, got) == target
 
 
-def test_rare_level_has_bounded_regret_and_remains_exact(monkeypatch):
+def test_level_zero_keeps_zero_regret_and_remains_exact(monkeypatch):
     raw = bytes(range(251)) * 4096
     target = _raw_deflate(raw, 0)
     real = zlib.compressobj
@@ -44,7 +44,7 @@ def test_rare_level_has_bounded_regret_and_remains_exact(monkeypatch):
     monkeypatch.setattr(codec.zlib, "compressobj", observed)
     got = codec.deflate_level_for(raw, target)
     assert got == 0
-    assert attempts == [6, 0]
+    assert attempts == [0]
     assert _raw_deflate(raw, got) == target
 
 
