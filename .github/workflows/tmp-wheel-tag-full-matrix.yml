@@ -3,6 +3,7 @@ name: TEMP explicit CPython tag full matrix
 on:
   push:
     branches: [agent/wheel-tag-full-matrix]
+    paths: ['.github/workflows/tmp-wheel-tag-full-matrix.yml']
   workflow_dispatch:
 
 permissions:
@@ -35,14 +36,15 @@ jobs:
             export ARCHFLAGS="-arch arm64 -arch x86_64"
           fi
           "$PY" -m pip wheel --no-deps dist/*.tar.gz -w "$RUNNER_TEMP/original"
-          WHEEL=$(find "$RUNNER_TEMP/original" -name 'cmpct-*.whl' -type f -print -quit)
-          "$PY" -m wheel tags --python-tag cp310.cp311.cp312.cp313.cp314 --abi-tag none --remove "$WHEEL"
-          RETAGGED=$(find "$RUNNER_TEMP/original" -name 'cmpct-*.whl' -type f -print -quit)
-          cp "$RETAGGED" "$RUNNER_TEMP/retagged/"
-          python - <<'PY'
-          import hashlib, os
-          from pathlib import Path
-          wheels=list((Path(os.environ['RUNNER_TEMP'])/'retagged').glob('cmpct-*.whl'))
+          cp "$RUNNER_TEMP"/original/cmpct-*.whl "$RUNNER_TEMP/retagged/"
+          cd "$RUNNER_TEMP/retagged"
+          ORIGINAL=$(echo cmpct-*.whl)
+          "$PY" -m wheel tags --python-tag=cp310.cp311.cp312.cp313.cp314 --abi-tag=none --remove "$ORIGINAL" | tee retagged-name.txt
+          RETAGGED=$(cat retagged-name.txt)
+          test -f "$RETAGGED"
+          "$PY" - <<'PY'
+          import hashlib, pathlib
+          wheels=list(pathlib.Path('.').glob('cmpct-*.whl'))
           assert len(wheels)==1,wheels
           p=wheels[0]
           print(p.name)
