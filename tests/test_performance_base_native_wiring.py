@@ -20,5 +20,7 @@ def test_helper_changes_are_performance_impacting():
     # Invocation + both event path filters must name the exact helper path; otherwise a helper-only
     # comparator-semantic change can legitimately avoid scheduling this release evidence lane.
     assert text.count(HELPER) >= 3
-    classifier = text[text.index('latest-head-impact'):text.index('performance:', text.index('latest-head-impact'))]
+    start = text.index('latest-head-impact:')
+    # Slice at the next job header, not the earlier `run_performance:` output key.
+    classifier = text[start:text.index('\n  performance:', start)]
     assert 'materialize_performance_base_native' in classifier
