@@ -8,57 +8,41 @@
   },
   "active_product_bottleneck": {
     "id": "hidden-zip-information-yield-productization",
-    "observation": "#201 established a -9,370,622 B held-matrix research gain with zero byte regressions. Draft #205 is the sole active productization lane. Exact head 998990bd adds literal local-header charging, expected-object bounded hashing and a 256-MiB aggregate declared logical-work ceiling. Builder does not execute the observer yet, so no product byte credit is earned.",
-    "next_discriminator": "Close the remaining pre-integration hostile gap: bounded actual stored/DEFLATE validation tied to the content-bound proof, plus literal accounting/removal of the expected-hash EOF probe. Then integrate candidate-scoped discovery into Builder without a second tree walk and test explicit S_PACK invariance before measuring final-form Office gain and whole-product timing/RSS/locality."
+    "observation": "#201 established a -9,370,622 B held-matrix research gain with zero byte regressions. Draft #205 is the sole active productization lane. Code head be1434c closes the previously open physical-I/O and lying-size/actual-DEFLATE safety gaps and is green on 811 tests, but Builder still does not execute the observer, so no product byte credit is earned.",
+    "next_discriminator": "Before Builder integration, falsify and repair owner self-consistency: a hidden fallback must not supply inner-stream reuse credit to another hidden admission. Use the preregistered three-owner A-X-B-Y-C chain, then fold the fixed-point ownership law into the candidate-scoped observer refactor."
   },
   "primary_question": {
     "id": "generic-hidden-zip-admission",
     "family": "representation-discovery+execution",
-    "hypothesis": "Generic hidden ZIP/OOXML reuse can retain #201's large structural byte gain if admission is content-bound, fail-closed, bounded against hostile physical/logical work, and fused into Builder's existing scan/ownership semantics without perturbing explicit ZIP cohorts.",
-    "status": "PRODUCTIZATION_HARDENING_ACTIVE",
+    "hypothesis": "Generic hidden ZIP/OOXML reuse can retain #201's large structural byte gain if admission is content-bound, fail-closed, bounded against hostile physical/logical work, self-consistent over actually realized owners, and fused into Builder's scan semantics without perturbing explicit ZIP cohorts.",
+    "status": "PRODUCTIZATION_OWNERSHIP_GATE_ACTIVE",
     "evidence": [
       "#201 / 35719088885 / 10690274379: 181,603,782 -> 172,233,160 B (-9,370,622 B), zero regressed rows, five Office admissions",
-      "f0e2f972: exact-head regression 35783718007 green; unchanged r24 ABBA 35783718094 green, byte-identical, combined create -1.50%, extract -0.48%; substrate only",
-      "61285cec: resource-bound substrate exactness green but r24 timing evaluator red on 35791680994; preserved as timing noise/debt evidence, not narrated away",
-      "7a32625f / 35795947509: 808 passed / 1 failed; sole failure was an over-demanding new I/O-budget test oracle",
+      "#200 / 35703345978: full traversal fusion failed final-form CPU+wall improvement and remains retired",
       "90569bac: full regression 35796502353 green and unchanged r24 performance gate 35796502250 green",
-      "998990bd: local-header I/O charge + expected-object bounded hash + aggregate declared logical-work ceiling; exact-head CI pending"
+      "be1434c / 35800577108 / 10726011125: 811 passed in 195.48 s; CLI smoke green",
+      "be1434c: actual raw-DEFLATE output is chunk-bounded and CRC/length/eof validated under a 256-MiB aggregate ceiling; a central-directory 2-MiB-as-1-byte hostile fails closed",
+      "PR comment 5786663492: one-pass hidden-owner reuse can be economically optimistic; fixed-point owner pruning is now a required pre-integration gate"
     ],
-    "prediction": "The remaining actual-stream validator should kill lying-size/high-expansion candidates before staging without changing healthy archive bytes; candidate-scoped Builder fusion should then preserve explicit .zip/.whl/S_PACK behavior while exposing the Office gain.",
-    "kill": "Any exactness failure, explicit-cohort perturbation, byte regression, unbounded hostile work, or confirmed create/extract/RSS/locality debt blocks or narrows promotion. Thresholds and semantics do not move after results."
+    "prediction": "The three-owner chain will expose the one-pass owner graph, and monotone pruning from realized explicit S_VZIP owners plus tentative hidden owners will remove the false admission without changing healthy mutually-realized cohorts.",
+    "kill": "Any exactness failure, explicit-cohort perturbation, byte regression, unbounded hostile work, false reuse credit from non-realized owners, or confirmed create/extract/RSS/locality debt blocks or narrows promotion. Thresholds and semantics do not move after results."
   },
   "frontier_candidates": [
-    {
-      "id": "hidden-zip-productization",
-      "family": "representation-discovery+execution",
-      "status": "ACTIVE_PR_205",
-      "evidence": "#205 head 998990bd; pre-integration hardening active"
-    },
-    {
-      "id": "r25-publishability-pruning",
-      "family": "execution-architecture",
-      "status": "ADJACENT",
-      "evidence": "#194; ML +116 B pre-overlay becomes -161843 B winner, mandatory hostile"
-    },
-    {
-      "id": "serious-corpus-efficiency",
-      "family": "product-efficiency",
-      "status": "QUEUED",
-      "evidence": "#192"
-    }
+    {"id":"hidden-zip-productization","family":"representation-discovery+execution","status":"ACTIVE_PR_205","evidence":"code head be1434c; exact regression green; owner fixed-point gate open"},
+    {"id":"r25-publishability-pruning","family":"execution-architecture","status":"ADJACENT","evidence":"#194; ML +116 B pre-overlay becomes -161843 B winner, mandatory hostile"},
+    {"id":"serious-corpus-efficiency","family":"product-efficiency","status":"QUEUED","evidence":"#192"}
   ],
   "saturated_families": [
     {"family":"content-ZIP mirror/original-path/full-matrix rediscovery","reason":"historical ladder + #201 decide these rungs"},
     {"family":"content-ZIP traversal fusion","reason":"#200 / 35703345978 failed final-form CPU+wall improvement gate"},
     {"family":"pure level-6-first Deflate product order","reason":"32 MiB level-0 hostile exposed large CPU regret; superseded by cost-aware product order"},
-    {"family":"raw 0..9 Deflate level search","reason":"#196/#199 establish stronger bounded-regret exact search"},
-    {"family":"scheduler-only-r25-speedup","reason":"multi-second work remains vs sub-second budgets"}
+    {"family":"raw 0..9 Deflate level search","reason":"#196/#199 establish stronger bounded-regret exact search"}
   ],
   "decision_evidence": {
     "hidden_zip_information_yield":"#201 / 35719088885 / 10690274379: -9,370,622 B, zero regressed rows, five Office admissions",
-    "hidden_zip_last_green_substrate":"90569bac / tests 35796502353 / r24 35796502250: green; no Builder execution",
-    "scan_fusion_negative":"#200 / 35703345978: bytes/RSS identical, CPU/wall not improved",
-    "r25_bound_hostile":"35681729751 ML g04 pre=13836789, v029 floor=13836673 (+116 B), overlay=13674830 (-161843 B)"
+    "hidden_zip_current_safety":"be1434c / 35800577108: 811 passed; actual-output bomb gate added; no Builder execution",
+    "owner_fixed_point":"PR #205 comment 5786663492 preregisters A-X-B-Y-C false-owner hostile and monotone realized-owner pruning",
+    "scan_fusion_negative":"#200 / 35703345978: bytes/RSS identical, CPU/wall not improved"
   },
   "process_lessons": [
     {"lesson":"Inspect complete historical workflow/run ladders before declaring the next rung.","evidence":"content-ZIP ladder recovery and preflate duplicate correction"},
@@ -67,9 +51,8 @@
     {"lesson":"Do not require byte identity across independently regenerated corpora; test mechanism semantics within each paired exact input unless corpus identity itself is frozen and proven.","evidence":"#201 35713728064 -> 35719088885"}
   ],
   "pending_jobs": [
-    {"provider":"github-actions","run":"35800260983","source_sha":"998990bd1ac1f0c4473ac02fc55713326cc7273d","question":"#205 exact-head full regression","expected_artifact":"test result/diagnostic","decision_unlocked":"whether current hardening preserves full regression"},
-    {"provider":"github-actions","run":"35800261197","source_sha":"998990bd1ac1f0c4473ac02fc55713326cc7273d","question":"#205 unchanged r24 performance gate","expected_artifact":"ABBA release benchmark evidence","decision_unlocked":"whether current non-executing substrate preserves the inherited product floor"}
+    {"provider":"github-actions","run":"35800577104","source_sha":"be1434c03150d45cc26edb47ce93b70e836e3e66","question":"unchanged r24 ABBA product floor on current code head","expected_artifact":"release benchmark evidence","decision_unlocked":"whether the non-executing substrate remains timing/byte neutral on the inherited product gate"}
   ],
-  "next_action": "Do not babysit pending CI. Finish the actual-stream hostile validator and literal physical-I/O accounting, then consume exact-head evidence. Only after those hardening gates survive should Builder candidate-scoped integration begin. Keep #205 draft and do not claim #201's research byte win as product evidence.",
-  "last_reconciled": "2026-09-23T00:05Z"
+  "next_action": "Implement the cheap three-owner fixed-point hostile first: A shares X only with B, B shares Y only with C, each stream alone below the floor and X+Y above it. Confirm current one-pass logic fails, then repair admission by repeatedly pruning hidden owners below the reuse floor from the live set of realized explicit S_VZIP owners plus tentative hidden owners. Recompute after validation/staging failures. In the same candidate-scoped refactor, stop validating all members of near-miss candidates; validate actual output only for the final tentative hidden cohort. Then add 7-vs-8 explicit S_PACK hostiles before the Office/product benchmark.",
+  "last_reconciled": "2026-09-23T00:15Z"
 }
