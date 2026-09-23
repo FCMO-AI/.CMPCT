@@ -1,56 +1,16 @@
 {
-  "schema":"cmpct-discovery-state-v1",
-  "status":"ACTIVE",
+  "schema":"cmpct-discovery-state-v1","status":"ACTIVE",
   "authority":{"canonical_release":"v0.29.0 / r24 on main","active_frontier":"agent/v030-authoritative-integration","source":"repository, PR, docs/V030_RELEASE_LOCK.json and exact-head run truth outrank this staleable cache"},
-  "active_product_bottleneck":{
-    "id":"hidden-zip-information-yield-productization",
-    "observation":"#205 actual-Builder byte gain is reproducible (~9.37 MB / ~60.7% Office reduction, zero matrix byte regressions), but isolated fresh-process A-B-B-A confirms major runtime debt: create 0.08227 -> 0.67165 s (8.16x), extract 0.01595 -> 0.03080 s (1.93x), while arm-local peak RSS is 1.00x. Promotion is blocked; breakthrough rehabilitation is active.",
-    "next_discriminator":"Consume the exact-head v0.30 resource+selective receipt and max-speed Deflate-retention oracle dispatched by the current hidden-ZIP workflow. Use them to separate proof/loser cost, winner staging/recompression cost, and read-time mode-2 regeneration before implementing rehabilitation."
-  },
-  "primary_question":{
-    "id":"generic-hidden-zip-admission",
-    "family":"representation-discovery+execution",
-    "status":"ACTUAL_BUILDER_BYTE_BREAKTHROUGH_RUNTIME_DEBT_CONFIRMED_REHABILITATION",
-    "hypothesis":"The ~9.37 MB actual-Builder hidden-ZIP gain can be preserved while removing exported create/extract debt by isolating proof, staging/recompression and read-time stream-regeneration costs rather than weakening admission or release gates.",
-    "evidence":[
-      "#201 / 35719088885 / 10690274379: -9,370,622 B research headroom, zero regressed rows",
-      "131c6b3c / artifact 10771104120: actual Builder Office savings 9,370,630 / 9,370,622 / 9,370,630 B; zero regressed rows; exact tree/ranges",
-      "76174d6a / run 35920334081 / artifact 10776499399 sha256:306c52b412560363b1c41138f1a67e754d064ad4c66637a49e05015f79856f98: Office savings 9,370,638 / 9,370,626 / 9,370,620 B; fresh-process create ratio 8.16x, extract 1.93x, peak RSS 1.00x",
-      "same isolated receipt accounting per Office tree: proof I/O 29,536,814 B; proof logical validation 12,787,462 B; stage source read 9,471,353 B; temp write 9,471,353 B; temp read 28,414,059 B; retained staged candidate bytes 22,258,815 B; five realized hidden owners, zero stage exclusions",
-      "5244a814 / topology 35919876878: exact-head workflow custody repair green without evaluator/mechanism change",
-      "docs/V030_RELEASE_LOCK.json runtime-memory-selective authority: median create <=1.10, median extract <=1.10, max-workload create/extract <=1.25, max peak RSS <=1.25, selective read measured"
-    ],
-    "prediction":"Exact-stream max-speed oracle should improve extract/selective behavior if mode-2 regeneration is a major read debt source, at some byte cost. Create debt may remain because proof plus staging/recompression are separate. A weak oracle redirects effort toward proof/staging rather than threshold tuning.",
-    "kill":"Retire or narrow the seed if rehabilitation cannot restore required runtime/resource/locality floors without erasing the material byte gain or violating exactness/safety/complexity bounds."
-  },
+  "active_product_bottleneck":{"id":"hidden-zip-information-yield-productization","observation":"#205 actual-Builder byte gain is reproducible (~9.37 MB / ~60.7% Office reduction, zero matrix byte regressions), but isolated fresh-process A-B-B-A confirms runtime debt: create 0.08227 -> 0.67165 s (8.16x), extract 0.01595 -> 0.03080 s (1.93x), arm-local peak RSS 1.00x. Optional proof+staging moves ~76.89 MB, ~8.12x the 9.47 MB surfaced hidden-source bytes, beyond Builder's original scan.","next_discriminator":"Consume run 35921021513 from source 5804cc75: selective-aware v0.30 resource evidence plus the gifted max-speed exact-stream-retention oracle. Use it to choose between hidden-winner stream retention, scan-time compact ownership fingerprints, and verified repeated Deflate-level-search reuse."},
+  "primary_question":{"id":"generic-hidden-zip-admission","family":"representation-discovery+execution","status":"BYTE_BREAKTHROUGH_RUNTIME_DEBT_CONFIRMED_REHABILITATION","hypothesis":"The ~9.37 MB actual-Builder hidden-ZIP gain can be preserved while removing create/extract/locality debt by changing ownership/proof and stream-retention execution rather than weakening admission or release gates.","evidence":["#201 / 35719088885 / 10690274379: -9,370,622 B research headroom, zero regressed rows","131c6b3c / 10771104120: actual Builder Office savings 9,370,630 / 9,370,622 / 9,370,630 B; zero regressed rows; exact tree/ranges","76174d6a / 35920334081 / 10776499399 sha256:306c52b412560363b1c41138f1a67e754d064ad4c66637a49e05015f79856f98: Office savings 9,370,638 / 9,370,626 / 9,370,620 B; fresh-process create 8.16x, extract 1.93x, peak RSS 1.00x","same receipt per Office tree: proof I/O 29,536,814 B; proof logical 12,787,462 B; stage source 9,471,353 B; temp write 9,471,353 B; temp read 28,414,059 B; five realized hidden owners","V030_RELEASE_LOCK: median create/extract <=1.10, max-workload create/extract <=1.25, max peak RSS <=1.25, selective read measured"],"prediction":"Existing max-speed exact-stream retention should materially improve extract/selective behavior if mode-2 regeneration owns read debt, but may leave create debt because proof and recipe/level-search work are separate.","kill":"Retire or narrow the seed if rehabilitation cannot restore required runtime/resource/locality floors without erasing the material byte gain or violating exactness/safety/complexity bounds."},
   "frontier_candidates":[
-    {"id":"hidden-zip-resource-rehabilitation","family":"representation-discovery+execution","status":"ACTIVE_PR_205","evidence":"byte breakthrough product-path green; create/extract debt confirmed; RSS healthy"},
-    {"id":"deflate-retention-speed-oracle","family":"portfolio/admission","status":"DISPATCHED","evidence":"existing documented CMPCT_DEFLATE_REUSE_MIN=0 maximum-speed policy; oracle only, no product credit"},
-    {"id":"exact-payload-ownership-proof","family":"proof-architecture","status":"QUEUED","evidence":"fixed point consumes exact compressed-stream identity while current proof also validates/decompresses all members; proof logical work 12.79 MB on Office"},
-    {"id":"deflate-level-search-reuse","family":"execution-architecture","status":"QUEUED","evidence":"make_vzip_recipe repeats exact zlib-level search; repeated streams create a natural verified-result reuse opportunity"},
-    {"id":"r25-publishability-pruning","family":"execution-architecture","status":"ADJACENT","evidence":"#194"}
+    {"id":"hidden-winner-exact-stream-retention","family":"portfolio/admission","status":"ORACLE_RUNNING","evidence":"documented CMPCT_DEFLATE_REUSE_MIN=0 oracle estimates read-speed/byte tradeoff without changing product policy"},
+    {"id":"scan-time-exact-payload-fingerprints","family":"proof-architecture","status":"QUEUED","evidence":"Builder already owns candidate raw bytes; compact exact stream identities could remove ~29.54 MB proof reread and 12.79 MB proof decompression"},
+    {"id":"verified-deflate-level-search-reuse","family":"execution-architecture","status":"QUEUED","evidence":"make_vzip_recipe repeats deterministic exact zlib-level search across the repeated streams that create the breakthrough"}
   ],
-  "saturated_families":[
-    {"family":"content-ZIP mirror/original-path/full-matrix rediscovery","reason":"historical ladder + #201 + #205 actual-Builder matrix decide byte headroom"},
-    {"family":"content-ZIP traversal fusion","reason":"#200 failed final-form CPU+wall improvement gate"},
-    {"family":"ordinary-path seam timing chase","reason":"two moving r24 reds followed by exact-head PASS; mechanism-bearing Office receipt now supplies the real cost locus"}
-  ],
-  "decision_evidence":{
-    "actual_builder_gain_retention":"artifact 10771104120 and 10776499399: every Office rep >=9 MB saving, zero regressed rows",
-    "resource_debt_confirmed":"10776499399: create 8.16x, extract 1.93x, RSS 1.00x in fresh-process A-B-B-A",
-    "resource_cost_map":"proof 29.54 MB physical + 12.79 MB logical; staging 9.47 MB source + 9.47 MB temp write + 28.41 MB temp read; five winners",
-    "v030_release_law":"docs/V030_RELEASE_LOCK.json runtime-memory-selective receipt owns 1.10 median runtime, 1.25 max workload/runtime and RSS, selective-read measurement",
-    "general_timing_law":"docs/PERFORMANCE_RELEASE_GATE.md +5% and +3 ms is the general confirmed-noise rule; it does not supersede the stricter v0.30 lock"
-  },
-  "process_lessons":[
-    {"lesson":"Mechanism product evidence must execute the actual shipping candidate, not its research ancestor.","evidence":"#201 versus #205"},
-    {"lesson":"Repeated workflow FAIL is not repeated mechanism evidence unless the same observable/locus/direction reproduces.","evidence":"two moving r24 reds then exact-head PASS"},
-    {"lesson":"Resolve authority layers before freezing an evaluator: general release timing law and version-specific release-lock gates can both apply, with the stricter scoped authority governing promotion.","evidence":"PERFORMANCE_RELEASE_GATE plus V030_RELEASE_LOCK reconciliation before final resource receipt"},
-    {"lesson":"When a breakthrough exports cost, measure the cost map before choosing a repair; RSS is already exonerated while proof/staging/read regeneration remain live.","evidence":"artifact 10776499399"}
-  ],
-  "pending_jobs":[
-    {"provider":"github-actions","source_sha":"5804cc757566366380f5df129443088dd1e763ac","question":"final selective-aware v0.30 resource receipt plus max-speed exact-stream-retention oracle","expected_artifact":"v030-hidden-zip-product-gain-retention-<exact-sha>","decision_unlocked":"whether existing stream retention can recover extract/selective performance while retaining material byte gain; otherwise choose proof/staging rehabilitation"}
-  ],
-  "next_action":"Consume the current exact-head resource/oracle artifact when complete. If max-speed retention restores extract/selective with material byte gain, design a generic bounded retention/portfolio rule and remeasure. If not, instrument proof versus staging wall time and test cheaper exact compressed-payload ownership proof and/or verified Deflate-level-search reuse. Preserve the ~9.37 MB gain and all red resource evidence; do not merge until v0.30 gates are restored.",
-  "last_reconciled":"2026-09-23T21:13Z"
+  "saturated_families":[{"family":"content-ZIP mirror/original-path/full-matrix rediscovery","reason":"#201 + #205 actual-Builder matrix decide byte headroom"},{"family":"content-ZIP traversal fusion","reason":"#200 failed final-form CPU+wall gate"},{"family":"ordinary-path seam timing chase","reason":"moving r24 reds followed by exact-head PASS; mechanism-bearing Office receipt now supplies the real cost locus"}],
+  "decision_evidence":{"actual_builder_gain_retention":"10771104120 + 10776499399: every Office rep >=9 MB saving, zero regressed rows","resource_debt_confirmed":"10776499399: create 8.16x, extract 1.93x, RSS 1.00x","resource_amplification":"proof+staging physical movement 76,893,579 B / 9,471,353 B surfaced source = 8.12x beyond initial scan","v030_release_law":"V030_RELEASE_LOCK runtime-memory-selective receipt owns 1.10 median runtime, 1.25 max-workload/runtime and RSS, selective-read measurement","general_timing_law":"PERFORMANCE_RELEASE_GATE +5% and +3 ms remains the general confirmed-noise rule"},
+  "process_lessons":[{"lesson":"Mechanism product evidence must execute the actual shipping candidate, not its research ancestor.","evidence":"#201 versus #205"},{"lesson":"Repeated workflow FAIL is not repeated mechanism evidence unless the same observable/locus/direction reproduces.","evidence":"two moving r24 reds then exact-head PASS"},{"lesson":"Resolve authority layers before freezing an evaluator; scoped version release law may be stricter than general timing law.","evidence":"PERFORMANCE_RELEASE_GATE + V030_RELEASE_LOCK reconciliation"},{"lesson":"Normalize exported work to the source/gain it buys; the current optional lane's 8.12x extra physical movement makes pass elimination a first-class target.","evidence":"10776499399"}],
+  "pending_jobs":[{"provider":"github-actions","run_id":35921021513,"source_sha":"5804cc757566366380f5df129443088dd1e763ac","question":"selective-aware v0.30 resource receipt plus max-speed exact-stream-retention oracle","expected_artifact":"v030-hidden-zip-product-gain-retention-5804cc75...","decision_unlocked":"whether exact-stream retention can recover extract/selective while retaining material byte gain; otherwise prioritize proof/staging"}],
+  "next_action":"Consume run 35921021513. If max-speed retention restores read economics with material byte gain, productize only hidden-winner retention and skip unnecessary level search, then remeasure. If weak, instrument proof versus staging wall time and attack scan-time fingerprints / verified level-search reuse. Preserve all red debt; do not merge until v0.30 gates are restored.","last_reconciled":"2026-09-23T21:17Z"
 }
