@@ -20,6 +20,11 @@ def test_logical_work_budget_rejects_before_exact_payload_verification(tmp_path)
     payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload);obs=observe_hidden_zip_admission(tmp_path,max_candidate_logical_bytes=1)
     assert obs.admitted==();assert obs.verification_bytes_read==0;assert ('logical_work_budget',2) in obs.rejects
 
+def test_aggregate_logical_work_budget_fails_closed_across_candidates(tmp_path):
+    payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload)
+    obs=observe_hidden_zip_admission(tmp_path,max_candidate_logical_bytes=len(payload),max_observation_logical_bytes=len(payload))
+    assert obs.admitted==();assert obs.verification_bytes_read==0;assert ('observation_logical_work_budget',1) in obs.rejects
+
 def test_global_file_budget_fails_closed_before_partial_admission(tmp_path):
     payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload);obs=observe_hidden_zip_admission(tmp_path,max_observation_files=1)
     assert obs.admitted==();assert obs.verification_bytes_read==0;assert ('observation_file_budget',1) in obs.rejects
@@ -53,8 +58,6 @@ def test_global_io_budget_also_bounds_exact_stream_verification(tmp_path):
     file_bytes=sum((tmp_path/name).stat().st_size for name in ('a.bin','b.bin'))
     obs=observe_hidden_zip_admission(tmp_path,max_observation_io_bytes=preflight_bytes+metadata_parser_bytes+file_bytes+1)
     assert obs.admitted==();assert ('observation_io_budget',1) in obs.rejects
-    # The fail-closed order spends one evidence-owner hash, then refuses the verification parser open.
-    # It need not burn the remaining budget hashing the second owner merely to reach the same decision.
     assert obs.verification_bytes_read==(tmp_path/'a.bin').stat().st_size
 
 def test_revalidation_shares_the_aggregate_io_ceiling(tmp_path):
