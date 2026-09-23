@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 
 from cmpct.builder import Builder
-from cmpct.builder_hidden_zip import ownership_sources_from_builder
+from cmpct.builder_hidden_zip import ownership_sources_from_builder, resolve_hidden_zip_candidates
 from cmpct.codec import S_PACK, S_VZIP
 from cmpct.hidden_zip_candidates import prove_candidate_zip_ownership
 
@@ -56,3 +56,31 @@ def test_eight_explicit_plus_hidden_preserves_spack_and_supplies_zero_inner_evid
     proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1)
     assert proof.realized == frozenset()
     assert proof.credit == {}
+
+
+def test_composed_resolution_commits_only_stable_hidden_winner(tmp_path: Path) -> None:
+    hidden = _fixture(tmp_path, 7)
+    builder = Builder(tmp_path); builder.scan()
+    recipes_before = len(builder.recipes)
+
+    result = resolve_hidden_zip_candidates(builder, [("hidden-document.bin", hidden)], min_verified_reuse=2176)
+
+    assert "hidden-document.bin" in result.proof.realized
+    assert "hidden-document.bin" in result.cohort.realized
+    assert result.storage["hidden-document.bin"][0] == S_VZIP
+    assert len(builder.recipes) == recipes_before + 1
+
+
+def test_composed_resolution_cannot_borrow_from_spack(tmp_path: Path) -> None:
+    hidden = _fixture(tmp_path, 8)
+    builder = Builder(tmp_path); builder.scan()
+    recipes_before = len(builder.recipes)
+    candidates_before = set(builder.cands)
+
+    result = resolve_hidden_zip_candidates(builder, [("hidden-document.bin", hidden)], min_verified_reuse=1)
+
+    assert result.proof.realized == frozenset()
+    assert result.cohort.realized == frozenset()
+    assert result.storage == {}
+    assert len(builder.recipes) == recipes_before
+    assert set(builder.cands) == candidates_before
