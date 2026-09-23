@@ -38,11 +38,16 @@ def test_finalize_hidden_winner_appends_vzip_row_from_surfaced_snapshot(tmp_path
     assert result.storage["document.bin"][0] == S_VZIP
     assert row[6][0] == S_VZIP; assert row[4] == item.candidate.stamp[2]; assert row[5] == item.candidate.digest
     # A realized hidden winner, unlike the inherited explicit owner, funds exact Deflate retention even
-    # below the normal 64 KiB cutoff. This is the productized form of the max-speed oracle, scoped only
-    # to streams whose hidden representation actually survived ownership proof and staging.
+    # below the normal 64 KiB cutoff. Every exact stream introduced by the hidden staged recipe must be
+    # canonical or retained-secondary, including after the inherited compact-policy preparation pass;
+    # otherwise the hidden-only level-search elision could accidentally fall through to mode 2.
     assert builder.canonical_deflate
-    forced = set(builder.canonical_deflate)
-    assert all(builder.cands[ref].deflates for ref in forced)
+    builder._prepare_deflate_reuse()
+    for staged in result.cohort.staged.values():
+        for _raw, _hint, stream, ref in staged.candidates:
+            if stream is None: continue
+            stream_hash=sha(stream);rawref=bytes(ref)
+            assert builder.canonical_deflate.get(rawref)==stream_hash or stream_hash in builder.secondary_stream_hashes
 
 
 def test_finalize_hidden_loser_returns_through_inherited_blob_policy(tmp_path: Path) -> None:
