@@ -5,6 +5,10 @@ version string, is the canonical source of truth until the 1.0 format is frozen.
 """
 __version__ = "0.24.0"
 
+# Draft v0.30 hidden-container productization seam.  It patches only Builder.scan and preserves the
+# explicit ZIP/WHL cohort; the module remains independently deletable until #205 earns product gates.
+from . import v030_hidden_zip_builder as _v030_hidden_zip_builder  # noqa: E402,F401
+
 # Encoder-only v0.30 release guards. They are inert for ordinary/historical Builder instances and
 # activate only under the promoted release-owned r24-v4 policy. Keeping installation here makes every
 # import order deterministic: release code cannot accidentally miss locality enforcement or operation-
