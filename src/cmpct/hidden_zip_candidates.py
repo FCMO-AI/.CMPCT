@@ -62,8 +62,8 @@ def prove_candidate_zip_ownership(
 
     Metadata is only a cheap necessary-condition filter. Reuse credit comes exclusively
     from validated exact compressed-stream identities and is then solved over realized
-    owners. Any budget or structural failure removes that source from the proof rather
-    than partially admitting it.
+    owners. Any budget, aliasing, or structural failure removes that source from the proof
+    rather than partially admitting it.
     """
 
     sources = tuple(sources)
@@ -71,11 +71,32 @@ def prove_candidate_zip_ownership(
         raise ValueError("candidate owner rel paths must be unique")
 
     rejects: Counter[str] = Counter()
+    # Physical ownership is stricter than path identity. Builder normally surfaces only the
+    # first hardlink owner, but this boundary independently fails closed if a caller supplies
+    # aliases: two names for one inode may never manufacture the required second owner.
+    physical: dict[tuple[int, int], list[str]] = {}
+    source_physical: dict[str, tuple[int, int]] = {}
+    for source in sources:
+        try:
+            st = source.path.stat()
+            key = (int(st.st_dev), int(st.st_ino))
+        except OSError:
+            rejects["source_changed"] += 1
+            continue
+        source_physical[source.rel] = key
+        physical.setdefault(key, []).append(source.rel)
+    aliased = {rel for rels in physical.values() if len(rels) > 1 for rel in rels}
+
     parsed: list[tuple[ZipOwnerSource, set[tuple[int, int, int, int]], int]] = []
     metadata_owners: Counter[tuple[int, int, int, int]] = Counter()
     io_used = logical_used = declared_logical_used = 0
 
     for source in sources:
+        if source.rel not in source_physical:
+            continue
+        if source.rel in aliased:
+            rejects["physical_alias"] += 1
+            continue
         pf = hidden_zip_preflight(source.path, max_read_bytes=max(0, int(max_io_bytes) - io_used))
         io_used += int(pf.head_bytes_read) + int(pf.tail_bytes_read)
         if not pf.eligible:
@@ -119,11 +140,12 @@ def prove_candidate_zip_ownership(
         except OSError:
             rejects["source_changed"] += 1
             continue
+        if (int(st.st_dev), int(st.st_ino)) != source_physical[source.rel]:
+            rejects["source_changed"] += 1
+            continue
         if io_used + physical_size + parser_charge > int(max_io_bytes):
             rejects["io_budget"] += 1
             continue
-        # Hash exactly the stamped object before proof. Unlike read_bytes(), the bounded
-        # helper cannot silently consume a concurrently growing file past the charged size.
         digest_before = _file_sha256_expected(source.path, stamp)
         if digest_before is None:
             rejects["source_changed"] += 1
@@ -137,8 +159,6 @@ def prove_candidate_zip_ownership(
         if verified is None:
             rejects[reason or "validation_rejected"] += 1
             continue
-        # Revalidation is part of the proof, so refuse it before reading if the same global
-        # physical-I/O account cannot pay for another exact stamped-size hash.
         if io_used + physical_size > int(max_io_bytes):
             rejects["io_budget"] += 1
             continue
