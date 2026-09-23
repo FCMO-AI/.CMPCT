@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+import os
+import random
+import stat
+import zipfile
+from pathlib import Path
+
+import pytest
+
+from cmpct.builder import Builder
+from cmpct.builder_hidden_zip import DeferredHiddenFile, finalize_deferred_hidden_files, surface_hidden_candidate
+from cmpct.codec import S_BLOB, S_PACK, S_VZIP, sha
+
+
+def _write_zip(path: Path, payload: bytes) -> None:
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("payload.bin", payload)
+
+
+def _defer(path: Path, rel: str) -> DeferredHiddenFile:
+    st = path.stat(); raw = path.read_bytes()
+    return DeferredHiddenFile(surface_hidden_candidate(rel, path, st, raw), stat.S_IMODE(st.st_mode), st.st_mtime_ns, path.suffix.lower())
+
+
+def _storage(builder: Builder) -> dict[str, list]:
+    return {row[0]: row[6] for row in builder.files if row[6] is not None}
+
+
+def test_finalize_hidden_winner_appends_vzip_row_from_surfaced_snapshot(tmp_path: Path) -> None:
+    payload = random.Random(101).randbytes(32 * 1024)
+    _write_zip(tmp_path / "owner.zip", payload)
+    builder = Builder(tmp_path); builder.scan()
+    assert _storage(builder)["owner.zip"][0] == S_VZIP
+
+    hidden = tmp_path / "document.bin"; _write_zip(hidden, payload); item = _defer(hidden, "document.bin")
+    result = finalize_deferred_hidden_files(builder, [item], min_verified_reuse=1)
+    row = next(row for row in builder.files if row[0] == "document.bin")
+    assert result.storage["document.bin"][0] == S_VZIP
+    assert row[6][0] == S_VZIP; assert row[4] == item.candidate.stamp[2]; assert row[5] == item.candidate.digest
+
+
+def test_finalize_hidden_loser_returns_through_inherited_blob_policy(tmp_path: Path) -> None:
+    builder = Builder(tmp_path); builder.scan()
+    hidden = tmp_path / "document.bin"; _write_zip(hidden, random.Random(102).randbytes(4096)); item = _defer(hidden, "document.bin")
+    result = finalize_deferred_hidden_files(builder, [item], min_verified_reuse=1)
+    row = next(row for row in builder.files if row[0] == "document.bin")
+    assert result.storage == {}; assert row[6][0] == S_BLOB
+    assert row[6][1] == sha(hidden.read_bytes()); assert row[5] == item.candidate.digest
+
+
+def test_finalize_spack_cannot_subsidize_hidden_and_loser_falls_back(tmp_path: Path) -> None:
+    payload = random.Random(103).randbytes(32 * 1024)
+    for i in range(8): _write_zip(tmp_path / f"owner-{i}.zip", payload)
+    builder = Builder(tmp_path); builder.scan()
+    assert all(_storage(builder)[f"owner-{i}.zip"][0] == S_PACK for i in range(8))
+
+    hidden = tmp_path / "document.bin"; _write_zip(hidden, payload); item = _defer(hidden, "document.bin")
+    result = finalize_deferred_hidden_files(builder, [item], min_verified_reuse=1)
+    assert result.storage == {}
+    assert _storage(builder)["document.bin"][0] == S_BLOB
+
+
+def test_finalize_refuses_source_drift_instead_of_pairing_old_metadata_with_new_bytes(tmp_path: Path) -> None:
+    builder = Builder(tmp_path); builder.scan()
+    hidden = tmp_path / "document.bin"; _write_zip(hidden, random.Random(104).randbytes(4096)); item = _defer(hidden, "document.bin")
+    replacement = tmp_path / "replacement.bin"; _write_zip(replacement, random.Random(105).randbytes(4096)); os.replace(replacement, hidden)
+    with pytest.raises(RuntimeError, match="changed before ordinary fallback"):
+        finalize_deferred_hidden_files(builder, [item], min_verified_reuse=1)
+    assert not any(row[0] == "document.bin" for row in builder.files)
