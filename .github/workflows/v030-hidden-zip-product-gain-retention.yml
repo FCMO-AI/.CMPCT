@@ -7,6 +7,7 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_hidden_zip_product_gain_retention.py'
+      - 'benchmarks/v030_hidden_zip_resource_gate.py'
       - 'src/cmpct/v030_hidden_zip_builder.py'
       - 'src/cmpct/builder_hidden_zip.py'
       - 'src/cmpct/hidden_zip*.py'
@@ -37,7 +38,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "${{ github.event_name }}" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD >/tmp/f
-          if grep -Eq '^(benchmarks/v030_hidden_zip_product_gain_retention\.py|src/cmpct/(v030_hidden_zip_builder|builder_hidden_zip|hidden_zip[^/]*|reuse_ownership|vzip_transaction)\.py|\.github/workflows/v030-hidden-zip-product-gain-retention\.yml)$' /tmp/f; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -Eq '^(benchmarks/v030_hidden_zip_(product_gain_retention|resource_gate)\.py|src/cmpct/(v030_hidden_zip_builder|builder_hidden_zip|hidden_zip[^/]*|reuse_ownership|vzip_transaction)\.py|\.github/workflows/v030-hidden-zip-product-gain-retention\.yml)$' /tmp/f; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
   evidence:
     needs: classify
     if: needs.classify.outputs.run_deep == 'true'
@@ -58,13 +59,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - run: python -m py_compile benchmarks/v030_hidden_zip_product_gain_retention.py src/cmpct/v030_hidden_zip_builder.py
+      - run: python -m py_compile benchmarks/v030_hidden_zip_product_gain_retention.py benchmarks/v030_hidden_zip_resource_gate.py src/cmpct/v030_hidden_zip_builder.py
       - run: python benchmarks/v030_hidden_zip_product_gain_retention.py --output benchmark-artifacts/hidden-zip-product.json
+      - run: python benchmarks/v030_hidden_zip_resource_gate.py --output benchmark-artifacts/hidden-zip-resource.json
       - run: python tools/check_ci_topology.py .github/workflows/v030-hidden-zip-product-gain-retention.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: v030-hidden-zip-product-gain-retention-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/hidden-zip-product.json
+          path: |
+            benchmark-artifacts/hidden-zip-product.json
+            benchmark-artifacts/hidden-zip-resource.json
           if-no-files-found: error
           retention-days: 90
