@@ -7,7 +7,7 @@ from pathlib import Path
 
 from cmpct.builder import Builder
 from cmpct.codec import K_HARDLINK, S_BLOB, S_PACK, S_VZIP
-import cmpct.v030_hidden_zip_builder as scan_seam
+import cmpct.builder_hidden_zip as hidden_api
 
 
 def _write_zip(path: Path, payload: bytes) -> None:
@@ -50,10 +50,10 @@ def test_scan_cohort_overflow_disables_whole_optional_lane_before_second_record(
     first = tmp_path / "a.docx"; second = tmp_path / "b.docx"
     _write_zip(first, random.Random(1).randbytes(8 * 1024))
     _write_zip(second, random.Random(2).randbytes(8 * 1024))
-    monkeypatch.setattr(scan_seam, "MAX_OBSERVATION_FILES", 1)
+    monkeypatch.setattr(hidden_api, "MAX_OBSERVATION_FILES", 1)
     def must_not_optimize(*_args, **_kwargs):
         raise AssertionError("overflowed hidden cohort must not enter proof/finalization")
-    monkeypatch.setattr(scan_seam, "finalize_deferred_hidden_files", must_not_optimize)
+    monkeypatch.setattr(hidden_api, "finalize_deferred_hidden_files", must_not_optimize)
     b = Builder(tmp_path); b.scan(); rows = _rows(b)
     assert rows["a.docx"][6][0] == S_BLOB
     assert rows["b.docx"][6][0] == S_BLOB
