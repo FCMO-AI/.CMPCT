@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Candidate v0.30 Builder scan seam for bounded hidden-ZIP discovery.
 
-This module deliberately patches only ``Builder.scan``.  The ordinary non-PK path is copied from the
+This module deliberately patches only ``Builder.scan``. The ordinary non-PK path is copied from the
 canonical implementation so hidden discovery cannot change its representation policy; explicit
 ``.zip``/``.whl`` files retain their independent cohort and therefore retain the S_PACK threshold.
 The patch lives separately while #205 is a draft so the product experiment is easy to delete if the
@@ -16,20 +16,23 @@ from pathlib import Path
 from .builder import Builder
 from .codec import *
 from .codec import _hash_sparse, _sparse_data_extents
+from .hidden_zip import MAX_OBSERVATION_FILES
 from .builder_hidden_zip import (
+    MAX_HIDDEN_SURFACE_AGGREGATE_BYTES,
     DeferredHiddenFile,
     finalize_deferred_hidden_files,
     finalize_hidden_fallback_only,
     hidden_candidate_size_can_stage,
-    hidden_cohort_within_surface_budget,
     surface_hidden_candidate,
 )
 
 
 def _scan_with_hidden_zip(self: Builder):
     virtual_ext={'.zip','.whl'};deferred=[];hidden_deferred=[]
+    hidden_surface_bytes=0;hidden_surface_overflow=False
 
     def walk(absdir:str,prefix:str=''):
+        nonlocal hidden_surface_bytes,hidden_surface_overflow
         with os.scandir(absdir) as it: entries=sorted(it,key=lambda e:e.name)
         for e in entries:
             rel=f'{prefix}/{e.name}' if prefix else e.name
@@ -56,13 +59,18 @@ def _scan_with_hidden_zip(self: Builder):
                 self.files.append([rel,K_FILE,mode,st.st_mtime_ns,st.st_size,_hash_sparse(st.st_size,sparse),[S_SPARSE,ex]]);continue
             with open(e.path,'rb') as fh:raw=fh.read()
 
-            # Hidden discovery is an optional side lane, never part of the explicit archive cohort.
-            # The size predicate is derived from the downstream immutable-snapshot resource contract.
-            # Normal non-PK files fall straight through to the inherited hot path below.
-            if raw.startswith(b'PK\x03\x04') and hidden_candidate_size_can_stage(len(raw)):
-                surfaced=surface_hidden_candidate(rel,p,st,raw)
-                hidden_deferred.append(DeferredHiddenFile(surfaced,mode,st.st_mtime_ns,ext))
-                continue
+            # Hidden discovery is optional and never part of the explicit archive cohort. Enforce the
+            # global cohort ceilings before allocating another deferred record: a bound downstream of
+            # an unbounded list would not actually bound hostile scan memory. Once overflow occurs the
+            # whole optional cohort is disabled, while this and later files use inherited storage now.
+            if raw.startswith(b'PK\x03\x04') and hidden_candidate_size_can_stage(len(raw)) and not hidden_surface_overflow:
+                next_bytes=hidden_surface_bytes+len(raw)
+                if len(hidden_deferred)<MAX_OBSERVATION_FILES and next_bytes<=MAX_HIDDEN_SURFACE_AGGREGATE_BYTES:
+                    surfaced=surface_hidden_candidate(rel,p,st,raw)
+                    hidden_deferred.append(DeferredHiddenFile(surfaced,mode,st.st_mtime_ns,ext))
+                    hidden_surface_bytes=next_bytes
+                    continue
+                hidden_surface_overflow=True
 
             if len(raw)>4*CHUNK and ext!='.wav':
                 parts=cdc_chunks(raw);entries=[[len(part),self.add_content(part,ext)] for part in parts]
@@ -90,13 +98,12 @@ def _scan_with_hidden_zip(self: Builder):
                 rid=len(self.recipes);self.recipes.append(recipe);storage=[S_VZIP,rid]
             rawsha=sha(p.read_bytes());self.files.append([rel,K_FILE,mode,st.st_mtime_ns,st.st_size,rawsha,storage])
 
-    # Optimize the whole surfaced cohort or none of it. A source/aggregate ceiling must not turn
-    # lexical traversal order into an admission policy by proving only a convenient prefix.
+    # Overflow is all-or-none: never let lexical traversal order choose the proof prefix. Candidates
+    # observed before overflow are returned through ordinary storage; candidates at/after overflow
+    # already took that same inherited path in the walker.
     if hidden_deferred:
-        if hidden_cohort_within_surface_budget(hidden_deferred):
-            finalize_deferred_hidden_files(self,hidden_deferred)
-        else:
-            finalize_hidden_fallback_only(self,hidden_deferred)
+        if hidden_surface_overflow:finalize_hidden_fallback_only(self,hidden_deferred)
+        else:finalize_deferred_hidden_files(self,hidden_deferred)
 
     if self.reproducible:
         for row in self.files:row[3]=self.reproducible_epoch_ns
