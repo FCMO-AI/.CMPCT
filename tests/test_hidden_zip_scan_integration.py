@@ -36,6 +36,22 @@ def test_scan_seven_explicit_plus_hidden_preserves_threshold_and_can_admit(tmp_p
     assert sum(row[6][0] == S_PACK for row in rows.values() if row[6]) == 0
 
 
+def test_integrated_hidden_admission_reduces_complete_archive_vs_forced_fallback(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "src"; root.mkdir()
+    hidden_bytes = _explicit_set(root, 7); (root / "hidden.docx").write_bytes(hidden_bytes)
+    admitted = tmp_path / "admitted.cmpct"; fallback = tmp_path / "fallback.cmpct"
+    Builder(root).build(admitted)
+
+    original = hidden_api.finalize_deferred_hidden_files
+    def force_fallback(builder, deferred, **_kwargs):
+        return original(builder, deferred, min_verified_reuse=10**18)
+    monkeypatch.setattr(hidden_api, "finalize_deferred_hidden_files", force_fallback)
+    Builder(root).build(fallback)
+
+    # Cheap causal falsifier only: the full held-matrix gate owns the >=9 MB product claim.
+    assert admitted.stat().st_size < fallback.stat().st_size
+
+
 def test_scan_eight_explicit_plus_hidden_preserves_spack_and_denies_subsidy(tmp_path: Path) -> None:
     hidden_bytes = _explicit_set(tmp_path, 8)
     (tmp_path / "hidden.docx").write_bytes(hidden_bytes)
