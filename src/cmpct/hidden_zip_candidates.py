@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .hidden_zip import (
-    MAX_CANDIDATE_LOGICAL_BYTES, MAX_OBSERVATION_ENTRIES, MAX_OBSERVATION_IO_BYTES,
+    MAX_CANDIDATE_LOGICAL_BYTES, MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES,
+    MAX_OBSERVATION_DESCRIPTORS, MAX_OBSERVATION_FILES, MAX_OBSERVATION_IO_BYTES,
     MAX_OBSERVATION_LOGICAL_BYTES, MIN_VERIFIED_REUSE, _file_sha256_expected,
     _metadata_descriptors, _stamp, _verify_candidate, hidden_zip_preflight,
 )
@@ -39,13 +40,22 @@ class CandidateOwnershipProof:
     rejects: tuple[tuple[str, int], ...]
 
 
+def _budget_refusal(reason: str, observed: int, io_bytes: int = 0, logical_bytes: int = 0) -> CandidateOwnershipProof:
+    """Reject the whole optional proof rather than bias ownership with a truncated prefix."""
+    return CandidateOwnershipProof(
+        frozenset(), {}, {}, {}, int(io_bytes), int(logical_bytes), ((reason, int(observed)),)
+    )
+
+
 def prove_candidate_zip_ownership(
     sources: tuple[ZipOwnerSource, ...] | list[ZipOwnerSource], *,
     min_verified_reuse: int = MIN_VERIFIED_REUSE,
     max_io_bytes: int = MAX_OBSERVATION_IO_BYTES,
     max_logical_bytes: int = MAX_OBSERVATION_LOGICAL_BYTES,
     max_candidate_logical_bytes: int = MAX_CANDIDATE_LOGICAL_BYTES,
-    max_sources: int = MAX_OBSERVATION_ENTRIES,
+    max_sources: int = MAX_OBSERVATION_FILES,
+    max_descriptors: int = MAX_OBSERVATION_DESCRIPTORS,
+    max_central_directory_bytes: int = MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES,
     excluded_owners: frozenset[str] = frozenset(),
 ) -> CandidateOwnershipProof:
     """Prove exact stream ownership only among Builder-surfaced candidates.
@@ -57,9 +67,7 @@ def prove_candidate_zip_ownership(
     # Check the caller-owned sequence length before tuple/set construction. The optional optimization
     # must fail closed without allocating another O(N) container for an already-hostile surfaced set.
     if len(sources) > int(max_sources):
-        return CandidateOwnershipProof(
-            frozenset(), {}, {}, {}, 0, 0, (("source_budget", len(sources)),)
-        )
+        return _budget_refusal("source_budget", len(sources))
     sources = tuple(sources)
     if len({s.rel for s in sources}) != len(sources):
         raise ValueError("candidate owner rel paths must be unique")
@@ -78,6 +86,7 @@ def prove_candidate_zip_ownership(
     parsed: list[tuple[ZipOwnerSource, set[tuple[int, int, int, int]], int]] = []
     metadata_owners: Counter[tuple[int, int, int, int]] = Counter()
     io_used = logical_used = declared_logical_used = 0
+    descriptor_used = central_directory_used = 0
     for source in sources:
         if source.rel not in source_physical: continue
         if source.rel in aliased:
@@ -86,13 +95,19 @@ def prove_candidate_zip_ownership(
         io_used += int(pf.head_bytes_read) + int(pf.tail_bytes_read)
         if not pf.eligible:
             rejects[pf.reason] += 1; continue
+        central_directory_used += int(pf.central_directory_size)
+        if central_directory_used > int(max_central_directory_bytes):
+            return _budget_refusal("central_directory_budget", central_directory_used, io_used, logical_used)
         parser_charge = int(pf.tail_bytes_read) + int(pf.central_directory_size)
         if io_used + parser_charge > int(max_io_bytes):
             rejects["io_budget"] += 1; continue
         io_used += parser_charge
-        descriptors, _entries, declared_logical, reason = _metadata_descriptors(source.path)
+        descriptors, entries, declared_logical, reason = _metadata_descriptors(source.path)
         if descriptors is None:
             rejects[reason or "exact_parse_rejected"] += 1; continue
+        descriptor_used += int(entries)
+        if descriptor_used > int(max_descriptors):
+            return _budget_refusal("descriptor_budget", descriptor_used, io_used, logical_used)
         if declared_logical > int(max_candidate_logical_bytes) or declared_logical_used + int(declared_logical) > int(max_logical_bytes):
             rejects["logical_work_budget"] += 1; continue
         declared_logical_used += int(declared_logical)
