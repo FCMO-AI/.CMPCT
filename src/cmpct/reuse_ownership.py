@@ -19,20 +19,33 @@ def realized_reuse_fixed_point(
     *,
     hidden_owners: Iterable[str],
     fixed_owners: Iterable[str] = (),
+    excluded_owners: Iterable[str] = (),
     min_verified_reuse: int,
 ) -> tuple[frozenset[str], dict[str, int]]:
     """Return stable realized owners and their final reusable-byte credit.
 
     ``fixed_owners`` are already-realized product owners (for example explicit
-    VZIP owners) and are never peeled. ``hidden_owners`` are optional owners;
-    they survive only while their reuse credit meets ``min_verified_reuse``.
+    VZIP owners) and are never peeled for economics. ``hidden_owners`` are
+    optional owners; they survive only while their reuse credit meets
+    ``min_verified_reuse``. ``excluded_owners`` are owners that failed a later
+    validation/staging gate and therefore must be removed before the economic
+    fixed point is recomputed. This makes a failed hidden stage unable to keep
+    another hidden owner alive through reuse credit.
+
     Identity byte cost is identity[1] (compressed size).
     """
     hidden = set(hidden_owners)
     fixed = set(fixed_owners)
+    excluded = set(excluded_owners)
     if hidden & fixed:
         raise ValueError("an owner cannot be both hidden and fixed")
-    active = hidden | fixed
+    if excluded & fixed:
+        raise ValueError("a fixed realized owner cannot be excluded")
+    unknown_excluded = excluded - hidden
+    if unknown_excluded:
+        raise ValueError("excluded owners must be hidden owners")
+
+    active = (hidden | fixed) - excluded
     normalized: dict[str, set[Identity]] = {
         owner: set(owner_identities.get(owner, ())) for owner in active
     }
@@ -48,7 +61,7 @@ def realized_reuse_fixed_point(
             for owner in owners:
                 credit[owner] += size
 
-    queue = deque(owner for owner in hidden if credit[owner] < int(min_verified_reuse))
+    queue = deque(owner for owner in hidden & active if credit[owner] < int(min_verified_reuse))
     queued = set(queue)
     while queue:
         owner = queue.popleft()
