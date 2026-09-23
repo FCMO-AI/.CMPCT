@@ -24,16 +24,30 @@ def test_stage_failure_cascades_and_discards_previously_staged_peer(tmp_path: Pa
     sources = [ZipOwnerSource("a.bin", a), ZipOwnerSource("b.bin", b)]
     proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1)
     assert proof.realized == frozenset({"a.bin", "b.bin"})
-
-    # Simulate a post-proof source/staging failure. a.bin may stage first, but b.bin's
-    # failure removes the only second owner, so a's speculative stage must not survive.
     b.unlink()
     cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=1)
-
     assert cohort.realized == frozenset()
     assert cohort.staged == {}
     assert cohort.excluded == frozenset({"b.bin"})
     assert cohort.retained_candidate_bytes == 0
+
+
+def test_post_proof_replacement_is_rejected_before_recipe_staging(tmp_path: Path) -> None:
+    """A changed path cannot turn the optional staging pass into a hostile decompression route."""
+    payload = _noise(23)
+    explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
+    _write_zip(explicit, payload); _write_zip(hidden, payload)
+    sources = [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("hidden.bin", hidden)]
+    proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1)
+    assert "hidden.bin" in proof.realized
+
+    # Replace the proven object after proof. The stage boundary must notice stamp/content drift
+    # before make_vzip_recipe sees the replacement bytes.
+    hidden.write_bytes(b"PK\x03\x04" + b"hostile-replacement" * 10000)
+    cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=1)
+    assert cohort.realized == frozenset({"owner.zip"})
+    assert cohort.excluded == frozenset({"hidden.bin"})
+    assert cohort.staged == {}
 
 
 def test_staging_memory_refusal_becomes_owner_exclusion_before_commit(tmp_path: Path) -> None:
@@ -43,14 +57,7 @@ def test_staging_memory_refusal_becomes_owner_exclusion_before_commit(tmp_path: 
     sources = [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("hidden.bin", hidden)]
     proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1)
     assert "hidden.bin" in proof.realized
-
-    cohort = stage_stable_hidden_cohort(
-        proof,
-        sources,
-        min_verified_reuse=1,
-        max_staged_candidate_bytes=1,
-    )
-
+    cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=1, max_staged_candidate_bytes=1)
     assert cohort.realized == frozenset({"owner.zip"})
     assert cohort.staged == {}
     assert cohort.excluded == frozenset({"hidden.bin"})
@@ -63,15 +70,9 @@ def test_successful_staging_retains_no_more_than_explicit_memory_ceiling(tmp_pat
     _write_zip(explicit, payload); _write_zip(hidden, payload)
     sources = [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("hidden.bin", hidden)]
     proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1)
-
     ceiling = 64 * 1024
-    cohort = stage_stable_hidden_cohort(
-        proof,
-        sources,
-        min_verified_reuse=1,
-        max_staged_candidate_bytes=ceiling,
-    )
-
+    cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=1, max_staged_candidate_bytes=ceiling)
     assert cohort.realized == frozenset({"owner.zip", "hidden.bin"})
     assert set(cohort.staged) == {"hidden.bin"}
     assert 0 < cohort.retained_candidate_bytes <= ceiling
+    assert cohort.source_bytes_read > 0
