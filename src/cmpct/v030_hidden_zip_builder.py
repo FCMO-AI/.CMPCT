@@ -103,4 +103,12 @@ def _scan_with_hidden_zip(self: Builder):
     self.files.sort(key=lambda x:x[0])
 
 
-Builder.scan=_scan_with_hidden_zip
+def install() -> None:
+    # Package initialization later wraps scan with release-locality enforcement. A reload of this draft
+    # module must not clobber that outer wrapper, so installation is one-shot on the Builder class.
+    if getattr(Builder,"_cmpct_v030_hidden_zip_scan_installed",False):return
+    Builder.scan=_scan_with_hidden_zip
+    Builder._cmpct_v030_hidden_zip_scan_installed=True
+
+
+install()
