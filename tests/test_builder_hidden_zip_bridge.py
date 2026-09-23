@@ -7,8 +7,11 @@ from pathlib import Path
 
 from cmpct.builder import Builder
 import cmpct.builder_hidden_zip as builder_hidden_zip
-from cmpct.builder_hidden_zip import SurfacedHiddenCandidate, ownership_sources_from_builder, read_surfaced_candidate, resolve_hidden_zip_candidates
-from cmpct.codec import S_PACK, S_VZIP, sha
+from cmpct.builder_hidden_zip import (
+    SurfacedHiddenCandidate, ordinary_storage_for_hidden_fallback, ownership_sources_from_builder,
+    read_surfaced_candidate, resolve_hidden_zip_candidates, surface_hidden_candidate,
+)
+from cmpct.codec import CHUNK, S_BLOB, S_CDC, S_PACK, S_VZIP, sha
 from cmpct.hidden_zip_candidates import prove_candidate_zip_ownership
 
 
@@ -73,8 +76,6 @@ def test_realized_explicit_owner_is_bound_to_bytes_builder_materialized(tmp_path
     payload = random.Random(91).randbytes(32 * 1024); explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
     _write_zip(explicit, payload); _write_zip(hidden, payload); builder = Builder(tmp_path); builder.scan()
     assert _storage(builder)["owner.zip"][0] == S_VZIP
-    # Change only container-level bytes. Member metadata/stream identity still matches the hidden ZIP,
-    # so only whole-container content binding can prevent this replaced path from acting as evidence.
     with zipfile.ZipFile(explicit, "a") as z: z.comment = b"replacement-container"
     proof = prove_candidate_zip_ownership(ownership_sources_from_builder(builder, [("hidden.bin", hidden)]), min_verified_reuse=1)
     assert "owner.zip" not in proof.source_states; assert "hidden.bin" not in proof.realized
@@ -83,7 +84,26 @@ def test_realized_explicit_owner_is_bound_to_bytes_builder_materialized(tmp_path
 
 def test_surfaced_hidden_fallback_read_requires_same_scan_snapshot(tmp_path: Path) -> None:
     hidden = tmp_path / "hidden.bin"; _write_zip(hidden, random.Random(93).randbytes(4096)); raw = hidden.read_bytes()
-    surfaced = SurfacedHiddenCandidate("hidden.bin", hidden, _stamp(hidden), sha(raw))
+    surfaced = surface_hidden_candidate("hidden.bin", hidden, hidden.stat(), raw)
+    assert surfaced == SurfacedHiddenCandidate("hidden.bin", hidden, _stamp(hidden), sha(raw))
     assert read_surfaced_candidate(surfaced) == raw
     replacement = tmp_path / "replacement.bin"; _write_zip(replacement, random.Random(94).randbytes(4096)); os.replace(replacement, hidden)
     assert read_surfaced_candidate(surfaced) is None
+
+
+def test_hidden_fallback_small_blob_policy_matches_canonical_ordinary_path(tmp_path: Path) -> None:
+    raw = b"ordinary-small" * 100
+    ordinary_root = tmp_path / "ordinary"; ordinary_root.mkdir(); (ordinary_root / "x.bin").write_bytes(raw)
+    canonical = Builder(ordinary_root); canonical.scan(); canonical_storage = _storage(canonical)["x.bin"]
+    fallback = Builder(tmp_path / "unused"); fallback_storage = ordinary_storage_for_hidden_fallback(fallback, raw, ".bin")
+    assert canonical_storage[0] == fallback_storage[0] == S_BLOB
+    assert canonical_storage[1] == fallback_storage[1] == sha(raw)
+
+
+def test_hidden_fallback_large_cdc_policy_matches_canonical_ordinary_path(tmp_path: Path) -> None:
+    raw = random.Random(95).randbytes(4 * CHUNK + 1)
+    ordinary_root = tmp_path / "ordinary"; ordinary_root.mkdir(); (ordinary_root / "x.bin").write_bytes(raw)
+    canonical = Builder(ordinary_root); canonical.scan(); canonical_storage = _storage(canonical)["x.bin"]
+    fallback = Builder(tmp_path / "unused"); fallback_storage = ordinary_storage_for_hidden_fallback(fallback, raw, ".bin")
+    assert canonical_storage[0] == fallback_storage[0] == S_CDC
+    assert canonical_storage[1] == fallback_storage[1]
