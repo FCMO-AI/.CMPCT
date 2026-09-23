@@ -3,6 +3,7 @@ from __future__ import annotations
 """Bridge canonical Builder storage outcomes into candidate-scoped hidden-ZIP proof."""
 
 from dataclasses import dataclass
+import hashlib
 import os
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from .hidden_zip_stage import (
 
 EXPLICIT_SUFFIXES = frozenset((".zip", ".whl"))
 MAX_HIDDEN_SURFACE_PHYSICAL_BYTES = min(MAX_STAGE_SOURCE_BYTES // 4, MAX_STAGED_CANDIDATE_BYTES // 2)
+FALLBACK_HASH_CHUNK = 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -44,13 +46,30 @@ def surface_hidden_candidate(rel: str, path: Path, st, raw: bytes) -> SurfacedHi
     return SurfacedHiddenCandidate(str(rel), Path(path), _stamp(st), sha(raw))
 
 
+def validate_surfaced_candidate(candidate: SurfacedHiddenCandidate) -> bool:
+    """Content-bind a fallback snapshot with bounded scratch memory before any winner commit."""
+    expected_size = int(candidate.stamp[2]); digest = hashlib.sha256(); read = 0
+    try:
+        with candidate.path.open("rb") as fh:
+            if _stamp(os.fstat(fh.fileno())) != candidate.stamp: return False
+            while read < expected_size:
+                block = fh.read(min(FALLBACK_HASH_CHUNK, expected_size - read))
+                if not block: return False
+                digest.update(block); read += len(block)
+            if fh.read(1): return False
+            if _stamp(os.fstat(fh.fileno())) != candidate.stamp: return False
+    except OSError:
+        return False
+    return read == expected_size and digest.digest() == candidate.digest
+
+
 def read_surfaced_candidate(candidate: SurfacedHiddenCandidate) -> bytes | None:
     expected_size = int(candidate.stamp[2])
     try:
         with candidate.path.open("rb") as fh:
             if _stamp(os.fstat(fh.fileno())) != candidate.stamp: return None
             raw = fh.read(expected_size)
-            if len(raw) != expected_size: return None
+            if len(raw) != expected_size or fh.read(1): return None
             if _stamp(os.fstat(fh.fileno())) != candidate.stamp: return None
     except OSError:
         return None
@@ -75,13 +94,6 @@ def _append_fallback_row(builder, item: DeferredHiddenFile, raw: bytes) -> None:
 
 
 def finalize_hidden_fallback_only(builder, deferred) -> None:
-    """Disable optional discovery without turning overflow into a product failure.
-
-    Builder can call this for the bounded prefix already deferred when the source-count ceiling is
-    crossed. Each source is reread once and returned to inherited ordinary storage; future candidates
-    should stay on the normal hot path. This avoids running proof on a biased prefix and avoids an
-    extra validation pass when the optimization has already been disabled.
-    """
     for item in deferred:
         raw = read_surfaced_candidate(item.candidate)
         if raw is None:
@@ -148,7 +160,7 @@ def finalize_deferred_hidden_files(
     builder, deferred: tuple[DeferredHiddenFile, ...] | list[DeferredHiddenFile], *,
     min_verified_reuse: int = MIN_VERIFIED_REUSE,
 ) -> HiddenZipResolution:
-    """Finalize a bounded discovery cohort with O(max-candidate) fallback snapshot memory."""
+    """Finalize a bounded discovery cohort with bounded fallback-validation scratch memory."""
     deferred = tuple(deferred)
     if len(deferred) > MAX_OBSERVATION_FILES:
         raise ValueError("hidden discovery cohort exceeds source ceiling; use fallback-only path")
@@ -158,7 +170,7 @@ def finalize_deferred_hidden_files(
     winner_rels = set(prepared.cohort.staged)
     losers = [item for item in deferred if item.candidate.rel not in winner_rels]
     for item in losers:
-        if read_surfaced_candidate(item.candidate) is None:
+        if not validate_surfaced_candidate(item.candidate):
             raise RuntimeError(f"hidden candidate changed before ordinary fallback: {item.candidate.rel}")
 
     storage = commit_stable_hidden_cohort(builder, prepared.cohort)
