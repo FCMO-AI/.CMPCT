@@ -14,6 +14,9 @@ from .vzip_transaction import StagedVzipRecipe, commit_staged_vzip, stage_vzip_r
 
 MAX_STAGED_CANDIDATE_BYTES = 256 * 1024 * 1024
 MAX_STAGE_SOURCE_BYTES = 256 * 1024 * 1024
+# Conservative whole-container-equivalent source-I/O charge: hash-before (1), metadata peak-bound
+# parser (1), recipe construction (up to 2: original snapshot + ZIP parser/member reads), hash-after (1).
+STAGE_SOURCE_PASSES = 5
 STAGE_REJECTS = (OSError, ValueError, RuntimeError, struct.error, zipfile.BadZipFile)
 
 
@@ -47,7 +50,6 @@ def stage_stable_hidden_cohort(
     min_verified_reuse: int, max_staged_candidate_bytes: int = MAX_STAGED_CANDIDATE_BYTES,
     max_stage_source_bytes: int = MAX_STAGE_SOURCE_BYTES,
 ) -> StagedHiddenCohort:
-    """Stage hidden winners without mutating Builder, then peel failures to stability."""
     sources = tuple(sources); source_by_rel = {source.rel: source for source in sources}
     if len(source_by_rel) != len(sources): raise ValueError("candidate owner rel paths must be unique")
     fixed = {rel for rel, source in source_by_rel.items() if source.fixed and rel in proof.owner_identities}
@@ -58,34 +60,26 @@ def stage_stable_hidden_cohort(
         source = source_by_rel.get(rel); state = proof.source_states.get(rel)
         if source is None or state is None:
             excluded.add(rel); continue
-        physical_size = int(state[0][2])
-        # Staging performs hash-before, a metadata pre-bound pass, recipe construction, and hash-after.
-        # Charge each as at most one physical-container read. This deliberately overcharges the central
-        # directory pass rather than adding an unaccounted read while claiming a finite source-I/O cap.
-        required = physical_size * 4
+        physical_size = int(state[0][2]); required = physical_size * STAGE_SOURCE_PASSES
         if required > int(max_stage_source_bytes) - source_read:
             excluded.add(rel); continue
         current, read = _source_current(source, proof); source_read += read
         if not current:
             excluded.add(rel); continue
-        # Bound retained raw+stream+skeleton state *before* make_vzip_recipe can materialize decoded
-        # members. The previous post-stage check bounded steady retained state but not transient peak RSS.
         remaining_retained = int(max_staged_candidate_bytes) - retained
         try:
             candidate = stage_vzip_recipe(source.path, max_retained_bytes=max(0, remaining_retained))
         except STAGE_REJECTS:
             candidate = None
-        # Conservatively account the metadata pre-bound and recipe-construction passes separately.
-        source_read += physical_size * 2
+        # Charge the pre-bound parser as one P and recipe construction as two P. This intentionally
+        # overcharges cached/repeated bytes; the budget is a safety ceiling, not a throughput estimate.
+        source_read += physical_size * 3
         if candidate is None:
             excluded.add(rel); continue
         current, read = _source_current(source, proof); source_read += read
         if not current:
             excluded.add(rel); continue
         cost = _retained_bytes(candidate)
-        # Keep the postcondition even though the metadata pre-bound should imply it. Two differently
-        # rooted checks make a future recipe implementation change fail closed rather than silently
-        # invalidating the staging-memory contract.
         if cost > remaining_retained:
             excluded.add(rel); continue
         staged[rel] = candidate; retained += cost
@@ -100,7 +94,6 @@ def stage_stable_hidden_cohort(
 
 
 def commit_stable_hidden_cohort(builder, cohort: StagedHiddenCohort) -> dict[str, list]:
-    """Commit only a fully staged stable cohort; canonical Builder still owns file-table rows."""
     storage: dict[str, list] = {}
     for rel in sorted(cohort.staged):
         recipe = commit_staged_vzip(cohort.staged[rel], builder.add_content)
