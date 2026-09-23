@@ -58,7 +58,11 @@ def stage_stable_hidden_cohort(
         source = source_by_rel.get(rel); state = proof.source_states.get(rel)
         if source is None or state is None:
             excluded.add(rel); continue
-        physical_size = int(state[0][2]); required = physical_size * 3
+        physical_size = int(state[0][2])
+        # Staging performs hash-before, a metadata pre-bound pass, recipe construction, and hash-after.
+        # Charge each as at most one physical-container read. This deliberately overcharges the central
+        # directory pass rather than adding an unaccounted read while claiming a finite source-I/O cap.
+        required = physical_size * 4
         if required > int(max_stage_source_bytes) - source_read:
             excluded.add(rel); continue
         current, read = _source_current(source, proof); source_read += read
@@ -71,7 +75,8 @@ def stage_stable_hidden_cohort(
             candidate = stage_vzip_recipe(source.path, max_retained_bytes=max(0, remaining_retained))
         except STAGE_REJECTS:
             candidate = None
-        source_read += physical_size
+        # Conservatively account the metadata pre-bound and recipe-construction passes separately.
+        source_read += physical_size * 2
         if candidate is None:
             excluded.add(rel); continue
         current, read = _source_current(source, proof); source_read += read
