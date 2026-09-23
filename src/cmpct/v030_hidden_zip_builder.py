@@ -107,6 +107,10 @@ def install() -> None:
     # Package initialization later wraps scan with release-locality enforcement. A reload of this draft
     # module must not clobber that outer wrapper, so installation is one-shot on the Builder class.
     if getattr(Builder,"_cmpct_v030_hidden_zip_scan_installed",False):return
+    # Keep the exact inherited method as a private experiment control. This is not a second product
+    # policy: it lets mechanism-bearing evidence compare the same Builder implementation with only the
+    # hidden seam toggled, instead of importing a historical research subclass or reconstructing code.
+    Builder._cmpct_v030_authority_scan=Builder.scan
     Builder.scan=_scan_with_hidden_zip
     Builder._cmpct_v030_hidden_zip_scan_installed=True
 
