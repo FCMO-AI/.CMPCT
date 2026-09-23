@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Candidate-scoped proof for hidden-ZIP reuse ownership.
 
-This is the shipping-side replacement for root-level discovery.  Canonical Builder owns
+This is the shipping-side replacement for root-level discovery. Canonical Builder owns
 filesystem traversal and representation selection; this module receives only owners Builder
 has already surfaced and never walks the tree itself.
 """
@@ -10,15 +10,15 @@ has already surfaced and never walks the tree itself.
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-import hashlib
 
 from .hidden_zip import (
-    LOCAL_HEADER_BYTES,
     MAX_CANDIDATE_LOGICAL_BYTES,
     MAX_OBSERVATION_IO_BYTES,
     MAX_OBSERVATION_LOGICAL_BYTES,
     MIN_VERIFIED_REUSE,
+    _file_sha256_expected,
     _metadata_descriptors,
+    _stamp,
     _verify_candidate,
     hidden_zip_preflight,
 )
@@ -30,7 +30,7 @@ class ZipOwnerSource:
     """One Builder-surfaced physical owner.
 
     ``fixed`` means canonical Builder already materialized this owner as an individual
-    S_VZIP.  Non-fixed sources are tentative hidden owners.  S_PACK members and explicit
+    S_VZIP. Non-fixed sources are tentative hidden owners. S_PACK members and explicit
     fallback blobs must never be supplied as fixed sources.
     """
 
@@ -60,9 +60,9 @@ def prove_candidate_zip_ownership(
 ) -> CandidateOwnershipProof:
     """Prove exact stream ownership only among Builder-surfaced candidates.
 
-    Metadata is only a cheap necessary-condition filter.  Reuse credit comes exclusively
+    Metadata is only a cheap necessary-condition filter. Reuse credit comes exclusively
     from validated exact compressed-stream identities and is then solved over realized
-    owners.  Any budget or structural failure removes that source from the proof rather
+    owners. Any budget or structural failure removes that source from the proof rather
     than partially admitting it.
     """
 
@@ -73,7 +73,7 @@ def prove_candidate_zip_ownership(
     rejects: Counter[str] = Counter()
     parsed: list[tuple[ZipOwnerSource, set[tuple[int, int, int, int]], int]] = []
     metadata_owners: Counter[tuple[int, int, int, int]] = Counter()
-    io_used = logical_used = 0
+    io_used = logical_used = declared_logical_used = 0
 
     for source in sources:
         pf = hidden_zip_preflight(source.path, max_read_bytes=max(0, int(max_io_bytes) - io_used))
@@ -95,6 +95,10 @@ def prove_candidate_zip_ownership(
         if declared_logical > int(max_candidate_logical_bytes):
             rejects["logical_work_budget"] += 1
             continue
+        if declared_logical_used + int(declared_logical) > int(max_logical_bytes):
+            rejects["logical_work_budget"] += 1
+            continue
+        declared_logical_used += int(declared_logical)
         parsed.append((source, set(descriptors), parser_charge))
         metadata_owners.update(descriptors)
 
@@ -109,18 +113,19 @@ def prove_candidate_zip_ownership(
             accepted_sources[source.rel] = source
             continue
         try:
-            physical_size = int(source.path.stat().st_size)
+            st = source.path.stat()
+            stamp = _stamp(st)
+            physical_size = int(st.st_size)
         except OSError:
             rejects["source_changed"] += 1
             continue
         if io_used + physical_size + parser_charge > int(max_io_bytes):
             rejects["io_budget"] += 1
             continue
-        # Content-bind the source before exact-stream proof. Builder will later revalidate
-        # its own source identity before commit; this digest prevents a path-only proof.
-        try:
-            digest_before = hashlib.sha256(source.path.read_bytes()).digest()
-        except OSError:
+        # Hash exactly the stamped object before proof. Unlike read_bytes(), the bounded
+        # helper cannot silently consume a concurrently growing file past the charged size.
+        digest_before = _file_sha256_expected(source.path, stamp)
+        if digest_before is None:
             rejects["source_changed"] += 1
             continue
         io_used += physical_size + parser_charge
@@ -132,18 +137,14 @@ def prove_candidate_zip_ownership(
         if verified is None:
             rejects[reason or "validation_rejected"] += 1
             continue
-        try:
-            digest_after = hashlib.sha256(source.path.read_bytes()).digest()
-        except OSError:
-            rejects["source_changed"] += 1
-            continue
-        # Charge the revalidation read too. A proof that cannot afford content binding is
-        # not allowed to become product ownership evidence.
-        io_used += physical_size
-        if io_used > int(max_io_bytes):
+        # Revalidation is part of the proof, so refuse it before reading if the same global
+        # physical-I/O account cannot pay for another exact stamped-size hash.
+        if io_used + physical_size > int(max_io_bytes):
             rejects["io_budget"] += 1
             continue
-        if digest_after != digest_before:
+        digest_after = _file_sha256_expected(source.path, stamp)
+        io_used += physical_size
+        if digest_after is None or digest_after != digest_before:
             rejects["source_changed"] += 1
             continue
         identities = frozenset(identity for group in verified.values() for identity in group)
