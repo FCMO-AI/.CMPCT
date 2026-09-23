@@ -78,7 +78,7 @@ def test_surface_size_filter_is_derived_from_downstream_hard_caps() -> None:
     assert not hidden_candidate_size_can_stage(MAX_HIDDEN_SURFACE_PHYSICAL_BYTES + 1)
     assert not hidden_candidate_size_can_stage(-1)
     assert MAX_HIDDEN_SURFACE_PHYSICAL_BYTES == min(
-        builder_hidden_zip.MAX_STAGE_SOURCE_BYTES // 4,
+        builder_hidden_zip.MAX_STAGE_SOURCE_BYTES // builder_hidden_zip.STAGE_SOURCE_PASSES,
         builder_hidden_zip.MAX_STAGED_CANDIDATE_BYTES // 2,
     )
 
