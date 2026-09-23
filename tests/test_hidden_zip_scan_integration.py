@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import random
 import zipfile
 from pathlib import Path
 
@@ -18,9 +19,12 @@ def _rows(builder: Builder) -> dict[str, list]:
 
 
 def _explicit_set(root: Path, count: int) -> bytes:
-    shared = b"shared-hidden-owner-" * 4096
+    # Deterministic high-entropy content keeps the exact shared Deflate stream comfortably above the
+    # 2176-byte economic reuse floor; the test therefore exercises ownership rather than tiny-stream
+    # rejection.
+    shared = random.Random(0xC0DEC7).randbytes(32 * 1024)
     for i in range(count):
-        payload = shared if i == 0 else (f"owner-{i}-".encode() * 4096)
+        payload = shared if i == 0 else random.Random(i + 100).randbytes(8 * 1024)
         _write_zip(root / f"explicit-{i}.zip", payload)
     return (root / "explicit-0.zip").read_bytes()
 
