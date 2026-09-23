@@ -25,18 +25,15 @@ class SurfacedHiddenCandidate:
 
 def read_surfaced_candidate(candidate: SurfacedHiddenCandidate) -> bytes | None:
     """Return fallback bytes only if the exact Builder-surfaced source object is still present."""
-    remaining = int(candidate.stamp[2]); chunks: list[bytes] = []
+    expected_size = int(candidate.stamp[2])
     try:
         with candidate.path.open("rb") as fh:
             if _stamp(os.fstat(fh.fileno())) != candidate.stamp: return None
-            while remaining:
-                chunk = fh.read(min(1024 * 1024, remaining))
-                if not chunk: return None
-                chunks.append(chunk); remaining -= len(chunk)
+            raw = fh.read(expected_size)
+            if len(raw) != expected_size: return None
             if _stamp(os.fstat(fh.fileno())) != candidate.stamp: return None
     except OSError:
         return None
-    raw = b"".join(chunks)
     return raw if sha(raw) == candidate.digest else None
 
 
@@ -66,8 +63,6 @@ def ownership_sources_from_builder(
         rel, kind, _mode, _mtime, _size, digest, storage = row
         if kind != K_FILE or not storage or storage[0] != S_VZIP: continue
         if Path(rel).suffix.lower() not in EXPLICIT_SUFFIXES: continue
-        # Bind evidence to the exact container Builder already materialized, not whatever bytes a
-        # mutable path happens to contain later during hidden discovery.
         sources.append(ZipOwnerSource(rel, Path(builder.root) / rel, fixed=True, expected_digest=bytes(digest)))
 
     fixed_rels = {source.rel for source in sources}
