@@ -1,28 +1,27 @@
 {
-  "schema": "cmpct-discovery-state-v1",
-  "status": "ACTIVE",
-  "authority": {"canonical_release":"v0.29.0 / r24 on main","active_frontier":"agent/v030-authoritative-integration","source":"repository, PR and exact-head run truth outrank this staleable cache"},
-  "active_product_bottleneck": {
+  "schema":"cmpct-discovery-state-v1",
+  "status":"ACTIVE",
+  "authority":{"canonical_release":"v0.29.0 / r24 on main","active_frontier":"agent/v030-authoritative-integration","source":"repository, PR and exact-head run truth outrank this staleable cache"},
+  "active_product_bottleneck":{
     "id":"hidden-zip-information-yield-productization",
-    "observation":"#201 established -9,370,622 B held-matrix research gain with zero byte regressions. Draft #205 is the sole productization lane. Candidate proof, realized-owner economics, Builder S_VZIP provenance, snapshot binding, pre-allocation staging peak bounds, ordinary BLOB/CDC fallback parity, and pre-commit loser validation are executable. Canonical Builder still does not surface hidden candidates, so no product byte credit is earned.",
-    "next_discriminator":"Implement the now-small canonical Builder surfacing seam: bounded non-explicit PK candidates only; explicit ZIP/WHL cohort unchanged; finalize_deferred_hidden_files after explicit resolution."
+    "observation":"#201 established -9,370,622 B held-matrix research gain with zero byte regressions. Draft #205 is the sole productization lane. Exact ownership, realized-owner economics, Builder S_VZIP provenance, bounded private staging snapshots, ordinary fallback parity and whole-cohort commit are executable. Canonical Builder still does not surface hidden candidates, so no product byte credit is earned.",
+    "next_discriminator":"After exact-head snapshot CI, implement the narrow canonical Builder surfacing seam: bounded non-explicit PK candidates only; explicit ZIP/WHL cohort unchanged; finalize_deferred_hidden_files after explicit resolution."
   },
-  "primary_question": {
-    "id":"generic-hidden-zip-admission","family":"representation-discovery+execution","status":"FINALIZATION_BOUNDARY_LANDED_BUILDER_SURFACING_NEXT",
-    "hypothesis":"Generic hidden ZIP/OOXML reuse can retain #201's structural byte gain if Builder surfaces hidden candidates during its existing scan, proof is exact to the surfaced snapshot, and only representations that actually survive selection subsidize reuse.",
+  "primary_question":{
+    "id":"generic-hidden-zip-admission","family":"representation-discovery+execution","status":"IMMUTABLE_STAGING_SNAPSHOT_LANDED_BUILDER_SURFACING_NEXT",
+    "hypothesis":"Generic hidden ZIP/OOXML reuse can retain #201's structural byte gain if Builder surfaces hidden candidates during its existing scan, proof is exact to the surfaced snapshot, parser/staging consumes a private content-bound copy, and only representations that actually survive selection subsidize reuse.",
     "evidence":[
       "#201 / 35719088885 / 10690274379: 181,603,782 -> 172,233,160 B (-9,370,622 B), zero regressed rows, five Office admissions",
       "#200 / 35703345978: full traversal fusion failed final-form CPU+wall improvement and remains retired",
-      "724c0cf4 / 35836156382 + 35836156385: full tests and unchanged r24 gate green; artifact 10740030860, sha256 6c4c73a1da0116a5297957ef050769a694ffceb05370be754851b7dde42eb15b; Builder still did not execute hidden discovery",
-      "661f94e9 / 35829736400 / 10737321372: byte-identical ABBA but timing red while Builder still did not execute hidden discovery; preserve as non-causal product-floor evidence",
-      "7e10597d: staging pre-bound covers transient original-container coexistence as 2*physical + declared logical before recipe construction; source-I/O account charges metadata pre-bound as a fourth pass",
-      "075ea8d2: hidden finalization validates all loser snapshots before committing prepared winners; ordinary fallback helper is parity-tested against canonical BLOB and CDC decisions; exact-head CI pending"
+      "724c0cf4 / 35836156382 + 35836156385: full tests and unchanged r24 gate green before final substrate hardening",
+      "3f31a82a / 35841706154 + 35841706047: full tests and unchanged r24 gate green; Builder still did not execute hidden discovery",
+      "7204c923: staging now copies the proven source through stamp+digest validation into a private temp object; ZIP metadata parsing and recipe construction consume only that snapshot; source read, temp write and conservative temp reads are separately accounted; exact-head CI pending"
     ],
     "prediction":"The remaining Builder edit can be a narrow surfacing/call seam while normal non-PK hot-path code remains structurally unchanged.",
-    "kill":"Any exactness failure, explicit-cohort perturbation, byte regression, unbounded hostile work, false reuse credit, fallback-policy drift, or confirmed create/extract/RSS/locality debt blocks or narrows promotion."
+    "kill":"Any exactness failure, explicit-cohort perturbation, byte regression, unbounded hostile work, false reuse credit, fallback-policy drift, or confirmed create/extract/RSS/temp-I/O/locality debt blocks or narrows promotion."
   },
   "frontier_candidates":[
-    {"id":"hidden-zip-productization","family":"representation-discovery+execution","status":"ACTIVE_PR_205","evidence":"code head 075ea8d2; finalization boundary landed; canonical Builder surfacing seam open"},
+    {"id":"hidden-zip-productization","family":"representation-discovery+execution","status":"ACTIVE_PR_205","evidence":"code head 7204c923; immutable staging snapshot landed; canonical Builder surfacing seam open"},
     {"id":"r25-publishability-pruning","family":"execution-architecture","status":"ADJACENT","evidence":"#194; ML +116 B pre-overlay becomes -161843 B winner, mandatory hostile"},
     {"id":"serious-corpus-efficiency","family":"product-efficiency","status":"QUEUED","evidence":"#192"}
   ],
@@ -31,29 +30,30 @@
     {"family":"content-ZIP traversal fusion","reason":"#200 / 35703345978 failed final-form CPU+wall improvement gate"},
     {"family":"raw 0..9 Deflate level search","reason":"#196/#199 establish stronger bounded-regret exact search"}
   ],
-  "decision_evidence": {
+  "decision_evidence":{
     "hidden_zip_information_yield":"#201 / 35719088885 / 10690274379: -9,370,622 B, zero regressed rows, five Office admissions",
     "owner_fixed_point":"cc6dabb + 13a2b837: fixed-point ownership and failed-stage cascade semantics",
     "candidate_scoped_boundary":"616fb798: no root walk in product proof boundary; physical alias rejection, bounded content binding and staging",
     "composed_builder_bridge":"661f94e9: actual Builder S_VZIP provenance -> proof -> stable stage -> commit",
     "scan_snapshot_binding":"14570203: hidden owner stamp+digest and explicit Builder-row digest bind proof to surfaced/materialized bytes",
-    "staging_peak_bound":"7e10597d: pre-allocation bound is 2*container bytes + declared logical bytes, with four-pass conservative source-I/O charge",
+    "staging_peak_bound":"3f31a82a: pre-allocation 4*physical + declared-logical dominant-buffer bound and five-pass conservative staging-I/O ceiling",
+    "immutable_staging_snapshot":"7204c923: source is copied with fd stamp+digest binding; parser/recipe operate only on private snapshot; source/temp I/O is explicit",
     "fallback_parity":"73dae218: hidden loser helper reproduces inherited ordinary BLOB and large-file CDC storage decisions",
     "finalization_transaction":"075ea8d2: all loser snapshots validate before prepared winner commit; late loser drift leaves recipes/candidates/file rows untouched",
-    "surface_impossibility_bound":"0e878372: candidates above min(stage-source/4, stage-peak/2) cannot survive downstream hard caps and need not enter optional discovery",
-    "latest_nonintegrated_green":"724c0cf4 / 35836156382 + 35836156385: correctness and unchanged r24 product floor green before newest substrate hardening",
+    "latest_nonintegrated_green":"3f31a82a / 35841706154 + 35841706047: correctness and unchanged r24 product floor green; hidden Builder seam absent",
     "scaffolding_timing_red":"661f94e9 / 35829736400 / 10737321372: bytes identical, combined create -1.03%, binary +17.09%, nested +9.94%; non-causal because Builder seam absent"
   },
   "process_lessons":[
     {"lesson":"Measure final admitted archive before optimizing isolated search microbenchmarks.","evidence":"#199"},
     {"lesson":"Representation eligibility and physical ownership differ; reuse economics require owners that actually survive selection.","evidence":"#205 ownership controls"},
-    {"lesson":"A memory/resource ceiling must reject before the allocation it claims to bound; post-allocation retained state is not peak memory.","evidence":"7e10597d"},
+    {"lesson":"A memory/resource ceiling must reject before the allocation it claims to bound; post-allocation retained state is not peak memory.","evidence":"3f31a82a"},
+    {"lesson":"A parser resource bound requires immutable consumed bytes; repeated mutable-path checks protect correctness but cannot make race-time allocation bounds true.","evidence":"7204c923"},
     {"lesson":"Validate every fallback snapshot before committing any speculative winner so a late race cannot leave partial optimization state.","evidence":"075ea8d2"}
   ],
   "pending_jobs":[
-    {"provider":"github-actions","run":"35841043276","source_sha":"075ea8d2f56de8b1abcfc5ac86b71e31ea342576","question":"exact-head regression after finalization transaction","expected":"full correctness artifact"},
-    {"provider":"github-actions","run":"35841043145","source_sha":"075ea8d2f56de8b1abcfc5ac86b71e31ea342576","question":"unchanged r24 floor before Builder execution seam","expected":"ABBA receipt; no hidden product credit"}
+    {"provider":"github-actions","run":"35846430104","source_sha":"7204c92356e9e0811139b59f3241144e4ef723c8","question":"exact-head regression after immutable staging snapshot","expected":"full correctness artifact"},
+    {"provider":"github-actions","run":"35846429946","source_sha":"7204c92356e9e0811139b59f3241144e4ef723c8","question":"unchanged r24 floor before Builder execution seam","expected":"ABBA receipt; no hidden product credit"}
   ],
-  "next_action":"Edit canonical Builder.scan only: keep sparse/hardlink and explicit .zip/.whl handling unchanged; after the existing ordinary raw read, defer only non-explicit raw starting PK\\x03\\x04 whose physical size satisfies hidden_candidate_size_can_stage, recording DeferredHiddenFile(surface_hidden_candidate(...), mode, mtime, ext). Do not alter the normal non-PK BLOB/CDC hot path. Resolve explicit archives unchanged, then call finalize_deferred_hidden_files before reproducible mtime normalization. On surfaced-source overflow, disable optional discovery for the bounded collected cohort rather than optimize a biased prefix. Add integrated scan-level 7/8-explicit, fallback, sparse/hardlink, mutation and reproducible controls, then buy Office/full-product evidence.",
-  "last_reconciled":"2026-09-23T09:07Z"
+  "next_action":"Consume exact-head snapshot correctness first. Then edit canonical Builder.scan only: preserve sparse/hardlink and explicit .zip/.whl behavior; after the existing ordinary raw read, defer only bounded non-explicit raw starting PK\\x03\\x04 as DeferredHiddenFile(surface_hidden_candidate(...), mode, mtime, ext). Do not alter normal non-PK BLOB/CDC hot-path structure. Resolve explicit archives unchanged, then finalize_deferred_hidden_files before reproducible mtime normalization; overflow takes fallback-only path. Add integrated scan-level 7/8-explicit, fallback, sparse/hardlink, mutation and reproducible controls, then buy Office/full-product evidence.",
+  "last_reconciled":"2026-09-23T10:09Z"
 }
