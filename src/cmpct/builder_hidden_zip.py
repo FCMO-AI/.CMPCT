@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .codec import K_FILE, S_VZIP
-from .hidden_zip import MIN_VERIFIED_REUSE
+from .hidden_zip import MAX_OBSERVATION_FILES, MIN_VERIFIED_REUSE
 from .hidden_zip_candidates import CandidateOwnershipProof, ZipOwnerSource, prove_candidate_zip_ownership
 from .hidden_zip_stage import StagedHiddenCohort, commit_stable_hidden_cohort, stage_stable_hidden_cohort
 
@@ -33,6 +33,10 @@ def ownership_sources_from_builder(
     merely parseable ZIPs are absent by construction. Hidden candidates are supplied separately,
     so they cannot change the explicit ZIP/WHL cohort cardinality that chooses S_PACK.
     """
+    # Builder will eventually enforce this while surfacing candidates, but keep the bridge itself
+    # fail-closed: a hostile caller must not trigger another tuple/set allocation before proof limits.
+    if len(hidden_candidates) > MAX_OBSERVATION_FILES:
+        return ()
     hidden_candidates = tuple(hidden_candidates)
     hidden_rels = {rel for rel, _path in hidden_candidates}
     if len(hidden_rels) != len(hidden_candidates):
