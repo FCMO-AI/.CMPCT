@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import random
 import zipfile
 from pathlib import Path
@@ -25,10 +26,7 @@ def test_candidate_scoped_proof_uses_realized_explicit_vzip_owner(tmp_path: Path
     _write_zip(hidden, payload)
 
     proof = prove_candidate_zip_ownership(
-        [
-            ZipOwnerSource("owner.zip", explicit, fixed=True),
-            ZipOwnerSource("document.bin", hidden),
-        ],
+        [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("document.bin", hidden)],
         min_verified_reuse=2176,
     )
 
@@ -39,33 +37,19 @@ def test_candidate_scoped_proof_uses_realized_explicit_vzip_owner(tmp_path: Path
 
 
 def test_candidate_scoped_proof_does_not_invent_fixed_ownership(tmp_path: Path) -> None:
-    """Without a realized explicit owner, one hidden candidate cannot subsidize itself."""
     hidden = tmp_path / "document.bin"
     _write_zip(hidden, _noise(2))
-
-    proof = prove_candidate_zip_ownership(
-        [ZipOwnerSource("document.bin", hidden)],
-        min_verified_reuse=1,
-    )
-
+    proof = prove_candidate_zip_ownership([ZipOwnerSource("document.bin", hidden)], min_verified_reuse=1)
     assert proof.realized == frozenset()
     assert proof.credit == {}
 
 
 def test_candidate_scoped_exclusion_cascades_after_stage_failure(tmp_path: Path) -> None:
-    """A failed hidden stage is removed before another hidden owner may use its credit."""
     payload = _noise(3)
-    a = tmp_path / "a.bin"
-    b = tmp_path / "b.bin"
-    _write_zip(a, payload)
-    _write_zip(b, payload)
-
-    initial = prove_candidate_zip_ownership(
-        [ZipOwnerSource("a.bin", a), ZipOwnerSource("b.bin", b)],
-        min_verified_reuse=1,
-    )
+    a = tmp_path / "a.bin"; b = tmp_path / "b.bin"
+    _write_zip(a, payload); _write_zip(b, payload)
+    initial = prove_candidate_zip_ownership([ZipOwnerSource("a.bin", a), ZipOwnerSource("b.bin", b)], min_verified_reuse=1)
     assert initial.realized == frozenset({"a.bin", "b.bin"})
-
     after_failure = prove_candidate_zip_ownership(
         [ZipOwnerSource("a.bin", a), ZipOwnerSource("b.bin", b)],
         min_verified_reuse=1,
@@ -76,35 +60,39 @@ def test_candidate_scoped_exclusion_cascades_after_stage_failure(tmp_path: Path)
 
 
 def test_candidate_scope_ignores_unlisted_parseable_archive(tmp_path: Path) -> None:
-    """S_PACK/fallback owners cannot leak into proof merely because they exist on disk."""
     payload = _noise(4)
-    hidden = tmp_path / "hidden.bin"
-    unlisted = tmp_path / "packed-or-fallback.zip"
-    _write_zip(hidden, payload)
-    _write_zip(unlisted, payload)
-
-    proof = prove_candidate_zip_ownership(
-        [ZipOwnerSource("hidden.bin", hidden)],
-        min_verified_reuse=1,
-    )
-
+    hidden = tmp_path / "hidden.bin"; unlisted = tmp_path / "packed-or-fallback.zip"
+    _write_zip(hidden, payload); _write_zip(unlisted, payload)
+    proof = prove_candidate_zip_ownership([ZipOwnerSource("hidden.bin", hidden)], min_verified_reuse=1)
     assert proof.realized == frozenset()
     assert "packed-or-fallback.zip" not in proof.owner_identities
 
 
 def test_candidate_scope_fails_closed_when_content_binding_cannot_fit_io_budget(tmp_path: Path) -> None:
-    """A repeated stream cannot earn ownership if the global physical-I/O account is exhausted."""
     payload = _noise(5)
-    explicit = tmp_path / "owner.zip"
-    hidden = tmp_path / "hidden.bin"
-    _write_zip(explicit, payload)
-    _write_zip(hidden, payload)
-
+    explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
+    _write_zip(explicit, payload); _write_zip(hidden, payload)
     proof = prove_candidate_zip_ownership(
         [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("hidden.bin", hidden)],
         min_verified_reuse=1,
         max_io_bytes=4096,
     )
-
     assert "hidden.bin" not in proof.realized
     assert dict(proof.rejects).get("io_budget", 0) >= 1
+
+
+def test_candidate_scope_hardlink_aliases_cannot_fake_two_physical_owners(tmp_path: Path) -> None:
+    """Two names for one inode are not two reuse owners, even if a caller supplies both."""
+    first = tmp_path / "first.bin"
+    alias = tmp_path / "alias.bin"
+    _write_zip(first, _noise(6))
+    os.link(first, alias)
+
+    proof = prove_candidate_zip_ownership(
+        [ZipOwnerSource("first.bin", first), ZipOwnerSource("alias.bin", alias)],
+        min_verified_reuse=1,
+    )
+
+    assert proof.realized == frozenset()
+    assert proof.owner_identities == {}
+    assert dict(proof.rejects).get("physical_alias") == 2
