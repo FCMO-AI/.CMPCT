@@ -111,3 +111,30 @@ def test_candidate_scope_fails_closed_before_per_source_work_when_owner_set_is_o
     assert proof.io_bytes == 0
     assert proof.logical_bytes == 0
     assert proof.rejects == (("source_budget", 3),)
+
+
+def test_candidate_scope_preserves_aggregate_descriptor_ceiling(tmp_path: Path) -> None:
+    candidate = tmp_path / "many-members.bin"
+    with zipfile.ZipFile(candidate, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("a.bin", b"a")
+        z.writestr("b.bin", b"b")
+    proof = prove_candidate_zip_ownership(
+        [ZipOwnerSource("many-members.bin", candidate)], min_verified_reuse=1, max_descriptors=1
+    )
+    assert proof.realized == frozenset()
+    assert proof.owner_identities == {}
+    assert proof.rejects == (("descriptor_budget", 2),)
+
+
+def test_candidate_scope_preserves_aggregate_central_directory_ceiling(tmp_path: Path) -> None:
+    candidate = tmp_path / "central-directory.bin"
+    _write_zip(candidate, _noise(7, 128))
+    proof = prove_candidate_zip_ownership(
+        [ZipOwnerSource("central-directory.bin", candidate)],
+        min_verified_reuse=1,
+        max_central_directory_bytes=1,
+    )
+    assert proof.realized == frozenset()
+    assert proof.owner_identities == {}
+    assert proof.rejects[0][0] == "central_directory_budget"
+    assert proof.rejects[0][1] > 1
