@@ -8,8 +8,9 @@ from pathlib import Path
 from cmpct.builder import Builder
 import cmpct.builder_hidden_zip as builder_hidden_zip
 from cmpct.builder_hidden_zip import (
-    SurfacedHiddenCandidate, ordinary_storage_for_hidden_fallback, ownership_sources_from_builder,
-    read_surfaced_candidate, resolve_hidden_zip_candidates, surface_hidden_candidate,
+    MAX_HIDDEN_SURFACE_PHYSICAL_BYTES, SurfacedHiddenCandidate, hidden_candidate_size_can_stage,
+    ordinary_storage_for_hidden_fallback, ownership_sources_from_builder, read_surfaced_candidate,
+    resolve_hidden_zip_candidates, surface_hidden_candidate,
 )
 from cmpct.codec import CHUNK, S_BLOB, S_CDC, S_PACK, S_VZIP, sha
 from cmpct.hidden_zip_candidates import prove_candidate_zip_ownership
@@ -70,6 +71,16 @@ def test_bridge_source_cap_refuses_optional_resolution_before_copying_hostile_ca
     result = resolve_hidden_zip_candidates(builder, candidates, min_verified_reuse=1)
     assert result.sources == (); assert result.proof.realized == frozenset(); assert result.cohort.realized == frozenset(); assert result.storage == {}
     assert builder.cands == {}; assert builder.recipes == []
+
+
+def test_surface_size_filter_is_derived_from_downstream_hard_caps() -> None:
+    assert hidden_candidate_size_can_stage(MAX_HIDDEN_SURFACE_PHYSICAL_BYTES)
+    assert not hidden_candidate_size_can_stage(MAX_HIDDEN_SURFACE_PHYSICAL_BYTES + 1)
+    assert not hidden_candidate_size_can_stage(-1)
+    assert MAX_HIDDEN_SURFACE_PHYSICAL_BYTES == min(
+        builder_hidden_zip.MAX_STAGE_SOURCE_BYTES // 4,
+        builder_hidden_zip.MAX_STAGED_CANDIDATE_BYTES // 2,
+    )
 
 
 def test_realized_explicit_owner_is_bound_to_bytes_builder_materialized(tmp_path: Path) -> None:
