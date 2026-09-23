@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 
-from .codec import K_FILE, S_VZIP, sha
+from .codec import CHUNK, K_FILE, S_BLOB, S_CDC, S_VZIP, cdc_chunks, sha
 from .hidden_zip import MAX_OBSERVATION_FILES, MIN_VERIFIED_REUSE, _stamp
 from .hidden_zip_candidates import CandidateOwnershipProof, Stamp, ZipOwnerSource, prove_candidate_zip_ownership
 from .hidden_zip_stage import StagedHiddenCohort, commit_stable_hidden_cohort, stage_stable_hidden_cohort
@@ -23,6 +23,13 @@ class SurfacedHiddenCandidate:
     digest: bytes
 
 
+def surface_hidden_candidate(rel: str, path: Path, st, raw: bytes) -> SurfacedHiddenCandidate:
+    """Bind a Builder-read hidden candidate to the exact scan snapshot without rereading it."""
+    if len(raw) != int(st.st_size):
+        raise RuntimeError("hidden candidate changed while Builder was reading it")
+    return SurfacedHiddenCandidate(str(rel), Path(path), _stamp(st), sha(raw))
+
+
 def read_surfaced_candidate(candidate: SurfacedHiddenCandidate) -> bytes | None:
     """Return fallback bytes only if the exact Builder-surfaced source object is still present."""
     expected_size = int(candidate.stamp[2])
@@ -35,6 +42,20 @@ def read_surfaced_candidate(candidate: SurfacedHiddenCandidate) -> bytes | None:
     except OSError:
         return None
     return raw if sha(raw) == candidate.digest else None
+
+
+def ordinary_storage_for_hidden_fallback(builder, raw: bytes, ext: str) -> list:
+    """Apply Builder's inherited ordinary BLOB/CDC policy only to rejected hidden candidates.
+
+    The normal hot path stays in ``Builder.scan``. This narrow duplicate exists so deferred hidden
+    losers can return to the exact inherited representation decision without first materializing a
+    speculative ordinary candidate that would need sweeping later.
+    """
+    if len(raw) > 4 * CHUNK and ext != ".wav":
+        parts = cdc_chunks(raw)
+        entries = [[len(part), builder.add_content(part, ext)] for part in parts]
+        return [S_CDC, entries]
+    return [S_BLOB, builder.add_content(raw, ext)]
 
 
 @dataclass(frozen=True)
