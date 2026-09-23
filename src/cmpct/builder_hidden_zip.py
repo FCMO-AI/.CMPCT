@@ -9,9 +9,15 @@ from pathlib import Path
 from .codec import CHUNK, K_FILE, S_BLOB, S_CDC, S_VZIP, cdc_chunks, sha
 from .hidden_zip import MAX_OBSERVATION_FILES, MIN_VERIFIED_REUSE, _stamp
 from .hidden_zip_candidates import CandidateOwnershipProof, Stamp, ZipOwnerSource, prove_candidate_zip_ownership
-from .hidden_zip_stage import StagedHiddenCohort, commit_stable_hidden_cohort, stage_stable_hidden_cohort
+from .hidden_zip_stage import (
+    MAX_STAGED_CANDIDATE_BYTES, MAX_STAGE_SOURCE_BYTES, StagedHiddenCohort,
+    commit_stable_hidden_cohort, stage_stable_hidden_cohort,
+)
 
 EXPLICIT_SUFFIXES = frozenset((".zip", ".whl"))
+# A candidate larger than this cannot possibly survive staging even before member logical bytes are
+# counted: staging charges four source passes and its transient peak contains at least two containers.
+MAX_HIDDEN_SURFACE_PHYSICAL_BYTES = min(MAX_STAGE_SOURCE_BYTES // 4, MAX_STAGED_CANDIDATE_BYTES // 2)
 
 
 @dataclass(frozen=True)
@@ -21,6 +27,11 @@ class SurfacedHiddenCandidate:
     path: Path
     stamp: Stamp
     digest: bytes
+
+
+def hidden_candidate_size_can_stage(size: int) -> bool:
+    """Cheap impossibility filter derived only from downstream hard resource contracts."""
+    return 0 <= int(size) <= int(MAX_HIDDEN_SURFACE_PHYSICAL_BYTES)
 
 
 def surface_hidden_candidate(rel: str, path: Path, st, raw: bytes) -> SurfacedHiddenCandidate:
