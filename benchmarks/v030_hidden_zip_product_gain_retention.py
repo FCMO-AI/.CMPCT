@@ -1,9 +1,9 @@
 from __future__ import annotations
 """Mechanism-bearing direct-base-vs-actual-Builder productization falsifier for #205.
 
-The historical #201 research subclass is not a candidate engine here.  Each fresh generated tree is
-built first with the exact authority Builder.scan captured from source, then with the installed #205
-Builder.scan.  The pair therefore differs only in hidden-ZIP discovery/selection on the same Builder
+The historical #201 research subclass is not a candidate engine here. Each fresh generated tree is
+built first with the exact pre-seam Builder.scan captured by the installer, then with the installed
+#205 scan. The pair therefore differs only in hidden-ZIP discovery/selection on the same Builder
 implementation and the same exact generated source tree.
 """
 import argparse, json, os, resource, shutil, statistics, time
@@ -18,13 +18,9 @@ from cmpct import v030_hidden_zip_builder as HIDDEN_SCAN
 
 REPS = 3
 RANGE = 4096
-AUTHORITY_SCAN = HIDDEN_SCAN._scan_with_hidden_zip.__globals__["Builder"].__dict__.get("_cmpct_v030_authority_scan")
+AUTHORITY_SCAN = getattr(Builder, "_cmpct_v030_authority_scan", None)
 if AUTHORITY_SCAN is None:
-    # The draft seam replaces Builder.scan at import time.  Recover the exact authority method from
-    # the class source by loading the authority module under a private name is deliberately avoided:
-    # duplicate module globals can change codec/worker state.  The installer records the original
-    # method in current heads; fail closed on older heads rather than benchmark a guessed control.
-    raise RuntimeError("#205 must record Builder._cmpct_v030_authority_scan before product matrix execution")
+    raise RuntimeError("#205 installer did not retain the exact pre-seam Builder.scan control")
 CANDIDATE_SCAN = HIDDEN_SCAN._scan_with_hidden_zip
 
 
@@ -45,8 +41,7 @@ def _measure_scan(scan, source: Path, arc: Path, out: Path):
     cpu0 = time.process_time(); wall0 = time.perf_counter(); range_checks = []; pack_checks = []
     with CMPCT(arc) as reader:
         for row in reader.files:
-            if row[1] != 0 or not row[6]: continue
-            if row[6][0] not in (S_VZIP, S_PACK): continue
+            if row[1] != 0 or not row[6] or row[6][0] not in (S_VZIP, S_PACK): continue
             raw = (source / row[0]).read_bytes(); ln = min(RANGE, len(raw))
             for start in sorted({0, max(0, len(raw)//2-ln//2), max(0, len(raw)-ln)}):
                 got = reader.read_range(row[0], start, ln)
