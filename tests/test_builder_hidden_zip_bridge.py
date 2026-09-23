@@ -73,7 +73,9 @@ def test_realized_explicit_owner_is_bound_to_bytes_builder_materialized(tmp_path
     payload = random.Random(91).randbytes(32 * 1024); explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
     _write_zip(explicit, payload); _write_zip(hidden, payload); builder = Builder(tmp_path); builder.scan()
     assert _storage(builder)["owner.zip"][0] == S_VZIP
-    _write_zip(explicit, random.Random(92).randbytes(32 * 1024))
+    # Change only container-level bytes. Member metadata/stream identity still matches the hidden ZIP,
+    # so only whole-container content binding can prevent this replaced path from acting as evidence.
+    with zipfile.ZipFile(explicit, "a") as z: z.comment = b"replacement-container"
     proof = prove_candidate_zip_ownership(ownership_sources_from_builder(builder, [("hidden.bin", hidden)]), min_verified_reuse=1)
     assert "owner.zip" not in proof.source_states; assert "hidden.bin" not in proof.realized
     assert dict(proof.rejects).get("source_changed", 0) >= 1
@@ -83,6 +85,5 @@ def test_surfaced_hidden_fallback_read_requires_same_scan_snapshot(tmp_path: Pat
     hidden = tmp_path / "hidden.bin"; _write_zip(hidden, random.Random(93).randbytes(4096)); raw = hidden.read_bytes()
     surfaced = SurfacedHiddenCandidate("hidden.bin", hidden, _stamp(hidden), sha(raw))
     assert read_surfaced_candidate(surfaced) == raw
-
     replacement = tmp_path / "replacement.bin"; _write_zip(replacement, random.Random(94).randbytes(4096)); os.replace(replacement, hidden)
     assert read_surfaced_candidate(surfaced) is None
