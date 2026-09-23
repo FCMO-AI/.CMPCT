@@ -20,7 +20,6 @@ MAX_HIDDEN_SURFACE_PHYSICAL_BYTES = min(MAX_STAGE_SOURCE_BYTES // 4, MAX_STAGED_
 
 @dataclass(frozen=True)
 class SurfacedHiddenCandidate:
-    """Hidden candidate tied to the exact filesystem object and bytes Builder observed."""
     rel: str
     path: Path
     stamp: Stamp
@@ -29,7 +28,6 @@ class SurfacedHiddenCandidate:
 
 @dataclass(frozen=True)
 class DeferredHiddenFile:
-    """File-table metadata retained while a surfaced hidden candidate awaits cohort resolution."""
     candidate: SurfacedHiddenCandidate
     mode: int
     mtime_ns: int
@@ -83,7 +81,6 @@ def ownership_sources_from_builder(
     builder,
     hidden_candidates: tuple[tuple[str, Path] | SurfacedHiddenCandidate, ...] | list[tuple[str, Path] | SurfacedHiddenCandidate],
 ) -> tuple[ZipOwnerSource, ...]:
-    """Return only owners allowed to participate in hidden reuse proof."""
     if len(hidden_candidates) > MAX_OBSERVATION_FILES: return ()
     hidden_candidates = tuple(hidden_candidates); normalized: list[tuple[str, Path, Stamp | None, bytes | None]] = []
     for item in hidden_candidates:
@@ -106,43 +103,61 @@ def ownership_sources_from_builder(
     return tuple(sources)
 
 
+def prepare_hidden_zip_candidates(
+    builder,
+    hidden_candidates: tuple[tuple[str, Path] | SurfacedHiddenCandidate, ...] | list[tuple[str, Path] | SurfacedHiddenCandidate],
+    *, min_verified_reuse: int = MIN_VERIFIED_REUSE,
+) -> HiddenZipResolution:
+    """Prove and stage a cohort without mutating Builder candidate/recipe state."""
+    sources = ownership_sources_from_builder(builder, hidden_candidates)
+    proof = prove_candidate_zip_ownership(sources, min_verified_reuse=int(min_verified_reuse))
+    cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=int(min_verified_reuse))
+    return HiddenZipResolution(sources, proof, cohort, {})
+
+
 def resolve_hidden_zip_candidates(
     builder,
     hidden_candidates: tuple[tuple[str, Path] | SurfacedHiddenCandidate, ...] | list[tuple[str, Path] | SurfacedHiddenCandidate],
     *, min_verified_reuse: int = MIN_VERIFIED_REUSE,
 ) -> HiddenZipResolution:
-    """Resolve surfaced hidden candidates transactionally against actual Builder outcomes."""
-    sources = ownership_sources_from_builder(builder, hidden_candidates)
-    proof = prove_candidate_zip_ownership(sources, min_verified_reuse=int(min_verified_reuse))
-    cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=int(min_verified_reuse))
-    storage = commit_stable_hidden_cohort(builder, cohort)
-    return HiddenZipResolution(sources, proof, cohort, storage)
+    """Resolve surfaced hidden candidates and commit only the final stable hidden cohort."""
+    prepared = prepare_hidden_zip_candidates(builder, hidden_candidates, min_verified_reuse=int(min_verified_reuse))
+    storage = commit_stable_hidden_cohort(builder, prepared.cohort)
+    return HiddenZipResolution(prepared.sources, prepared.proof, prepared.cohort, storage)
 
 
 def finalize_deferred_hidden_files(
     builder, deferred: tuple[DeferredHiddenFile, ...] | list[DeferredHiddenFile], *,
     min_verified_reuse: int = MIN_VERIFIED_REUSE,
 ) -> HiddenZipResolution:
-    """Resolve a bounded hidden cohort and append exact file rows for winners and ordinary losers.
+    """Validate every final source snapshot before mutating Builder, then append all hidden rows.
 
-    This is the transaction boundary canonical ``Builder.scan`` should call after explicit ZIP/WHL
-    resolution. It owns neither traversal nor explicit cohort selection. A fallback reread must match
-    the surfaced object+digest; drift aborts rather than emitting old metadata for new bytes.
+    Winner recipes are staged but not committed while loser fallback snapshots are reread. If any
+    loser drifted, the whole finalization aborts with no hidden recipe/candidate mutation. This avoids
+    turning a late fallback race into speculative residue inside a reusable Builder instance.
     """
     deferred = tuple(deferred)
-    resolution = resolve_hidden_zip_candidates(
+    prepared = prepare_hidden_zip_candidates(
         builder, [item.candidate for item in deferred], min_verified_reuse=int(min_verified_reuse)
     )
+    winner_rels = set(prepared.cohort.staged)
+    fallback_raw: dict[str, bytes] = {}
     for item in deferred:
         candidate = item.candidate
-        storage = resolution.storage.get(candidate.rel)
-        if storage is None:
-            raw = read_surfaced_candidate(candidate)
-            if raw is None:
-                raise RuntimeError(f"hidden candidate changed before ordinary fallback: {candidate.rel}")
-            storage = ordinary_storage_for_hidden_fallback(builder, raw, item.ext)
+        if candidate.rel in winner_rels: continue
+        raw = read_surfaced_candidate(candidate)
+        if raw is None:
+            raise RuntimeError(f"hidden candidate changed before ordinary fallback: {candidate.rel}")
+        fallback_raw[candidate.rel] = raw
+
+    storage = commit_stable_hidden_cohort(builder, prepared.cohort)
+    for item in deferred:
+        candidate = item.candidate
+        row_storage = storage.get(candidate.rel)
+        if row_storage is None:
+            row_storage = ordinary_storage_for_hidden_fallback(builder, fallback_raw[candidate.rel], item.ext)
         builder.files.append([
             candidate.rel, K_FILE, int(item.mode), int(item.mtime_ns), int(candidate.stamp[2]),
-            candidate.digest, storage,
+            candidate.digest, row_storage,
         ])
-    return resolution
+    return HiddenZipResolution(prepared.sources, prepared.proof, prepared.cohort, storage)
