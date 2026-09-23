@@ -17,19 +17,19 @@ def _noise(seed: int, size: int = 32 * 1024) -> bytes:
     return random.Random(seed).randbytes(size)
 
 
-def test_candidate_scoped_proof_uses_realized_explicit_vzip_owner(tmp_path: Path) -> None:
-    """A realized explicit VZIP may anchor a hidden owner without a root walk."""
-    payload = _noise(1)
-    explicit = tmp_path / "owner.zip"
-    hidden = tmp_path / "document.bin"
-    _write_zip(explicit, payload)
-    _write_zip(hidden, payload)
+def _stamp(path: Path) -> tuple[int, int, int, int]:
+    st = path.stat()
+    return int(st.st_dev), int(st.st_ino), int(st.st_size), int(st.st_mtime_ns)
 
+
+def test_candidate_scoped_proof_uses_realized_explicit_vzip_owner(tmp_path: Path) -> None:
+    payload = _noise(1)
+    explicit = tmp_path / "owner.zip"; hidden = tmp_path / "document.bin"
+    _write_zip(explicit, payload); _write_zip(hidden, payload)
     proof = prove_candidate_zip_ownership(
         [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("document.bin", hidden)],
         min_verified_reuse=2176,
     )
-
     assert proof.rejects == ()
     assert proof.realized == frozenset({"owner.zip", "document.bin"})
     assert proof.credit["document.bin"] >= 2176
@@ -37,104 +37,86 @@ def test_candidate_scoped_proof_uses_realized_explicit_vzip_owner(tmp_path: Path
 
 
 def test_candidate_scoped_proof_does_not_invent_fixed_ownership(tmp_path: Path) -> None:
-    hidden = tmp_path / "document.bin"
-    _write_zip(hidden, _noise(2))
+    hidden = tmp_path / "document.bin"; _write_zip(hidden, _noise(2))
     proof = prove_candidate_zip_ownership([ZipOwnerSource("document.bin", hidden)], min_verified_reuse=1)
-    assert proof.realized == frozenset()
-    assert proof.credit == {}
+    assert proof.realized == frozenset(); assert proof.credit == {}
 
 
 def test_candidate_scoped_exclusion_cascades_after_stage_failure(tmp_path: Path) -> None:
-    payload = _noise(3)
-    a = tmp_path / "a.bin"; b = tmp_path / "b.bin"
+    payload = _noise(3); a = tmp_path / "a.bin"; b = tmp_path / "b.bin"
     _write_zip(a, payload); _write_zip(b, payload)
     initial = prove_candidate_zip_ownership([ZipOwnerSource("a.bin", a), ZipOwnerSource("b.bin", b)], min_verified_reuse=1)
     assert initial.realized == frozenset({"a.bin", "b.bin"})
     after_failure = prove_candidate_zip_ownership(
-        [ZipOwnerSource("a.bin", a), ZipOwnerSource("b.bin", b)],
-        min_verified_reuse=1,
+        [ZipOwnerSource("a.bin", a), ZipOwnerSource("b.bin", b)], min_verified_reuse=1,
         excluded_owners=frozenset({"b.bin"}),
     )
-    assert after_failure.realized == frozenset()
-    assert after_failure.credit == {}
+    assert after_failure.realized == frozenset(); assert after_failure.credit == {}
 
 
 def test_candidate_scope_ignores_unlisted_parseable_archive(tmp_path: Path) -> None:
-    payload = _noise(4)
-    hidden = tmp_path / "hidden.bin"; unlisted = tmp_path / "packed-or-fallback.zip"
+    payload = _noise(4); hidden = tmp_path / "hidden.bin"; unlisted = tmp_path / "packed-or-fallback.zip"
     _write_zip(hidden, payload); _write_zip(unlisted, payload)
     proof = prove_candidate_zip_ownership([ZipOwnerSource("hidden.bin", hidden)], min_verified_reuse=1)
-    assert proof.realized == frozenset()
-    assert "packed-or-fallback.zip" not in proof.owner_identities
+    assert proof.realized == frozenset(); assert "packed-or-fallback.zip" not in proof.owner_identities
 
 
 def test_candidate_scope_fails_closed_when_content_binding_cannot_fit_io_budget(tmp_path: Path) -> None:
-    payload = _noise(5)
-    explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
+    payload = _noise(5); explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
     _write_zip(explicit, payload); _write_zip(hidden, payload)
     proof = prove_candidate_zip_ownership(
         [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("hidden.bin", hidden)],
-        min_verified_reuse=1,
-        max_io_bytes=4096,
+        min_verified_reuse=1, max_io_bytes=4096,
     )
-    assert "hidden.bin" not in proof.realized
-    assert dict(proof.rejects).get("io_budget", 0) >= 1
+    assert "hidden.bin" not in proof.realized; assert dict(proof.rejects).get("io_budget", 0) >= 1
 
 
 def test_candidate_scope_hardlink_aliases_cannot_fake_two_physical_owners(tmp_path: Path) -> None:
-    """Two names for one inode are not two reuse owners, even if a caller supplies both."""
-    first = tmp_path / "first.bin"
-    alias = tmp_path / "alias.bin"
-    _write_zip(first, _noise(6))
-    os.link(first, alias)
-
+    first = tmp_path / "first.bin"; alias = tmp_path / "alias.bin"
+    _write_zip(first, _noise(6)); os.link(first, alias)
     proof = prove_candidate_zip_ownership(
-        [ZipOwnerSource("first.bin", first), ZipOwnerSource("alias.bin", alias)],
-        min_verified_reuse=1,
+        [ZipOwnerSource("first.bin", first), ZipOwnerSource("alias.bin", alias)], min_verified_reuse=1,
     )
-
-    assert proof.realized == frozenset()
-    assert proof.owner_identities == {}
+    assert proof.realized == frozenset(); assert proof.owner_identities == {}
     assert dict(proof.rejects).get("physical_alias") == 2
 
 
 def test_candidate_scope_fails_closed_before_per_source_work_when_owner_set_is_oversized(tmp_path: Path) -> None:
-    """A hostile surfaced-owner count cannot turn candidate proof into an unbounded stat/parser pass."""
-    # Paths intentionally do not exist. The source-count guard must fire before any per-source stat;
-    # otherwise these would be reported as source_changed instead of one whole-proof refusal.
     sources = [ZipOwnerSource(f"candidate-{i}.bin", tmp_path / f"missing-{i}.bin") for i in range(3)]
     proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1, max_sources=2)
-
-    assert proof.realized == frozenset()
-    assert proof.owner_identities == {}
-    assert proof.source_states == {}
-    assert proof.io_bytes == 0
-    assert proof.logical_bytes == 0
-    assert proof.rejects == (("source_budget", 3),)
+    assert proof.realized == frozenset(); assert proof.owner_identities == {}; assert proof.source_states == {}
+    assert proof.io_bytes == 0; assert proof.logical_bytes == 0; assert proof.rejects == (("source_budget", 3),)
 
 
 def test_candidate_scope_preserves_aggregate_descriptor_ceiling(tmp_path: Path) -> None:
     candidate = tmp_path / "many-members.bin"
     with zipfile.ZipFile(candidate, "w", compression=zipfile.ZIP_DEFLATED) as z:
-        z.writestr("a.bin", b"a")
-        z.writestr("b.bin", b"b")
-    proof = prove_candidate_zip_ownership(
-        [ZipOwnerSource("many-members.bin", candidate)], min_verified_reuse=1, max_descriptors=1
-    )
-    assert proof.realized == frozenset()
-    assert proof.owner_identities == {}
-    assert proof.rejects == (("descriptor_budget", 2),)
+        z.writestr("a.bin", b"a"); z.writestr("b.bin", b"b")
+    proof = prove_candidate_zip_ownership([ZipOwnerSource("many-members.bin", candidate)], min_verified_reuse=1, max_descriptors=1)
+    assert proof.realized == frozenset(); assert proof.owner_identities == {}; assert proof.rejects == (("descriptor_budget", 2),)
 
 
 def test_candidate_scope_preserves_aggregate_central_directory_ceiling(tmp_path: Path) -> None:
-    candidate = tmp_path / "central-directory.bin"
-    _write_zip(candidate, _noise(7, 128))
+    candidate = tmp_path / "central-directory.bin"; _write_zip(candidate, _noise(7, 128))
     proof = prove_candidate_zip_ownership(
-        [ZipOwnerSource("central-directory.bin", candidate)],
-        min_verified_reuse=1,
-        max_central_directory_bytes=1,
+        [ZipOwnerSource("central-directory.bin", candidate)], min_verified_reuse=1, max_central_directory_bytes=1,
     )
-    assert proof.realized == frozenset()
-    assert proof.owner_identities == {}
-    assert proof.rejects[0][0] == "central_directory_budget"
-    assert proof.rejects[0][1] > 1
+    assert proof.realized == frozenset(); assert proof.owner_identities == {}
+    assert proof.rejects[0][0] == "central_directory_budget"; assert proof.rejects[0][1] > 1
+
+
+def test_candidate_scope_rejects_object_replaced_after_builder_surfacing(tmp_path: Path) -> None:
+    payload = _noise(8); explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
+    _write_zip(explicit, payload); _write_zip(hidden, payload)
+    surfaced_stamp = _stamp(hidden)
+    replacement = tmp_path / "replacement.bin"; _write_zip(replacement, payload); os.replace(replacement, hidden)
+    assert _stamp(hidden) != surfaced_stamp
+
+    proof = prove_candidate_zip_ownership(
+        [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("hidden.bin", hidden, expected_stamp=surfaced_stamp)],
+        min_verified_reuse=1,
+    )
+
+    assert "hidden.bin" not in proof.realized
+    assert "hidden.bin" not in proof.source_states
+    assert dict(proof.rejects).get("source_changed", 0) >= 1
