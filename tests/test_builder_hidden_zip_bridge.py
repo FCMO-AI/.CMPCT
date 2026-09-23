@@ -1,23 +1,26 @@
 from __future__ import annotations
 
+import os
 import random
 import zipfile
 from pathlib import Path
 
 from cmpct.builder import Builder
 import cmpct.builder_hidden_zip as builder_hidden_zip
-from cmpct.builder_hidden_zip import ownership_sources_from_builder, resolve_hidden_zip_candidates
-from cmpct.codec import S_PACK, S_VZIP
+from cmpct.builder_hidden_zip import SurfacedHiddenCandidate, ownership_sources_from_builder, read_surfaced_candidate, resolve_hidden_zip_candidates
+from cmpct.codec import S_PACK, S_VZIP, sha
 from cmpct.hidden_zip_candidates import prove_candidate_zip_ownership
 
 
 def _write_zip(path: Path, payload: bytes) -> None:
-    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as z:
-        z.writestr("payload.bin", payload)
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as z: z.writestr("payload.bin", payload)
 
 
-def _storage(builder: Builder) -> dict[str, list]:
-    return {row[0]: row[6] for row in builder.files if row[6] is not None}
+def _stamp(path: Path) -> tuple[int, int, int, int]:
+    st = path.stat(); return int(st.st_dev), int(st.st_ino), int(st.st_size), int(st.st_mtime_ns)
+
+
+def _storage(builder: Builder) -> dict[str, list]: return {row[0]: row[6] for row in builder.files if row[6] is not None}
 
 
 def _fixture(root: Path, explicit_count: int) -> Path:
@@ -52,8 +55,7 @@ def test_composed_resolution_commits_only_stable_hidden_winner(tmp_path: Path) -
 
 
 def test_composed_resolution_cannot_borrow_from_spack(tmp_path: Path) -> None:
-    hidden = _fixture(tmp_path, 8); builder = Builder(tmp_path); builder.scan()
-    recipes_before = len(builder.recipes); candidates_before = set(builder.cands)
+    hidden = _fixture(tmp_path, 8); builder = Builder(tmp_path); builder.scan(); recipes_before = len(builder.recipes); candidates_before = set(builder.cands)
     result = resolve_hidden_zip_candidates(builder, [("hidden-document.bin", hidden)], min_verified_reuse=1)
     assert result.proof.realized == frozenset(); assert result.cohort.realized == frozenset(); assert result.storage == {}
     assert len(builder.recipes) == recipes_before; assert set(builder.cands) == candidates_before
@@ -68,18 +70,19 @@ def test_bridge_source_cap_refuses_optional_resolution_before_copying_hostile_ca
 
 
 def test_realized_explicit_owner_is_bound_to_bytes_builder_materialized(tmp_path: Path) -> None:
-    payload = random.Random(91).randbytes(32 * 1024)
-    explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
-    _write_zip(explicit, payload); _write_zip(hidden, payload)
-    builder = Builder(tmp_path); builder.scan()
+    payload = random.Random(91).randbytes(32 * 1024); explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
+    _write_zip(explicit, payload); _write_zip(hidden, payload); builder = Builder(tmp_path); builder.scan()
     assert _storage(builder)["owner.zip"][0] == S_VZIP
-
-    # Replace the path after Builder materialized its explicit VZIP. It remains a valid ZIP, but it
-    # is not the physical evidence owner represented by Builder's file row and may not subsidize hidden reuse.
     _write_zip(explicit, random.Random(92).randbytes(32 * 1024))
-    sources = ownership_sources_from_builder(builder, [("hidden.bin", hidden)])
-    proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1)
-
-    assert "owner.zip" not in proof.source_states
-    assert "hidden.bin" not in proof.realized
+    proof = prove_candidate_zip_ownership(ownership_sources_from_builder(builder, [("hidden.bin", hidden)]), min_verified_reuse=1)
+    assert "owner.zip" not in proof.source_states; assert "hidden.bin" not in proof.realized
     assert dict(proof.rejects).get("source_changed", 0) >= 1
+
+
+def test_surfaced_hidden_fallback_read_requires_same_scan_snapshot(tmp_path: Path) -> None:
+    hidden = tmp_path / "hidden.bin"; _write_zip(hidden, random.Random(93).randbytes(4096)); raw = hidden.read_bytes()
+    surfaced = SurfacedHiddenCandidate("hidden.bin", hidden, _stamp(hidden), sha(raw))
+    assert read_surfaced_candidate(surfaced) == raw
+
+    replacement = tmp_path / "replacement.bin"; _write_zip(replacement, random.Random(94).randbytes(4096)); os.replace(replacement, hidden)
+    assert read_surfaced_candidate(surfaced) is None
