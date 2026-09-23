@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 
 from cmpct.builder import Builder
-from cmpct.codec import S_BLOB, S_PACK, S_VZIP
+from cmpct.codec import K_HARDLINK, S_BLOB, S_PACK, S_VZIP
 import cmpct.v030_hidden_zip_builder as scan_seam
 
 
@@ -20,9 +20,6 @@ def _rows(builder: Builder) -> dict[str, list]:
 
 
 def _explicit_set(root: Path, count: int) -> bytes:
-    # Deterministic high-entropy content keeps the exact shared Deflate stream comfortably above the
-    # 2176-byte economic reuse floor; the test therefore exercises ownership rather than tiny-stream
-    # rejection.
     shared = random.Random(0xC0DEC7).randbytes(32 * 1024)
     for i in range(count):
         payload = shared if i == 0 else random.Random(i + 100).randbytes(8 * 1024)
@@ -54,14 +51,31 @@ def test_scan_cohort_overflow_disables_whole_optional_lane_before_second_record(
     _write_zip(first, random.Random(1).randbytes(8 * 1024))
     _write_zip(second, random.Random(2).randbytes(8 * 1024))
     monkeypatch.setattr(scan_seam, "MAX_OBSERVATION_FILES", 1)
-
     def must_not_optimize(*_args, **_kwargs):
         raise AssertionError("overflowed hidden cohort must not enter proof/finalization")
     monkeypatch.setattr(scan_seam, "finalize_deferred_hidden_files", must_not_optimize)
-
     b = Builder(tmp_path); b.scan(); rows = _rows(b)
     assert rows["a.docx"][6][0] == S_BLOB
     assert rows["b.docx"][6][0] == S_BLOB
+
+
+def test_scan_malformed_pk_candidate_falls_back_exactly(tmp_path: Path) -> None:
+    raw = b"PK\x03\x04" + random.Random(9).randbytes(16 * 1024)
+    (tmp_path / "hostile.docx").write_bytes(raw)
+    b = Builder(tmp_path); b.scan(); row = _rows(b)["hostile.docx"]
+    assert row[6][0] == S_BLOB
+    assert b.cands[bytes(row[6][1])].raw == raw
+
+
+def test_scan_hardlink_alias_cannot_create_second_hidden_owner(tmp_path: Path) -> None:
+    first = tmp_path / "a.docx"
+    _write_zip(first, random.Random(11).randbytes(32 * 1024))
+    second = tmp_path / "b.docx"
+    os.link(first, second)
+    b = Builder(tmp_path); b.scan(); rows = _rows(b)
+    assert rows["a.docx"][6][0] == S_BLOB
+    assert rows["b.docx"][1] == K_HARDLINK
+    assert rows["b.docx"][6] == ["a.docx"]
 
 
 def test_non_pk_ordinary_blob_path_is_unchanged(tmp_path: Path) -> None:
