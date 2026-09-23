@@ -8,7 +8,8 @@ import pytest
 from cmpct.builder import Builder
 from cmpct.builder_hidden_zip import (
     DeferredHiddenFile, FALLBACK_HASH_CHUNK, finalize_deferred_hidden_files,
-    finalize_hidden_fallback_only, surface_hidden_candidate, validate_surfaced_candidate,
+    finalize_hidden_fallback_only, hidden_cohort_within_surface_budget,
+    surface_hidden_candidate, validate_surfaced_candidate,
 )
 from cmpct.codec import S_BLOB, sha
 
@@ -38,13 +39,24 @@ def test_streaming_snapshot_validator_handles_multi_chunk_source_and_detects_dri
     assert not validate_surfaced_candidate(item.candidate)
 
 
-def test_discovery_finalizer_refuses_oversized_cohort_before_copying_it(tmp_path: Path, monkeypatch) -> None:
-    builder = Builder(tmp_path); path = tmp_path / "candidate.bin"; path.write_bytes(b"PK\x03\x04payload")
-    item = _item(path)
+def test_discovery_finalizer_refuses_source_count_before_copying_hostile_cohort(tmp_path: Path, monkeypatch) -> None:
+    builder = Builder(tmp_path); path = tmp_path / "candidate.bin"; path.write_bytes(b"PK\x03\x04payload"); item = _item(path)
     import cmpct.builder_hidden_zip as bridge
     monkeypatch.setattr(bridge, "MAX_OBSERVATION_FILES", 1)
-    with pytest.raises(ValueError, match="source ceiling"):
+    with pytest.raises(ValueError, match="source/byte ceiling"):
         finalize_deferred_hidden_files(builder, [item, item], min_verified_reuse=1)
+    assert builder.files == []; assert builder.cands == {}; assert builder.recipes == []
+
+
+def test_discovery_finalizer_refuses_aggregate_surface_bytes_before_proof(tmp_path: Path, monkeypatch) -> None:
+    builder = Builder(tmp_path); a = tmp_path / "a.bin"; b = tmp_path / "b.bin"
+    a.write_bytes(b"PK\x03\x04" + b"a" * 100); b.write_bytes(b"PK\x03\x04" + b"b" * 100)
+    items = [_item(a), _item(b)]
+    import cmpct.builder_hidden_zip as bridge
+    monkeypatch.setattr(bridge, "MAX_HIDDEN_SURFACE_AGGREGATE_BYTES", a.stat().st_size + b.stat().st_size - 1)
+    assert not hidden_cohort_within_surface_budget(items)
+    with pytest.raises(ValueError, match="source/byte ceiling"):
+        finalize_deferred_hidden_files(builder, items, min_verified_reuse=1)
     assert builder.files == []; assert builder.cands == {}; assert builder.recipes == []
 
 
