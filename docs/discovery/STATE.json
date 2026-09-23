@@ -8,55 +8,48 @@
   },
   "active_product_bottleneck": {
     "id": "hidden-zip-information-yield-productization",
-    "observation": "#201 established a -9,370,622 B held-matrix research gain with zero byte regressions. Draft #205 remains the sole productization lane. Head 7bebcba8 adds a candidate-scoped exact-owner proof boundary that never walks the root, accepts only caller-designated realized fixed owners, applies the proven fixed point, content-binds sources under one I/O account, and fails closed on physical aliases. Canonical Builder does not yet call it, so no product byte credit is earned.",
-    "next_discriminator": "Wire the candidate-scoped proof into the smallest canonical Builder seam without adding hidden candidates to explicit ZIP/WHL cardinality. Fixed evidence owners must be actual explicit S_VZIP outcomes; S_PACK/fallback owners are absent. Stage surviving hidden owners transactionally, feed stage failures through excluded_owners, then commit only the stable cohort."
+    "observation": "#201 established a -9,370,622 B held-matrix research gain with zero byte regressions. Draft #205 is the sole productization lane. Candidate-scoped proof, realized-owner fixed point, Builder-outcome provenance, bounded transactional staging, and a composed proof->stage->commit bridge are landed. Canonical Builder still does not surface hidden candidates, so no product byte credit is earned.",
+    "next_discriminator": "Implement the smallest canonical Builder surfacing seam: recognize hidden PK\\x03\\x04 candidates during the existing read, keep them separate from explicit ZIP/WHL cardinality, resolve explicit cohorts unchanged, then invoke the composed bridge and ordinary-store every non-survivor."
   },
   "primary_question": {
     "id": "generic-hidden-zip-admission",
     "family": "representation-discovery+execution",
     "hypothesis": "Generic hidden ZIP/OOXML reuse can retain #201's structural byte gain if Builder surfaces hidden candidates during its existing scan, ownership proof is candidate-scoped and physically exact, and only representations that actually survive selection may subsidize reuse.",
-    "status": "PRODUCTIZATION_CANDIDATE_PROOF_LANDED_BUILDER_SEAM_NEXT",
+    "status": "PRODUCTIZATION_BRIDGE_LANDED_BUILDER_SURFACING_NEXT",
     "evidence": [
       "#201 / 35719088885 / 10690274379: 181,603,782 -> 172,233,160 B (-9,370,622 B), zero regressed rows, five Office admissions",
       "#200 / 35703345978: full traversal fusion failed final-form CPU+wall improvement and remains retired",
-      "be1434c / 35800577108 / 10726011125: 811 passed in 195.48 s; CLI smoke green",
-      "be1434c / 35800577104: r24 ABBA bytes identical but timing evaluator red; Builder did not execute hidden observation, so non-causal hosted timing evidence",
-      "cc6dabb: queue-peeling realized-owner fixed point passes A-X-B-Y-C and 1,000 randomized differential comparisons",
-      "13a2b837: fixed point supports failed-hidden exclusion and cascading removal",
-      "f0c5297c: Builder ownership controls freeze 7-explicit individual VZIP, 8-explicit S_PACK, and parseable BZIP2 fallback semantics",
-      "7bebcba8: candidate-scoped proof module removes the root walk from the proof boundary, ignores unlisted owners, content-binds exact streams under bounded I/O/logical work, propagates exclusions, and rejects hardlink aliases as independent owners"
+      "cc6dabb + 13a2b837: queue-peeling realized-owner fixed point plus failed-hidden cascading exclusion",
+      "f0c5297c: Builder ownership controls freeze 7-explicit individual VZIP, 8-explicit S_PACK, and parseable fallback semantics",
+      "616fb798: candidate-scoped proof + Builder-outcome provenance + bounded transactional staging are green at exact-head regression 35825619309 (832 passed)",
+      "661f94e9: composed resolve_hidden_zip_candidates bridge now enforces actual Builder provenance through proof, stable staging and the sole commit boundary; exact-head CI pending"
     ],
-    "prediction": "The candidate-scoped proof can be wired after unchanged explicit resolution so hidden candidates cannot perturb S_PACK cardinality and cannot receive credit from packed/fallback owners.",
+    "prediction": "A tiny Builder surfacing seam can materialize hidden reuse without changing explicit S_PACK cardinality, ordinary fallback semantics, or paying a second tree walk.",
     "kill": "Any exactness failure, explicit-cohort perturbation, byte regression, unbounded hostile work, false reuse credit from non-realized owners, or confirmed create/extract/RSS/locality debt blocks or narrows promotion. Thresholds and semantics do not move after results."
   },
   "frontier_candidates": [
-    {"id":"hidden-zip-productization","family":"representation-discovery+execution","status":"ACTIVE_PR_205","evidence":"head 7bebcba8; candidate-scoped proof landed; canonical Builder seam open"},
+    {"id":"hidden-zip-productization","family":"representation-discovery+execution","status":"ACTIVE_PR_205","evidence":"head 661f94e9; composed candidate-scoped bridge landed; canonical Builder surfacing seam open"},
     {"id":"r25-publishability-pruning","family":"execution-architecture","status":"ADJACENT","evidence":"#194; ML +116 B pre-overlay becomes -161843 B winner, mandatory hostile"},
     {"id":"serious-corpus-efficiency","family":"product-efficiency","status":"QUEUED","evidence":"#192"}
   ],
   "saturated_families": [
     {"family":"content-ZIP mirror/original-path/full-matrix rediscovery","reason":"historical ladder + #201 decide these rungs"},
     {"family":"content-ZIP traversal fusion","reason":"#200 / 35703345978 failed final-form CPU+wall improvement gate"},
-    {"family":"pure level-6-first Deflate product order","reason":"32 MiB level-0 hostile exposed large CPU regret; superseded by cost-aware product order"},
     {"family":"raw 0..9 Deflate level search","reason":"#196/#199 establish stronger bounded-regret exact search"}
   ],
   "decision_evidence": {
     "hidden_zip_information_yield":"#201 / 35719088885 / 10690274379: -9,370,622 B, zero regressed rows, five Office admissions",
-    "hidden_zip_current_safety":"be1434c / 35800577108: 811 passed; actual-output bomb gate added; no Builder execution",
     "owner_fixed_point":"cc6dabb + 13a2b837: fixed-point ownership and failed-stage cascade semantics",
-    "candidate_scoped_boundary":"7bebcba8: no root walk; exact candidate ownership, physical-alias rejection, bounded content binding; exact-head CI 35825161470 and r24 35825161476 pending",
+    "candidate_scoped_boundary":"616fb798: no root walk in product proof boundary; exact candidate ownership, physical-alias rejection, bounded content binding and staging; exact-head regression 35825619309 green, 832 passed",
+    "composed_builder_bridge":"661f94e9: actual Builder S_VZIP provenance -> proof -> stable stage -> commit composed behind one API; Builder file-table surfacing remains unimplemented",
     "scan_fusion_negative":"#200 / 35703345978: bytes/RSS identical, CPU/wall not improved"
   },
   "process_lessons": [
-    {"lesson":"Inspect complete historical workflow/run ladders before declaring the next rung.","evidence":"content-ZIP ladder recovery and preflate duplicate correction"},
     {"lesson":"Measure final admitted archive before optimizing isolated search microbenchmarks.","evidence":"#199"},
     {"lesson":"A cleaner execution boundary dies when final-form CPU/wall do not improve.","evidence":"#200 / 35703345978"},
     {"lesson":"Representation eligibility and physical ownership are different facts; compute reuse economics only from owners that actually survive selection.","evidence":"#205 Builder ownership controls and realized-owner fixed point"}
   ],
-  "pending_jobs": [
-    {"provider":"github-actions","run":"35825161470","source_sha":"7bebcba8d4506618dd1bbc75917cac7dab7e551c","question":"candidate-scoped ownership proof exact-head regression","expected_artifact":"full CMPCT regression and CLI smoke","decision_unlocked":"whether the new proof boundary is safe to wire into Builder"},
-    {"provider":"github-actions","run":"35825161476","source_sha":"7bebcba8d4506618dd1bbc75917cac7dab7e551c","question":"unchanged r24 product floor","expected_artifact":"same-runner ABBA receipt when selected","decision_unlocked":"performance/evidence continuity; no hidden-ZIP product credit before Builder execution"}
-  ],
-  "next_action": "Consume exact-head CI for 7bebcba8. If green, wire the candidate-scoped proof into canonical Builder without changing explicit ZIP/WHL cohort cardinality: surface hidden PK\\x03\\x04 candidates separately, resolve explicit cohorts unchanged, pass only realized explicit S_VZIP owners as fixed evidence, stage stable hidden owners transactionally, re-run exclusions after failures, and ordinary-store every non-survivor. Add integrated 7-explicit+1-hidden and 8-explicit+hidden controls before Office/full-product benchmarking.",
-  "last_reconciled": "2026-09-23T06:16Z"
+  "pending_jobs": [],
+  "next_action": "Consume exact-head CI for 661f94e9. If green, edit canonical Builder.scan so non-explicit files already read as raw and beginning PK\\x03\\x04 are deferred into a separate hidden collection before BLOB/CDC storage; never add them to explicit deferred. Resolve explicit cohorts unchanged, call resolve_hidden_zip_candidates, emit S_VZIP rows for stable winners, and run inherited ordinary storage for every non-survivor. Add integrated 7-explicit+1-hidden and 8-explicit+hidden controls, then buy the Office/full-product benchmark.",
+  "last_reconciled": "2026-09-23T07:08Z"
 }
