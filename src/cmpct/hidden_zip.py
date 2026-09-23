@@ -5,13 +5,13 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-import hashlib, os, stat, struct, zipfile
+import hashlib, os, stat, struct, zipfile, zlib
 from .codec import _compressed_payload
 
 LOCAL_SIG=b"PK\x03\x04";EOCD_SIG=b"PK\x05\x06";EOCD_MIN=22;MAX_COMMENT=65535;MAX_TAIL=EOCD_MIN+MAX_COMMENT
 MAX_ENTRIES=8192;MAX_CENTRAL_DIRECTORY=16*1024*1024;MAX_CANDIDATE_LOGICAL_BYTES=256*1024*1024
 MAX_OBSERVATION_FILES=262144;MAX_OBSERVATION_DESCRIPTORS=131072;MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES=256*1024*1024;MAX_OBSERVATION_IO_BYTES=512*1024*1024;MAX_OBSERVATION_LOGICAL_BYTES=256*1024*1024
-LOCAL_HEADER_BYTES=30
+LOCAL_HEADER_BYTES=30;VALIDATION_CHUNK=1024*1024
 ZIP64_U16=0xFFFF;ZIP64_U32=0xFFFFFFFF
 SUPPORTED_METHODS=frozenset((zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED));EXPLICIT_SUFFIXES=frozenset((".zip",".whl"));MIN_VERIFIED_REUSE=2176
 
@@ -39,10 +39,9 @@ def _file_sha256_expected(path:Path,expected:tuple[int,int,int,int])->bytes|None
         with Path(path).open('rb') as f:
             if _stamp(os.fstat(f.fileno()))!=expected:return None
             while remaining:
-                chunk=f.read(min(1024*1024,remaining))
+                chunk=f.read(min(VALIDATION_CHUNK,remaining))
                 if not chunk:return None
                 h.update(chunk);remaining-=len(chunk)
-            if f.read(1):return None
             if _stamp(os.fstat(f.fileno()))!=expected:return None
         return h.digest()
     except OSError:return None
@@ -123,23 +122,48 @@ def _metadata_descriptors(path:Path):
             return descriptors,len(infos),logical,None
     except (OSError,ValueError,zipfile.BadZipFile,RuntimeError,struct.error):return None,0,0,'exact_parse_rejected'
 
-def _verify_streams(path:Path,descriptors:set[tuple[int,int,int,int]],max_bytes:int):
-    identities={d:set() for d in descriptors};read=0
+def _validate_payload(info:zipfile.ZipInfo,payload:bytes,max_logical:int)->tuple[bool,int]:
+    """Validate actual output without trusting central-directory file_size as an allocation bound."""
+    if info.compress_type==zipfile.ZIP_STORED:
+        actual=len(payload)
+        if actual>int(max_logical):return False,actual
+        return actual==int(info.file_size) and (zlib.crc32(payload)&0xffffffff)==int(info.CRC),actual
+    if info.compress_type!=zipfile.ZIP_DEFLATED:return False,0
+    d=zlib.decompressobj(-zlib.MAX_WBITS);pending=payload;actual=0;crc=0
+    try:
+        while True:
+            room=min(VALIDATION_CHUNK,int(max_logical)-actual+1)
+            if room<=0:return False,actual
+            out=d.decompress(pending,room);actual+=len(out);crc=zlib.crc32(out,crc)
+            if actual>int(max_logical):return False,actual
+            pending=d.unconsumed_tail
+            if pending:continue
+            if not d.eof:return False,actual
+            break
+    except zlib.error:return False,actual
+    return actual==int(info.file_size) and (crc&0xffffffff)==int(info.CRC) and not d.unused_data,actual
+
+def _verify_candidate(path:Path,hints:set[tuple[int,int,int,int]],max_bytes:int,max_logical:int):
+    """Validate every member, while collecting exact identities only for repeated metadata hints."""
+    identities={d:set() for d in hints};read=logical=0
     try:
         with zipfile.ZipFile(path) as z:
             for info in z.infolist():
-                descriptor=(int(info.compress_type),int(info.compress_size),int(info.file_size),int(info.CRC))
-                if info.is_dir() or descriptor not in descriptors:continue
-                compressed_size=descriptor[1];physical_read=LOCAL_HEADER_BYTES+compressed_size
-                if read+physical_read>int(max_bytes):return None,read,True
-                payload=_compressed_payload(path,info);read+=physical_read
-                if len(payload)!=compressed_size:return None,read,False
-                identities[descriptor].add((descriptor[0],compressed_size,hashlib.sha256(payload).digest()))
-        return {d:v for d,v in identities.items() if v},read,False
-    except (OSError,ValueError,zipfile.BadZipFile,RuntimeError,struct.error):return None,read,False
+                if info.is_dir():continue
+                descriptor=(int(info.compress_type),int(info.compress_size),int(info.file_size),int(info.CRC));physical=LOCAL_HEADER_BYTES+int(info.compress_size)
+                if read+physical>int(max_bytes):return None,read,logical,'io_budget'
+                payload=_compressed_payload(path,info);read+=physical
+                if len(payload)!=int(info.compress_size):return None,read,logical,'validation_rejected'
+                valid,actual=_validate_payload(info,payload,int(max_logical)-logical);logical+=actual
+                if not valid:
+                    if logical>int(max_logical):return None,read,logical,'logical_budget'
+                    return None,read,logical,'validation_rejected'
+                if descriptor in hints:identities[descriptor].add((descriptor[0],descriptor[1],hashlib.sha256(payload).digest()))
+        return {d:v for d,v in identities.items() if v},read,logical,None
+    except (OSError,ValueError,zipfile.BadZipFile,RuntimeError,struct.error):return None,read,logical,'validation_rejected'
 
 def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED_REUSE,max_observation_files:int=MAX_OBSERVATION_FILES,max_observation_descriptors:int=MAX_OBSERVATION_DESCRIPTORS,max_observation_central_directory_bytes:int=MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES,max_candidate_logical_bytes:int=MAX_CANDIDATE_LOGICAL_BYTES,max_observation_io_bytes:int=MAX_OBSERVATION_IO_BYTES,max_observation_logical_bytes:int=MAX_OBSERVATION_LOGICAL_BYTES)->HiddenZipObservation:
-    root=Path(root);rejects:Counter[str]=Counter();stamps={};hidden=set();parsed=head_bytes=tail_bytes=parser_bytes=verification_bytes=descriptor_count=files_observed=central_directory_bytes=logical_bytes=0;candidates=[];metadata_owners:Counter[tuple[int,int,int,int]]=Counter()
+    root=Path(root);rejects:Counter[str]=Counter();stamps={};hidden=set();parsed=head_bytes=tail_bytes=parser_bytes=verification_bytes=descriptor_count=files_observed=central_directory_bytes=declared_logical_bytes=validated_logical_bytes=0;candidates=[];metadata_owners:Counter[tuple[int,int,int,int]]=Counter()
     def total_io():return head_bytes+tail_bytes+parser_bytes+verification_bytes
     def result(admitted=(),evidence=()):return HiddenZipObservation(tuple(admitted),files_observed,parsed,head_bytes,tail_bytes,verification_bytes,tuple(sorted(rejects.items())),tuple(evidence),parser_bytes)
     def failed_io_budget():rejects['observation_io_budget']+=1;return result()
@@ -157,8 +181,8 @@ def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED
             descriptors,entries,logical,reason=_metadata_descriptors(path)
             if descriptors is None:rejects[('explicit_' if explicit else '')+(reason or 'exact_parse_rejected')]+=1;continue
             if logical>int(max_candidate_logical_bytes):rejects[('explicit_' if explicit else '')+'logical_work_budget']+=1;continue
-            logical_bytes+=logical
-            if logical_bytes>int(max_observation_logical_bytes):rejects['observation_logical_work_budget']+=1;return result()
+            declared_logical_bytes+=logical
+            if declared_logical_bytes>int(max_observation_logical_bytes):rejects['observation_logical_work_budget']+=1;return result()
             descriptor_count+=entries
             if descriptor_count>int(max_observation_descriptors):rejects['observation_descriptor_budget']+=1;return result()
             stamps[rel]=stamp
@@ -177,9 +201,11 @@ def observe_hidden_zip_admission(root:Path,*,min_verified_reuse:int=MIN_VERIFIED
         content_hashes[rel]=digest
         if total_io()+parser_charge>int(max_observation_io_bytes):return failed_io_budget()
         parser_bytes+=parser_charge
-        remaining=int(max_observation_io_bytes)-total_io();verified,read,exhausted=_verify_streams(path,hints,remaining);verification_bytes+=read
-        if exhausted:return failed_io_budget()
-        if verified is None:rejects['verification_rejected']+=1;continue
+        remaining_io=int(max_observation_io_bytes)-total_io();remaining_logical=int(max_observation_logical_bytes)-validated_logical_bytes
+        verified,read,logical,reason=_verify_candidate(path,hints,remaining_io,remaining_logical);verification_bytes+=read;validated_logical_bytes+=logical
+        if reason=='io_budget':return failed_io_budget()
+        if reason=='logical_budget':rejects['observation_actual_logical_work_budget']+=1;return result()
+        if verified is None:rejects['actual_stream_validation_rejected']+=1;continue
         for identities in verified.values():
             for identity in identities:exact_owners.setdefault(identity,set()).add(rel)
     reuse:Counter[str]=Counter()
