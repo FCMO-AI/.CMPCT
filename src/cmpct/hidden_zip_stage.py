@@ -64,8 +64,11 @@ def stage_stable_hidden_cohort(
         current, read = _source_current(source, proof); source_read += read
         if not current:
             excluded.add(rel); continue
+        # Bound retained raw+stream+skeleton state *before* make_vzip_recipe can materialize decoded
+        # members. The previous post-stage check bounded steady retained state but not transient peak RSS.
+        remaining_retained = int(max_staged_candidate_bytes) - retained
         try:
-            candidate = stage_vzip_recipe(source.path)
+            candidate = stage_vzip_recipe(source.path, max_retained_bytes=max(0, remaining_retained))
         except STAGE_REJECTS:
             candidate = None
         source_read += physical_size
@@ -75,7 +78,10 @@ def stage_stable_hidden_cohort(
         if not current:
             excluded.add(rel); continue
         cost = _retained_bytes(candidate)
-        if cost > int(max_staged_candidate_bytes) - retained:
+        # Keep the postcondition even though the metadata pre-bound should imply it. Two differently
+        # rooted checks make a future recipe implementation change fail closed rather than silently
+        # invalidating the staging-memory contract.
+        if cost > remaining_retained:
             excluded.add(rel); continue
         staged[rel] = candidate; retained += cost
     realized, credit = realized_reuse_fixed_point(
