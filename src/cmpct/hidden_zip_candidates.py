@@ -54,16 +54,15 @@ def prove_candidate_zip_ownership(
     validated exact compressed-stream identities and is solved over realized owners. Any budget,
     aliasing, or structural failure removes that source rather than partially admitting it.
     """
-    sources = tuple(sources)
-    if len({s.rel for s in sources}) != len(sources):
-        raise ValueError("candidate owner rel paths must be unique")
-    # Candidate-scoped integration removes the old second tree walk, but the caller can still surface
-    # a hostile number of PK-prefixed files. Refuse the whole optional optimization before per-source
-    # stat/parser state is allocated; partial truncation could manufacture or destroy reuse ownership.
+    # Check the caller-owned sequence length before tuple/set construction. The optional optimization
+    # must fail closed without allocating another O(N) container for an already-hostile surfaced set.
     if len(sources) > int(max_sources):
         return CandidateOwnershipProof(
             frozenset(), {}, {}, {}, 0, 0, (("source_budget", len(sources)),)
         )
+    sources = tuple(sources)
+    if len({s.rel for s in sources}) != len(sources):
+        raise ValueError("candidate owner rel paths must be unique")
 
     rejects: Counter[str] = Counter()
     physical: dict[tuple[int, int], list[str]] = {}
