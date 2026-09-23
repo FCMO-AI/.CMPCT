@@ -52,3 +52,15 @@ def test_stage_peak_bound_covers_original_skeleton_copies_streams_and_decoded_by
     assert staged is not None
     final_retained = sum(len(raw) + (0 if stream is None else len(stream)) for raw, _hint, stream, _ref in staged.candidates)
     assert final_retained <= path.stat().st_size + len(payload)
+
+
+def test_exact_retained_staging_records_stream_without_level_search(monkeypatch, tmp_path):
+    path = tmp_path / "candidate.bin"; payload = b"repeatable-member-" * 4096
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z: z.writestr("payload.bin", payload)
+    def forbidden_generic(*_args, **_kwargs): raise AssertionError("exact-retained path must not call generic level-search recipe")
+    monkeypatch.setattr(tx, "make_vzip_recipe", forbidden_generic)
+    staged = tx.stage_vzip_recipe(path, exact_stream_retention=True)
+    assert staged is not None
+    deflated = [row for row in staged.recipe[2] if row[1] == zipfile.ZIP_DEFLATED]
+    assert deflated and all(row[4] == 0 for row in deflated)
+    assert any(stream is not None for _raw, _hint, stream, _ref in staged.candidates)
