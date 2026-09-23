@@ -32,7 +32,6 @@ def test_finalize_hidden_winner_appends_vzip_row_from_surfaced_snapshot(tmp_path
     _write_zip(tmp_path / "owner.zip", payload)
     builder = Builder(tmp_path); builder.scan()
     assert _storage(builder)["owner.zip"][0] == S_VZIP
-
     hidden = tmp_path / "document.bin"; _write_zip(hidden, payload); item = _defer(hidden, "document.bin")
     result = finalize_deferred_hidden_files(builder, [item], min_verified_reuse=1)
     row = next(row for row in builder.files if row[0] == "document.bin")
@@ -54,11 +53,9 @@ def test_finalize_spack_cannot_subsidize_hidden_and_loser_falls_back(tmp_path: P
     for i in range(8): _write_zip(tmp_path / f"owner-{i}.zip", payload)
     builder = Builder(tmp_path); builder.scan()
     assert all(_storage(builder)[f"owner-{i}.zip"][0] == S_PACK for i in range(8))
-
     hidden = tmp_path / "document.bin"; _write_zip(hidden, payload); item = _defer(hidden, "document.bin")
     result = finalize_deferred_hidden_files(builder, [item], min_verified_reuse=1)
-    assert result.storage == {}
-    assert _storage(builder)["document.bin"][0] == S_BLOB
+    assert result.storage == {}; assert _storage(builder)["document.bin"][0] == S_BLOB
 
 
 def test_finalize_refuses_source_drift_instead_of_pairing_old_metadata_with_new_bytes(tmp_path: Path) -> None:
@@ -68,3 +65,18 @@ def test_finalize_refuses_source_drift_instead_of_pairing_old_metadata_with_new_
     with pytest.raises(RuntimeError, match="changed before ordinary fallback"):
         finalize_deferred_hidden_files(builder, [item], min_verified_reuse=1)
     assert not any(row[0] == "document.bin" for row in builder.files)
+
+
+def test_late_loser_drift_aborts_before_prepared_winner_commit(tmp_path: Path) -> None:
+    payload = random.Random(106).randbytes(32 * 1024); _write_zip(tmp_path / "owner.zip", payload)
+    builder = Builder(tmp_path); builder.scan(); recipes_before = len(builder.recipes); cands_before = set(builder.cands)
+    winner = tmp_path / "winner.bin"; loser = tmp_path / "loser.bin"
+    _write_zip(winner, payload); _write_zip(loser, random.Random(107).randbytes(4096))
+    winner_item = _defer(winner, "winner.bin"); loser_item = _defer(loser, "loser.bin")
+    replacement = tmp_path / "replacement.bin"; _write_zip(replacement, random.Random(108).randbytes(4096)); os.replace(replacement, loser)
+
+    with pytest.raises(RuntimeError, match="changed before ordinary fallback"):
+        finalize_deferred_hidden_files(builder, [winner_item, loser_item], min_verified_reuse=1)
+    # The winner was fully proved and staged, but fallback drift is discovered before the cohort commit.
+    assert len(builder.recipes) == recipes_before; assert set(builder.cands) == cands_before
+    assert not any(row[0] in {"winner.bin", "loser.bin"} for row in builder.files)
