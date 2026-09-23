@@ -162,6 +162,16 @@ def _retain_exact_streams_for_hidden_winners(builder, cohort: StagedHiddenCohort
             got = builder.add_content(stream, '.opaque-deflate')
             if got != stream_hash: raise ValueError("hidden exact-stream retention lost content identity")
             builder.secondary_stream_hashes.add(stream_hash)
+    # The hidden recipe fast path intentionally omits zlib-level search. It is correct only while every
+    # Deflate stream it emitted is guaranteed to map to retained mode 0/1. Enforce that coupling here so
+    # a future retention-policy refactor fails closed instead of silently turning the inert level field
+    # into a mode-2 reconstruction instruction.
+    for staged in cohort.staged.values():
+        for _raw, _hint, stream, ref in staged.candidates:
+            if stream is None: continue
+            stream_hash=sha(stream);rawref=bytes(ref)
+            if builder.canonical_deflate.get(rawref)!=stream_hash and stream_hash not in builder.secondary_stream_hashes:
+                raise RuntimeError("hidden exact-stream recipe escaped retained mode 0/1")
 
 
 def _commit_hidden_winners(builder, cohort: StagedHiddenCohort) -> dict[str, list]:
