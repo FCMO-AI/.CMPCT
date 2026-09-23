@@ -16,6 +16,7 @@ on:
       - 'src/cmpct/reuse_ownership.py'
       - 'src/cmpct/vzip_transaction.py'
       - 'tests/test_hidden_zip_finalize.py'
+      - 'tests/test_hidden_zip_scan_integration.py'
       - 'tests/test_v030_vzip_transaction.py'
       - '.github/workflows/v030-hidden-zip-product-gain-retention.yml'
   workflow_dispatch:
@@ -42,7 +43,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "${{ github.event_name }}" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD >/tmp/f
-          if grep -Eq '^(benchmarks/v030_hidden_zip_(product_gain_retention|resource_gate|speed_oracle|mode1_oracle)\.py|src/cmpct/(v030_hidden_zip_builder|builder_hidden_zip|hidden_zip[^/]*|reuse_ownership|vzip_transaction)\.py|tests/test_(hidden_zip_finalize|v030_vzip_transaction)\.py|\.github/workflows/v030-hidden-zip-product-gain-retention\.yml)$' /tmp/f; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -Eq '^(benchmarks/v030_hidden_zip_(product_gain_retention|resource_gate|speed_oracle|mode1_oracle)\.py|src/cmpct/(v030_hidden_zip_builder|builder_hidden_zip|hidden_zip[^/]*|reuse_ownership|vzip_transaction)\.py|tests/test_(hidden_zip_finalize|hidden_zip_scan_integration|v030_vzip_transaction)\.py|\.github/workflows/v030-hidden-zip-product-gain-retention\.yml)$' /tmp/f; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
   evidence:
     needs: classify
     if: needs.classify.outputs.run_deep == 'true'
