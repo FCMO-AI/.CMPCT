@@ -7,7 +7,7 @@ from pathlib import Path
 from cmpct.builder import Builder
 from cmpct.codec import S_VZIP
 from cmpct.hidden_zip_candidates import ZipOwnerSource, prove_candidate_zip_ownership
-from cmpct.hidden_zip_stage import commit_stable_hidden_cohort, stage_stable_hidden_cohort
+from cmpct.hidden_zip_stage import STAGE_SOURCE_PASSES, commit_stable_hidden_cohort, stage_stable_hidden_cohort
 
 
 def _write_zip(path: Path, payload: bytes) -> None:
@@ -39,7 +39,7 @@ def test_post_proof_replacement_is_rejected_before_recipe_staging(tmp_path: Path
     hidden.write_bytes(b"PK\x03\x04" + b"hostile-replacement" * 10000)
     cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=1)
     assert cohort.realized == frozenset({"owner.zip"}); assert cohort.excluded == frozenset({"hidden.bin"})
-    assert cohort.staged == {}
+    assert cohort.staged == {}; assert cohort.temporary_bytes_written == 0
 
 
 def test_staging_memory_refusal_becomes_owner_exclusion_before_commit(tmp_path: Path) -> None:
@@ -52,28 +52,31 @@ def test_staging_memory_refusal_becomes_owner_exclusion_before_commit(tmp_path: 
     assert cohort.excluded == frozenset({"hidden.bin"}); assert cohort.retained_candidate_bytes == 0
 
 
-def test_stage_source_budget_charges_prebound_parser_before_allocation(tmp_path: Path) -> None:
+def test_stage_io_budget_covers_source_snapshot_write_and_private_parser_reads(tmp_path: Path) -> None:
     payload = _noise(25); explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
     _write_zip(explicit, payload); _write_zip(hidden, payload)
     sources = [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("hidden.bin", hidden)]
-    proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1)
-    physical = hidden.stat().st_size
-    # The old three-pass account would have admitted this budget. The pre-allocation metadata pass is
-    # a fourth source read and must be charged rather than disappearing from the I/O contract.
-    cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=1, max_stage_source_bytes=physical * 3)
-    assert cohort.realized == frozenset({"owner.zip"})
-    assert cohort.excluded == frozenset({"hidden.bin"})
+    proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1); physical = hidden.stat().st_size
+    cohort = stage_stable_hidden_cohort(
+        proof, sources, min_verified_reuse=1, max_stage_source_bytes=physical * (STAGE_SOURCE_PASSES - 1)
+    )
+    assert cohort.realized == frozenset({"owner.zip"}); assert cohort.excluded == frozenset({"hidden.bin"})
     assert cohort.staged == {}; assert cohort.source_bytes_read == 0
+    assert cohort.temporary_bytes_written == 0; assert cohort.temporary_bytes_read == 0
 
 
-def test_successful_staging_retains_no_more_than_explicit_memory_ceiling(tmp_path: Path) -> None:
+def test_successful_staging_uses_content_bound_private_snapshot_with_explicit_io_account(tmp_path: Path) -> None:
     payload = _noise(22, 8 * 1024); explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
     _write_zip(explicit, payload); _write_zip(hidden, payload)
     sources = [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("hidden.bin", hidden)]
     proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1); ceiling = 64 * 1024
+    physical = hidden.stat().st_size
     cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=1, max_staged_candidate_bytes=ceiling)
     assert cohort.realized == frozenset({"owner.zip", "hidden.bin"}); assert set(cohort.staged) == {"hidden.bin"}
-    assert 0 < cohort.retained_candidate_bytes <= ceiling; assert cohort.source_bytes_read > 0
+    assert 0 < cohort.retained_candidate_bytes <= ceiling
+    assert cohort.source_bytes_read == physical
+    assert cohort.temporary_bytes_written == physical
+    assert cohort.temporary_bytes_read == physical * 3
 
 
 def test_staging_does_not_mutate_builder_until_explicit_commit(tmp_path: Path) -> None:
@@ -84,9 +87,7 @@ def test_staging_does_not_mutate_builder_until_explicit_commit(tmp_path: Path) -
     cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=1)
     builder = Builder(tmp_path)
     assert builder.cands == {}; assert builder.recipes == []
-
     storage = commit_stable_hidden_cohort(builder, cohort)
     assert set(storage) == {"a.bin", "b.bin"}
     assert all(value[0] == S_VZIP for value in storage.values())
-    assert len(builder.recipes) == 2
-    assert builder.cands
+    assert len(builder.recipes) == 2; assert builder.cands
