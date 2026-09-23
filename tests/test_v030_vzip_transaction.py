@@ -64,3 +64,16 @@ def test_exact_retained_staging_records_stream_without_level_search(monkeypatch,
     deflated = [row for row in staged.recipe[2] if row[1] == zipfile.ZIP_DEFLATED]
     assert deflated and all(row[4] == 0 for row in deflated)
     assert any(stream is not None for _raw, _hint, stream, _ref in staged.candidates)
+
+
+def test_in_memory_exact_staging_is_recipe_equivalent_and_keeps_peak_bound(tmp_path):
+    path=tmp_path/'candidate.zip';payload=b'in-memory-owner-boundary-'*4096
+    with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+        z.writestr('payload.bin',payload);z.writestr('stored.txt',b'identity',compress_type=zipfile.ZIP_STORED)
+    raw=path.read_bytes();bound=len(raw)*4+len(payload)+len(b'identity')
+    by_path=tx.stage_vzip_recipe(path,max_retained_bytes=bound,exact_stream_retention=True)
+    by_bytes=tx.stage_vzip_recipe_bytes(raw,max_retained_bytes=bound,exact_stream_retention=True)
+    assert by_path is not None and by_bytes is not None
+    assert by_bytes.recipe==by_path.recipe
+    assert by_bytes.candidates==by_path.candidates
+    assert tx.stage_vzip_recipe_bytes(raw,max_retained_bytes=bound-1,exact_stream_retention=True) is None
