@@ -3,10 +3,11 @@ from __future__ import annotations
 """Bridge canonical Builder storage outcomes into candidate-scoped hidden-ZIP proof."""
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
-from .codec import K_FILE, S_VZIP
-from .hidden_zip import MAX_OBSERVATION_FILES, MIN_VERIFIED_REUSE
+from .codec import K_FILE, S_VZIP, sha
+from .hidden_zip import MAX_OBSERVATION_FILES, MIN_VERIFIED_REUSE, _stamp
 from .hidden_zip_candidates import CandidateOwnershipProof, Stamp, ZipOwnerSource, prove_candidate_zip_ownership
 from .hidden_zip_stage import StagedHiddenCohort, commit_stable_hidden_cohort, stage_stable_hidden_cohort
 
@@ -20,6 +21,23 @@ class SurfacedHiddenCandidate:
     path: Path
     stamp: Stamp
     digest: bytes
+
+
+def read_surfaced_candidate(candidate: SurfacedHiddenCandidate) -> bytes | None:
+    """Return fallback bytes only if the exact Builder-surfaced source object is still present."""
+    remaining = int(candidate.stamp[2]); chunks: list[bytes] = []
+    try:
+        with candidate.path.open("rb") as fh:
+            if _stamp(os.fstat(fh.fileno())) != candidate.stamp: return None
+            while remaining:
+                chunk = fh.read(min(1024 * 1024, remaining))
+                if not chunk: return None
+                chunks.append(chunk); remaining -= len(chunk)
+            if _stamp(os.fstat(fh.fileno())) != candidate.stamp: return None
+    except OSError:
+        return None
+    raw = b"".join(chunks)
+    return raw if sha(raw) == candidate.digest else None
 
 
 @dataclass(frozen=True)
@@ -48,8 +66,8 @@ def ownership_sources_from_builder(
         rel, kind, _mode, _mtime, _size, digest, storage = row
         if kind != K_FILE or not storage or storage[0] != S_VZIP: continue
         if Path(rel).suffix.lower() not in EXPLICIT_SUFFIXES: continue
-        # The file-row digest is the exact explicit container Builder materialized. A later path
-        # replacement may not subsidize hidden reuse even if size/mtime are forged to match.
+        # Bind evidence to the exact container Builder already materialized, not whatever bytes a
+        # mutable path happens to contain later during hidden discovery.
         sources.append(ZipOwnerSource(rel, Path(builder.root) / rel, fixed=True, expected_digest=bytes(digest)))
 
     fixed_rels = {source.rel for source in sources}
