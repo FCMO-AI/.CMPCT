@@ -27,6 +27,7 @@ class ZipOwnerSource:
     rel: str
     path: Path
     fixed: bool = False
+    expected_stamp: Stamp | None = None
 
 
 @dataclass(frozen=True)
@@ -62,10 +63,9 @@ def prove_candidate_zip_ownership(
 
     Metadata is only a cheap necessary-condition filter. Reuse credit comes exclusively from
     validated exact compressed-stream identities and is solved over realized owners. Any budget,
-    aliasing, or structural failure removes that source rather than partially admitting it.
+    aliasing, structural failure or scan-identity drift removes that source rather than partially
+    admitting it.
     """
-    # Check the caller-owned sequence length before tuple/set construction. The optional optimization
-    # must fail closed without allocating another O(N) container for an already-hostile surfaced set.
     if len(sources) > int(max_sources):
         return _budget_refusal("source_budget", len(sources))
     sources = tuple(sources)
@@ -77,8 +77,12 @@ def prove_candidate_zip_ownership(
     source_physical: dict[str, tuple[int, int]] = {}
     for source in sources:
         try:
-            st = source.path.stat(); key = (int(st.st_dev), int(st.st_ino))
+            st = source.path.stat(); stamp = _stamp(st); key = (int(st.st_dev), int(st.st_ino))
         except OSError:
+            rejects["source_changed"] += 1; continue
+        # A hidden candidate surfaced by Builder belongs to that exact scan object. Accepting a
+        # replacement here would let a later recipe be paired with stale file-row size/mtime data.
+        if source.expected_stamp is not None and stamp != source.expected_stamp:
             rejects["source_changed"] += 1; continue
         source_physical[source.rel] = key; physical.setdefault(key, []).append(source.rel)
     aliased = {rel for rels in physical.values() if len(rels) > 1 for rel in rels}
@@ -124,6 +128,8 @@ def prove_candidate_zip_ownership(
         try:
             st = source.path.stat(); stamp = _stamp(st); physical_size = int(st.st_size)
         except OSError:
+            rejects["source_changed"] += 1; continue
+        if source.expected_stamp is not None and stamp != source.expected_stamp:
             rejects["source_changed"] += 1; continue
         if (int(st.st_dev), int(st.st_ino)) != source_physical[source.rel]:
             rejects["source_changed"] += 1; continue
