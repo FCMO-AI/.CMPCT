@@ -8,27 +8,28 @@
   },
   "active_product_bottleneck": {
     "id": "hidden-zip-information-yield-productization",
-    "observation": "#201 established a -9,370,622 B held-matrix research gain with zero byte regressions. Draft #205 is the sole active productization lane. Code head be1434c closes the previously open physical-I/O and lying-size/actual-DEFLATE safety gaps and is green on 811 tests, but Builder still does not execute the observer, so no product byte credit is earned.",
-    "next_discriminator": "Before Builder integration, falsify and repair owner self-consistency: a hidden fallback must not supply inner-stream reuse credit to another hidden admission. Use the preregistered three-owner A-X-B-Y-C chain, then fold the fixed-point ownership law into the candidate-scoped observer refactor."
+    "observation": "#201 established a -9,370,622 B held-matrix research gain with zero byte regressions. Draft #205 is the sole active productization lane. Exact head 13a2b837 contains the bounded realized-owner queue-peeling primitive plus explicit failed-stage exclusion/cascade semantics; Builder still does not execute hidden observation, so no product byte credit is earned.",
+    "next_discriminator": "Integrate the proven owner fixed point into a candidate-scoped Builder seam: only actually realized explicit S_VZIP owners may be fixed evidence owners, tentative hidden owners must survive the economic fixed point, and actual-output/staging failures must enter excluded_owners before any commit. Do not revive the second root walk."
   },
   "primary_question": {
     "id": "generic-hidden-zip-admission",
     "family": "representation-discovery+execution",
     "hypothesis": "Generic hidden ZIP/OOXML reuse can retain #201's large structural byte gain if admission is content-bound, fail-closed, bounded against hostile physical/logical work, self-consistent over actually realized owners, and fused into Builder's scan semantics without perturbing explicit ZIP cohorts.",
-    "status": "PRODUCTIZATION_OWNERSHIP_GATE_ACTIVE",
+    "status": "PRODUCTIZATION_BUILDER_OWNERSHIP_INTEGRATION_ACTIVE",
     "evidence": [
       "#201 / 35719088885 / 10690274379: 181,603,782 -> 172,233,160 B (-9,370,622 B), zero regressed rows, five Office admissions",
       "#200 / 35703345978: full traversal fusion failed final-form CPU+wall improvement and remains retired",
-      "90569bac: full regression 35796502353 green and unchanged r24 performance gate 35796502250 green",
       "be1434c / 35800577108 / 10726011125: 811 passed in 195.48 s; CLI smoke green",
-      "be1434c: actual raw-DEFLATE output is chunk-bounded and CRC/length/eof validated under a 256-MiB aggregate ceiling; a central-directory 2-MiB-as-1-byte hostile fails closed",
-      "PR comment 5786663492: one-pass hidden-owner reuse can be economically optimistic; fixed-point owner pruning is now a required pre-integration gate"
+      "be1434c / 35800577104: r24 ABBA bytes identical on every corpus but unchanged timing evaluator red; Builder did not execute hidden observation, so this is non-causal hosted timing evidence",
+      "cc6dabb: queue-peeling realized-owner fixed point passes the A-X-B-Y-C hostile and 1,000 randomized differential comparisons against whole-graph recomputation",
+      "cc6dabb exact-head runs: tests 35804707613, engineering evidence 35804707560, version discipline 35804707544, native 35804707505, fuzz 35804707583 and r24 gate 35804707714 all green",
+      "13a2b837: fixed point accepts explicit failed hidden owners and cascades their removal; randomized differential oracle now samples exclusions; current-head CI pending"
     ],
-    "prediction": "The three-owner chain will expose the one-pass owner graph, and monotone pruning from realized explicit S_VZIP owners plus tentative hidden owners will remove the false admission without changing healthy mutually-realized cohorts.",
+    "prediction": "Candidate-scoped integration from realized explicit S_VZIP owners plus tentative hidden owners will preserve healthy mutually-realized cohorts while removing false admissions and any cohort made unsupported by validation/staging failure.",
     "kill": "Any exactness failure, explicit-cohort perturbation, byte regression, unbounded hostile work, false reuse credit from non-realized owners, or confirmed create/extract/RSS/locality debt blocks or narrows promotion. Thresholds and semantics do not move after results."
   },
   "frontier_candidates": [
-    {"id":"hidden-zip-productization","family":"representation-discovery+execution","status":"ACTIVE_PR_205","evidence":"code head be1434c; exact regression green; owner fixed-point gate open"},
+    {"id":"hidden-zip-productization","family":"representation-discovery+execution","status":"ACTIVE_PR_205","evidence":"head 13a2b837; owner algorithm selected/proven; Builder ownership integration open"},
     {"id":"r25-publishability-pruning","family":"execution-architecture","status":"ADJACENT","evidence":"#194; ML +116 B pre-overlay becomes -161843 B winner, mandatory hostile"},
     {"id":"serious-corpus-efficiency","family":"product-efficiency","status":"QUEUED","evidence":"#192"}
   ],
@@ -41,7 +42,7 @@
   "decision_evidence": {
     "hidden_zip_information_yield":"#201 / 35719088885 / 10690274379: -9,370,622 B, zero regressed rows, five Office admissions",
     "hidden_zip_current_safety":"be1434c / 35800577108: 811 passed; actual-output bomb gate added; no Builder execution",
-    "owner_fixed_point":"PR #205 comment 5786663492 preregisters A-X-B-Y-C false-owner hostile and monotone realized-owner pruning",
+    "owner_fixed_point":"cc6dabb: A-X-B-Y-C hostile + 1,000 randomized differential checks; 13a2b837 adds failed-stage exclusion/cascade semantics",
     "scan_fusion_negative":"#200 / 35703345978: bytes/RSS identical, CPU/wall not improved"
   },
   "process_lessons": [
@@ -51,8 +52,8 @@
     {"lesson":"Do not require byte identity across independently regenerated corpora; test mechanism semantics within each paired exact input unless corpus identity itself is frozen and proven.","evidence":"#201 35713728064 -> 35719088885"}
   ],
   "pending_jobs": [
-    {"provider":"github-actions","run":"35800577104","source_sha":"be1434c03150d45cc26edb47ce93b70e836e3e66","question":"unchanged r24 ABBA product floor on current code head","expected_artifact":"release benchmark evidence","decision_unlocked":"whether the non-executing substrate remains timing/byte neutral on the inherited product gate"}
+    {"provider":"github-actions","run":"pending-discovery","source_sha":"13a2b8372b6a20b66f0420b2cb143e1d7e8c3980","question":"failed-owner exclusion/cascade semantics on exact head","expected_artifact":"exact-head regression and ordinary project-lane evidence","decision_unlocked":"whether failed-stage pruning substrate is safe to wire into Builder ownership integration"}
   ],
-  "next_action": "Implement the cheap three-owner fixed-point hostile first: A shares X only with B, B shares Y only with C, each stream alone below the floor and X+Y above it. Confirm current one-pass logic fails, then repair admission by repeatedly pruning hidden owners below the reuse floor from the live set of realized explicit S_VZIP owners plus tentative hidden owners. Recompute after validation/staging failures. In the same candidate-scoped refactor, stop validating all members of near-miss candidates; validate actual output only for the final tentative hidden cohort. Then add 7-vs-8 explicit S_PACK hostiles before the Office/product benchmark.",
-  "last_reconciled": "2026-09-23T00:15Z"
+  "next_action": "Consume exact-head CI for 13a2b837. Then refactor hidden observation around candidate records supplied by Builder.scan(): fixed owners are only explicit ZIP/WHL paths actually realized as S_VZIP, S_PACK explicit cohorts supply zero inner evidence, tentative hidden owners pass realized_reuse_fixed_point(), and actual-output/staging failures re-enter it through excluded_owners before any add_content commit. Add 7-explicit+1-hidden versus 8-explicit+hidden hostiles before Office/full-product benchmarking. Split proof from actual-output validation so near misses do not pay full inflate cost.",
+  "last_reconciled": "2026-09-23T02:03Z"
 }
