@@ -96,3 +96,18 @@ def test_candidate_scope_hardlink_aliases_cannot_fake_two_physical_owners(tmp_pa
     assert proof.realized == frozenset()
     assert proof.owner_identities == {}
     assert dict(proof.rejects).get("physical_alias") == 2
+
+
+def test_candidate_scope_fails_closed_before_per_source_work_when_owner_set_is_oversized(tmp_path: Path) -> None:
+    """A hostile surfaced-owner count cannot turn candidate proof into an unbounded stat/parser pass."""
+    # Paths intentionally do not exist. The source-count guard must fire before any per-source stat;
+    # otherwise these would be reported as source_changed instead of one whole-proof refusal.
+    sources = [ZipOwnerSource(f"candidate-{i}.bin", tmp_path / f"missing-{i}.bin") for i in range(3)]
+    proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1, max_sources=2)
+
+    assert proof.realized == frozenset()
+    assert proof.owner_identities == {}
+    assert proof.source_states == {}
+    assert proof.io_bytes == 0
+    assert proof.logical_bytes == 0
+    assert proof.rejects == (("source_budget", 3),)
