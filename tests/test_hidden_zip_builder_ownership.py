@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 
 from cmpct.builder import Builder
-from cmpct.codec import S_PACK, S_VZIP
+from cmpct.codec import S_BLOB, S_PACK, S_VZIP
 
 
 def _write_zip(path: Path, payload: bytes) -> None:
@@ -55,3 +55,25 @@ def test_eight_explicit_archives_are_spack_and_not_vzip_owners(tmp_path: Path) -
     assert not any(s[0] == S_VZIP for s in explicit)
     # All eight rows must point at the same physical pack candidate.
     assert len({bytes(s[1]) for s in explicit}) == 1
+
+
+def test_parseable_explicit_archive_that_falls_back_is_not_a_vzip_owner(tmp_path: Path) -> None:
+    """Parser eligibility alone cannot grant hidden-reuse ownership.
+
+    BZIP2 is a valid ZIP method understood by Python, but CMPCT's VZIP recipe intentionally does not
+    reproduce it.  Canonical Builder therefore falls back to an opaque blob; future hidden admission
+    must not treat this archive's inner compressed stream as physically reusable evidence.
+    """
+    path = tmp_path / "fallback.zip"
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_BZIP2) as z:
+        z.writestr("payload.bin", b"fallback-owner" * 1024)
+
+    # Establish that this is a valid, parseable ZIP rather than malformed-input rejection.
+    with zipfile.ZipFile(path) as z:
+        assert z.read("payload.bin") == b"fallback-owner" * 1024
+
+    b = Builder(tmp_path)
+    b.scan()
+    storage = _storage_by_rel(b)["fallback.zip"]
+    assert storage[0] == S_BLOB
+    assert storage[0] != S_VZIP
