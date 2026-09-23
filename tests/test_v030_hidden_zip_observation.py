@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-import os, random, zipfile
+import os, random, struct, zipfile
 from cmpct.hidden_zip import MIN_VERIFIED_REUSE, admission_is_current, observation_is_current, observe_hidden_zip_admission
 
 def _payload(seed:int=204)->bytes:
     rng=random.Random(seed);return bytes(rng.randrange(256) for _ in range(16*1024))
 def _hidden_zip(path,payload:bytes):
     with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:z.writestr('shared.bin',payload)
+def _lie_about_uncompressed_size(path,declared:int):
+    raw=bytearray(path.read_bytes());off=raw.find(b'PK\x01\x02');assert off>=0
+    struct.pack_into('<I',raw,off+24,int(declared));path.write_bytes(raw)
 
 def test_two_physical_hidden_archives_can_earn_verified_reuse(tmp_path):
     payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload);obs=observe_hidden_zip_admission(tmp_path)
@@ -24,6 +27,13 @@ def test_aggregate_logical_work_budget_fails_closed_across_candidates(tmp_path):
     payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload)
     obs=observe_hidden_zip_admission(tmp_path,max_candidate_logical_bytes=len(payload),max_observation_logical_bytes=len(payload))
     assert obs.admitted==();assert obs.verification_bytes_read==0;assert ('observation_logical_work_budget',1) in obs.rejects
+
+def test_actual_deflate_output_cannot_hide_behind_lied_file_size(tmp_path):
+    payload=b'A'*(2*1024*1024)
+    for name in ('a.bin','b.bin'):
+        path=tmp_path/name;_hidden_zip(path,payload);_lie_about_uncompressed_size(path,1)
+    obs=observe_hidden_zip_admission(tmp_path,max_candidate_logical_bytes=1024,max_observation_logical_bytes=1024)
+    assert obs.admitted==();assert ('observation_actual_logical_work_budget',1) in obs.rejects
 
 def test_global_file_budget_fails_closed_before_partial_admission(tmp_path):
     payload=_payload();_hidden_zip(tmp_path/'a.bin',payload);_hidden_zip(tmp_path/'b.bin',payload);obs=observe_hidden_zip_admission(tmp_path,max_observation_files=1)
