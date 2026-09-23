@@ -1,13 +1,14 @@
 from __future__ import annotations
 """Isolated resource/economics evidence for #205 actual-Builder hidden-ZIP productization.
-Fresh child processes make peak RSS arm-local; each fresh Office tree runs A-B-B-A. Promotion classification
-uses the current v0.30 lock: median create/extract <=1.10, peak RSS <=1.25, selective reads measured.
+Fresh child processes make peak RSS arm-local; each fresh Office tree runs A-B-B-A. This one-workload
+receipt can decide the v0.30 max-workload <=1.25 bound, RSS <=1.25 and selective measurement; the
+separate full matrix owns the release lock's median create/extract <=1.10 assertion.
 """
 import argparse,json,os,resource,shutil,statistics,subprocess,sys,time
 from pathlib import Path
 from benchmarks import v030_release_generalization as GENERAL
 from experiments import entropygraph_v030_release_product as PRODUCT
-REPS=3;MAX_MEDIAN_RUNTIME_RATIO=1.10;MAX_PEAK_RSS_RATIO=1.25;TIMING_RELATIVE=0.05;TIMING_ABSOLUTE_S=0.003;RANGE=4096
+REPS=3;MAX_MEDIAN_RUNTIME_RATIO=1.10;MAX_WORKLOAD_RUNTIME_RATIO=1.25;MAX_PEAK_RSS_RATIO=1.25;TIMING_RELATIVE=0.05;TIMING_ABSOLUTE_S=0.003;RANGE=4096
 
 def _treehash(root:Path)->str:return PRODUCT.treehash(root)
 def _confirmed_timing_regression(base:float,candidate:float)->bool:return candidate>base*(1+TIMING_RELATIVE) and candidate-base>TIMING_ABSOLUTE_S
@@ -82,15 +83,16 @@ def run(root:Path)->dict:
         reps.append({'rep':rep,'source_tree_sha256':source_hash,'sequence':sequence,'base_create_wall_median_s':_median(base,'create_wall_s'),'candidate_create_wall_median_s':_median(candidate,'create_wall_s'),'base_extract_wall_median_s':_median(base,'extract_wall_s'),'candidate_extract_wall_median_s':_median(candidate,'extract_wall_s'),'base_peak_rss_kib_median':_median(base,'peak_rss_kib'),'candidate_peak_rss_kib_median':_median(candidate,'peak_rss_kib'),'base_selective_wall_median_s':statistics.median(x['selective_read']['wall_s'] for x in base),'candidate_selective_wall_median_s':statistics.median(x['selective_read']['wall_s'] for x in candidate),'base_archive_bytes':base[0]['archive_bytes'],'candidate_archive_bytes':candidate[0]['archive_bytes'],'candidate_hidden_accounting':candidate[0]['hidden_accounting']})
     bc=statistics.median(r['base_create_wall_median_s'] for r in reps);cc=statistics.median(r['candidate_create_wall_median_s'] for r in reps);be=statistics.median(r['base_extract_wall_median_s'] for r in reps);ce=statistics.median(r['candidate_extract_wall_median_s'] for r in reps);br=statistics.median(r['base_peak_rss_kib_median'] for r in reps);cr=statistics.median(r['candidate_peak_rss_kib_median'] for r in reps);bs=statistics.median(r['base_selective_wall_median_s'] for r in reps);cs=statistics.median(r['candidate_selective_wall_median_s'] for r in reps)
     saving=[r['base_archive_bytes']-r['candidate_archive_bytes'] for r in reps];create_ratio=cc/bc;extract_ratio=ce/be;rss_ratio=cr/br;selective_ratio=cs/bs if bs else None
-    lock_pass=create_ratio<=MAX_MEDIAN_RUNTIME_RATIO and extract_ratio<=MAX_MEDIAN_RUNTIME_RATIO and rss_ratio<=MAX_PEAK_RSS_RATIO
+    office_lock_pass=create_ratio<=MAX_WORKLOAD_RUNTIME_RATIO and extract_ratio<=MAX_WORKLOAD_RUNTIME_RATIO and rss_ratio<=MAX_PEAK_RSS_RATIO
     phase_keys=('ownership_proof_wall_s','winner_staging_wall_s','winner_commit_retention_wall_s')
     phase_medians={key:statistics.median(float(r['candidate_hidden_accounting'].get(key,0.0)) for r in reps) for key in phase_keys}
-    summary={'office_saving_bytes_by_rep':saving,'base_create_wall_median_s':bc,'candidate_create_wall_median_s':cc,'create_wall_ratio':create_ratio,'create_confirmed_general_timing_regression':_confirmed_timing_regression(bc,cc),'base_extract_wall_median_s':be,'candidate_extract_wall_median_s':ce,'extract_wall_ratio':extract_ratio,'extract_confirmed_general_timing_regression':_confirmed_timing_regression(be,ce),'base_peak_rss_kib_median':br,'candidate_peak_rss_kib_median':cr,'peak_rss_ratio':rss_ratio,'base_selective_wall_median_s':bs,'candidate_selective_wall_median_s':cs,'selective_wall_ratio':selective_ratio,'selective_read_measured':True,'hidden_phase_wall_medians_s':phase_medians,'v030_runtime_memory_lock_pass':lock_pass,'byte_floor_pass':min(saving)>=9_000_000,'promotion_ready':lock_pass and min(saving)>=9_000_000}
-    return {'schema':'cmpct-v030-hidden-zip-resource-gate-v5','source_commit':os.environ.get('EVIDENCE_HEAD'),'repetitions':REPS,'order':'A-B-B-A fresh child processes per repetition','rows':reps,'summary':summary,'contract':{'actual_builder_candidate':True,'same_tree_per_ABBA':True,'isolated_process_per_arm':True,'exact_tree_verified':True,'v030_median_create_extract_ratio_max':MAX_MEDIAN_RUNTIME_RATIO,'v030_peak_rss_ratio_max':MAX_PEAK_RSS_RATIO,'general_timing_noise_rule':'slowdown exceeds both 5% and 3 ms','selective_read_measured':True,'phase_timing_is_diagnostic_only':True}}
+    byte_floor=min(saving)>=9_000_000
+    summary={'office_saving_bytes_by_rep':saving,'base_create_wall_median_s':bc,'candidate_create_wall_median_s':cc,'create_wall_ratio':create_ratio,'create_confirmed_general_timing_regression':_confirmed_timing_regression(bc,cc),'base_extract_wall_median_s':be,'candidate_extract_wall_median_s':ce,'extract_wall_ratio':extract_ratio,'extract_confirmed_general_timing_regression':_confirmed_timing_regression(be,ce),'base_peak_rss_kib_median':br,'candidate_peak_rss_kib_median':cr,'peak_rss_ratio':rss_ratio,'base_selective_wall_median_s':bs,'candidate_selective_wall_median_s':cs,'selective_wall_ratio':selective_ratio,'selective_read_measured':True,'hidden_phase_wall_medians_s':phase_medians,'office_max_workload_runtime_memory_lock_pass':office_lock_pass,'full_matrix_median_runtime_gate_decidable_here':False,'byte_floor_pass':byte_floor,'mechanism_office_gate_pass':office_lock_pass and byte_floor,'promotion_ready':False}
+    return {'schema':'cmpct-v030-hidden-zip-resource-gate-v6','source_commit':os.environ.get('EVIDENCE_HEAD'),'repetitions':REPS,'order':'A-B-B-A fresh child processes per repetition','rows':reps,'summary':summary,'contract':{'actual_builder_candidate':True,'same_tree_per_ABBA':True,'isolated_process_per_arm':True,'exact_tree_verified':True,'v030_full_matrix_median_create_extract_ratio_max':MAX_MEDIAN_RUNTIME_RATIO,'v030_max_workload_create_extract_ratio_max':MAX_WORKLOAD_RUNTIME_RATIO,'v030_peak_rss_ratio_max':MAX_PEAK_RSS_RATIO,'single_workload_cannot_decide_full_matrix_median':True,'general_timing_noise_rule':'slowdown exceeds both 5% and 3 ms','selective_read_measured':True,'phase_timing_is_diagnostic_only':True}}
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--work-root',type=Path,default=Path('benchmark-artifacts/hidden-zip-resource-work'));p.add_argument('--output',type=Path,default=Path('benchmark-artifacts/hidden-zip-resource.json'));p.add_argument('--child',action='store_true');p.add_argument('--source',type=Path);p.add_argument('--arm',choices=('base','candidate'));p.add_argument('--arc',type=Path);p.add_argument('--extract',type=Path);p.add_argument('--child-output',type=Path);a=p.parse_args()
     if a.child:_child(a.source,a.arm,a.arc,a.extract,a.child_output);return
     result=run(a.work_root);a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result['summary'],indent=2))
-    if not result['summary']['byte_floor_pass'] or not result['summary']['v030_runtime_memory_lock_pass']:raise SystemExit(2)
+    if not result['summary']['mechanism_office_gate_pass']:raise SystemExit(2)
 if __name__=='__main__':main()
