@@ -2,12 +2,13 @@ from __future__ import annotations
 
 """Transactional staging for speculative VZIP recipe construction."""
 
+import binascii
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 import zipfile
 
-from .codec import make_vzip_recipe, sha
+from .codec import LFH, make_vzip_recipe, sha
 
 
 @dataclass(frozen=True)
@@ -34,11 +35,41 @@ def _staging_peak_upper_bound(path: Path) -> int | None:
     return physical * 4 + logical
 
 
-def stage_vzip_recipe(path: Path, *, max_retained_bytes: int | None = None) -> StagedVzipRecipe | None:
+def _make_exact_retained_recipe(path: Path, add_content: Callable):
+    """Build VZIP without searching for a zlib regeneration level.
+
+    Hidden winners now retain every exact Deflate stream they introduce. Their recipes therefore never
+    need mode-2 regeneration, making the ten-level search pure exported create work. Keep the ordinary
+    recipe builder unchanged; this fast path is valid only when the caller also guarantees exact-stream
+    retention before Builder maps the recipe. ``level=0`` is a schema-valid inert placeholder for the
+    retained modes and must never become a mode-2 fallback.
+    """
+    path=Path(path);original=path.read_bytes();payloads=[];spans=[]
+    with zipfile.ZipFile(path) as z:
+        infos=sorted((i for i in z.infolist() if not i.is_dir()),key=lambda x:x.header_offset)
+        with path.open('rb') as f:
+            for info in infos:
+                f.seek(info.header_offset);v=LFH.unpack(f.read(LFH.size));nl,xl=v[-2],v[-1]
+                start=info.header_offset+LFH.size+nl+xl;end=start+info.compress_size
+                raw=z.read(info);stream=original[start:end]
+                if info.compress_type==zipfile.ZIP_STORED:
+                    cref=add_content(raw,Path(info.filename).suffix.lower());stream_hash=b'';level=-1
+                elif info.compress_type==zipfile.ZIP_DEFLATED:
+                    cref=add_content(raw,Path(info.filename).suffix.lower(),stream);stream_hash=sha(stream);level=0
+                else:return None
+                spans.append((start,end));payloads.append([cref,info.compress_type,stream_hash,len(stream),level])
+    literals=[];cursor=0
+    for start,end in spans:literals.append(original[cursor:start]);cursor=end
+    literals.append(original[cursor:]);skeleton=b''.join(literals);lens=[len(x) for x in literals]
+    skref=add_content(skeleton,'.cmpct-skeleton')
+    return [skref,lens,payloads,sha(original),len(original),binascii.crc32(original)&0xffffffff]
+
+
+def stage_vzip_recipe(path: Path, *, max_retained_bytes: int | None = None, exact_stream_retention: bool = False) -> StagedVzipRecipe | None:
     """Build a complete recipe/candidate set without mutating Builder state.
 
     ``max_retained_bytes`` is a peak staging-memory ceiling despite the historical parameter name.
-    Refusal happens from central-directory metadata before ``make_vzip_recipe`` can allocate decoded
+    Refusal happens from central-directory metadata before recipe construction can allocate decoded
     member/skeleton buffers; a separate post-stage check remains at the cohort layer.
     """
     if max_retained_bytes is not None:
@@ -48,7 +79,7 @@ def stage_vzip_recipe(path: Path, *, max_retained_bytes: int | None = None) -> S
     def stage(raw: bytes, hint: str = "", deflate_stream: bytes | None = None):
         raw = bytes(raw); stream = None if deflate_stream is None else bytes(deflate_stream); ref = sha(raw)
         staged.append((raw, hint, stream, ref)); return ref
-    recipe = make_vzip_recipe(Path(path), stage)
+    recipe = _make_exact_retained_recipe(Path(path), stage) if exact_stream_retention else make_vzip_recipe(Path(path), stage)
     if recipe is None:return None
     return StagedVzipRecipe(recipe, tuple(staged))
 
