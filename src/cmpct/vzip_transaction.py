@@ -16,14 +16,15 @@ class StagedVzipRecipe:
     candidates: tuple[tuple[bytes, str, bytes | None, bytes], ...]
 
 
-def _retained_upper_bound(path: Path) -> int | None:
-    """Bound raw+exact-stream+skeleton bytes before recipe construction allocates them.
+def _staging_peak_upper_bound(path: Path) -> int | None:
+    """Conservatively bound recipe-construction bytes before decoded members are allocated.
 
-    ``make_vzip_recipe`` retains every decoded member plus exact compressed streams and a skeleton.
-    The streams and skeleton are disjoint slices of the original container, so
-    ``container_size + sum(member.file_size)`` is a conservative bound on retained candidate bytes.
-    Reading only the central directory here is intentionally cheaper than discovering the bound after
-    ``ZipFile.read`` has already materialized a hostile member.
+    ``make_vzip_recipe`` first retains the complete original container. Its final staged candidates
+    then retain every decoded member plus exact compressed streams and a skeleton; streams+skeleton
+    are disjoint slices whose total is at most one additional container size. During construction the
+    original coexists with those staged bytes, so ``2*container_size + sum(member.file_size)`` bounds
+    this transaction's dominant byte buffers. The estimate intentionally overcharges rather than
+    calling a post-stage retained-state limit a peak-memory limit.
     """
     try:
         physical = int(path.stat().st_size)
@@ -31,7 +32,7 @@ def _retained_upper_bound(path: Path) -> int | None:
             logical = sum(int(info.file_size) for info in z.infolist() if not info.is_dir())
     except (OSError, ValueError, RuntimeError, zipfile.BadZipFile):
         return None
-    return physical + logical
+    return physical * 2 + logical
 
 
 def stage_vzip_recipe(path: Path, *, max_retained_bytes: int | None = None) -> StagedVzipRecipe | None:
@@ -42,11 +43,11 @@ def stage_vzip_recipe(path: Path, *, max_retained_bytes: int | None = None) -> S
     atomically at the decision level instead of leaving a half-realized economic proof.
 
     When ``max_retained_bytes`` is supplied, reject from central-directory metadata before
-    ``make_vzip_recipe`` can allocate decoded member bytes. The bound is conservative: actual retained
-    bytes may be smaller, but can never legitimately exceed container bytes plus declared logical bytes.
+    ``make_vzip_recipe`` can allocate decoded member bytes. The bound covers the original container
+    coexisting with staged raw/stream/skeleton buffers, not merely steady retained state after return.
     """
     if max_retained_bytes is not None:
-        bound = _retained_upper_bound(Path(path))
+        bound = _staging_peak_upper_bound(Path(path))
         if bound is None or bound > int(max_retained_bytes):
             return None
 
