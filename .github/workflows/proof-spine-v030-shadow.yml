@@ -1,0 +1,72 @@
+name: CMPCT v0.30 Proof Spine shadow receipt
+
+on:
+  pull_request:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'tools/proof_spine_v030_receipt.py'
+      - 'tests/test_proof_spine_v030_receipt.py'
+      - '.github/workflows/proof-spine-v030-shadow.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-proof-spine-v030-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evidence-only-shadow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      # Footnote: this job observes the authoritative local release lock; it does not
+      # change any threshold, receipt, task state, version, tag, publication surface,
+      # or release authority. LOCKED is a valid observation and does not fail the job.
+      - name: Compile evidence adapter
+        run: python -m py_compile tools/proof_spine_v030_receipt.py tests/test_proof_spine_v030_receipt.py
+
+      - name: Run adapter regressions
+        run: python -m unittest tests.test_proof_spine_v030_receipt -v
+
+      - name: Export current strict-lock evidence receipt
+        run: python tools/proof_spine_v030_receipt.py --output /tmp/cmpct-v030-proof-spine-receipt.json
+
+      - name: Verify evidence-only authority boundary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('/tmp/cmpct-v030-proof-spine-receipt.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          assert data['kind'] == 'FCMO_PROOF_SPINE_PROJECT_RECEIPT'
+          assert data['authority'] == 'EVIDENCE_ONLY'
+          assert data['project'] == {'id': 'cmpct', 'repository': 'FCMO-AI/.CMPCT'}
+          assert not ({'mission', 'claims', 'gates'} & set(data))
+          decision = data['local_decisions'][0]
+          print(f"CMPCT local strict release lock: {decision['state']}")
+          print(f"Receipts: {decision['passed_receipts']}/{decision['required_receipts']} accepted")
+          print(f"Candidate fingerprint: {data['scope']['candidate_fingerprint']}")
+          PY
+
+      # Footnote: the artifact is observational input for an external/shared proof
+      # contract. It is intentionally not committed back to the candidate branch so
+      # observation cannot mutate the release-critical fingerprint it describes.
+      - name: Upload shadow receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v030-proof-spine-shadow-receipt
+          path: /tmp/cmpct-v030-proof-spine-receipt.json
+          if-no-files-found: error
+          retention-days: 30
