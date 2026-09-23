@@ -40,13 +40,11 @@ def test_cohort_can_stage_every_recipe_before_any_real_mutation(monkeypatch, tmp
     good = tx.stage_vzip_recipe(tmp_path / "good.bin")
     bad = tx.stage_vzip_recipe(tmp_path / "bad.bin")
     assert good is not None and bad is None
-    # A cohort caller can now discard the successful stage because another member failed,
-    # without having touched the real candidate store.
     assert real_calls == []
     assert good.candidates[0][0] == b"good.bin"
 
 
-def test_stage_retention_budget_rejects_before_recipe_materialization(monkeypatch, tmp_path):
+def test_stage_peak_budget_rejects_before_recipe_materialization(monkeypatch, tmp_path):
     """Declared logical bytes must gate staging before member payloads are decoded."""
     path = tmp_path / "candidate.bin"
     payload = b"A" * (2 * 1024 * 1024)
@@ -63,15 +61,17 @@ def test_stage_retention_budget_rejects_before_recipe_materialization(monkeypatc
     assert called is False
 
 
-def test_stage_retention_bound_is_conservative_for_valid_recipe(tmp_path):
+def test_stage_peak_bound_covers_original_plus_staged_recipe_bytes(tmp_path):
     path = tmp_path / "candidate.bin"
     payload = (b"bounded-retention-" * 4096)
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as z:
         z.writestr("payload.bin", payload)
 
-    bound = tx._retained_upper_bound(path)
-    assert bound == path.stat().st_size + len(payload)
+    bound = tx._staging_peak_upper_bound(path)
+    assert bound == path.stat().st_size * 2 + len(payload)
     staged = tx.stage_vzip_recipe(path, max_retained_bytes=bound)
     assert staged is not None
-    actual = sum(len(raw) + (0 if stream is None else len(stream)) for raw, _hint, stream, _ref in staged.candidates)
-    assert actual <= bound
+    final_retained = sum(len(raw) + (0 if stream is None else len(stream)) for raw, _hint, stream, _ref in staged.candidates)
+    # Final retained state is strictly below the peak bound because the temporary original container
+    # has left scope; this is exactly why a post-stage-only check was not enough.
+    assert final_retained <= bound - path.stat().st_size
