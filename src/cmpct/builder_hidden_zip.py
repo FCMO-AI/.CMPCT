@@ -35,19 +35,16 @@ class DeferredHiddenFile:
 
 
 def hidden_candidate_size_can_stage(size: int) -> bool:
-    """Cheap impossibility filter derived only from downstream hard resource contracts."""
     return 0 <= int(size) <= int(MAX_HIDDEN_SURFACE_PHYSICAL_BYTES)
 
 
 def surface_hidden_candidate(rel: str, path: Path, st, raw: bytes) -> SurfacedHiddenCandidate:
-    """Bind a Builder-read hidden candidate to the exact scan snapshot without rereading it."""
     if len(raw) != int(st.st_size):
         raise RuntimeError("hidden candidate changed while Builder was reading it")
     return SurfacedHiddenCandidate(str(rel), Path(path), _stamp(st), sha(raw))
 
 
 def read_surfaced_candidate(candidate: SurfacedHiddenCandidate) -> bytes | None:
-    """Return fallback bytes only if the exact Builder-surfaced source object is still present."""
     expected_size = int(candidate.stamp[2])
     try:
         with candidate.path.open("rb") as fh:
@@ -61,7 +58,6 @@ def read_surfaced_candidate(candidate: SurfacedHiddenCandidate) -> bytes | None:
 
 
 def ordinary_storage_for_hidden_fallback(builder, raw: bytes, ext: str) -> list:
-    """Apply Builder's inherited ordinary BLOB/CDC policy only to rejected hidden candidates."""
     if len(raw) > 4 * CHUNK and ext != ".wav":
         parts = cdc_chunks(raw)
         entries = [[len(part), builder.add_content(part, ext)] for part in parts]
@@ -108,7 +104,6 @@ def prepare_hidden_zip_candidates(
     hidden_candidates: tuple[tuple[str, Path] | SurfacedHiddenCandidate, ...] | list[tuple[str, Path] | SurfacedHiddenCandidate],
     *, min_verified_reuse: int = MIN_VERIFIED_REUSE,
 ) -> HiddenZipResolution:
-    """Prove and stage a cohort without mutating Builder candidate/recipe state."""
     sources = ownership_sources_from_builder(builder, hidden_candidates)
     proof = prove_candidate_zip_ownership(sources, min_verified_reuse=int(min_verified_reuse))
     cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=int(min_verified_reuse))
@@ -120,7 +115,6 @@ def resolve_hidden_zip_candidates(
     hidden_candidates: tuple[tuple[str, Path] | SurfacedHiddenCandidate, ...] | list[tuple[str, Path] | SurfacedHiddenCandidate],
     *, min_verified_reuse: int = MIN_VERIFIED_REUSE,
 ) -> HiddenZipResolution:
-    """Resolve surfaced hidden candidates and commit only the final stable hidden cohort."""
     prepared = prepare_hidden_zip_candidates(builder, hidden_candidates, min_verified_reuse=int(min_verified_reuse))
     storage = commit_stable_hidden_cohort(builder, prepared.cohort)
     return HiddenZipResolution(prepared.sources, prepared.proof, prepared.cohort, storage)
@@ -130,32 +124,33 @@ def finalize_deferred_hidden_files(
     builder, deferred: tuple[DeferredHiddenFile, ...] | list[DeferredHiddenFile], *,
     min_verified_reuse: int = MIN_VERIFIED_REUSE,
 ) -> HiddenZipResolution:
-    """Validate every final source snapshot before mutating Builder, then append all hidden rows.
+    """Finalize hidden rows without retaining every fallback file in memory at once.
 
-    Winner recipes are staged but not committed while loser fallback snapshots are reread. If any
-    loser drifted, the whole finalization aborts with no hidden recipe/candidate mutation. This avoids
-    turning a late fallback race into speculative residue inside a reusable Builder instance.
+    Loser snapshots are first validated one-by-one before winner commit, so ordinary pre-existing drift
+    aborts without speculative winner state. After commit each loser is reread and content-bound again
+    immediately before ordinary BLOB/CDC materialization. A race in that tiny second window aborts the
+    build rather than emitting mismatched bytes; no archive is produced. This two-pass validation keeps
+    hidden-specific fallback memory O(max candidate size), not O(number of rejected candidates).
     """
     deferred = tuple(deferred)
     prepared = prepare_hidden_zip_candidates(
         builder, [item.candidate for item in deferred], min_verified_reuse=int(min_verified_reuse)
     )
     winner_rels = set(prepared.cohort.staged)
-    fallback_raw: dict[str, bytes] = {}
-    for item in deferred:
-        candidate = item.candidate
-        if candidate.rel in winner_rels: continue
-        raw = read_surfaced_candidate(candidate)
-        if raw is None:
-            raise RuntimeError(f"hidden candidate changed before ordinary fallback: {candidate.rel}")
-        fallback_raw[candidate.rel] = raw
+    losers = [item for item in deferred if item.candidate.rel not in winner_rels]
+    for item in losers:
+        if read_surfaced_candidate(item.candidate) is None:
+            raise RuntimeError(f"hidden candidate changed before ordinary fallback: {item.candidate.rel}")
 
     storage = commit_stable_hidden_cohort(builder, prepared.cohort)
     for item in deferred:
         candidate = item.candidate
         row_storage = storage.get(candidate.rel)
         if row_storage is None:
-            row_storage = ordinary_storage_for_hidden_fallback(builder, fallback_raw[candidate.rel], item.ext)
+            raw = read_surfaced_candidate(candidate)
+            if raw is None:
+                raise RuntimeError(f"hidden candidate changed during ordinary fallback: {candidate.rel}")
+            row_storage = ordinary_storage_for_hidden_fallback(builder, raw, item.ext)
         builder.files.append([
             candidate.rel, K_FILE, int(item.mode), int(item.mtime_ns), int(candidate.stamp[2]),
             candidate.digest, row_storage,
