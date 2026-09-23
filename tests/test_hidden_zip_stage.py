@@ -52,6 +52,20 @@ def test_staging_memory_refusal_becomes_owner_exclusion_before_commit(tmp_path: 
     assert cohort.excluded == frozenset({"hidden.bin"}); assert cohort.retained_candidate_bytes == 0
 
 
+def test_stage_source_budget_charges_prebound_parser_before_allocation(tmp_path: Path) -> None:
+    payload = _noise(25); explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
+    _write_zip(explicit, payload); _write_zip(hidden, payload)
+    sources = [ZipOwnerSource("owner.zip", explicit, fixed=True), ZipOwnerSource("hidden.bin", hidden)]
+    proof = prove_candidate_zip_ownership(sources, min_verified_reuse=1)
+    physical = hidden.stat().st_size
+    # The old three-pass account would have admitted this budget. The pre-allocation metadata pass is
+    # a fourth source read and must be charged rather than disappearing from the I/O contract.
+    cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=1, max_stage_source_bytes=physical * 3)
+    assert cohort.realized == frozenset({"owner.zip"})
+    assert cohort.excluded == frozenset({"hidden.bin"})
+    assert cohort.staged == {}; assert cohort.source_bytes_read == 0
+
+
 def test_successful_staging_retains_no_more_than_explicit_memory_ceiling(tmp_path: Path) -> None:
     payload = _noise(22, 8 * 1024); explicit = tmp_path / "owner.zip"; hidden = tmp_path / "hidden.bin"
     _write_zip(explicit, payload); _write_zip(hidden, payload)
