@@ -28,6 +28,7 @@ class ZipOwnerSource:
     path: Path
     fixed: bool = False
     expected_stamp: Stamp | None = None
+    expected_digest: bytes | None = None
 
 
 @dataclass(frozen=True)
@@ -42,10 +43,7 @@ class CandidateOwnershipProof:
 
 
 def _budget_refusal(reason: str, observed: int, io_bytes: int = 0, logical_bytes: int = 0) -> CandidateOwnershipProof:
-    """Reject the whole optional proof rather than bias ownership with a truncated prefix."""
-    return CandidateOwnershipProof(
-        frozenset(), {}, {}, {}, int(io_bytes), int(logical_bytes), ((reason, int(observed)),)
-    )
+    return CandidateOwnershipProof(frozenset(), {}, {}, {}, int(io_bytes), int(logical_bytes), ((reason, int(observed)),))
 
 
 def prove_candidate_zip_ownership(
@@ -59,29 +57,17 @@ def prove_candidate_zip_ownership(
     max_central_directory_bytes: int = MAX_OBSERVATION_CENTRAL_DIRECTORY_BYTES,
     excluded_owners: frozenset[str] = frozenset(),
 ) -> CandidateOwnershipProof:
-    """Prove exact stream ownership only among Builder-surfaced candidates.
-
-    Metadata is only a cheap necessary-condition filter. Reuse credit comes exclusively from
-    validated exact compressed-stream identities and is solved over realized owners. Any budget,
-    aliasing, structural failure or scan-identity drift removes that source rather than partially
-    admitting it.
-    """
-    if len(sources) > int(max_sources):
-        return _budget_refusal("source_budget", len(sources))
+    """Prove exact stream ownership only among Builder-surfaced candidates."""
+    if len(sources) > int(max_sources): return _budget_refusal("source_budget", len(sources))
     sources = tuple(sources)
-    if len({s.rel for s in sources}) != len(sources):
-        raise ValueError("candidate owner rel paths must be unique")
+    if len({s.rel for s in sources}) != len(sources): raise ValueError("candidate owner rel paths must be unique")
 
-    rejects: Counter[str] = Counter()
-    physical: dict[tuple[int, int], list[str]] = {}
-    source_physical: dict[str, tuple[int, int]] = {}
+    rejects: Counter[str] = Counter(); physical: dict[tuple[int, int], list[str]] = {}; source_physical: dict[str, tuple[int, int]] = {}
     for source in sources:
         try:
             st = source.path.stat(); stamp = _stamp(st); key = (int(st.st_dev), int(st.st_ino))
         except OSError:
             rejects["source_changed"] += 1; continue
-        # A hidden candidate surfaced by Builder belongs to that exact scan object. Accepting a
-        # replacement here would let a later recipe be paired with stale file-row size/mtime data.
         if source.expected_stamp is not None and stamp != source.expected_stamp:
             rejects["source_changed"] += 1; continue
         source_physical[source.rel] = key; physical.setdefault(key, []).append(source.rel)
@@ -89,8 +75,7 @@ def prove_candidate_zip_ownership(
 
     parsed: list[tuple[ZipOwnerSource, set[tuple[int, int, int, int]], int]] = []
     metadata_owners: Counter[tuple[int, int, int, int]] = Counter()
-    io_used = logical_used = declared_logical_used = 0
-    descriptor_used = central_directory_used = 0
+    io_used = logical_used = declared_logical_used = descriptor_used = central_directory_used = 0
     for source in sources:
         if source.rel not in source_physical: continue
         if source.rel in aliased:
@@ -100,8 +85,7 @@ def prove_candidate_zip_ownership(
         if not pf.eligible:
             rejects[pf.reason] += 1; continue
         central_directory_used += int(pf.central_directory_size)
-        if central_directory_used > int(max_central_directory_bytes):
-            return _budget_refusal("central_directory_budget", central_directory_used, io_used, logical_used)
+        if central_directory_used > int(max_central_directory_bytes): return _budget_refusal("central_directory_budget", central_directory_used, io_used, logical_used)
         parser_charge = int(pf.tail_bytes_read) + int(pf.central_directory_size)
         if io_used + parser_charge > int(max_io_bytes):
             rejects["io_budget"] += 1; continue
@@ -110,17 +94,14 @@ def prove_candidate_zip_ownership(
         if descriptors is None:
             rejects[reason or "exact_parse_rejected"] += 1; continue
         descriptor_used += int(entries)
-        if descriptor_used > int(max_descriptors):
-            return _budget_refusal("descriptor_budget", descriptor_used, io_used, logical_used)
+        if descriptor_used > int(max_descriptors): return _budget_refusal("descriptor_budget", descriptor_used, io_used, logical_used)
         if declared_logical > int(max_candidate_logical_bytes) or declared_logical_used + int(declared_logical) > int(max_logical_bytes):
             rejects["logical_work_budget"] += 1; continue
         declared_logical_used += int(declared_logical)
         parsed.append((source, set(descriptors), parser_charge)); metadata_owners.update(descriptors)
 
     repeated = {d for d, count in metadata_owners.items() if count >= 2}
-    owner_identities: dict[str, frozenset[Identity]] = {}
-    source_states: dict[str, tuple[Stamp, bytes]] = {}
-    accepted_sources: dict[str, ZipOwnerSource] = {}
+    owner_identities: dict[str, frozenset[Identity]] = {}; source_states: dict[str, tuple[Stamp, bytes]] = {}; accepted_sources: dict[str, ZipOwnerSource] = {}
     for source, descriptors, parser_charge in parsed:
         hints = descriptors & repeated
         if not hints:
@@ -136,12 +117,10 @@ def prove_candidate_zip_ownership(
         if io_used + physical_size + parser_charge > int(max_io_bytes):
             rejects["io_budget"] += 1; continue
         digest_before = _file_sha256_expected(source.path, stamp)
-        if digest_before is None:
+        if digest_before is None or (source.expected_digest is not None and digest_before != source.expected_digest):
             rejects["source_changed"] += 1; continue
         io_used += physical_size + parser_charge
-        verified, read, logical, reason = _verify_candidate(
-            source.path, hints, int(max_io_bytes) - io_used, int(max_logical_bytes) - logical_used
-        )
+        verified, read, logical, reason = _verify_candidate(source.path, hints, int(max_io_bytes) - io_used, int(max_logical_bytes) - logical_used)
         io_used += int(read); logical_used += int(logical)
         if verified is None:
             rejects[reason or "validation_rejected"] += 1; continue
@@ -151,16 +130,9 @@ def prove_candidate_zip_ownership(
         if digest_after is None or digest_after != digest_before:
             rejects["source_changed"] += 1; continue
         owner_identities[source.rel] = frozenset(identity for group in verified.values() for identity in group)
-        source_states[source.rel] = (stamp, digest_after)
-        accepted_sources[source.rel] = source
+        source_states[source.rel] = (stamp, digest_after); accepted_sources[source.rel] = source
 
-    fixed = {rel for rel, source in accepted_sources.items() if source.fixed}
-    hidden = set(accepted_sources) - fixed
+    fixed = {rel for rel, source in accepted_sources.items() if source.fixed}; hidden = set(accepted_sources) - fixed
     excluded = set(excluded_owners) & hidden
-    realized, credit = realized_reuse_fixed_point(
-        owner_identities, hidden_owners=hidden, fixed_owners=fixed, excluded_owners=excluded,
-        min_verified_reuse=int(min_verified_reuse),
-    )
-    return CandidateOwnershipProof(
-        realized, credit, owner_identities, source_states, int(io_used), int(logical_used), tuple(sorted(rejects.items()))
-    )
+    realized, credit = realized_reuse_fixed_point(owner_identities, hidden_owners=hidden, fixed_owners=fixed, excluded_owners=excluded, min_verified_reuse=int(min_verified_reuse))
+    return CandidateOwnershipProof(realized, credit, owner_identities, source_states, int(io_used), int(logical_used), tuple(sorted(rejects.items())))
