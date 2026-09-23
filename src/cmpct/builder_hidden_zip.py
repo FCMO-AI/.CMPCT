@@ -65,6 +65,30 @@ def ordinary_storage_for_hidden_fallback(builder, raw: bytes, ext: str) -> list:
     return [S_BLOB, builder.add_content(raw, ext)]
 
 
+def _append_fallback_row(builder, item: DeferredHiddenFile, raw: bytes) -> None:
+    candidate = item.candidate
+    storage = ordinary_storage_for_hidden_fallback(builder, raw, item.ext)
+    builder.files.append([
+        candidate.rel, K_FILE, int(item.mode), int(item.mtime_ns), int(candidate.stamp[2]),
+        candidate.digest, storage,
+    ])
+
+
+def finalize_hidden_fallback_only(builder, deferred) -> None:
+    """Disable optional discovery without turning overflow into a product failure.
+
+    Builder can call this for the bounded prefix already deferred when the source-count ceiling is
+    crossed. Each source is reread once and returned to inherited ordinary storage; future candidates
+    should stay on the normal hot path. This avoids running proof on a biased prefix and avoids an
+    extra validation pass when the optimization has already been disabled.
+    """
+    for item in deferred:
+        raw = read_surfaced_candidate(item.candidate)
+        if raw is None:
+            raise RuntimeError(f"hidden candidate changed before ordinary fallback: {item.candidate.rel}")
+        _append_fallback_row(builder, item, raw)
+
+
 @dataclass(frozen=True)
 class HiddenZipResolution:
     sources: tuple[ZipOwnerSource, ...]
@@ -124,15 +148,10 @@ def finalize_deferred_hidden_files(
     builder, deferred: tuple[DeferredHiddenFile, ...] | list[DeferredHiddenFile], *,
     min_verified_reuse: int = MIN_VERIFIED_REUSE,
 ) -> HiddenZipResolution:
-    """Finalize hidden rows without retaining every fallback file in memory at once.
-
-    Loser snapshots are first validated one-by-one before winner commit, so ordinary pre-existing drift
-    aborts without speculative winner state. After commit each loser is reread and content-bound again
-    immediately before ordinary BLOB/CDC materialization. A race in that tiny second window aborts the
-    build rather than emitting mismatched bytes; no archive is produced. This two-pass validation keeps
-    hidden-specific fallback memory O(max candidate size), not O(number of rejected candidates).
-    """
+    """Finalize a bounded discovery cohort with O(max-candidate) fallback snapshot memory."""
     deferred = tuple(deferred)
+    if len(deferred) > MAX_OBSERVATION_FILES:
+        raise ValueError("hidden discovery cohort exceeds source ceiling; use fallback-only path")
     prepared = prepare_hidden_zip_candidates(
         builder, [item.candidate for item in deferred], min_verified_reuse=int(min_verified_reuse)
     )
@@ -150,7 +169,7 @@ def finalize_deferred_hidden_files(
             raw = read_surfaced_candidate(candidate)
             if raw is None:
                 raise RuntimeError(f"hidden candidate changed during ordinary fallback: {candidate.rel}")
-            row_storage = ordinary_storage_for_hidden_fallback(builder, raw, item.ext)
+            _append_fallback_row(builder, item, raw); continue
         builder.files.append([
             candidate.rel, K_FILE, int(item.mode), int(item.mtime_ns), int(candidate.stamp[2]),
             candidate.digest, row_storage,
