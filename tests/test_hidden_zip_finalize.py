@@ -37,6 +37,12 @@ def test_finalize_hidden_winner_appends_vzip_row_from_surfaced_snapshot(tmp_path
     row = next(row for row in builder.files if row[0] == "document.bin")
     assert result.storage["document.bin"][0] == S_VZIP
     assert row[6][0] == S_VZIP; assert row[4] == item.candidate.stamp[2]; assert row[5] == item.candidate.digest
+    # A realized hidden winner, unlike the inherited explicit owner, funds exact Deflate retention even
+    # below the normal 64 KiB cutoff. This is the productized form of the max-speed oracle, scoped only
+    # to streams whose hidden representation actually survived ownership proof and staging.
+    assert builder.canonical_deflate
+    forced = set(builder.canonical_deflate)
+    assert all(builder.cands[ref].deflates for ref in forced)
 
 
 def test_finalize_hidden_loser_returns_through_inherited_blob_policy(tmp_path: Path) -> None:
@@ -46,6 +52,7 @@ def test_finalize_hidden_loser_returns_through_inherited_blob_policy(tmp_path: P
     row = next(row for row in builder.files if row[0] == "document.bin")
     assert result.storage == {}; assert row[6][0] == S_BLOB
     assert row[6][1] == sha(hidden.read_bytes()); assert row[5] == item.candidate.digest
+    assert builder.canonical_deflate == {}
 
 
 def test_finalize_spack_cannot_subsidize_hidden_and_loser_falls_back(tmp_path: Path) -> None:
@@ -56,6 +63,7 @@ def test_finalize_spack_cannot_subsidize_hidden_and_loser_falls_back(tmp_path: P
     hidden = tmp_path / "document.bin"; _write_zip(hidden, payload); item = _defer(hidden, "document.bin")
     result = finalize_deferred_hidden_files(builder, [item], min_verified_reuse=1)
     assert result.storage == {}; assert _storage(builder)["document.bin"][0] == S_BLOB
+    assert builder.canonical_deflate == {}
 
 
 def test_finalize_refuses_source_drift_instead_of_pairing_old_metadata_with_new_bytes(tmp_path: Path) -> None:
@@ -79,4 +87,5 @@ def test_late_loser_drift_aborts_before_prepared_winner_commit(tmp_path: Path) -
         finalize_deferred_hidden_files(builder, [winner_item, loser_item], min_verified_reuse=1)
     # The winner was fully proved and staged, but fallback drift is discovered before the cohort commit.
     assert len(builder.recipes) == recipes_before; assert set(builder.cands) == cands_before
+    assert builder.canonical_deflate == {}
     assert not any(row[0] in {"winner.bin", "loser.bin"} for row in builder.files)
