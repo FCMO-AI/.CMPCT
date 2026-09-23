@@ -15,8 +15,6 @@ from .hidden_zip_stage import (
 )
 
 EXPLICIT_SUFFIXES = frozenset((".zip", ".whl"))
-# A candidate larger than this cannot possibly survive staging even before member logical bytes are
-# counted: staging charges four source passes and its transient peak contains at least two containers.
 MAX_HIDDEN_SURFACE_PHYSICAL_BYTES = min(MAX_STAGE_SOURCE_BYTES // 4, MAX_STAGED_CANDIDATE_BYTES // 2)
 
 
@@ -27,6 +25,15 @@ class SurfacedHiddenCandidate:
     path: Path
     stamp: Stamp
     digest: bytes
+
+
+@dataclass(frozen=True)
+class DeferredHiddenFile:
+    """File-table metadata retained while a surfaced hidden candidate awaits cohort resolution."""
+    candidate: SurfacedHiddenCandidate
+    mode: int
+    mtime_ns: int
+    ext: str
 
 
 def hidden_candidate_size_can_stage(size: int) -> bool:
@@ -56,12 +63,7 @@ def read_surfaced_candidate(candidate: SurfacedHiddenCandidate) -> bytes | None:
 
 
 def ordinary_storage_for_hidden_fallback(builder, raw: bytes, ext: str) -> list:
-    """Apply Builder's inherited ordinary BLOB/CDC policy only to rejected hidden candidates.
-
-    The normal hot path stays in ``Builder.scan``. This narrow duplicate exists so deferred hidden
-    losers can return to the exact inherited representation decision without first materializing a
-    speculative ordinary candidate that would need sweeping later.
-    """
+    """Apply Builder's inherited ordinary BLOB/CDC policy only to rejected hidden candidates."""
     if len(raw) > 4 * CHUNK and ext != ".wav":
         parts = cdc_chunks(raw)
         entries = [[len(part), builder.add_content(part, ext)] for part in parts]
@@ -109,14 +111,38 @@ def resolve_hidden_zip_candidates(
     hidden_candidates: tuple[tuple[str, Path] | SurfacedHiddenCandidate, ...] | list[tuple[str, Path] | SurfacedHiddenCandidate],
     *, min_verified_reuse: int = MIN_VERIFIED_REUSE,
 ) -> HiddenZipResolution:
-    """Resolve surfaced hidden candidates transactionally against actual Builder outcomes.
-
-    Shipping Builder must supply ``SurfacedHiddenCandidate`` records. Tuple compatibility remains
-    only for existing substrate tests; it does not provide the scan-snapshot invariant required for
-    product integration.
-    """
+    """Resolve surfaced hidden candidates transactionally against actual Builder outcomes."""
     sources = ownership_sources_from_builder(builder, hidden_candidates)
     proof = prove_candidate_zip_ownership(sources, min_verified_reuse=int(min_verified_reuse))
     cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=int(min_verified_reuse))
     storage = commit_stable_hidden_cohort(builder, cohort)
     return HiddenZipResolution(sources, proof, cohort, storage)
+
+
+def finalize_deferred_hidden_files(
+    builder, deferred: tuple[DeferredHiddenFile, ...] | list[DeferredHiddenFile], *,
+    min_verified_reuse: int = MIN_VERIFIED_REUSE,
+) -> HiddenZipResolution:
+    """Resolve a bounded hidden cohort and append exact file rows for winners and ordinary losers.
+
+    This is the transaction boundary canonical ``Builder.scan`` should call after explicit ZIP/WHL
+    resolution. It owns neither traversal nor explicit cohort selection. A fallback reread must match
+    the surfaced object+digest; drift aborts rather than emitting old metadata for new bytes.
+    """
+    deferred = tuple(deferred)
+    resolution = resolve_hidden_zip_candidates(
+        builder, [item.candidate for item in deferred], min_verified_reuse=int(min_verified_reuse)
+    )
+    for item in deferred:
+        candidate = item.candidate
+        storage = resolution.storage.get(candidate.rel)
+        if storage is None:
+            raw = read_surfaced_candidate(candidate)
+            if raw is None:
+                raise RuntimeError(f"hidden candidate changed before ordinary fallback: {candidate.rel}")
+            storage = ordinary_storage_for_hidden_fallback(builder, raw, item.ext)
+        builder.files.append([
+            candidate.rel, K_FILE, int(item.mode), int(item.mtime_ns), int(candidate.stamp[2]),
+            candidate.digest, storage,
+        ])
+    return resolution
