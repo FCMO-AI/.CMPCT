@@ -5,6 +5,7 @@ import zipfile
 from pathlib import Path
 
 from cmpct.builder import Builder
+import cmpct.builder_hidden_zip as builder_hidden_zip
 from cmpct.builder_hidden_zip import ownership_sources_from_builder, resolve_hidden_zip_candidates
 from cmpct.codec import S_PACK, S_VZIP
 from cmpct.hidden_zip_candidates import prove_candidate_zip_ownership
@@ -84,3 +85,18 @@ def test_composed_resolution_cannot_borrow_from_spack(tmp_path: Path) -> None:
     assert result.storage == {}
     assert len(builder.recipes) == recipes_before
     assert set(builder.cands) == candidates_before
+
+
+def test_bridge_source_cap_refuses_optional_resolution_before_copying_hostile_candidate_set(tmp_path: Path, monkeypatch) -> None:
+    builder = Builder(tmp_path)
+    monkeypatch.setattr(builder_hidden_zip, "MAX_OBSERVATION_FILES", 2)
+    candidates = [(f"missing-{i}.bin", tmp_path / f"missing-{i}.bin") for i in range(3)]
+
+    result = resolve_hidden_zip_candidates(builder, candidates, min_verified_reuse=1)
+
+    assert result.sources == ()
+    assert result.proof.realized == frozenset()
+    assert result.cohort.realized == frozenset()
+    assert result.storage == {}
+    assert builder.cands == {}
+    assert builder.recipes == []
