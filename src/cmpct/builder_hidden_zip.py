@@ -137,9 +137,42 @@ def prepare_hidden_zip_candidates(builder, hidden_candidates, *, min_verified_re
     return HiddenZipResolution(sources, proof, cohort, {})
 
 
+def _retain_exact_streams_for_hidden_winners(builder, cohort: StagedHiddenCohort) -> None:
+    """Keep exact Deflate only for streams bought by a realized hidden winner.
+
+    The max-speed oracle showed that global exact-stream retention restores extraction/locality while
+    giving back only ~36 KiB of the ~9.37 MiB Office gain. Applying that policy globally would silently
+    change inherited encoder economics. Instead, realized hidden winners fund their own exact streams.
+    ``Builder._prepare_deflate_reuse`` is monotone over preselected canonical/secondary maps, so these
+    marks survive the normal 64 KiB compact-policy pass without changing unrelated content.
+    """
+    raw_refs: set[bytes] = set()
+    for staged in cohort.staged.values():
+        for _raw, _hint, stream, ref in staged.candidates:
+            if stream is not None: raw_refs.add(bytes(ref))
+    for rawref in sorted(raw_refs):
+        candidate = builder.cands.get(rawref)
+        if candidate is None or not candidate.deflates: continue
+        chosen_hash, (_chosen_bytes, _chosen_count) = max(
+            candidate.deflates.items(), key=lambda kv: (kv[1][1], -len(kv[1][0]))
+        )
+        builder.canonical_deflate[rawref] = chosen_hash
+        for stream_hash, (stream, _count) in candidate.deflates.items():
+            if stream_hash == chosen_hash: continue
+            got = builder.add_content(stream, '.opaque-deflate')
+            if got != stream_hash: raise ValueError("hidden exact-stream retention lost content identity")
+            builder.secondary_stream_hashes.add(stream_hash)
+
+
+def _commit_hidden_winners(builder, cohort: StagedHiddenCohort) -> dict[str, list]:
+    storage = commit_stable_hidden_cohort(builder, cohort)
+    _retain_exact_streams_for_hidden_winners(builder, cohort)
+    return storage
+
+
 def resolve_hidden_zip_candidates(builder, hidden_candidates, *, min_verified_reuse: int = MIN_VERIFIED_REUSE) -> HiddenZipResolution:
     prepared = prepare_hidden_zip_candidates(builder, hidden_candidates, min_verified_reuse=int(min_verified_reuse))
-    storage = commit_stable_hidden_cohort(builder, prepared.cohort)
+    storage = _commit_hidden_winners(builder, prepared.cohort)
     return HiddenZipResolution(prepared.sources, prepared.proof, prepared.cohort, storage)
 
 
@@ -150,7 +183,7 @@ def finalize_deferred_hidden_files(builder, deferred, *, min_verified_reuse: int
     winner_rels = set(prepared.cohort.staged); losers = [item for item in deferred if item.candidate.rel not in winner_rels]
     for item in losers:
         if not validate_surfaced_candidate(item.candidate):raise RuntimeError(f"hidden candidate changed before ordinary fallback: {item.candidate.rel}")
-    storage = commit_stable_hidden_cohort(builder, prepared.cohort)
+    storage = _commit_hidden_winners(builder, prepared.cohort)
     for item in deferred:
         candidate = item.candidate; row_storage = storage.get(candidate.rel)
         if row_storage is None:
