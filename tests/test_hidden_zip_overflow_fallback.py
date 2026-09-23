@@ -7,8 +7,8 @@ import pytest
 
 from cmpct.builder import Builder
 from cmpct.builder_hidden_zip import (
-    DeferredHiddenFile, SurfacedHiddenCandidate, finalize_deferred_hidden_files,
-    finalize_hidden_fallback_only, surface_hidden_candidate,
+    DeferredHiddenFile, FALLBACK_HASH_CHUNK, finalize_deferred_hidden_files,
+    finalize_hidden_fallback_only, surface_hidden_candidate, validate_surfaced_candidate,
 )
 from cmpct.codec import S_BLOB, sha
 
@@ -29,6 +29,13 @@ def test_disabled_discovery_prefix_returns_to_ordinary_storage_without_proof(tmp
     for path in paths:
         row = rows[path.name]
         assert row[6][0] == S_BLOB; assert row[5] == sha(path.read_bytes())
+
+
+def test_streaming_snapshot_validator_handles_multi_chunk_source_and_detects_drift(tmp_path: Path) -> None:
+    path = tmp_path / "candidate.bin"; path.write_bytes(b"P" * (FALLBACK_HASH_CHUNK * 2 + 17)); item = _item(path)
+    assert validate_surfaced_candidate(item.candidate)
+    path.write_bytes(b"Q" * (FALLBACK_HASH_CHUNK * 2 + 17))
+    assert not validate_surfaced_candidate(item.candidate)
 
 
 def test_discovery_finalizer_refuses_oversized_cohort_before_copying_it(tmp_path: Path, monkeypatch) -> None:
