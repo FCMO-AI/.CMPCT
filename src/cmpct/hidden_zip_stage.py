@@ -3,6 +3,8 @@ from __future__ import annotations
 """Transactional cohort staging after candidate-scoped hidden-ZIP ownership proof."""
 
 from dataclasses import dataclass
+import struct
+import zipfile
 
 from .codec import S_VZIP
 from .hidden_zip import _file_sha256_expected, _stamp
@@ -12,6 +14,7 @@ from .vzip_transaction import StagedVzipRecipe, commit_staged_vzip, stage_vzip_r
 
 MAX_STAGED_CANDIDATE_BYTES = 256 * 1024 * 1024
 MAX_STAGE_SOURCE_BYTES = 256 * 1024 * 1024
+STAGE_REJECTS = (OSError, ValueError, RuntimeError, struct.error, zipfile.BadZipFile)
 
 
 @dataclass(frozen=True)
@@ -44,12 +47,7 @@ def stage_stable_hidden_cohort(
     min_verified_reuse: int, max_staged_candidate_bytes: int = MAX_STAGED_CANDIDATE_BYTES,
     max_stage_source_bytes: int = MAX_STAGE_SOURCE_BYTES,
 ) -> StagedHiddenCohort:
-    """Stage hidden winners without mutating Builder, then peel failures to stability.
-
-    Proven source content is checked before and after recipe construction. Both hashes plus one
-    conservative file-size charge for staging share a finite source-I/O account; retained raw and
-    exact-stream bytes have a separate memory ceiling.
-    """
+    """Stage hidden winners without mutating Builder, then peel failures to stability."""
     sources = tuple(sources); source_by_rel = {source.rel: source for source in sources}
     if len(source_by_rel) != len(sources): raise ValueError("candidate owner rel paths must be unique")
     fixed = {rel for rel, source in source_by_rel.items() if source.fixed and rel in proof.owner_identities}
@@ -66,7 +64,11 @@ def stage_stable_hidden_cohort(
         current, read = _source_current(source, proof); source_read += read
         if not current:
             excluded.add(rel); continue
-        candidate = stage_vzip_recipe(source.path); source_read += physical_size
+        try:
+            candidate = stage_vzip_recipe(source.path)
+        except STAGE_REJECTS:
+            candidate = None
+        source_read += physical_size
         if candidate is None:
             excluded.add(rel); continue
         current, read = _source_current(source, proof); source_read += read
@@ -87,15 +89,9 @@ def stage_stable_hidden_cohort(
 
 
 def commit_stable_hidden_cohort(builder, cohort: StagedHiddenCohort) -> dict[str, list]:
-    """Commit only a fully staged stable cohort and return each hidden file's storage recipe.
-
-    This function intentionally does not append file-table rows. Canonical Builder retains ownership
-    of filesystem metadata and fallback policy; the bridge only materializes content candidates and
-    recipe ids after the economic/staging decision is final.
-    """
+    """Commit only a fully staged stable cohort; canonical Builder still owns file-table rows."""
     storage: dict[str, list] = {}
     for rel in sorted(cohort.staged):
         recipe = commit_staged_vzip(cohort.staged[rel], builder.add_content)
-        rid = len(builder.recipes); builder.recipes.append(recipe)
-        storage[rel] = [S_VZIP, rid]
+        rid = len(builder.recipes); builder.recipes.append(recipe); storage[rel] = [S_VZIP, rid]
     return storage
