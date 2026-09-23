@@ -4,56 +4,55 @@
   "authority":{"canonical_release":"v0.29.0 / r24 on main","active_frontier":"agent/v030-authoritative-integration","source":"repository, PR and exact-head run truth outrank this staleable cache"},
   "active_product_bottleneck":{
     "id":"hidden-zip-information-yield-productization",
-    "observation":"#201 established -9,370,622 B held-matrix research headroom with zero byte regressions. Draft #205 now executes bounded hidden-ZIP discovery through Builder.scan and is correctness-green. Two earlier inherited-r24 ABBA receipts were red at different timing loci, but the preregistered exact-source-head rerun of 039ee8e1 completed PASS with zero confirmed regressions; neither prior red locus reproduced. No product-byte credit is earned until the actual Builder seam reproduces gain on the mechanism-bearing matrix.",
-    "next_discriminator":"Run the preregistered direct-authority-vs-actual-Builder hidden Office/full-product matrix. Preserve the two historical r24 red receipts as non-replicating negative observations; do not redesign the cold hidden proof/staging path or move thresholds based on those moving loci. Measure complete stored bytes, create/extract, peak RSS, private-temp I/O and selective/locality work."
+    "observation":"#205 actual-Builder product matrix now reproduces #201's structural byte gain: exact-head artifact 10771104120 reports Office savings 9,370,630 / 9,370,622 / 9,370,630 B across three fresh repetitions with zero regressed neutral/resemblance rows and exact reconstruction/range checks. This earns product-path byte evidence, not promotion. The same first receipt shows large preliminary Office runtime debt (median create 0.1150 -> 0.9367 s; extract 0.0210 -> 0.0704 s) and only process-cumulative RSS, so resource economics are now the blocking question.",
+    "next_discriminator":"Consume exact-head isolated resource receipt from run 35920334081 / source 76174d6a: fresh-process A-B-B-A on three fresh Office trees, normative timing classification (+5% and +3 ms), arm-local peak RSS, and explicit proof/staging source/temp I/O. If runtime debt confirms, profile proof versus winner staging and rehabilitate without moving admission or release thresholds."
   },
   "primary_question":{
-    "id":"generic-hidden-zip-admission","family":"representation-discovery+execution","status":"BUILDER_SEAM_CORRECTNESS_GREEN_R24_REPLICATION_PASS_MECHANISM_MATRIX_NEXT",
-    "hypothesis":"Generic hidden ZIP/OOXML reuse can retain #201's structural byte gain if Builder surfaces bounded hidden candidates during its existing scan, only realized physical owners subsidize reuse, parser/staging consumes immutable private snapshots, and the cold optional lane remains neutral on ordinary product behavior.",
+    "id":"generic-hidden-zip-admission",
+    "family":"representation-discovery+execution",
+    "status":"ACTUAL_BUILDER_BYTE_GAIN_GREEN_RESOURCE_GATE_RUNNING",
+    "hypothesis":"Generic hidden ZIP/OOXML reuse can retain the measured ~9.37 MB Office gain through the actual Builder while rehabilitation removes exported create/extract/resource debt without weakening exactness, fallback, ownership or release law.",
     "evidence":[
-      "#201 / 35719088885 / 10690274379: 181,603,782 -> 172,233,160 B (-9,370,622 B), zero regressed rows, five Office admissions; research only",
-      "14129f1e / 35846478545 + 35846478517 + 35846586753: immutable snapshot substrate full tests, unchanged r24 floor and engineering evidence green",
-      "7d17e42b: runtime Builder scan seam landed with separate hidden cohort, pre-allocation source/aggregate bounds, lazy proof/staging import, idempotent installer and integrated 7/8-explicit, malformed-PK, hardlink, ordinary-path and reproducible controls",
-      "7d17e42b / 35858668186: correctness and complete A-B-B-A benchmark executed; inherited r24 gate red at source/CLI/create, while binary/library/create improved",
-      "039ee8e1 / 35859557450: full CMPCT tests green; native/fuzz/evidence/version/attribution gates green",
-      "039ee8e1 / 35859557519 / artifact 10749648616 sha256:993e9cca70f796f08258a1b5a274dba328fa556844e07163458b961ff786d601: complete correctness + A-B-B-A receipt red at binary/library/create; source/CLI/create stayed inside noise",
-      "039ee8e1 exact-source-head rerun / performance job 107287782032 / artifact 10766565204 sha256:e0f6f9a9ca1206d859296deeabd990cd9a124445b9dc27e0a1a6e1528494fa0f: 865 tests passed; inherited r24 gate PASS with zero confirmed regressions and 12 measured improvements; prior binary/library/create locus +0.479 ms/+0.35% and prior source/CLI/create locus +0.611 ms/+0.53%, both inside noise"
+      "#201 / 35719088885 / 10690274379: 181,603,782 -> 172,233,160 B (-9,370,622 B), zero regressed rows; historical research headroom",
+      "039ee8e1 exact-source-head rerun / job 107287782032 / artifact 10766565204: inherited r24 PASS with zero confirmed regressions; two earlier moving red loci did not reproduce",
+      "131c6b3c / 35906625372 / artifact 10771104120: actual Builder, 3 fresh reps, Office savings 9,370,630 / 9,370,622 / 9,370,630 B; zero regressed rows; exact tree and VZIP/S_PACK ranges verified",
+      "same artifact preliminary economics: Office create wall median 0.115019484 -> 0.936735589 s (~8.14x), extract 0.021016298 -> 0.070398281 s (~3.35x); process-level RSS samples are not arm-isolated and receive no comparative credit",
+      "5244a814: workflow exact-head checkout spelling repaired; topology ratchet 35919876878 green without changing experiment/evaluator",
+      "76174d6a: isolated resource harness preregistered with fresh child process per arm, A-B-B-A, normative timing rule and no invented RSS threshold"
     ],
-    "prediction":"The actual Builder seam will retain a material fraction of #201's generic Office byte gain without deterministic byte regressions. Ordinary r24 timing debt is not currently demonstrated as deterministic because an exact-head independent rerun passed and neither prior red locus reproduced.",
-    "kill":"Any exactness failure, explicit-cohort perturbation, deterministic byte regression, unbounded hostile work, false reuse credit, fallback-policy drift, or confirmed create/extract/RSS/temp-I/O/locality debt on the mechanism-bearing matrix that cannot be rehabilitated blocks or narrows promotion."
+    "prediction":"Byte retention should reproduce. Isolated create/extract likely confirm debt unless the first same-process timings were strongly confounded. If debt confirms, exact compressed-payload proof and repeated deflate-level search are distinct candidate cost centers to discriminate rather than threshold-tune.",
+    "kill":"Any exactness failure, byte regression, false reuse credit, unbounded hostile work, or exported performance/resource debt that cannot be rehabilitated blocks promotion. Byte gain alone cannot promote the mechanism."
   },
   "frontier_candidates":[
-    {"id":"hidden-zip-productization","family":"representation-discovery+execution","status":"ACTIVE_PR_205_MECHANISM_MATRIX_NEXT","evidence":"Builder execution seam correctness-green; two moving r24 red loci followed by exact-head PASS; actual-Builder Office/resource product evidence still absent"},
-    {"id":"r25-publishability-pruning","family":"execution-architecture","status":"ADJACENT","evidence":"#194; ML +116 B pre-overlay becomes -161843 B winner, mandatory hostile"},
+    {"id":"hidden-zip-resource-rehabilitation","family":"representation-discovery+execution","status":"ACTIVE_PR_205_RESOURCE_RECEIPT_RUNNING","evidence":"actual-Builder byte gain green; preliminary runtime debt large"},
+    {"id":"exact-payload-ownership-proof","family":"proof-architecture","status":"QUEUED_IF_CREATE_DEBT_CONFIRMS","evidence":"ownership fixed point consumes exact compressed-stream identity; current proof additionally decompresses all members before winner staging"},
+    {"id":"deflate-level-search-reuse","family":"execution-architecture","status":"QUEUED_IF_STAGING_DOMINATES","evidence":"make_vzip_recipe repeats deterministic zlib-level search; repeated exact streams may permit bounded verified-result reuse"},
+    {"id":"r25-publishability-pruning","family":"execution-architecture","status":"ADJACENT","evidence":"#194; mandatory hostile remains"},
     {"id":"serious-corpus-efficiency","family":"product-efficiency","status":"QUEUED","evidence":"#192"}
   ],
   "saturated_families":[
     {"family":"content-ZIP mirror/original-path/full-matrix rediscovery","reason":"historical ladder + #201 decide these rungs"},
     {"family":"content-ZIP traversal fusion","reason":"#200 / 35703345978 failed final-form CPU+wall improvement gate"},
-    {"family":"raw 0..9 Deflate level search","reason":"#196/#199 establish stronger bounded-regret exact search"}
+    {"family":"raw 0..9 Deflate level search","reason":"#196/#199 establish stronger bounded-regret exact search; this does not preclude caching verified repeated exact-stream level results"}
   ],
   "decision_evidence":{
-    "hidden_zip_information_yield":"#201 / 35719088885 / 10690274379: -9,370,622 B, zero regressed rows, five Office admissions",
-    "owner_fixed_point":"cc6dabb + 13a2b837: fixed-point ownership and failed-stage cascade semantics",
-    "candidate_scoped_boundary":"616fb798: no root walk in product proof boundary; physical alias rejection, bounded content binding and staging",
-    "composed_builder_bridge":"661f94e9: actual Builder S_VZIP provenance -> proof -> stable stage -> commit",
-    "immutable_staging_snapshot":"7204c923: source copied with fd stamp+digest binding; parser/recipe operate only on private snapshot; source/temp I/O explicit",
-    "immutable_snapshot_green":"14129f1e / 35846478545 + 35846478517 + 35846586753",
-    "builder_execution_seam":"7d17e42b: separate bounded hidden cohort in runtime Builder.scan; ordinary non-PK path retains only four-byte discriminator; hidden stack lazy-loads; explicit S_PACK cardinality unchanged",
-    "builder_seam_correctness":"039ee8e1 / 35859557450 plus 35859557519 and 107287782032 correctness: green",
-    "builder_seam_r24_nonreplicating":"7d17e42b / 35858668186 red at source/CLI/create; 039ee8e1 / 35859557519 red at binary/library/create; exact-source-head rerun job 107287782032 PASS with zero confirmed regressions and neither locus reproduced. Historical reds remain valid observations but do not establish deterministic seam debt.",
-    "fallback_parity":"73dae218: hidden loser helper reproduces inherited ordinary BLOB and large-file CDC decisions",
-    "scaffolding_timing_red":"661f94e9 / 35829736400 / 10737321372: bytes identical, combined create -1.03%, binary +17.09%, nested +9.94%; non-causal because Builder seam absent"
+    "hidden_zip_research_headroom":"#201 / 35719088885 / 10690274379: -9,370,622 B, zero regressed rows",
+    "actual_builder_gain_retention":"131c6b3c / artifact 10771104120: median -9,370,630 B Office, every rep >=9 MB, zero regressed rows, exact reconstruction/ranges",
+    "builder_seam_r24_nonreplicating":"7d17e42b red source/CLI; 039ee8e1 red binary/library; exact-head rerun PASS with neither locus reproduced",
+    "resource_debt_preliminary":"artifact 10771104120: Office create ~8.14x and extract ~3.35x in same-process matrix; requires isolated confirmation",
+    "workflow_topology_repair":"5244a814 / 35919876878 topology green; only checkout syntax changed"
   },
   "process_lessons":[
     {"lesson":"Representation eligibility and physical ownership differ; reuse economics require owners that actually survive selection.","evidence":"#205 ownership controls"},
-    {"lesson":"A memory/resource ceiling must reject before the allocation it claims to bound.","evidence":"3f31a82a plus 61935ef6 scan-seam correction"},
+    {"lesson":"A memory/resource ceiling must reject before the allocation it claims to bound.","evidence":"3f31a82a plus 61935ef6"},
     {"lesson":"A parser resource bound requires immutable consumed bytes.","evidence":"7204c923"},
-    {"lesson":"Optional machinery should stay on a cold path when a cheap discriminator can preserve ordinary product behavior.","evidence":"c181213a"},
-    {"lesson":"Mechanism product evidence must execute the actual shipping candidate, not a historical research subclass that inspired it.","evidence":"#201 versus #205 evidence boundary"},
-    {"lesson":"Repeated workflow FAIL is not repeated mechanism evidence unless the same observable/locus/direction reproduces; preserve moving red receipts, but require locus replication before causal surgery.","evidence":"35858668186 + 35859557519 + exact-head rerun job 107287782032 PASS"}
+    {"lesson":"Mechanism product evidence must execute the actual shipping candidate, not a historical research subclass.","evidence":"#201 versus #205"},
+    {"lesson":"Repeated workflow FAIL is not repeated mechanism evidence unless the same observable/locus/direction reproduces.","evidence":"35858668186 + 35859557519 + exact-head PASS"},
+    {"lesson":"Do not invent a promotion threshold from remembered campaign prose; bind experimental evaluators to current normative repository law before consuming evidence.","evidence":"resource harness corrected before receipt from draft 1.10x/1.25x constants to PERFORMANCE_RELEASE_GATE +5% and +3 ms timing law; RSS left measured without fabricated threshold"}
   ],
-  "pending_jobs":[],
-  "next_action":"Build and run the mechanism-bearing direct-base-vs-actual-Builder Office/full-product gain-retention matrix already preregistered for #205. Require exact reconstruction/range identity, zero deterministic byte regressions, material retention of #201's hidden-container gain, and explicit create/extract/RSS/private-temp-I/O/selective-locality accounting. Preserve the two historical r24 reds and the exact-head PASS; do not spend another activation chasing ordinary-path timing unless mechanism-bearing evidence reopens a stable cost locus.",
-  "last_reconciled":"2026-09-23T18:00Z"
+  "pending_jobs":[
+    {"provider":"github-actions","run_id":35920334081,"source_sha":"76174d6ae64caaa55f02d4eba8e5ac4d468fd1a6","question":"isolated Office runtime/RSS/temp-I/O economics","expected_artifact":"v030-hidden-zip-product-gain-retention-<exact-sha>","decision_unlocked":"whether #205 enters resource rehabilitation and which cost center to attack"}
+  ],
+  "next_action":"Consume run 35920334081 without babysitting it. If isolated timing is red, preserve the byte breakthrough and use the exported proof/staging accounting to choose between cheaper exact compressed-payload ownership proof, repeated deflate-level-search reuse, or another causally stronger rehabilitation. Do not weaken release timing law, invent an RSS threshold, or promote on bytes alone.",
+  "last_reconciled":"2026-09-23T21:08Z"
 }
