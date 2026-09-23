@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .hidden_zip import (
-    MAX_CANDIDATE_LOGICAL_BYTES, MAX_OBSERVATION_IO_BYTES, MAX_OBSERVATION_LOGICAL_BYTES,
-    MIN_VERIFIED_REUSE, _file_sha256_expected, _metadata_descriptors, _stamp,
-    _verify_candidate, hidden_zip_preflight,
+    MAX_CANDIDATE_LOGICAL_BYTES, MAX_OBSERVATION_ENTRIES, MAX_OBSERVATION_IO_BYTES,
+    MAX_OBSERVATION_LOGICAL_BYTES, MIN_VERIFIED_REUSE, _file_sha256_expected,
+    _metadata_descriptors, _stamp, _verify_candidate, hidden_zip_preflight,
 )
 from .reuse_ownership import Identity, realized_reuse_fixed_point
 
@@ -45,6 +45,7 @@ def prove_candidate_zip_ownership(
     max_io_bytes: int = MAX_OBSERVATION_IO_BYTES,
     max_logical_bytes: int = MAX_OBSERVATION_LOGICAL_BYTES,
     max_candidate_logical_bytes: int = MAX_CANDIDATE_LOGICAL_BYTES,
+    max_sources: int = MAX_OBSERVATION_ENTRIES,
     excluded_owners: frozenset[str] = frozenset(),
 ) -> CandidateOwnershipProof:
     """Prove exact stream ownership only among Builder-surfaced candidates.
@@ -56,6 +57,13 @@ def prove_candidate_zip_ownership(
     sources = tuple(sources)
     if len({s.rel for s in sources}) != len(sources):
         raise ValueError("candidate owner rel paths must be unique")
+    # Candidate-scoped integration removes the old second tree walk, but the caller can still surface
+    # a hostile number of PK-prefixed files. Refuse the whole optional optimization before per-source
+    # stat/parser state is allocated; partial truncation could manufacture or destroy reuse ownership.
+    if len(sources) > int(max_sources):
+        return CandidateOwnershipProof(
+            frozenset(), {}, {}, {}, 0, 0, (("source_budget", len(sources)),)
+        )
 
     rejects: Counter[str] = Counter()
     physical: dict[tuple[int, int], list[str]] = {}
