@@ -98,7 +98,9 @@ def stage_stable_hidden_cohort(
                     excluded.add(rel); continue
                 temp_written += physical_size
                 try:
-                    candidate = stage_vzip_recipe(snapshot, max_retained_bytes=max(0, remaining_retained))
+                    # Hidden winners pay for exact stream retention, so searching ten zlib levels for
+                    # a mode-2 fallback that will never be emitted is pure create-time debt.
+                    candidate = stage_vzip_recipe(snapshot, max_retained_bytes=max(0, remaining_retained), exact_stream_retention=True)
                 except STAGE_REJECTS:
                     candidate = None
                 # Metadata peak-bound parser is one P and recipe construction is conservatively two P.
