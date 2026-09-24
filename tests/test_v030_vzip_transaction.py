@@ -45,6 +45,14 @@ def test_validated_exact_stream_cache_skips_second_deflate_decode(monkeypatch,tm
     raw=path.read_bytes();cache={};first=tx.stage_vzip_recipe_bytes(raw,validated_deflates=cache);assert first is not None and cache
     def forbidden_read(*_args,**_kwargs):raise AssertionError('identical validated Deflate stream must reuse prior decoded bytes')
     monkeypatch.setattr(zipfile.ZipFile,'read',forbidden_read);second=tx.stage_vzip_recipe_bytes(raw,validated_deflates=dict(cache));assert second is not None;assert second.recipe==first.recipe;assert second.candidates==first.candidates
+def test_native_validation_receives_existing_cohort_cache(monkeypatch,tmp_path):
+    import cmpct.native_hidden_zip_batch as native
+    path=tmp_path/'candidate.zip';payload=b'native-cohort-cache-'*4096
+    with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:z.writestr('payload.bin',payload)
+    raw=path.read_bytes();cache={b'existing-key':b'existing-raw'};seen=[]
+    def fake_native(candidate,known):seen.append((candidate,known));return {}
+    monkeypatch.setattr(native,'native_validated_deflates',fake_native);staged=tx.stage_vzip_recipe_bytes(raw,validated_deflates=cache)
+    assert staged is not None;assert seen and seen[0][0]==raw and seen[0][1] is cache;assert cache[b'existing-key']==b'existing-raw'
 def test_prehashed_commit_reuses_staged_identity_without_rehashing_decoded_member(monkeypatch):
     from types import SimpleNamespace
     raw=b'already-verified-decoded-member';expected=sha(raw);staged=tx.StagedVzipRecipe(['recipe'],((raw,'.bin',None,expected),));builder=SimpleNamespace(cands={});real_sha=tx.sha
