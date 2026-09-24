@@ -21,7 +21,7 @@ class StagedHiddenCohort:
 def _retained_bytes(staged):return sum(len(raw)+(0 if stream is None else len(stream)) for raw,_hint,stream,_ref in staged.candidates)
 
 def _revalidate_proven_source(source:ZipOwnerSource,proof:CandidateOwnershipProof)->tuple[bool,int]:
-    """Rebind proof to the live path immediately before an older discovery snapshot can be staged."""
+    """Rebind staged immutable bytes to the live path immediately before cohort commit eligibility."""
     state=proof.source_states.get(source.rel)
     if state is None:return False,0
     expected_stamp,expected_digest=state;expected_size=int(expected_stamp[2]);digest=hashlib.sha256();read=0
@@ -68,12 +68,20 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
         if snapshot is not None:
             if len(snapshot)!=physical_size or sha(snapshot)!=state[1]:excluded.add(rel);continue
             if physical_size>int(max_stage_source_bytes)-(source_read+temp_written+temp_read):excluded.add(rel);continue
-            current,read=_revalidate_proven_source(source,proof);source_read+=read
-            if not current:excluded.add(rel);continue
             try:candidate=stage_vzip_recipe_bytes(snapshot,max_retained_bytes=max(0,remaining),exact_stream_retention=True)
             except STAGE_REJECTS:candidate=None
+            # The immutable Builder snapshot may be staged for milliseconds. Rebind only *after*
+            # staging so a mutation during recipe construction cannot slip between the old guard and
+            # commit. This preserves one live full-source read on the fast snapshot path, but moves it
+            # to the actual transaction boundary instead of merely checking before work begins.
+            if candidate is not None:
+                current,read=_revalidate_proven_source(source,proof);source_read+=read
+                if not current:candidate=None
         else:
-            required=physical_size*STAGE_SOURCE_PASSES
+            # The private-snapshot fallback needs both a validated copy and a final live rebind: the
+            # source can mutate while the private copy is being parsed. This path is intentionally
+            # slower and applies only when the bounded live snapshot optimization is unavailable.
+            required=physical_size*(STAGE_SOURCE_PASSES+1)
             if required>int(max_stage_source_bytes)-(source_read+temp_written+temp_read):excluded.add(rel);continue
             try:
                 with tempfile.TemporaryDirectory(prefix='cmpct-hidden-vzip-') as td:
@@ -83,6 +91,9 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
                     try:candidate=stage_vzip_recipe(private,max_retained_bytes=max(0,remaining),exact_stream_retention=True)
                     except STAGE_REJECTS:candidate=None
                     temp_read+=physical_size*3
+                    if candidate is not None:
+                        current,read=_revalidate_proven_source(source,proof);source_read+=read
+                        if not current:candidate=None
             except OSError:candidate=None
         if candidate is None:excluded.add(rel);continue
         cost=_retained_bytes(candidate)
