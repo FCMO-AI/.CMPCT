@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 """Transactional staging for speculative VZIP recipe construction."""
 import binascii
 from dataclasses import dataclass
@@ -42,16 +41,9 @@ def _staging_peak_upper_bound_bytes(original:bytes)->int|None:
     return len(original)*4+logical
 
 def _make_exact_retained_recipe_bytes(original:bytes,add_content:Callable,validated_deflates:dict|None=None,*,max_retained_bytes:int|None=None):
-    """Build retained-stream VZIP, reusing only previously CRC-validated identical Deflate streams.
-
-    In-memory hidden staging computes the unchanged `4*physical + logical` resource ceiling from the
-    same central-directory parse used to build the recipe. Malformed central-directory/open failures
-    retain the old preflight behavior (`None`); member CRC/length failures during authoritative reads
-    still propagate and cannot be mistaken for a harmless unsupported candidate.
-    """
+    """Build retained-stream VZIP, reusing only previously CRC-validated identical Deflate streams."""
     original=bytes(original);payloads=[];spans=[];view=_BytesView(original);validated_deflates=validated_deflates if validated_deflates is not None else {}
-    try:
-        z=zipfile.ZipFile(view);infos=sorted((i for i in z.infolist() if not i.is_dir()),key=lambda x:x.header_offset)
+    try:z=zipfile.ZipFile(view);infos=sorted((i for i in z.infolist() if not i.is_dir()),key=lambda x:x.header_offset)
     except (OSError,ValueError,RuntimeError,zipfile.BadZipFile):
         try:z.close()
         except Exception:pass
@@ -65,8 +57,7 @@ def _make_exact_retained_recipe_bytes(original:bytes,add_content:Callable,valida
             if info.compress_type==zipfile.ZIP_STORED:
                 raw=stream;cref=add_content(raw,Path(info.filename).suffix.lower());stream_hash=b'';level=-1
             elif info.compress_type==zipfile.ZIP_DEFLATED:
-                stream_hash=sha(stream);key=(int(info.compress_size),int(info.file_size),int(info.CRC),stream_hash)
-                raw=validated_deflates.get(key)
+                stream_hash=sha(stream);key=(int(info.compress_size),int(info.file_size),int(info.CRC),stream_hash);raw=validated_deflates.get(key)
                 if raw is None:raw=z.read(info);validated_deflates[key]=raw
                 cref=add_content(raw,Path(info.filename).suffix.lower(),stream);level=0
             else:return None
@@ -82,7 +73,12 @@ def _stage_with(stage_source,*,max_retained_bytes:int|None,exact_stream_retentio
     staged=[]
     def stage(raw:bytes,hint:str='',deflate_stream:bytes|None=None):
         raw=bytes(raw);stream=None if deflate_stream is None else bytes(deflate_stream);ref=sha(raw);staged.append((raw,hint,stream,ref));return ref
-    if isinstance(stage_source,bytes):recipe=_make_exact_retained_recipe_bytes(stage_source,stage,validated_deflates,max_retained_bytes=max_retained_bytes) if exact_stream_retention else None
+    if isinstance(stage_source,bytes):
+        if exact_stream_retention and validated_deflates is not None:
+            from .native_hidden_zip_batch import native_validated_deflates
+            native_cache=native_validated_deflates(stage_source)
+            if native_cache is not None:validated_deflates.update(native_cache)
+        recipe=_make_exact_retained_recipe_bytes(stage_source,stage,validated_deflates,max_retained_bytes=max_retained_bytes) if exact_stream_retention else None
     else:
         path=Path(stage_source)
         if max_retained_bytes is not None:
