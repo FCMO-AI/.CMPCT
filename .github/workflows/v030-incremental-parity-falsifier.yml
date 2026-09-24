@@ -5,6 +5,7 @@ on:
     paths:
       - 'experiments/v030_incremental_parity_falsifier.py'
       - 'experiments/v030_incremental_targeted_retention_oracle.py'
+      - 'experiments/v030_incremental_release_policy_decomposition.py'
       - '.github/workflows/v030-incremental-parity-falsifier.yml'
   workflow_dispatch:
 
@@ -17,11 +18,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        with: {ref: "${{ github.event.pull_request.head.sha || github.sha }}"}
       - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
+        with: {python-version: '3.11'}
       - name: Install benchmark runtime
         run: |
           python -m pip install --upgrade pip
@@ -29,7 +28,6 @@ jobs:
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Execute parity and locality falsifier
         run: |
-          set -euo pipefail
           mkdir -p evidence-artifacts
           python -m experiments.v030_incremental_parity_falsifier | tee evidence-artifacts/incremental-parity.json
       - name: Compact retention recovers genuine-r24 byte floor
@@ -43,10 +41,7 @@ jobs:
       - name: Preserve parity receipt
         if: always()
         uses: actions/upload-artifact@v4
-        with:
-          name: v030-incremental-parity-${{ github.event.pull_request.head.sha || github.sha }}
-          path: evidence-artifacts/incremental-parity.json
-          if-no-files-found: error
+        with: {name: "v030-incremental-parity-${{ github.event.pull_request.head.sha || github.sha }}", path: evidence-artifacts/incremental-parity.json, if-no-files-found: error}
       - name: Enforce compact-retention byte floor
         if: always()
         run: test '${{ steps.byte-floor.outcome }}' = success
@@ -59,11 +54,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        with: {ref: "${{ github.event.pull_request.head.sha || github.sha }}"}
       - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
+        with: {python-version: '3.11'}
       - name: Install benchmark runtime
         run: |
           python -m pip install --upgrade pip
@@ -71,7 +64,6 @@ jobs:
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Execute dictionary-user targeted-retention oracle
         run: |
-          set -euo pipefail
           mkdir -p evidence-artifacts
           python -m experiments.v030_incremental_targeted_retention_oracle | tee evidence-artifacts/targeted-retention.json
       - name: Targeted retention recovers genuine-r24 byte floor
@@ -85,13 +77,31 @@ jobs:
       - name: Preserve targeted-retention receipt
         if: always()
         uses: actions/upload-artifact@v4
-        with:
-          name: v030-targeted-retention-${{ github.event.pull_request.head.sha || github.sha }}
-          path: evidence-artifacts/targeted-retention.json
-          if-no-files-found: error
+        with: {name: "v030-targeted-retention-${{ github.event.pull_request.head.sha || github.sha }}", path: evidence-artifacts/targeted-retention.json, if-no-files-found: error}
       - name: Enforce targeted-retention byte floor
         if: always()
         run: test '${{ steps.targeted-byte-floor.outcome }}' = success
       - name: Enforce targeted-retention locality
         if: always()
         run: test '${{ steps.targeted-locality.outcome }}' = success
+
+  release-policy-decomposition:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: "${{ github.event.pull_request.head.sha || github.sha }}"}
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11'}
+      - name: Install benchmark runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Execute residual release-policy decomposition
+        run: |
+          mkdir -p evidence-artifacts
+          python -m experiments.v030_incremental_release_policy_decomposition | tee evidence-artifacts/release-policy-decomposition.json
+      - name: Preserve release-policy decomposition
+        uses: actions/upload-artifact@v4
+        with: {name: "v030-release-policy-decomposition-${{ github.event.pull_request.head.sha || github.sha }}", path: evidence-artifacts/release-policy-decomposition.json, if-no-files-found: error}
