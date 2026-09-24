@@ -108,8 +108,12 @@ def ownership_sources_from_builder(builder,hidden_candidates)->tuple[ZipOwnerSou
 
 def prepare_hidden_zip_candidates(builder,hidden_candidates,*,min_verified_reuse:int=MIN_VERIFIED_REUSE)->HiddenZipResolution:
     hidden_candidates=tuple(hidden_candidates);sources=ownership_sources_from_builder(builder,hidden_candidates)
-    proof=prove_candidate_zip_ownership(sources,min_verified_reuse=int(min_verified_reuse))
+    # The bounded Builder discovery snapshot is already the immutable source staging will consume.
+    # Let ownership proof derive exact compressed identities from those same bytes instead of opening
+    # and parsing each hidden path again. The independent live digest rebind remains in staging at the
+    # transaction boundary, so this fuses duplicate work without weakening source-mutation safety.
     snapshots={item.rel:item.raw for item in hidden_candidates if isinstance(item,SurfacedHiddenCandidate) and item.raw is not None}
+    proof=prove_candidate_zip_ownership(sources,min_verified_reuse=int(min_verified_reuse),source_snapshots=snapshots)
     cohort=stage_stable_hidden_cohort(proof,sources,min_verified_reuse=int(min_verified_reuse),source_snapshots=snapshots)
     return HiddenZipResolution(sources,proof,cohort,{})
 
