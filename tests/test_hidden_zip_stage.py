@@ -29,5 +29,13 @@ def test_failed_final_rebind_cannot_seed_cross_winner_decode_cache(tmp_path,monk
         nonlocal reads;reads+=1;return real_read(self,*args,**kwargs)
     monkeypatch.setattr(stage_api,'_revalidate_proven_source',selective_rebind);monkeypatch.setattr(zipfile.ZipFile,'read',counted_read);cohort=stage_stable_hidden_cohort(proof,sources,min_verified_reuse=1,source_snapshots=snapshots)
     assert reads==2;assert 'a.bin' in cohort.excluded;assert cohort.realized==frozenset();assert cohort.staged=={}
+def test_parallel_snapshot_stage_rebinds_live_source_after_workers_join(tmp_path,monkeypatch):
+    payload=_noise(27,64*1024);a=tmp_path/'a.bin';b=tmp_path/'b.bin';_write_zip(a,payload);_write_zip(b,payload);sources=[ZipOwnerSource('a.bin',a),ZipOwnerSource('b.bin',b)];snapshots={'a.bin':a.read_bytes(),'b.bin':b.read_bytes()};proof=prove_candidate_zip_ownership(sources,min_verified_reuse=1,source_snapshots=snapshots);real_stage=stage_api.stage_vzip_recipe_bytes
+    def stage_then_mutate(raw,*args,**kwargs):
+        staged=real_stage(raw,*args,**kwargs)
+        if raw is snapshots['a.bin']:a.write_bytes(b'X'*len(raw))
+        return staged
+    monkeypatch.setattr(stage_api,'stage_vzip_recipe_bytes',stage_then_mutate);cohort=stage_stable_hidden_cohort(proof,sources,min_verified_reuse=1,source_snapshots=snapshots,max_parallel_workers=4)
+    assert 'a.bin' in cohort.excluded;assert cohort.realized==frozenset();assert cohort.staged=={}
 def test_staging_does_not_mutate_builder_until_explicit_commit(tmp_path):
     payload=_noise(24);a=tmp_path/'a.bin';b=tmp_path/'b.bin';_write_zip(a,payload);_write_zip(b,payload);sources=[ZipOwnerSource('a.bin',a),ZipOwnerSource('b.bin',b)];proof=prove_candidate_zip_ownership(sources,min_verified_reuse=1);cohort=stage_stable_hidden_cohort(proof,sources,min_verified_reuse=1);builder=Builder(tmp_path);assert builder.cands=={};assert builder.recipes==[];storage=commit_stable_hidden_cohort(builder,cohort);assert set(storage)=={'a.bin','b.bin'};assert all(value[0]==S_VZIP for value in storage.values());assert len(builder.recipes)==2;assert builder.cands
