@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os,random,stat,struct,zipfile
+import io,os,random,stat,struct,zipfile
 from pathlib import Path
 import pytest
 from cmpct.builder import Builder
@@ -15,7 +15,7 @@ def _defer(path:Path,rel:str)->DeferredHiddenFile:
 def _storage(builder):return {row[0]:row[6] for row in builder.files if row[6] is not None}
 def _corrupt_payload_bytes(raw:bytes)->bytes:
     data=bytearray(raw)
-    with zipfile.ZipFile(Path('/dev/null')) if False else zipfile.ZipFile(__import__('io').BytesIO(raw)) as z:info=z.infolist()[0]
+    with zipfile.ZipFile(io.BytesIO(raw)) as z:info=z.infolist()[0]
     off=int(info.header_offset);nl,xl=struct.unpack_from('<HH',raw,off+26);pos=off+30+nl+xl+max(0,int(info.compress_size)//2);data[pos]^=1;return bytes(data)
 
 def test_finalize_hidden_winner_appends_vzip_row_from_surfaced_snapshot(tmp_path):
@@ -57,10 +57,10 @@ def test_mutation_during_snapshot_recipe_construction_is_rejected_before_commit(
     assert len(builder.recipes)==recipes_before;assert set(builder.cands)==cands_before;assert builder.canonical_deflate=={};assert not any(row[0]=='winner.bin' for row in builder.files)
 
 def test_provisional_malformed_hidden_peers_are_excluded_before_commit(tmp_path):
-    # Two hidden peers can provisionally match exact compressed bytes even when those bytes violate CRC.
-    # Staging must reject both, recompute ownership to empty, and preserve them exactly through fallback.
-    good=tmp_path/'seed.zip';_write_zip(good,random.Random(113).randbytes(32*1024));bad=_corrupt_payload_bytes(good.read_bytes());a=tmp_path/'a.bin';b=tmp_path/'b.bin';a.write_bytes(bad);b.write_bytes(bad)
-    builder=Builder(tmp_path);builder.scan();ia=_defer(a,'a.bin');ib=_defer(b,'b.bin');recipes_before=len(builder.recipes);result=finalize_deferred_hidden_files(builder,[ia,ib],min_verified_reuse=1)
+    # Identical malformed hidden peers can provisionally match exact compressed bytes. Staging must
+    # reject both, recompute ownership to empty, and preserve the original bytes through fallback.
+    seed=tmp_path/'seed.zip';_write_zip(seed,random.Random(113).randbytes(32*1024));bad=_corrupt_payload_bytes(seed.read_bytes());seed.unlink();builder=Builder(tmp_path);builder.scan()
+    a=tmp_path/'a.bin';b=tmp_path/'b.bin';a.write_bytes(bad);b.write_bytes(bad);ia=_defer(a,'a.bin');ib=_defer(b,'b.bin');recipes_before=len(builder.recipes);result=finalize_deferred_hidden_files(builder,[ia,ib],min_verified_reuse=1)
     assert result.storage=={};assert result.cohort.staged=={};assert result.cohort.realized==frozenset();assert len(builder.recipes)==recipes_before
     assert _storage(builder)['a.bin'][0]==S_BLOB and _storage(builder)['b.bin'][0]==S_BLOB;assert a.read_bytes()==bad and b.read_bytes()==bad
 
