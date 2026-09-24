@@ -32,6 +32,10 @@ jobs:
         id: medium
         continue-on-error: true
         run: python -c "import json; d=json.load(open('evidence-artifacts/decomposition.json')); r=next(x for x in d['rows'] if x['name']=='disable_medium_binary_only'); assert r['delta_vs_r24_bytes']<=0, r['delta_vs_r24_bytes']"
+      - name: Medium-binary-off preserves conservative 8x VZIP locality
+        id: medium-locality
+        continue-on-error: true
+        run: python -c "import json; d=json.load(open('evidence-artifacts/decomposition.json')); r=next(x for x in d['rows'] if x['name']=='disable_medium_binary_only'); assert r['vzip_locality']['within_8x'], r['vzip_locality']['max_decoded_context_amplification']"
       - name: Mature micro max and medium defaults reach r24 floor
         id: both
         continue-on-error: true
@@ -50,6 +54,9 @@ jobs:
       - name: Enforce medium-binary-off arm
         if: always()
         run: test '${{ steps.medium.outcome }}' = success
+      - name: Enforce medium-binary-off locality
+        if: always()
+        run: test '${{ steps.medium-locality.outcome }}' = success
       - name: Enforce both-defaults arm
         if: always()
         run: test '${{ steps.both.outcome }}' = success
