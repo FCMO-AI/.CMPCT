@@ -1,0 +1,94 @@
+name: CMPCT v0.30 G04 screen falsifier
+# ci-lane: deep
+# ci-cancel-policy: latest-head-only
+# ci-pr-scope: latest-head-commit-gate
+
+on:
+  pull_request:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'experiments/v030_g04_screen_falsifier.py'
+      - '.github/workflows/v030-g04-screen-falsifier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: cmpct-v030-g04-screen-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_oracle: ${{ steps.scope.outputs.run_oracle }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify oracle impact
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_oracle=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/v030_g04_screen_falsifier\.py|\.github/workflows/v030-g04-screen-falsifier\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_oracle=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_oracle=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_oracle == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact oracle head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic frozen-corpus dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile bounded oracle
+        run: python -m py_compile experiments/v030_g04_screen_falsifier.py
+      - name: Run paired frozen-workload falsifier
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_g04_screen_falsifier.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/g04-screen-falsifier.json"
+      - name: Upload exact-head receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-screen-falsifier-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/g04-screen-falsifier.json
+          if-no-files-found: warn
+          retention-days: 90
