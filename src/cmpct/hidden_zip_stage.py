@@ -1,6 +1,5 @@
 from __future__ import annotations
 """Transactional cohort staging after candidate-scoped hidden-ZIP ownership proof."""
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import hashlib,os,struct,tempfile,zipfile
 from pathlib import Path
@@ -72,6 +71,9 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
     # may use this bounded lane when at least two hidden winners can actually overlap.
     parallel_ok=max_parallel_workers>1 and len(parallel_rows)>1 and per_candidate_reservation>0 and physical_total<=int(max_stage_source_bytes)
     if parallel_ok:
+        # Keep concurrent.futures off the import path for ordinary/CLI creation; importing thread-pool
+        # machinery globally would itself tax the fresh-process timing surface that workers=1 protects.
+        from concurrent.futures import ThreadPoolExecutor
         workers=min(max_parallel_workers,len(parallel_rows))
         with ThreadPoolExecutor(max_workers=workers,thread_name_prefix='cmpct-hidden-stage') as pool:
             futures=[pool.submit(_parallel_snapshot_stage,rel,state,snapshot,per_candidate_reservation) for rel,_source,state,snapshot in parallel_rows]
