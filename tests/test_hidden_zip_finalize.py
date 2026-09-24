@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from cmpct.builder import Builder
 import cmpct.builder_hidden_zip as hidden_api
+import cmpct.hidden_zip_stage as stage_api
 from cmpct.builder_hidden_zip import DeferredHiddenFile,finalize_deferred_hidden_files,surface_hidden_candidate
 from cmpct.codec import S_BLOB,S_PACK,S_VZIP,sha
 
@@ -40,6 +41,14 @@ def test_mutation_after_proof_before_snapshot_stage_is_rejected(tmp_path,monkeyp
     def mutate_then_stage(*args,**kwargs):
         replacement=tmp_path/'replacement.bin';_write_zip(replacement,random.Random(110).randbytes(32*1024));os.replace(replacement,hidden);return original_stage(*args,**kwargs)
     monkeypatch.setattr(hidden_api,'stage_stable_hidden_cohort',mutate_then_stage)
+    with pytest.raises(RuntimeError,match='changed before ordinary fallback'):finalize_deferred_hidden_files(builder,[item],min_verified_reuse=1)
+    assert len(builder.recipes)==recipes_before;assert set(builder.cands)==cands_before;assert builder.canonical_deflate=={};assert not any(row[0]=='winner.bin' for row in builder.files)
+
+def test_mutation_during_snapshot_recipe_construction_is_rejected_before_commit(tmp_path,monkeypatch):
+    payload=random.Random(111).randbytes(32*1024);_write_zip(tmp_path/'owner.zip',payload);builder=Builder(tmp_path);builder.scan();hidden=tmp_path/'winner.bin';_write_zip(hidden,payload);item=_defer(hidden,'winner.bin');recipes_before=len(builder.recipes);cands_before=set(builder.cands);original=stage_api.stage_vzip_recipe_bytes
+    def stage_then_mutate(*args,**kwargs):
+        staged=original(*args,**kwargs);replacement=tmp_path/'replacement.bin';_write_zip(replacement,random.Random(112).randbytes(32*1024));os.replace(replacement,hidden);return staged
+    monkeypatch.setattr(stage_api,'stage_vzip_recipe_bytes',stage_then_mutate)
     with pytest.raises(RuntimeError,match='changed before ordinary fallback'):finalize_deferred_hidden_files(builder,[item],min_verified_reuse=1)
     assert len(builder.recipes)==recipes_before;assert set(builder.cands)==cands_before;assert builder.canonical_deflate=={};assert not any(row[0]=='winner.bin' for row in builder.files)
 
