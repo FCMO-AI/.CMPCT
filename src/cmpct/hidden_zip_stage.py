@@ -50,14 +50,13 @@ def _snapshot_proven_source(source,proof,destination):
     except OSError:return False,read
     return True,read
 def _parallel_snapshot_stage(rel,state,snapshot,max_retained_bytes):
-    """Stage one immutable snapshot privately; live-source validation happens after all workers join."""
     physical_size=int(state[0][2])
     if len(snapshot)!=physical_size or sha(snapshot)!=state[1]:return rel,None
     try:candidate=stage_vzip_recipe_bytes(snapshot,max_retained_bytes=max_retained_bytes,exact_stream_retention=True,validated_deflates={})
     except STAGE_REJECTS:candidate=None
     return rel,candidate
-def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_candidate_bytes=MAX_STAGED_CANDIDATE_BYTES,max_stage_source_bytes=MAX_STAGE_SOURCE_BYTES,source_snapshots=None):
-    sources=tuple(sources);source_by_rel={s.rel:s for s in sources};source_snapshots=source_snapshots or {}
+def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_candidate_bytes=MAX_STAGED_CANDIDATE_BYTES,max_stage_source_bytes=MAX_STAGE_SOURCE_BYTES,source_snapshots=None,max_parallel_workers:int=1):
+    sources=tuple(sources);source_by_rel={s.rel:s for s in sources};source_snapshots=source_snapshots or {};max_parallel_workers=max(1,min(MAX_PARALLEL_STAGE_WORKERS,int(max_parallel_workers)))
     if len(source_by_rel)!=len(sources):raise ValueError('candidate owner rel paths must be unique')
     fixed={rel for rel,s in source_by_rel.items() if s.fixed and rel in proof.owner_identities};hidden=set(proof.owner_identities)-fixed;initial=set(proof.realized)&hidden
     staged={};excluded=set();retained=source_read=temp_written=temp_read=0
@@ -68,17 +67,16 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
         parallel_rows.append((rel,source,state,snapshot))
     physical_total=sum(int(r[2][0][2]) for r in parallel_rows)
     per_candidate_reservation=(int(max_staged_candidate_bytes)//len(parallel_rows)) if parallel_rows else 0
-    # A singleton cannot gain parallel wall time; keep it on the proven serial/cache path and avoid
-    # thread-pool overhead on arbitrary corpora where only one hidden owner survives the fixed point.
-    parallel_ok=len(parallel_rows)>1 and per_candidate_reservation>0 and physical_total<=int(max_stage_source_bytes)
+    # Respect Builder's inherited worker policy. Fresh CLI creation deliberately constructs Builder
+    # with one worker to avoid the already-measured process-start thread tax; in-process/default Builder
+    # may use this bounded lane when at least two hidden winners can actually overlap.
+    parallel_ok=max_parallel_workers>1 and len(parallel_rows)>1 and per_candidate_reservation>0 and physical_total<=int(max_stage_source_bytes)
     if parallel_ok:
-        workers=min(MAX_PARALLEL_STAGE_WORKERS,len(parallel_rows))
+        workers=min(max_parallel_workers,len(parallel_rows))
         with ThreadPoolExecutor(max_workers=workers,thread_name_prefix='cmpct-hidden-stage') as pool:
             futures=[pool.submit(_parallel_snapshot_stage,rel,state,snapshot,per_candidate_reservation) for rel,_source,state,snapshot in parallel_rows]
             results=[f.result() for f in futures]
         candidates=dict(results)
-        # Rebind only after every immutable recipe is staged. Doing it inside workers would widen the
-        # mutation window for an early-finishing source while other workers were still decoding.
         for rel,source,_state,_snapshot in parallel_rows:
             candidate=candidates.get(rel)
             if candidate is None:excluded.add(rel);continue
