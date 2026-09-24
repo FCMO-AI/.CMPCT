@@ -82,11 +82,18 @@ jobs:
           if-no-files-found: error
           retention-days: 90
       - if: always()
+        run: python benchmarks/v030_hidden_zip_physical_identity_oracle.py --output benchmark-artifacts/hidden-zip-physical-id.json
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-hidden-zip-physical-identity-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/hidden-zip-physical-id.json
+          if-no-files-found: warn
+          retention-days: 90
+      - if: always()
         run: python benchmarks/v030_hidden_zip_speed_oracle.py --output benchmark-artifacts/hidden-zip-speed-oracle.json
       - if: always()
         run: python benchmarks/v030_hidden_zip_mode1_oracle.py --output benchmark-artifacts/hidden-zip-mode1-oracle.json
-      - if: always()
-        run: python benchmarks/v030_hidden_zip_physical_identity_oracle.py --output benchmark-artifacts/hidden-zip-physical-id.json
       - if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-hidden-zip-product-gain-retention.yml
       - uses: actions/upload-artifact@v6
@@ -96,7 +103,6 @@ jobs:
           path: |
             benchmark-artifacts/hidden-zip-speed-oracle.json
             benchmark-artifacts/hidden-zip-mode1-oracle.json
-            benchmark-artifacts/hidden-zip-physical-id.json
           if-no-files-found: warn
           retention-days: 90
       - name: Enforce resource gate outcome
