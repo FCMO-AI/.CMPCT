@@ -105,7 +105,7 @@ def prepare_hidden_zip_candidates(builder,hidden_candidates,*,min_verified_reuse
     hidden_candidates=tuple(hidden_candidates);sources=ownership_sources_from_builder(builder,hidden_candidates)
     snapshots={item.rel:item.raw for item in hidden_candidates if isinstance(item,SurfacedHiddenCandidate) and item.raw is not None}
     proof=prove_candidate_zip_ownership(sources,min_verified_reuse=int(min_verified_reuse),source_snapshots=snapshots)
-    cohort=stage_stable_hidden_cohort(proof,sources,min_verified_reuse=int(min_verified_reuse),source_snapshots=snapshots,max_parallel_workers=getattr(builder,'encode_workers',1))
+    cohort=stage_stable_hidden_cohort(proof,sources,min_verified_reuse=int(min_verified_reuse),source_snapshots=snapshots,max_parallel_workers=getattr(builder,'workers',1))
     return HiddenZipResolution(sources,proof,cohort,{})
 
 def _retain_exact_streams_for_hidden_winners(builder,cohort:StagedHiddenCohort)->None:
