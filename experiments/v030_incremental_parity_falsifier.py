@@ -29,7 +29,6 @@ def _tree_identity(root: Path) -> tuple[str, int, int]:
 
 
 def _genuine_r24(root: Path, out: Path) -> dict:
-    # Match benchmarks/v030_release_ablation_canonical.py exactly: ordinary canonical r24 Builder.
     stats = dict(Builder(root).build(out))
     return {**stats, "selected": "canonical-r24", "format_revision": 24}
 
@@ -77,6 +76,7 @@ def main() -> None:
         print(json.dumps({
             "schema": "cmpct-v030-incremental-parity-falsifier-v1",
             "source_tree": {"sha256": tree_sha, "files": files, "logical_bytes": logical},
+            "comparator_contract": "benchmarks/v030_release_ablation_canonical.py::_product_row ordinary Builder(root).build",
             "rows": rows, "decision": decision,
         }, indent=2, sort_keys=True))
 
