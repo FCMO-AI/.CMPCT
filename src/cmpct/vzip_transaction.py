@@ -76,10 +76,7 @@ def _stage_with(stage_source,*,max_retained_bytes:int|None,exact_stream_retentio
     if isinstance(stage_source,bytes):
         if exact_stream_retention and validated_deflates is not None:
             from .native_hidden_zip_batch import native_validated_deflates
-            # Preserve the serial product path's cohort-wide exact-stream reuse across the native boundary.
-            # Earlier native product evidence decoded every occurrence independently and therefore did not
-            # match the canonical Python validated_deflates semantics.
-            native_cache=native_validated_deflates(stage_source,validated_deflates)
+            native_cache=native_validated_deflates(stage_source)
             if native_cache is not None:validated_deflates.update(native_cache)
         recipe=_make_exact_retained_recipe_bytes(stage_source,stage,validated_deflates,max_retained_bytes=max_retained_bytes) if exact_stream_retention else None
     else:
