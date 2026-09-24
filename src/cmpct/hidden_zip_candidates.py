@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 """Candidate-scoped proof for hidden-ZIP reuse ownership."""
 from collections import Counter
 from dataclasses import dataclass
@@ -9,11 +8,9 @@ from .hidden_zip import MAX_CANDIDATE_LOGICAL_BYTES,MAX_OBSERVATION_CENTRAL_DIRE
 from .reuse_ownership import Identity,realized_reuse_fixed_point
 Stamp=tuple[int,int,int,int]
 @dataclass(frozen=True)
-class ZipOwnerSource:
-    rel:str;path:Path;fixed:bool=False;expected_stamp:Stamp|None=None;expected_digest:bytes|None=None
+class ZipOwnerSource:rel:str;path:Path;fixed:bool=False;expected_stamp:Stamp|None=None;expected_digest:bytes|None=None
 @dataclass(frozen=True)
-class CandidateOwnershipProof:
-    realized:frozenset[str];credit:dict[str,int];owner_identities:dict[str,frozenset[Identity]];source_states:dict[str,tuple[Stamp,bytes]];io_bytes:int;logical_bytes:int;rejects:tuple[tuple[str,int],...]
+class CandidateOwnershipProof:realized:frozenset[str];credit:dict[str,int];owner_identities:dict[str,frozenset[Identity]];source_states:dict[str,tuple[Stamp,bytes]];io_bytes:int;logical_bytes:int;rejects:tuple[tuple[str,int],...]
 def _budget_refusal(reason,observed,io_bytes=0,logical_bytes=0):return CandidateOwnershipProof(frozenset(),{},{},{},int(io_bytes),int(logical_bytes),((reason,int(observed)),))
 def _snapshot_hint_identities(raw,hints):
     identities=set()
@@ -88,7 +85,10 @@ def prove_candidate_zip_ownership(sources,*,min_verified_reuse=MIN_VERIFIED_REUS
             if exact is None:rejects['validation_rejected']+=1;continue
             ids[s.rel]=exact;states[s.rel]=(stamp,s.expected_digest);accepted[s.rel]=s;continue
         if not s.fixed and s.expected_digest is not None:
-            exact,read,reason=_path_hint_identities(s.path,hints,int(max_io_bytes)-io_used);io_used+=read
+            # ZipFile reparses the central directory here, so charge that parser pass before reading
+            # hinted local headers/payloads. The helper then owns a strict residual I/O budget.
+            if io_used+pc>int(max_io_bytes):rejects['io_budget']+=1;continue
+            io_used+=pc;exact,read,reason=_path_hint_identities(s.path,hints,int(max_io_bytes)-io_used);io_used+=read
             if exact is None:rejects[reason or 'validation_rejected']+=1;continue
             ids[s.rel]=exact;states[s.rel]=(stamp,s.expected_digest);accepted[s.rel]=s;continue
         if io_used+size+pc>int(max_io_bytes):rejects['io_budget']+=1;continue
