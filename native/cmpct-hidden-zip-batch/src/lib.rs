@@ -56,6 +56,7 @@ pub unsafe extern "C" fn cmpct_hidden_zip_validate_dedup_deflate_batch(input:*co
     let result=std::panic::catch_unwind(||{
         let src=if input_len==0{&[]}else{std::slice::from_raw_parts(input,input_len)};
         let specs=if job_count==0{&[]}else{std::slice::from_raw_parts(jobs,job_count)};
+        if specs.iter().any(|spec|spec.output_len>MAX_BATCH_OUTPUT){return Err(LIMIT)}
         let dst=if output_cap==0{&mut []}else{std::slice::from_raw_parts_mut(output,output_cap)};
         let digest_out=if hashes_cap==0{&mut []}else{std::slice::from_raw_parts_mut(hashes,hashes_cap)};
         let offsets=if owner_offsets_cap==0{&mut []}else{std::slice::from_raw_parts_mut(owner_offsets,owner_offsets_cap)};
