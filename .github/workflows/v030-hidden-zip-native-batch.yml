@@ -36,7 +36,7 @@ jobs:
     needs: classify
     if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     concurrency:
       group: v030-hidden-zip-native-batch-receipt-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
