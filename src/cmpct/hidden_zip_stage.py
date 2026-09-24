@@ -61,9 +61,6 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
     if len(source_by_rel)!=len(sources):raise ValueError('candidate owner rel paths must be unique')
     fixed={rel for rel,s in source_by_rel.items() if s.fixed and rel in proof.owner_identities};hidden=set(proof.owner_identities)-fixed;initial=set(proof.realized)&hidden
     staged={};excluded=set();retained=source_read=temp_written=temp_read=0
-    # Parallelism is admitted only when every provisional winner has an immutable Builder snapshot.
-    # Every worker gets a deterministic disjoint share of the aggregate retained-memory budget, which
-    # stays safe even for highly compressible/hostile members whose decoded bytes dwarf the container.
     parallel_rows=[]
     for rel in sorted(initial):
         source=source_by_rel.get(rel);state=proof.source_states.get(rel);snapshot=source_snapshots.get(rel)
@@ -71,7 +68,9 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
         parallel_rows.append((rel,source,state,snapshot))
     physical_total=sum(int(r[2][0][2]) for r in parallel_rows)
     per_candidate_reservation=(int(max_staged_candidate_bytes)//len(parallel_rows)) if parallel_rows else 0
-    parallel_ok=bool(parallel_rows) and per_candidate_reservation>0 and physical_total<=int(max_stage_source_bytes)
+    # A singleton cannot gain parallel wall time; keep it on the proven serial/cache path and avoid
+    # thread-pool overhead on arbitrary corpora where only one hidden owner survives the fixed point.
+    parallel_ok=len(parallel_rows)>1 and per_candidate_reservation>0 and physical_total<=int(max_stage_source_bytes)
     if parallel_ok:
         workers=min(MAX_PARALLEL_STAGE_WORKERS,len(parallel_rows))
         with ThreadPoolExecutor(max_workers=workers,thread_name_prefix='cmpct-hidden-stage') as pool:
@@ -79,8 +78,7 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
             results=[f.result() for f in futures]
         candidates=dict(results)
         # Rebind only after every immutable recipe is staged. Doing it inside workers would widen the
-        # mutation window for an early-finishing source while other workers were still decoding. The
-        # final validation remains deliberately adjacent to fixed-point/commit, as in the serial path.
+        # mutation window for an early-finishing source while other workers were still decoding.
         for rel,source,_state,_snapshot in parallel_rows:
             candidate=candidates.get(rel)
             if candidate is None:excluded.add(rel);continue
@@ -90,7 +88,6 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
             if retained+cost>int(max_staged_candidate_bytes):excluded.add(rel);continue
             staged[rel]=candidate;retained+=cost
     else:
-        # Serial fallback retains the previously proven cross-winner validated-decode cache.
         validated_deflates={}
         for rel in sorted(initial):
             source=source_by_rel.get(rel);state=proof.source_states.get(rel)
