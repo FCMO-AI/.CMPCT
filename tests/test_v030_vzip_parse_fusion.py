@@ -1,5 +1,6 @@
 from __future__ import annotations
-import zipfile
+import binascii,zlib,zipfile
+import pytest
 import cmpct.vzip_transaction as tx
 
 
@@ -28,3 +29,13 @@ def test_in_memory_fused_peak_bound_still_refuses_before_member_decode(monkeypat
 
 def test_in_memory_fused_parse_preserves_malformed_preflight_refusal():
     assert tx.stage_vzip_recipe_bytes(b'not-a-zip',max_retained_bytes=1024,exact_stream_retention=True) is None
+
+
+def test_direct_raw_deflate_validation_enforces_length_and_crc():
+    raw=b'direct-validation-'*4096;co=zlib.compressobj(6,zlib.DEFLATED,-15);stream=co.compress(raw)+co.flush();info=zipfile.ZipInfo('payload.bin');info.file_size=len(raw);info.CRC=binascii.crc32(raw)&0xffffffff
+    assert tx._validated_raw_deflate(stream,info)==raw
+    info.CRC^=1
+    with pytest.raises(zipfile.BadZipFile,match='CRC'):tx._validated_raw_deflate(stream,info)
+    info.CRC=binascii.crc32(raw)&0xffffffff;info.file_size+=1
+    with pytest.raises(zipfile.BadZipFile,match='size'):tx._validated_raw_deflate(stream,info)
+    with pytest.raises(zipfile.BadZipFile,match='deflate'):tx._validated_raw_deflate(stream[:-1],zipfile.ZipInfo('broken.bin'))
