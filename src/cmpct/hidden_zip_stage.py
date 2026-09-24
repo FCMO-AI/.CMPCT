@@ -63,23 +63,25 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
     if len(source_by_rel)!=len(sources):raise ValueError('candidate owner rel paths must be unique')
     fixed={rel for rel,s in source_by_rel.items() if s.fixed and rel in proof.owner_identities};hidden=set(proof.owner_identities)-fixed;initial=set(proof.realized)&hidden
     staged={};excluded=set();retained=source_read=temp_written=temp_read=0
-    # Parallelism is admitted only when every provisional winner has an immutable Builder snapshot and
-    # a conservative 2x physical reservation fits both retained-memory and source-work ceilings. This
-    # keeps the experiment bounded; anything outside that envelope falls through to the proven serial path.
-    parallel_rows=[];parallel_reservation=0
+    # Parallelism is admitted only when every provisional winner has an immutable Builder snapshot.
+    # Give every worker a deterministic disjoint share of the aggregate retained-memory budget; unlike
+    # a physical-size heuristic this remains safe for highly compressible/hostile ZIP members whose
+    # decoded material can be much larger than the container. Anything outside the envelope falls back.
+    parallel_rows=[]
     for rel in sorted(initial):
         source=source_by_rel.get(rel);state=proof.source_states.get(rel);snapshot=source_snapshots.get(rel)
         if source is None or state is None or snapshot is None:parallel_rows=[];break
-        physical_size=int(state[0][2]);parallel_reservation+=physical_size*2
         parallel_rows.append((rel,source,state,snapshot))
-    parallel_ok=bool(parallel_rows) and parallel_reservation<=int(max_staged_candidate_bytes) and sum(int(r[2][0][2]) for r in parallel_rows)<=int(max_stage_source_bytes)
+    physical_total=sum(int(r[2][0][2]) for r in parallel_rows)
+    per_candidate_reservation=(int(max_staged_candidate_bytes)//len(parallel_rows)) if parallel_rows else 0
+    parallel_ok=bool(parallel_rows) and per_candidate_reservation>0 and physical_total<=int(max_stage_source_bytes)
     if parallel_ok:
         workers=min(MAX_PARALLEL_STAGE_WORKERS,len(parallel_rows))
         with ThreadPoolExecutor(max_workers=workers,thread_name_prefix='cmpct-hidden-stage') as pool:
-            futures=[pool.submit(_parallel_snapshot_stage,rel,source,state,snapshot,proof,int(max_staged_candidate_bytes)) for rel,source,state,snapshot in parallel_rows]
+            futures=[pool.submit(_parallel_snapshot_stage,rel,source,state,snapshot,proof,per_candidate_reservation) for rel,source,state,snapshot in parallel_rows]
             results=[f.result() for f in futures]
-        # Collect in deterministic rel order. Aggregate retained bytes are enforced after all private
-        # workers finish; no Builder state has changed, so an over-budget cohort can fail closed safely.
+        # Collection and all Builder mutation are deterministic/serial. The disjoint worker budgets sum
+        # to <= max_staged_candidate_bytes, so aggregate retained material is bounded even while workers overlap.
         for rel,candidate,read in sorted(results,key=lambda x:x[0]):
             source_read+=int(read)
             if candidate is None:excluded.add(rel);continue
