@@ -12,27 +12,23 @@ def _payload_range(raw:bytes,info:zipfile.ZipInfo)->tuple[int,int]:
     if end>len(raw):raise zipfile.BadZipFile('compressed payload exceeds source')
     return start,end
 
-def native_validated_deflates(raw:bytes,known:dict|None=None)->dict|None:
-    """Return newly validated exact Deflate streams, or None when native support is unavailable.
+def native_validated_deflates(raw:bytes)->dict|None:
+    """Return the existing validated-deflate cache shape, or None when native support is unavailable.
 
-    ``known`` is the cohort-wide cache already validated by earlier hidden winners. Exact compressed-stream
-    identity is sufficient to reuse those logical bytes: the cache key includes compressed/logical length,
-    CRC and SHA-256 of the complete RFC-1951 stream. Skipping known keys therefore removes duplicate native
-    decode/materialization without inventing a new logical-identity proof. The library path remains explicit;
-    absence safely falls back to the canonical Python validator.
+    The library path is explicit during the bounded experiment. Absence is a safe fallback, not a
+    correctness bypass. Exact stream consumption/length/CRC are enforced natively; this wrapper
+    independently keys results by the same exact-stream SHA used by transactional recipe staging.
     """
     path=os.environ.get('CMPCT_HIDDEN_ZIP_BATCH_LIB')
     if not path:return None
     try:lib=ctypes.CDLL(path)
     except OSError:return None
     fn=lib.cmpct_hidden_zip_validate_deflate_batch;fn.argtypes=[ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(_Job),ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t];fn.restype=ctypes.c_int
-    known=known or {};specs=[];keys=[];seen=set();offset=0
+    specs=[];keys=[];offset=0
     with zipfile.ZipFile(io.BytesIO(raw)) as z:
         for info in z.infolist():
             if info.is_dir() or info.compress_type!=zipfile.ZIP_DEFLATED:continue
-            start,end=_payload_range(raw,info);stream=raw[start:end];key=(int(info.compress_size),int(info.file_size),int(info.CRC),hashlib.sha256(stream).digest())
-            if key in known or key in seen:continue
-            seen.add(key);keys.append((key,offset,int(info.file_size)));specs.append(_Job(start,end-start,offset,int(info.file_size),int(info.CRC)));offset+=int(info.file_size)
+            start,end=_payload_range(raw,info);stream=raw[start:end];key=(int(info.compress_size),int(info.file_size),int(info.CRC),hashlib.sha256(stream).digest());keys.append((key,offset,int(info.file_size)));specs.append(_Job(start,end-start,offset,int(info.file_size),int(info.CRC)));offset+=int(info.file_size)
     if not specs:return {}
     jobs=(_Job*len(specs))(*specs);src=ctypes.c_char_p(raw);out=(ctypes.c_ubyte*offset)();hashes=(ctypes.c_ubyte*(32*len(specs)))()
     rc=fn(ctypes.cast(src,ctypes.c_void_p),len(raw),jobs,len(specs),out,offset,hashes,len(hashes))
