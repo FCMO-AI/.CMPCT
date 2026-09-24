@@ -26,7 +26,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Execute same-input three-arm falsifier
+      - name: Execute parity and order-effect falsifier
         shell: bash
         run: |
           set -euo pipefail
