@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence-artifacts
-          python experiments/v030_incremental_parity_falsifier.py | tee evidence-artifacts/incremental-parity.json
+          python -m experiments.v030_incremental_parity_falsifier | tee evidence-artifacts/incremental-parity.json
       - name: Preserve decision receipt
         if: always()
         uses: actions/upload-artifact@v4
