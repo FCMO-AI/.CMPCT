@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'experiments/v030_incremental_parity_falsifier.py'
+      - 'experiments/v030_incremental_targeted_retention_oracle.py'
       - '.github/workflows/v030-incremental-parity-falsifier.yml'
   workflow_dispatch:
 
@@ -27,7 +28,6 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Execute parity and locality falsifier
-        shell: bash
         run: |
           set -euo pipefail
           mkdir -p evidence-artifacts
@@ -40,7 +40,7 @@ jobs:
         id: locality
         continue-on-error: true
         run: python -c "import json; d=json.load(open('evidence-artifacts/incremental-parity.json')); assert d['compact_retention']['locality_8x_green'], d['decision']"
-      - name: Preserve decision receipt
+      - name: Preserve parity receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -53,3 +53,45 @@ jobs:
       - name: Enforce compact-retention locality
         if: always()
         run: test '${{ steps.locality.outcome }}' = success
+
+  targeted-retention:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install benchmark runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Execute dictionary-user targeted-retention oracle
+        run: |
+          set -euo pipefail
+          mkdir -p evidence-artifacts
+          python -m experiments.v030_incremental_targeted_retention_oracle | tee evidence-artifacts/targeted-retention.json
+      - name: Targeted retention recovers genuine-r24 byte floor
+        id: targeted-byte-floor
+        continue-on-error: true
+        run: python -c "import json; d=json.load(open('evidence-artifacts/targeted-retention.json')); assert d['byte_floor_green'], d['decision']"
+      - name: Targeted retention preserves conservative 8x VZIP locality
+        id: targeted-locality
+        continue-on-error: true
+        run: python -c "import json; d=json.load(open('evidence-artifacts/targeted-retention.json')); assert d['locality_8x_green'], d['decision']"
+      - name: Preserve targeted-retention receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-targeted-retention-${{ github.event.pull_request.head.sha || github.sha }}
+          path: evidence-artifacts/targeted-retention.json
+          if-no-files-found: error
+      - name: Enforce targeted-retention byte floor
+        if: always()
+        run: test '${{ steps.targeted-byte-floor.outcome }}' = success
+      - name: Enforce targeted-retention locality
+        if: always()
+        run: test '${{ steps.targeted-locality.outcome }}' = success
