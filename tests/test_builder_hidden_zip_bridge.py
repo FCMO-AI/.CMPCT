@@ -96,7 +96,10 @@ def test_realized_explicit_owner_is_bound_to_bytes_builder_materialized(tmp_path
 def test_surfaced_hidden_fallback_read_requires_same_scan_snapshot(tmp_path: Path) -> None:
     hidden = tmp_path / "hidden.bin"; _write_zip(hidden, random.Random(93).randbytes(4096)); raw = hidden.read_bytes()
     surfaced = surface_hidden_candidate("hidden.bin", hidden, hidden.stat(), raw)
-    assert surfaced == SurfacedHiddenCandidate("hidden.bin", hidden, _stamp(hidden), sha(raw))
+    # The surfaced object deliberately owns the bounded Builder-read snapshot.  Keep the value assertion
+    # explicit so a future refactor cannot silently drop the snapshot that proof/stage fusion depends on.
+    assert surfaced == SurfacedHiddenCandidate("hidden.bin", hidden, _stamp(hidden), sha(raw), raw)
+    assert surfaced.raw is raw
     assert read_surfaced_candidate(surfaced) == raw
     replacement = tmp_path / "replacement.bin"; _write_zip(replacement, random.Random(94).randbytes(4096)); os.replace(replacement, hidden)
     assert read_surfaced_candidate(surfaced) is None
