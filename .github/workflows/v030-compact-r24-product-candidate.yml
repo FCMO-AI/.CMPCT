@@ -11,6 +11,7 @@ on:
       - 'experiments/entropygraph_v030_release_product_compact_r24.py'
       - 'benchmarks/v030_perf_worker_compact_r24.py'
       - 'benchmarks/v030_release_performance_compact_r24.py'
+      - 'benchmarks/v030_release_selective_read_compact_r24.py'
       - 'tools/run_v030_compact_candidate.py'
       - 'tests/test_v030_compact_r24_release_policy.py'
       - '.github/workflows/v030-compact-r24-product-candidate.yml'
@@ -51,7 +52,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(experiments/entropygraph_v030_release_product_compact_r24\.py|benchmarks/v030_(perf_worker_compact_r24|release_performance_compact_r24)\.py|tools/run_v030_compact_candidate\.py|tests/test_v030_compact_r24_release_policy\.py|\.github/workflows/v030-compact-r24-product-candidate\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(experiments/entropygraph_v030_release_product_compact_r24\.py|benchmarks/v030_(perf_worker_compact_r24|release_performance_compact_r24|release_selective_read_compact_r24)\.py|tools/run_v030_compact_candidate\.py|tests/test_v030_compact_r24_release_policy\.py|\.github/workflows/v030-compact-r24-product-candidate\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_candidate=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_candidate=false' >> "$GITHUB_OUTPUT"
@@ -87,6 +88,7 @@ jobs:
             experiments/entropygraph_v030_release_product_compact_r24.py \
             benchmarks/v030_perf_worker_compact_r24.py \
             benchmarks/v030_release_performance_compact_r24.py \
+            benchmarks/v030_release_selective_read_compact_r24.py \
             tools/run_v030_compact_candidate.py
           python -m pytest -q tests/test_v030_compact_r24_release_policy.py
       - name: Run unchanged historical causality and genuine r24-vs-candidate parity
@@ -104,7 +106,7 @@ jobs:
       - name: Run unchanged operation-derived selective-read gate
         if: always()
         run: |
-          python tools/run_v030_compact_candidate.py benchmarks/v030_release_selective_read_product.py \
+          python benchmarks/v030_release_selective_read_compact_r24.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/selective-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/selective.json"
       - name: Enforce frozen product gates
