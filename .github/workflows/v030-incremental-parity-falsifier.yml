@@ -26,12 +26,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Execute parity and order-effect falsifier
+      - name: Execute parity and locality falsifier
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p evidence-artifacts
           python -m experiments.v030_incremental_parity_falsifier | tee evidence-artifacts/incremental-parity.json
+      - name: Compact retention recovers genuine-r24 byte floor
+        id: byte-floor
+        continue-on-error: true
+        run: python -c "import json; d=json.load(open('evidence-artifacts/incremental-parity.json')); assert d['compact_retention']['byte_floor_green'], d['decision']"
+      - name: Compact retention preserves conservative 8x VZIP locality
+        id: locality
+        continue-on-error: true
+        run: python -c "import json; d=json.load(open('evidence-artifacts/incremental-parity.json')); assert d['compact_retention']['locality_8x_green'], d['decision']"
       - name: Preserve decision receipt
         if: always()
         uses: actions/upload-artifact@v4
@@ -39,3 +47,8 @@ jobs:
           name: v030-incremental-parity-${{ github.event.pull_request.head.sha || github.sha }}
           path: evidence-artifacts/incremental-parity.json
           if-no-files-found: error
+      - name: Enforce bounded oracle decision
+        if: always()
+        run: |
+          test '${{ steps.byte-floor.outcome }}' = success
+          test '${{ steps.locality.outcome }}' = success
