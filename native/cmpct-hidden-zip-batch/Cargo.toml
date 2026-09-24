@@ -1,0 +1,13 @@
+[package]
+name = "cmpct-hidden-zip-batch"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+crc32fast = "1.4"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+sha2 = "0.10"
