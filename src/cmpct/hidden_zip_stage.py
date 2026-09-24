@@ -9,7 +9,7 @@ from .codec import S_VZIP,sha
 from .hidden_zip import _stamp
 from .hidden_zip_candidates import CandidateOwnershipProof,ZipOwnerSource
 from .reuse_ownership import realized_reuse_fixed_point
-from .vzip_transaction import StagedVzipRecipe,commit_staged_vzip,stage_vzip_recipe,stage_vzip_recipe_bytes
+from .vzip_transaction import StagedVzipRecipe,commit_staged_vzip_prehashed,stage_vzip_recipe,stage_vzip_recipe_bytes
 
 MAX_STAGED_CANDIDATE_BYTES=256*1024*1024;MAX_STAGE_SOURCE_BYTES=256*1024*1024;SNAPSHOT_CHUNK=1024*1024;STAGE_SOURCE_PASSES=5
 STAGE_REJECTS=(OSError,ValueError,RuntimeError,struct.error,zipfile.BadZipFile)
@@ -95,5 +95,5 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
 def commit_stable_hidden_cohort(builder,cohort):
     storage={}
     for rel in sorted(cohort.staged):
-        recipe=commit_staged_vzip(cohort.staged[rel],builder.add_content);rid=len(builder.recipes);builder.recipes.append(recipe);storage[rel]=[S_VZIP,rid]
+        recipe=commit_staged_vzip_prehashed(cohort.staged[rel],builder);rid=len(builder.recipes);builder.recipes.append(recipe);storage[rel]=[S_VZIP,rid]
     return storage
