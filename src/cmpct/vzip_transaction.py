@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """Transactional staging for speculative VZIP recipe construction."""
-import binascii,zlib
+import binascii
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -41,20 +41,14 @@ def _staging_peak_upper_bound_bytes(original:bytes)->int|None:
     except (OSError,ValueError,RuntimeError,zipfile.BadZipFile):return None
     return len(original)*4+logical
 
-def _validated_raw_deflate(stream:bytes,info:zipfile.ZipInfo)->bytes:
-    """Decode an already-bounded exact RFC-1951 slice and enforce ZIP's length+CRC contract.
-
-    Hidden staging already owns the exact compressed slice and central-directory metadata. Going back
-    through ZipExtFile for every member reparses per-member state and copies through another file-like
-    layer. Direct raw-DEFLATE validation is the same semantic check at a smaller execution boundary.
-    """
-    try:raw=zlib.decompress(stream,-15)
-    except zlib.error as exc:raise zipfile.BadZipFile(f'bad deflate stream for {info.filename!r}') from exc
-    if len(raw)!=int(info.file_size):raise zipfile.BadZipFile(f'bad uncompressed size for {info.filename!r}')
-    if (binascii.crc32(raw)&0xffffffff)!=int(info.CRC):raise zipfile.BadZipFile(f'bad CRC for {info.filename!r}')
-    return raw
-
 def _make_exact_retained_recipe_bytes(original:bytes,add_content:Callable,validated_deflates:dict|None=None,*,max_retained_bytes:int|None=None):
+    """Build retained-stream VZIP, reusing only previously CRC-validated identical Deflate streams.
+
+    In-memory hidden staging computes the unchanged `4*physical + logical` resource ceiling from the
+    same central-directory parse used to build the recipe. Malformed central-directory/open failures
+    retain the old preflight behavior (`None`); member CRC/length failures during authoritative reads
+    still propagate and cannot be mistaken for a harmless unsupported candidate.
+    """
     original=bytes(original);payloads=[];spans=[];view=_BytesView(original);validated_deflates=validated_deflates if validated_deflates is not None else {}
     try:
         z=zipfile.ZipFile(view);infos=sorted((i for i in z.infolist() if not i.is_dir()),key=lambda x:x.header_offset)
@@ -73,8 +67,7 @@ def _make_exact_retained_recipe_bytes(original:bytes,add_content:Callable,valida
             elif info.compress_type==zipfile.ZIP_DEFLATED:
                 stream_hash=sha(stream);key=(int(info.compress_size),int(info.file_size),int(info.CRC),stream_hash)
                 raw=validated_deflates.get(key)
-                if raw is None:
-                    raw=_validated_raw_deflate(stream,info);validated_deflates[key]=raw
+                if raw is None:raw=z.read(info);validated_deflates[key]=raw
                 cref=add_content(raw,Path(info.filename).suffix.lower(),stream);level=0
             else:return None
             spans.append((start,end));payloads.append([cref,info.compress_type,stream_hash,len(stream),level])
