@@ -36,6 +36,8 @@ def hidden_cohort_within_surface_budget(deferred)->bool:
 
 def surface_hidden_candidate(rel:str,path:Path,st,raw:bytes)->SurfacedHiddenCandidate:
     if len(raw)!=int(st.st_size):raise RuntimeError("hidden candidate changed while Builder was reading it")
+    # bytes(raw) is zero-copy for bytes objects. Keep the bounded discovery snapshot alive until the
+    # hidden cohort resolves so winners do not reread/write/reread the same container during staging.
     snapshot=bytes(raw)
     return SurfacedHiddenCandidate(str(rel),Path(path),_stamp(st),sha(snapshot),snapshot)
 
@@ -103,6 +105,10 @@ def ownership_sources_from_builder(builder,hidden_candidates)->tuple[ZipOwnerSou
 
 def prepare_hidden_zip_candidates(builder,hidden_candidates,*,min_verified_reuse:int=MIN_VERIFIED_REUSE)->HiddenZipResolution:
     hidden_candidates=tuple(hidden_candidates);sources=ownership_sources_from_builder(builder,hidden_candidates)
+    # The bounded Builder discovery snapshot is already the immutable source staging will consume.
+    # Let ownership proof derive exact compressed identities from those same bytes instead of opening
+    # and parsing each hidden path again. The independent live digest rebind remains in staging at the
+    # transaction boundary, so this fuses duplicate work without weakening source-mutation safety.
     snapshots={item.rel:item.raw for item in hidden_candidates if isinstance(item,SurfacedHiddenCandidate) and item.raw is not None}
     proof=prove_candidate_zip_ownership(sources,min_verified_reuse=int(min_verified_reuse),source_snapshots=snapshots)
     cohort=stage_stable_hidden_cohort(proof,sources,min_verified_reuse=int(min_verified_reuse),source_snapshots=snapshots,max_parallel_workers=getattr(builder,'workers',1))
