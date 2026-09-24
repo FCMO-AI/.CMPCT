@@ -77,3 +77,28 @@ def test_in_memory_exact_staging_is_recipe_equivalent_and_keeps_peak_bound(tmp_p
     assert by_bytes.recipe==by_path.recipe
     assert by_bytes.candidates==by_path.candidates
     assert tx.stage_vzip_recipe_bytes(raw,max_retained_bytes=bound-1,exact_stream_retention=True) is None
+
+
+def test_prehashed_commit_reuses_staged_identity_without_rehashing_decoded_member(monkeypatch):
+    from types import SimpleNamespace
+    raw=b'already-verified-decoded-member';expected=sha(raw)
+    staged=tx.StagedVzipRecipe(['recipe'],((raw,'.bin',None,expected),))
+    builder=SimpleNamespace(cands={})
+    real_sha=tx.sha
+    def forbid_raw_rehash(data):
+        if data is raw:raise AssertionError('commit must reuse the identity staging already computed')
+        return real_sha(data)
+    monkeypatch.setattr(tx,'sha',forbid_raw_rehash)
+    assert tx.commit_staged_vzip_prehashed(staged,builder)==['recipe']
+    assert builder.cands[expected].raw==raw
+    assert builder.cands[expected].hints=={'.bin'}
+
+
+def test_prehashed_commit_preserves_deflate_variant_accounting():
+    from types import SimpleNamespace
+    raw=b'decoded';stream=b'exact-rfc1951';expected=sha(raw);stream_hash=sha(stream)
+    staged=tx.StagedVzipRecipe(['recipe'],((raw,'.bin',stream,expected),(raw,'.bin',stream,expected)))
+    builder=SimpleNamespace(cands={})
+    tx.commit_staged_vzip_prehashed(staged,builder)
+    candidate=builder.cands[expected]
+    assert candidate.raw==raw and candidate.deflates[stream_hash]==[stream,2]
