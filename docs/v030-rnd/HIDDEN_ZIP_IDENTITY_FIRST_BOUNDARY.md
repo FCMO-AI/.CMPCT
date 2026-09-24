@@ -4,63 +4,56 @@ Status: **PREREGISTERED / ORACLE-FIRST / NO PRODUCT CREDIT**
 
 ## Decision being tested
 
-The hidden-ZIP byte owner depends on exact logical-content sharing, but the current creator validates and materializes every admitted Deflate member occurrence before Builder content identity collapses duplicates. The exact-head native product attempt preserved the byte owner but failed the frozen Office create ceiling (`10793487574`: `1.341849x`; staging `52.542 ms`). Moving the same validation/materialization work native is therefore retired.
+The hidden-ZIP byte owner depends on exact logical-content sharing, but the current creator validates and materializes every admitted Deflate member occurrence before Builder content identity collapses duplicates. The exact-head native product attempt preserved the byte owner but failed the frozen Office create ceiling (`10793487574`: `1.341849x`; staging `52.542 ms`). Moving the same work native is retired.
 
-The next question is narrower and materially different: **can the creator establish exact logical identities across the whole winning cohort before it exports/materializes duplicate logical occurrences across the ownership boundary?**
+Exact research receipt `10794918189` now resolves the ownership geometry: 168 Deflate occurrences expose `12,787,462 B` logical bytes but only `4,748,362 B` / 84 exact global logical objects. `8,039,100 B` (**62.87%**) is duplicate. Per-container unique material is `12,778,132 B`, so almost the entire opportunity exists only across sibling containers.
 
-## Existing lower bounds
+The active question is therefore: **can the creator establish exact logical identities at cohort scope before duplicate logical bytes cross the ownership/materialization boundary?**
 
-The five admitted Office winners contain 168 Deflate member occurrences. Exact compressed-stream accounting already proves 84 unique streams plus 84 exact-stream aliases. Every exact-stream alias necessarily decodes to the same logical content as its owner, so at least 84 member occurrences are known duplicate logical identities even before considering differently encoded streams that decode identically. The exact byte-weight of that logical duplication is not yet authority; the v5 native-batch receipt measures it directly.
+## Strongest implementation frame
 
-## Cheapest discriminator
+Do not reopen worker/backend/threshold tuning. The existing admission proof already inflates every relevant Deflate occurrence to validate exact logical length and CRC, but currently discards the logical identity produced by that work. A product attempt, if earned, should exploit that existing decode rather than add another identity pass:
 
-The v5 research receipt reports, on the same admitted winners:
+1. During the already-required proof validation, update SHA-256 over the same logical chunks used for CRC; record `(logical_sha256, logical_length)` beside the exact physical identity.
+2. Resolve the unchanged ownership fixed point at cohort scope.
+3. Choose one deterministic representative for each exact logical identity needed by winning recipes.
+4. During staging, materialize/decode only those representatives; duplicate occurrences reference the already-proven logical identity instead of being decoded/copied into duplicate Python objects.
+5. Preserve deterministic Builder mutation and the independent final live-source stamp+digest rebind.
+6. Preserve the proven Python fallback and exact r24 reconstruction semantics.
 
-- total logical occurrence bytes;
-- exact global unique logical bytes keyed by SHA-256 plus length;
-- duplicate logical bytes and exact unique logical-object count;
-- per-container unique bytes, so cross-container sharing is visible rather than hidden;
-- matched Python and ordinary native full-materialization controls;
-- a per-container identity-first arm;
-- a cohort-wide identity-first arm that validates/hashes every occurrence exactly once, byte-checks digest aliases, and exports only one representative globally.
+This is materially different from the retired proof/cache tweaks: the purpose is not to make proof itself faster, but to make its already-paid decode establish the ownership fact that prevents duplicate staging work later.
 
-The oracle builds only the independently reseeded Office corpus rather than regenerating unrelated media/ML/etc. workloads. `corpus_office()` owns its deterministic PRNG stream, and the same repair normalization is applied. This changes evidence setup cost, not the measured Office bytes or timed boundary.
+## Research oracle
 
-All of this remains research evidence and receives no product credit.
+The native identity-first oracle remains a lower-rung mechanism probe, not the required product architecture. It validates/hashes every occurrence once, byte-checks digest aliases, and exports one representative globally. The current decision-bearing revision charges:
 
-## Candidate architecture if the oracle earns it
+- native kernel wall;
+- ctypes input/output allocation and direct-pointer return copy;
+- digest/offset conversion;
+- current cohort source-buffer join.
 
-Do **not** reopen the failed native-staging design by tuning workers, codec backends or thresholds. The only authorized product frame is an ownership-boundary change:
-
-1. validate every bounded RFC-1951 occurrence under the existing exact-consumption, declared-length and CRC contract;
-2. compute strong logical identity for every occurrence;
-3. retain/export logical bytes only for one deterministic representative of each exact logical identity needed by the winning cohort;
-4. represent duplicate occurrences by that already-proven logical identity rather than copying the same logical bytes through the native/Python boundary again;
-5. keep Python ownership fixed-point resolution, deterministic transaction commit and the independent final live-source stamp+digest rebind unless direct evidence shows one of those boundaries itself must change;
-6. preserve safe fallback when optional native support is absent.
-
-A useful implementation should avoid a second full decode of unique representatives. A two-pass `hash all -> decode owners again` design must first prove that its extra decode work is cheaper than the transfer/materialization work it removes; it is not assumed to be a win. The v5 oracle instead uses one decode per occurrence and a bounded reusable scratch buffer, copying only first-seen exact identities into caller-visible material.
+A previous v7 receipt exposed an evaluator bug: `bytes(ctypes_array[:used])` first created millions of Python integer objects, producing a false ~106 ms bridge. v8 uses direct `ctypes.string_at(pointer, used)` and preserves all real charged work. No product decision may use the v7 list-conversion wall.
 
 ## Mature external control
 
-Global content-identity-before-storage is not a novel product principle by itself. Borg documents repository-wide deduplication by strong chunk identity across files/backups/hosts (`https://borgbackup.readthedocs.io/en/2.0.0b23/internals.html`), and restic documents SHA-256 content IDs with write-once repository objects (`https://restic.readthedocs.io/en/v0.15.0/design.html`). Those systems do **not** prove CMPCT's nested-container reconstruction economics; they are a control showing that globally resolving strong content identity before durable storage is a mature ownership pattern. CMPCT still has to prove exact ZIP reconstruction, bounded hostile work, transaction safety, locality and its frozen runtime gate.
+Global content-identity-before-storage is a mature ownership pattern: Borg performs repository-wide strong-hash chunk deduplication across archives/hosts (`https://borgbackup.readthedocs.io/en/2.0.0b23/internals.html`), while restic uses SHA-256 content IDs for write-once repository objects (`https://restic.readthedocs.io/en/v0.15.0/design.html`). Those systems do not prove CMPCT's nested-container reconstruction economics; CMPCT still must prove exact ZIP reconstruction, bounded hostile work, transaction safety, locality and the frozen runtime gate.
 
 ## Safety invariants
 
 - Exact tree reconstruction remains mandatory.
 - CRC/length/complete-stream validation is not replaced by hash equality.
-- SHA-256 identity is paired with logical length; any contradiction is fatal.
-- A digest alias is byte-compared to its retained representative before reuse; cryptographic collision resistance is not used as permission to skip exactness.
+- SHA-256 identity is paired with logical length; contradictions are fatal.
+- A digest alias cannot weaken exactness; research materializers byte-check aliases against the retained representative.
 - Malformed provisional peers fail closed before cohort commit.
 - Hardlinks, S_PACK and fallback explicit archives receive no hidden ownership credit.
-- Aggregate input/output limits and per-job scratch limits are checked before hostile allocation/decode work.
-- The final live source rebind remains after staging and before mutation/commit.
+- Aggregate input/output and per-job scratch bounds precede hostile allocation/decode work.
+- Final live-source rebind remains after staging and before mutation/commit.
 - No reader grammar, release threshold, comparator semantics or timing boundary changes.
 
 ## Kill condition
 
-Consume the v5 cohort identity-first receipt first. If duplicate logical bytes are too small, or if the measured cohort boundary cannot plausibly recover the remaining create debt, retire this family without product integration. If the oracle shows decision-changing headroom, permit **one bounded product-path identity-first attempt**. That attempt must preserve the >9.33 MB byte owner and exactness while crossing the unchanged Office create ceiling `<=1.25x`; otherwise retire the family rather than tuning it.
+Consume v8 first. If its realistic charged cohort boundary plus the measured 62.87% duplication does not provide plausible margin against the remaining ~`12.484 ms` create debt, retire identity-first materialization. If it does, permit **one bounded product-path attempt using proof-derived logical identity and representative-only staging**. That attempt must preserve the >9.33 MB byte owner and exactness while crossing Office create `<=1.25x`; otherwise retire the family rather than tuning it.
 
 ## Counterfactual lesson
 
-The earlier native oracle timed the validation/materialization kernel and correctly showed that kernel was faster, but end-to-end product staging still lost. The wrapper subsequently converted the complete native output to Python bytes and sliced every logical occurrence into cache objects before Builder identity collapsed them. Future lower-rung execution-boundary oracles must therefore distinguish kernel time from ownership-transfer/copy/materialization cost. A faster kernel is not evidence that the product boundary is cheaper.
+The useful earlier observable was not “native decode is faster.” It was **where identity becomes known relative to where bytes become owned**. The current pipeline pays to validate logical content before it knows which logical objects are duplicates, then pays again to materialize them before Builder deduplication. Future representation work should ask whether a fact already computed upstream can eliminate downstream ownership work before optimizing the downstream implementation.
