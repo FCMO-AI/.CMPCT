@@ -13,7 +13,8 @@ shortcut with different bytes would exceed the experiment's evidence envelope.
 
 This is a bounded product candidate, not release authority.  It exists to run the complete unchanged
 release matrix once.  Promotion requires zero deterministic byte regressions plus all inherited
-runtime/RSS/locality/native/recovery/platform gates.
+runtime/RSS/locality/native/recovery/platform gates.  Any material loss is disproof: retire this
+candidate rather than weakening the quality ratchet or gardening another cutoff.
 """
 from __future__ import annotations
 
