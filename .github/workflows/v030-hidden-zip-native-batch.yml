@@ -1,0 +1,66 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
+name: CMPCT v0.30 hidden-ZIP native batch oracle
+on:
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'native/cmpct-hidden-zip-batch/**'
+      - 'benchmarks/v030_hidden_zip_native_batch_oracle.py'
+      - '.github/workflows/v030-hidden-zip-native-batch.yml'
+  workflow_dispatch:
+permissions: {contents: read}
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: v030-hidden-zip-native-batch-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs: {run_deep: '${{ steps.scope.outputs.run_deep }}'}
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
+      - id: scope
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD >/tmp/f
+          if grep -Eq '^(native/cmpct-hidden-zip-batch/|benchmarks/v030_hidden_zip_native_batch_oracle\.py|\.github/workflows/v030-hidden-zip-native-batch\.yml)' /tmp/f; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+  evidence:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: v030-hidden-zip-native-batch-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ env.EVIDENCE_HEAD }}'}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: cargo test --manifest-path native/cmpct-hidden-zip-batch/Cargo.toml --release
+      - run: cargo build --manifest-path native/cmpct-hidden-zip-batch/Cargo.toml --release
+      - run: python -m py_compile benchmarks/v030_hidden_zip_native_batch_oracle.py
+      - run: python benchmarks/v030_hidden_zip_native_batch_oracle.py --output benchmark-artifacts/native-batch.json
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-hidden-zip-native-batch-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/native-batch.json
+          if-no-files-found: error
+          retention-days: 90
+      - if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-hidden-zip-native-batch.yml
