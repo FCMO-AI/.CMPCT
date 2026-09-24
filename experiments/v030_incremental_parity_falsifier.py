@@ -9,6 +9,7 @@ import tempfile
 
 from benchmarks import neutral_hostile_corpus_v1 as N
 from benchmarks import neutral_hostile_determinism_repair_v6 as REPAIR
+from cmpct.builder import Builder
 from experiments import entropygraph_v030_release_product as PROMOTED
 from experiments import entropygraph_v030_release_product_base as BASE
 
@@ -25,6 +26,12 @@ def _tree_identity(root: Path) -> tuple[str, int, int]:
         h.update(len(raw).to_bytes(8, "little")); h.update(raw)
         files += 1; logical += len(raw)
     return h.hexdigest(), files, logical
+
+
+def _genuine_r24(root: Path, out: Path) -> dict:
+    # Match benchmarks/v030_release_ablation_canonical.py exactly: ordinary canonical r24 Builder.
+    stats = dict(Builder(root).build(out))
+    return {**stats, "selected": "canonical-r24", "format_revision": 24}
 
 
 def _build_row(name: str, builder, root: Path, out: Path) -> dict:
@@ -57,7 +64,7 @@ def main() -> None:
         rows = [
             _build_row("promoted_frontdoor", PROMOTED.build, root, td / "promoted.cmpct"),
             _build_row("mature_base_frontdoor", BASE.build, root, td / "base.cmpct"),
-            _build_row("genuine_r24", PROMOTED._locality_bounded_r24_build, root, td / "r24.cmpct"),
+            _build_row("genuine_r24", _genuine_r24, root, td / "r24.cmpct"),
         ]
         by_name = {row["name"]: row for row in rows}; r24 = int(by_name["genuine_r24"]["archive_bytes"])
         for row in rows: row["delta_vs_r24_bytes"] = int(row["archive_bytes"]) - r24
