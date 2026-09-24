@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Cheap same-input falsifier for the v0.30 incremental-backups zero-byte regression."""
+"""Localize the incremental-backups parity failure, including process-state order effects."""
 
 import hashlib
 import json
@@ -9,6 +9,8 @@ import tempfile
 
 from benchmarks import neutral_hostile_corpus_v1 as N
 from benchmarks import neutral_hostile_determinism_repair_v6 as REPAIR
+from benchmarks import v030_release_ablation_canonical as ABLATION
+from benchmarks import v030_release_generalization as GENERAL
 from cmpct.builder import Builder
 from experiments import entropygraph_v030_release_product as PROMOTED
 from experiments import entropygraph_v030_release_product_base as BASE
@@ -50,33 +52,44 @@ def main() -> None:
     REPAIR.install_generation_hooks(N)
     with tempfile.TemporaryDirectory(prefix="cmpct-v030-inc-parity-") as td_raw:
         td = Path(td_raw); corpus = td / "corpus"; corpus.mkdir()
-        N.corpus_backups(corpus)
-        root = corpus / "06_incremental_backups"
-        REPAIR.normalize_workload(root)
+        N.corpus_backups(corpus); root = corpus / "06_incremental_backups"; REPAIR.normalize_workload(root)
         tree_sha, files, logical = _tree_identity(root)
         if (tree_sha, files, logical) != (EXPECTED_TREE_SHA256, EXPECTED_FILES, EXPECTED_LOGICAL_BYTES):
-            raise RuntimeError(
-                "incremental-backups substrate identity mismatch: "
-                f"sha={tree_sha} files={files} logical={logical}"
-            )
+            raise RuntimeError(f"incremental-backups substrate identity mismatch: sha={tree_sha} files={files} logical={logical}")
 
         rows = [
-            _build_row("promoted_frontdoor", PROMOTED.build, root, td / "promoted.cmpct"),
-            _build_row("mature_base_frontdoor", BASE.build, root, td / "base.cmpct"),
+            _build_row("promoted_fresh", PROMOTED.build, root, td / "promoted-fresh.cmpct"),
+            _build_row("mature_base_fresh", BASE.build, root, td / "base-fresh.cmpct"),
             _build_row("genuine_r24", _genuine_r24, root, td / "r24.cmpct"),
         ]
-        by_name = {row["name"]: row for row in rows}; r24 = int(by_name["genuine_r24"]["archive_bytes"])
+        r24 = int(rows[-1]["archive_bytes"])
         for row in rows: row["delta_vs_r24_bytes"] = int(row["archive_bytes"]) - r24
-        promoted_delta = int(by_name["promoted_frontdoor"]["delta_vs_r24_bytes"])
-        base_delta = int(by_name["mature_base_frontdoor"]["delta_vs_r24_bytes"])
-        if promoted_delta > 0 and base_delta <= 0: decision = "PROMOTED_FRONTDOOR_SHORTCUT_CAUSAL"
-        elif promoted_delta > 0 and base_delta > 0: decision = "REGRESSION_BELOW_PROMOTED_SHORTCUT"
-        elif promoted_delta <= 0: decision = "REGRESSION_NOT_REPRODUCED"
+
+        # The authoritative release harness runs every historical ablation before canonical product parity in the
+        # same Python process. A fresh isolated build no longer reproduces the red release row, so charge the
+        # cheapest order-effect falsifier: run this workload's historical arm, then rebuild the same product row.
+        expected = GENERAL._accepted_v029_rows()[("neutral_hostile_v1", "06_incremental_backups")]
+        historical = ABLATION._historical_row("neutral_hostile_v1", root, expected, td / "historical")
+        after = _build_row("promoted_after_same_row_historical", PROMOTED.build, root, td / "promoted-after.cmpct")
+        after["delta_vs_r24_bytes"] = int(after["archive_bytes"]) - r24
+        rows.append(after)
+
+        fresh_delta = int(rows[0]["delta_vs_r24_bytes"]); base_delta = int(rows[1]["delta_vs_r24_bytes"])
+        after_delta = int(after["delta_vs_r24_bytes"])
+        if fresh_delta > 0 and base_delta <= 0: decision = "PROMOTED_FRONTDOOR_SHORTCUT_CAUSAL"
+        elif fresh_delta > 0 and base_delta > 0: decision = "REGRESSION_BELOW_PROMOTED_SHORTCUT"
+        elif fresh_delta <= 0 and after_delta > 0: decision = "SAME_ROW_HISTORICAL_STATE_CONTAMINATION_REPRODUCED"
+        elif fresh_delta <= 0 and after_delta <= 0: decision = "REGRESSION_REQUIRES_BROADER_PRIOR_STATE_OR_PROVENANCE"
         else: decision = "AMBIGUOUS"
+
         print(json.dumps({
-            "schema": "cmpct-v030-incremental-parity-falsifier-v1",
+            "schema": "cmpct-v030-incremental-parity-falsifier-v2",
             "source_tree": {"sha256": tree_sha, "files": files, "logical_bytes": logical},
             "comparator_contract": "benchmarks/v030_release_ablation_canonical.py::_product_row ordinary Builder(root).build",
+            "historical_same_row": {
+                "v029_bytes": historical["variants"]["v029"]["archive_bytes"],
+                "combined_bytes": historical["variants"]["combined"]["archive_bytes"],
+            },
             "rows": rows, "decision": decision,
         }, indent=2, sort_keys=True))
 
