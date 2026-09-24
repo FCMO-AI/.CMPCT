@@ -41,11 +41,20 @@ def _staging_peak_upper_bound_bytes(original:bytes)->int|None:
     except (OSError,ValueError,RuntimeError,zipfile.BadZipFile):return None
     return len(original)*4+logical
 
-def _make_exact_retained_recipe_bytes(original:bytes,add_content:Callable,validated_deflates:dict|None=None):
-    """Build retained-stream VZIP, reusing only previously CRC-validated identical Deflate streams."""
+def _make_exact_retained_recipe_bytes(original:bytes,add_content:Callable,validated_deflates:dict|None=None,*,max_retained_bytes:int|None=None):
+    """Build retained-stream VZIP, reusing only previously CRC-validated identical Deflate streams.
+
+    For in-memory hidden staging the resource-bound calculation is deliberately fused into this same
+    ZipFile parse. The old path opened every immutable winner once only to sum declared logical sizes,
+    then immediately reopened it to build the recipe. Keeping the identical `4*physical + logical`
+    ceiling here deletes that duplicate central-directory parse without moving or weakening the bound.
+    """
     original=bytes(original);payloads=[];spans=[];view=_BytesView(original);validated_deflates=validated_deflates if validated_deflates is not None else {}
     with zipfile.ZipFile(view) as z:
         infos=sorted((i for i in z.infolist() if not i.is_dir()),key=lambda x:x.header_offset)
+        if max_retained_bytes is not None:
+            logical=sum(int(i.file_size) for i in infos)
+            if len(original)*4+logical>int(max_retained_bytes):return None
         for info in infos:
             view.seek(info.header_offset);v=LFH.unpack(view.read(LFH.size));nl,xl=v[-2],v[-1];start=info.header_offset+LFH.size+nl+xl;end=start+info.compress_size;stream=original[start:end]
             if info.compress_type==zipfile.ZIP_STORED:
@@ -73,10 +82,9 @@ def _stage_with(stage_source,*,max_retained_bytes:int|None,exact_stream_retentio
     def stage(raw:bytes,hint:str='',deflate_stream:bytes|None=None):
         raw=bytes(raw);stream=None if deflate_stream is None else bytes(deflate_stream);ref=sha(raw);staged.append((raw,hint,stream,ref));return ref
     if isinstance(stage_source,bytes):
-        if max_retained_bytes is not None:
-            bound=_staging_peak_upper_bound_bytes(stage_source)
-            if bound is None or bound>int(max_retained_bytes):return None
-        recipe=_make_exact_retained_recipe_bytes(stage_source,stage,validated_deflates) if exact_stream_retention else None
+        # The bytes path fuses the unchanged peak bound into recipe construction so the central
+        # directory is parsed once rather than twice. Path-backed fallback retains the old preflight.
+        recipe=_make_exact_retained_recipe_bytes(stage_source,stage,validated_deflates,max_retained_bytes=max_retained_bytes) if exact_stream_retention else None
     else:
         path=Path(stage_source)
         if max_retained_bytes is not None:
