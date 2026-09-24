@@ -26,7 +26,6 @@ class DeferredHiddenFile:
     candidate:SurfacedHiddenCandidate;mode:int;mtime_ns:int;ext:str
 
 def hidden_candidate_size_can_stage(size:int)->bool:return 0<=int(size)<=int(MAX_HIDDEN_SURFACE_PHYSICAL_BYTES)
-
 def hidden_cohort_within_surface_budget(deferred)->bool:
     if len(deferred)>MAX_OBSERVATION_FILES:return False
     total=0
@@ -37,8 +36,6 @@ def hidden_cohort_within_surface_budget(deferred)->bool:
 
 def surface_hidden_candidate(rel:str,path:Path,st,raw:bytes)->SurfacedHiddenCandidate:
     if len(raw)!=int(st.st_size):raise RuntimeError("hidden candidate changed while Builder was reading it")
-    # bytes(raw) is zero-copy for bytes objects. Keep the bounded discovery snapshot alive until the
-    # hidden cohort resolves so winners do not reread/write/reread the same container during staging.
     snapshot=bytes(raw)
     return SurfacedHiddenCandidate(str(rel),Path(path),_stamp(st),sha(snapshot),snapshot)
 
@@ -71,11 +68,9 @@ def ordinary_storage_for_hidden_fallback(builder,raw:bytes,ext:str)->list:
     if len(raw)>4*CHUNK and ext!=".wav":
         parts=cdc_chunks(raw);entries=[[len(part),builder.add_content(part,ext)] for part in parts];return [S_CDC,entries]
     return [S_BLOB,builder.add_content(raw,ext)]
-
 def _append_fallback_row(builder,item:DeferredHiddenFile,raw:bytes)->None:
     c=item.candidate;storage=ordinary_storage_for_hidden_fallback(builder,raw,item.ext)
     builder.files.append([c.rel,K_FILE,int(item.mode),int(item.mtime_ns),int(c.stamp[2]),c.digest,storage])
-
 def finalize_hidden_fallback_only(builder,deferred)->None:
     for item in deferred:
         raw=read_surfaced_candidate(item.candidate)
@@ -108,13 +103,9 @@ def ownership_sources_from_builder(builder,hidden_candidates)->tuple[ZipOwnerSou
 
 def prepare_hidden_zip_candidates(builder,hidden_candidates,*,min_verified_reuse:int=MIN_VERIFIED_REUSE)->HiddenZipResolution:
     hidden_candidates=tuple(hidden_candidates);sources=ownership_sources_from_builder(builder,hidden_candidates)
-    # The bounded Builder discovery snapshot is already the immutable source staging will consume.
-    # Let ownership proof derive exact compressed identities from those same bytes instead of opening
-    # and parsing each hidden path again. The independent live digest rebind remains in staging at the
-    # transaction boundary, so this fuses duplicate work without weakening source-mutation safety.
     snapshots={item.rel:item.raw for item in hidden_candidates if isinstance(item,SurfacedHiddenCandidate) and item.raw is not None}
     proof=prove_candidate_zip_ownership(sources,min_verified_reuse=int(min_verified_reuse),source_snapshots=snapshots)
-    cohort=stage_stable_hidden_cohort(proof,sources,min_verified_reuse=int(min_verified_reuse),source_snapshots=snapshots)
+    cohort=stage_stable_hidden_cohort(proof,sources,min_verified_reuse=int(min_verified_reuse),source_snapshots=snapshots,max_parallel_workers=getattr(builder,'encode_workers',1))
     return HiddenZipResolution(sources,proof,cohort,{})
 
 def _retain_exact_streams_for_hidden_winners(builder,cohort:StagedHiddenCohort)->None:
@@ -141,11 +132,9 @@ def _retain_exact_streams_for_hidden_winners(builder,cohort:StagedHiddenCohort)-
 
 def _commit_hidden_winners(builder,cohort:StagedHiddenCohort)->dict[str,list]:
     storage=commit_stable_hidden_cohort(builder,cohort);_retain_exact_streams_for_hidden_winners(builder,cohort);return storage
-
 def resolve_hidden_zip_candidates(builder,hidden_candidates,*,min_verified_reuse:int=MIN_VERIFIED_REUSE)->HiddenZipResolution:
     prepared=prepare_hidden_zip_candidates(builder,hidden_candidates,min_verified_reuse=int(min_verified_reuse));storage=_commit_hidden_winners(builder,prepared.cohort)
     return HiddenZipResolution(prepared.sources,prepared.proof,prepared.cohort,storage)
-
 def finalize_deferred_hidden_files(builder,deferred,*,min_verified_reuse:int=MIN_VERIFIED_REUSE)->HiddenZipResolution:
     if not hidden_cohort_within_surface_budget(deferred):raise ValueError("hidden discovery cohort exceeds source/byte ceiling; use fallback-only path")
     deferred=tuple(deferred);prepared=prepare_hidden_zip_candidates(builder,[item.candidate for item in deferred],min_verified_reuse=int(min_verified_reuse))
