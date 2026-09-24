@@ -1,22 +1,10 @@
 from __future__ import annotations
 
-"""Cheap same-input falsifier for the v0.30 incremental-backups zero-byte regression.
-
-This is evidence tooling, not a product change. It regenerates only the deterministic
-neutral/hostile incremental-backups workload and compares three build ownership paths:
-
-1. promoted release front door (shipping candidate),
-2. preserved mature release-product base front door,
-3. genuine locality-bounded r24 product.
-
-The question is intentionally narrow: did the promoted shared-preflight shortcut alter
-winner selection, or does the regression already exist below that shortcut?
-"""
+"""Cheap same-input falsifier for the v0.30 incremental-backups zero-byte regression."""
 
 import hashlib
 import json
 from pathlib import Path
-import shutil
 import tempfile
 
 from benchmarks import neutral_hostile_corpus_v1 as N
@@ -63,14 +51,15 @@ def _build_row(name: str, builder, root: Path, out: Path) -> dict:
 
 
 def main() -> None:
-    # Repair-v5 composes the accepted deterministic repairs that affect this workload.
     R5.install_generation_hooks(N)
-    with tempfile.TemporaryDirectory(prefix="cmpct-v030-inc-parity-") as td:
-        td = Path(td)
+    with tempfile.TemporaryDirectory(prefix="cmpct-v030-inc-parity-") as td_raw:
+        td = Path(td_raw)
         corpus = td / "corpus"
         corpus.mkdir()
         N.corpus_backups(corpus)
         root = corpus / "06_incremental_backups"
+        # The accepted deterministic substrate is generation + repair normalization.
+        R5.normalize_workload(root)
         tree_sha, files, logical = _tree_identity(root)
         if (tree_sha, files, logical) != (EXPECTED_TREE_SHA256, EXPECTED_FILES, EXPECTED_LOGICAL_BYTES):
             raise RuntimeError(
