@@ -1,13 +1,10 @@
 from __future__ import annotations
-"""Research oracle for one bounded native validation/hash/materialization boundary.
+"""Research oracle for bounded hidden-ZIP native execution boundaries.
 
-Admission gifts the existing hidden winners and is untimed. Native and Python arms receive the same
-immutable RFC-1951 slices and perform the same exact-consumption, length, CRC, SHA-256 and materialization
-work. Arm order alternates by repetition. ZipFile independently checks outputs. No product/release credit.
-
-The receipt also reports logical occurrence bytes versus exact logical-content unique bytes. That accounting
-is untimed and exists to decide whether a future identity-first boundary could avoid materializing duplicate
-logical members; it receives no product/runtime credit.
+Admission gifts the existing hidden winners and is untimed. The baseline native and Python arms receive the
+same immutable RFC-1951 slices and perform the same exact-consumption, length, CRC, SHA-256 and materialization
+work. A third research-only arm validates/hashes every occurrence once but exports only one exact representative
+per logical identity. ZipFile independently checks outputs. No product/release credit.
 """
 import argparse, ctypes, hashlib, io, json, os, shutil, statistics, struct, time, zipfile, zlib
 from pathlib import Path
@@ -33,13 +30,19 @@ def _python_arm(raw,jobs):
         stream=raw[j.stream_offset:j.stream_offset+j.stream_len]; d=zlib.decompressobj(-15); logical=d.decompress(stream,j.output_len+1)+d.flush()
         if len(logical)!=j.output_len or not d.eof or d.unused_data or d.unconsumed_tail or (zlib.crc32(logical)&0xffffffff)!=j.crc32: raise RuntimeError('python control validation')
         out[j.output_offset:j.output_offset+j.output_len]=logical; hashes.append(hashlib.sha256(logical).digest())
-    return time.perf_counter()-t0,bytes(out),b''.join(hashes)
+    wall=time.perf_counter()-t0;return wall,bytes(out),b''.join(hashes)
 
 def _native_arm(lib,raw,jobs,out_off):
     arr=(Job*len(jobs))(*jobs); src=(ctypes.c_ubyte*len(raw)).from_buffer_copy(raw); out=(ctypes.c_ubyte*out_off)(); hashes=(ctypes.c_ubyte*(32*len(jobs)))()
     t0=time.perf_counter(); rc=lib.cmpct_hidden_zip_validate_deflate_batch(src,len(raw),arr,len(jobs),out,out_off,hashes,len(hashes)); wall=time.perf_counter()-t0
     if rc!=0: raise RuntimeError(f'native batch status {rc}')
     return wall,bytes(out),bytes(hashes)
+
+def _dedup_native_arm(lib,raw,jobs,out_off):
+    arr=(Job*len(jobs))(*jobs); src=(ctypes.c_ubyte*len(raw)).from_buffer_copy(raw); out=(ctypes.c_ubyte*out_off)(); hashes=(ctypes.c_ubyte*(32*len(jobs)))(); offsets=(ctypes.c_size_t*len(jobs))(); used=ctypes.c_size_t()
+    t0=time.perf_counter(); rc=lib.cmpct_hidden_zip_validate_dedup_deflate_batch(src,len(raw),arr,len(jobs),out,out_off,hashes,len(hashes),offsets,len(offsets),ctypes.byref(used)); wall=time.perf_counter()-t0
+    if rc!=0: raise RuntimeError(f'native dedup batch status {rc}')
+    return wall,bytes(out[:used.value]),bytes(hashes),tuple(int(x) for x in offsets),int(used.value)
 
 def _call(lib,path,native_first):
     raw=path.read_bytes(); jobs=[]; expected=[]; out_off=0
@@ -51,14 +54,22 @@ def _call(lib,path,native_first):
         nw,no,nh=_native_arm(lib,raw,jobs,out_off); pw,po,ph=_python_arm(raw,jobs)
     else:
         pw,po,ph=_python_arm(raw,jobs); nw,no,nh=_native_arm(lib,raw,jobs,out_off)
-    if no!=po or nh!=ph: raise RuntimeError('matched arms disagree')
+    dw,do,dh,offsets,used=_dedup_native_arm(lib,raw,jobs,out_off)
+    if no!=po or nh!=ph or dh!=ph: raise RuntimeError('matched arms disagree')
+    owners={}
     for i,(off,logical,digest) in enumerate(expected):
         if no[off:off+len(logical)]!=logical or nh[i*32:(i+1)*32]!=digest: raise RuntimeError('independent ZipFile crosscheck failed')
+        doff=offsets[i]
+        if doff+len(logical)>len(do) or do[doff:doff+len(logical)]!=logical: raise RuntimeError('identity-first materialization mismatch')
+        prior=owners.setdefault(digest,(doff,len(logical)))
+        if prior!=(doff,len(logical)): raise RuntimeError('identity-first owner contradiction')
     identities=[(nh[i*32:(i+1)*32].hex(),int(j.output_len)) for i,j in enumerate(jobs)]
-    return {'native_wall_s':nw,'python_wall_s':pw,'source_bytes':len(raw),'jobs':len(jobs),'compressed_bytes':sum(j.stream_len for j in jobs),'logical_bytes':out_off,'logical_identities':identities}
+    return {'native_wall_s':nw,'python_wall_s':pw,'dedup_native_wall_s':dw,'source_bytes':len(raw),'jobs':len(jobs),'compressed_bytes':sum(j.stream_len for j in jobs),'logical_bytes':out_off,'unique_logical_bytes':used,'unique_logical_objects':len(owners),'logical_identities':identities}
 
 def run(root):
-    lib=ctypes.CDLL(str(LIB)); fn=lib.cmpct_hidden_zip_validate_deflate_batch; fn.argtypes=[ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(Job),ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t]; fn.restype=ctypes.c_int
+    lib=ctypes.CDLL(str(LIB));
+    full=lib.cmpct_hidden_zip_validate_deflate_batch;full.argtypes=[ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(Job),ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t];full.restype=ctypes.c_int
+    dedup=lib.cmpct_hidden_zip_validate_dedup_deflate_batch;dedup.argtypes=[ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(Job),ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(ctypes.c_size_t),ctypes.c_size_t,ctypes.POINTER(ctypes.c_size_t)];dedup.restype=ctypes.c_int
     shutil.rmtree(root,ignore_errors=True); root.mkdir(parents=True); rows=[]
     for rep in range(REPS):
         suite=root/f'rep-{rep}'/'neutral'; n=GENERAL.V029._load(GENERAL.V029.ROOT/'benchmarks'/'neutral_hostile_corpus_v1.py',f'cmpct_native_batch_n_{rep}'); repair=GENERAL.V029._load(GENERAL.V029.REPAIR_PATH,f'cmpct_native_batch_r_{rep}'); repair.install_generation_hooks(n); n.build(suite); repair.normalize_root(suite)
@@ -70,9 +81,9 @@ def run(root):
                 prior=ids.setdefault(digest,nbytes)
                 if prior!=nbytes: raise RuntimeError('SHA-256 identity length contradiction')
         logical=sum(p['logical_bytes'] for p in parts); unique=sum(ids.values())
-        rows.append({'rep':rep,'native_wall_s':sum(p['native_wall_s'] for p in parts),'python_wall_s':sum(p['python_wall_s'] for p in parts),'winners':len(parts),'jobs':sum(p['jobs'] for p in parts),'compressed_bytes':sum(p['compressed_bytes'] for p in parts),'logical_bytes':logical,'unique_logical_bytes':unique,'duplicate_logical_bytes':logical-unique,'unique_logical_objects':len(ids)})
-    nm=statistics.median(r['native_wall_s'] for r in rows); pm=statistics.median(r['python_wall_s'] for r in rows); lm=statistics.median(r['logical_bytes'] for r in rows); um=statistics.median(r['unique_logical_bytes'] for r in rows)
-    return {'schema':'cmpct-v030-hidden-zip-native-batch-oracle-v3','source_commit':os.environ.get('EVIDENCE_HEAD'),'evidence_class':'research-oracle','product_release_credit':False,'summary':{'native_wall_median_s':nm,'python_wall_median_s':pm,'native_vs_python_ratio':nm/pm,'jobs_median':statistics.median(r['jobs'] for r in rows),'compressed_bytes_median':statistics.median(r['compressed_bytes'] for r in rows),'logical_bytes_median':lm,'unique_logical_bytes_median':um,'duplicate_logical_bytes_median':lm-um,'unique_logical_fraction':um/lm if lm else 1.0,'unique_logical_objects_median':statistics.median(r['unique_logical_objects'] for r in rows)},'contract':{'gifted_admission_untimed':True,'matched_exact_consumption_length_crc_sha256_materialization':True,'arm_order_alternates':True,'zipfile_independent_crosscheck':True,'logical_uniqueness_accounting_untimed':True,'reader_grammar_changed':False},'rows':rows}
+        rows.append({'rep':rep,'native_wall_s':sum(p['native_wall_s'] for p in parts),'python_wall_s':sum(p['python_wall_s'] for p in parts),'dedup_native_wall_s':sum(p['dedup_native_wall_s'] for p in parts),'winners':len(parts),'jobs':sum(p['jobs'] for p in parts),'compressed_bytes':sum(p['compressed_bytes'] for p in parts),'logical_bytes':logical,'unique_logical_bytes':unique,'duplicate_logical_bytes':logical-unique,'unique_logical_objects':len(ids),'per_container_unique_logical_bytes':sum(p['unique_logical_bytes'] for p in parts)})
+    nm=statistics.median(r['native_wall_s'] for r in rows); pm=statistics.median(r['python_wall_s'] for r in rows); dm=statistics.median(r['dedup_native_wall_s'] for r in rows); lm=statistics.median(r['logical_bytes'] for r in rows); um=statistics.median(r['unique_logical_bytes'] for r in rows)
+    return {'schema':'cmpct-v030-hidden-zip-native-batch-oracle-v4','source_commit':os.environ.get('EVIDENCE_HEAD'),'evidence_class':'research-oracle','product_release_credit':False,'summary':{'native_wall_median_s':nm,'python_wall_median_s':pm,'native_vs_python_ratio':nm/pm,'dedup_native_wall_median_s':dm,'dedup_native_vs_full_native_ratio':dm/nm,'jobs_median':statistics.median(r['jobs'] for r in rows),'compressed_bytes_median':statistics.median(r['compressed_bytes'] for r in rows),'logical_bytes_median':lm,'unique_logical_bytes_median':um,'duplicate_logical_bytes_median':lm-um,'unique_logical_fraction':um/lm if lm else 1.0,'unique_logical_objects_median':statistics.median(r['unique_logical_objects'] for r in rows)},'contract':{'gifted_admission_untimed':True,'matched_exact_consumption_length_crc_sha256_materialization':True,'identity_first_validates_every_occurrence_once':True,'identity_first_exports_one_exact_representative_per_container_identity':True,'identity_first_sha_collision_byte_check':True,'arm_order_alternates':True,'zipfile_independent_crosscheck':True,'logical_uniqueness_accounting_untimed':True,'reader_grammar_changed':False},'rows':rows}
 
 def main():
     p=argparse.ArgumentParser(); p.add_argument('--work-root',type=Path,default=Path('benchmark-artifacts/native-batch-work')); p.add_argument('--output',type=Path,default=Path('benchmark-artifacts/native-batch.json')); a=p.parse_args(); result=run(a.work_root); a.output.parent.mkdir(parents=True,exist_ok=True); a.output.write_text(json.dumps(result,indent=2)+'\n'); print(json.dumps(result['summary'],indent=2))
