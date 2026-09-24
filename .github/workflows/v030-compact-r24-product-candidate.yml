@@ -1,0 +1,107 @@
+name: CMPCT v0.30 compact r24 product candidate
+# ci-lane: deep
+# ci-cancel-policy: latest-head-only
+# ci-pr-scope: exact-candidate-paths
+
+on:
+  pull_request:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'experiments/entropygraph_v030_release_product_compact_r24.py'
+      - 'tools/run_v030_compact_candidate.py'
+      - 'tests/test_v030_compact_r24_release_policy.py'
+      - '.github/workflows/v030-compact-r24-product-candidate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 420
+    concurrency:
+      group: cmpct-v030-compact-r24-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic release dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Pin candidate policy and compile benchmark boundary
+        run: |
+          python -m py_compile experiments/entropygraph_v030_release_product_compact_r24.py tools/run_v030_compact_candidate.py
+          python -m pytest -q tests/test_v030_compact_r24_release_policy.py
+      - name: Run unchanged historical causality and genuine r24-vs-candidate parity
+        run: |
+          mkdir -p benchmark-artifacts
+          python tools/run_v030_compact_candidate.py benchmarks/v030_release_ablation_product.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/ablation-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/ablation.json"
+      - name: Run unchanged paired product runtime gate
+        continue-on-error: true
+        run: |
+          python tools/run_v030_compact_candidate.py benchmarks/v030_release_performance_product.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/runtime-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/runtime.json"
+      - name: Run unchanged operation-derived selective-read gate
+        if: always()
+        run: |
+          python tools/run_v030_compact_candidate.py benchmarks/v030_release_selective_read_product.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/selective-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/selective.json"
+      - name: Enforce frozen product gates
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          ap=Path('benchmark-artifacts/ablation.json')
+          rp=Path('benchmark-artifacts/runtime.json')
+          sp=Path('benchmark-artifacts/selective.json')
+          assert ap.is_file(), 'candidate ablation did not publish evidence'
+          assert rp.is_file(), 'candidate runtime did not publish evidence'
+          assert sp.is_file(), 'candidate selective-read did not publish evidence'
+          a=json.loads(ap.read_text()); r=json.loads(rp.read_text()); s=json.loads(sp.read_text())
+          h=a['historical_causality']; p=a['canonical_product_parity']
+          assert h['accepted_v029_bytes']==137499525
+          assert h['workloads_regressed']==0
+          assert h['workloads_improved']>=3
+          assert h['saving_vs_v029_bytes']>=687783
+          assert h['max_selected_member_read_amplification']<=8.0
+          assert p['product_regressions']==[]
+          assert len(h['rows'])==15 and len(p['rows'])==15
+          assert r['totals']['median_create_ratio']<=1.10
+          assert r['totals']['max_workload_create_ratio']<=1.25
+          assert r['totals']['median_extract_ratio']<=1.10
+          assert r['totals']['max_workload_extract_ratio']<=1.25
+          assert r['totals']['max_workload_peak_rss_ratio']<=1.25
+          assert s['max_selected_member_read_amplification']<=8.0
+          PY
+      - name: Upload exact-head candidate receipts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-compact-r24-candidate-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/*.json
+          if-no-files-found: warn
+          retention-days: 90
