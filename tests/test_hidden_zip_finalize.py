@@ -57,8 +57,6 @@ def test_mutation_during_snapshot_recipe_construction_is_rejected_before_commit(
     assert len(builder.recipes)==recipes_before;assert set(builder.cands)==cands_before;assert builder.canonical_deflate=={};assert not any(row[0]=='winner.bin' for row in builder.files)
 
 def test_provisional_malformed_hidden_peers_are_excluded_before_commit(tmp_path):
-    # Identical malformed hidden peers can provisionally match exact compressed bytes. Staging must
-    # reject both, recompute ownership to empty, and preserve the original bytes through fallback.
     seed=tmp_path/'seed.zip';_write_zip(seed,random.Random(113).randbytes(32*1024));bad=_corrupt_payload_bytes(seed.read_bytes());seed.unlink();builder=Builder(tmp_path);builder.scan()
     a=tmp_path/'a.bin';b=tmp_path/'b.bin';a.write_bytes(bad);b.write_bytes(bad);ia=_defer(a,'a.bin');ib=_defer(b,'b.bin');recipes_before=len(builder.recipes);result=finalize_deferred_hidden_files(builder,[ia,ib],min_verified_reuse=1)
     assert result.storage=={};assert result.cohort.staged=={};assert result.cohort.realized==frozenset();assert len(builder.recipes)==recipes_before
@@ -68,3 +66,9 @@ def test_late_loser_drift_aborts_before_prepared_winner_commit(tmp_path):
     payload=random.Random(106).randbytes(32*1024);_write_zip(tmp_path/'owner.zip',payload);builder=Builder(tmp_path);builder.scan();recipes_before=len(builder.recipes);cands_before=set(builder.cands);winner=tmp_path/'winner.bin';loser=tmp_path/'loser.bin';_write_zip(winner,payload);_write_zip(loser,random.Random(107).randbytes(4096));winner_item=_defer(winner,'winner.bin');loser_item=_defer(loser,'loser.bin');replacement=tmp_path/'replacement.bin';_write_zip(replacement,random.Random(108).randbytes(4096));os.replace(replacement,loser)
     with pytest.raises(RuntimeError,match='changed before ordinary fallback'):finalize_deferred_hidden_files(builder,[winner_item,loser_item],min_verified_reuse=1)
     assert len(builder.recipes)==recipes_before;assert set(builder.cands)==cands_before;assert builder.canonical_deflate=={};assert not any(row[0] in {'winner.bin','loser.bin'} for row in builder.files)
+
+def test_prepare_routes_builder_encode_worker_policy_to_hidden_stage(tmp_path,monkeypatch):
+    builder=Builder(tmp_path,workers=3);seen={};original=hidden_api.stage_stable_hidden_cohort
+    def capture(*args,**kwargs):seen['workers']=kwargs.get('max_parallel_workers');return original(*args,**kwargs)
+    monkeypatch.setattr(hidden_api,'stage_stable_hidden_cohort',capture);hidden_api.prepare_hidden_zip_candidates(builder,[],min_verified_reuse=1)
+    assert builder.encode_workers==3;assert seen['workers']==3
