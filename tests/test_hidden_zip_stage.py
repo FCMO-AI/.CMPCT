@@ -74,7 +74,8 @@ def test_successful_staging_uses_content_bound_private_snapshot_with_explicit_io
     cohort = stage_stable_hidden_cohort(proof, sources, min_verified_reuse=1, max_staged_candidate_bytes=ceiling)
     assert cohort.realized == frozenset({"owner.zip", "hidden.bin"}); assert set(cohort.staged) == {"hidden.bin"}
     assert 0 < cohort.retained_candidate_bytes <= ceiling
-    assert cohort.source_bytes_read == physical
+    # One read creates the private immutable snapshot; the second is the post-parse live digest rebind.
+    assert cohort.source_bytes_read == physical * 2
     assert cohort.temporary_bytes_written == physical
     assert cohort.temporary_bytes_read == physical * 3
 
