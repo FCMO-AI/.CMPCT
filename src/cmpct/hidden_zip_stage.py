@@ -49,24 +49,21 @@ def _snapshot_proven_source(source,proof,destination):
         if int(destination.stat().st_size)!=expected_size:return False,read
     except OSError:return False,read
     return True,read
-def _parallel_snapshot_stage(rel,source,state,snapshot,proof,max_retained_bytes):
-    """Stage one immutable snapshot privately; Builder mutation remains serial after collection."""
+def _parallel_snapshot_stage(rel,state,snapshot,max_retained_bytes):
+    """Stage one immutable snapshot privately; live-source validation happens after all workers join."""
     physical_size=int(state[0][2])
-    if len(snapshot)!=physical_size or sha(snapshot)!=state[1]:return rel,None,0
+    if len(snapshot)!=physical_size or sha(snapshot)!=state[1]:return rel,None
     try:candidate=stage_vzip_recipe_bytes(snapshot,max_retained_bytes=max_retained_bytes,exact_stream_retention=True,validated_deflates={})
     except STAGE_REJECTS:candidate=None
-    if candidate is None:return rel,None,0
-    current,read=_revalidate_proven_source(source,proof)
-    return rel,(candidate if current else None),read
+    return rel,candidate
 def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_candidate_bytes=MAX_STAGED_CANDIDATE_BYTES,max_stage_source_bytes=MAX_STAGE_SOURCE_BYTES,source_snapshots=None):
     sources=tuple(sources);source_by_rel={s.rel:s for s in sources};source_snapshots=source_snapshots or {}
     if len(source_by_rel)!=len(sources):raise ValueError('candidate owner rel paths must be unique')
     fixed={rel for rel,s in source_by_rel.items() if s.fixed and rel in proof.owner_identities};hidden=set(proof.owner_identities)-fixed;initial=set(proof.realized)&hidden
     staged={};excluded=set();retained=source_read=temp_written=temp_read=0
     # Parallelism is admitted only when every provisional winner has an immutable Builder snapshot.
-    # Give every worker a deterministic disjoint share of the aggregate retained-memory budget; unlike
-    # a physical-size heuristic this remains safe for highly compressible/hostile ZIP members whose
-    # decoded material can be much larger than the container. Anything outside the envelope falls back.
+    # Every worker gets a deterministic disjoint share of the aggregate retained-memory budget, which
+    # stays safe even for highly compressible/hostile members whose decoded bytes dwarf the container.
     parallel_rows=[]
     for rel in sorted(initial):
         source=source_by_rel.get(rel);state=proof.source_states.get(rel);snapshot=source_snapshots.get(rel)
@@ -78,19 +75,22 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
     if parallel_ok:
         workers=min(MAX_PARALLEL_STAGE_WORKERS,len(parallel_rows))
         with ThreadPoolExecutor(max_workers=workers,thread_name_prefix='cmpct-hidden-stage') as pool:
-            futures=[pool.submit(_parallel_snapshot_stage,rel,source,state,snapshot,proof,per_candidate_reservation) for rel,source,state,snapshot in parallel_rows]
+            futures=[pool.submit(_parallel_snapshot_stage,rel,state,snapshot,per_candidate_reservation) for rel,_source,state,snapshot in parallel_rows]
             results=[f.result() for f in futures]
-        # Collection and all Builder mutation are deterministic/serial. The disjoint worker budgets sum
-        # to <= max_staged_candidate_bytes, so aggregate retained material is bounded even while workers overlap.
-        for rel,candidate,read in sorted(results,key=lambda x:x[0]):
-            source_read+=int(read)
+        candidates=dict(results)
+        # Rebind only after every immutable recipe is staged. Doing it inside workers would widen the
+        # mutation window for an early-finishing source while other workers were still decoding. The
+        # final validation remains deliberately adjacent to fixed-point/commit, as in the serial path.
+        for rel,source,_state,_snapshot in parallel_rows:
+            candidate=candidates.get(rel)
             if candidate is None:excluded.add(rel);continue
+            current,read=_revalidate_proven_source(source,proof);source_read+=read
+            if not current:excluded.add(rel);continue
             cost=_retained_bytes(candidate)
             if retained+cost>int(max_staged_candidate_bytes):excluded.add(rel);continue
             staged[rel]=candidate;retained+=cost
     else:
-        # Cache only decodes from candidates that survived authoritative ZIP CRC/length validation *and*
-        # the final live digest rebind. Serial fallback retains the previously proven cross-winner cache.
+        # Serial fallback retains the previously proven cross-winner validated-decode cache.
         validated_deflates={}
         for rel in sorted(initial):
             source=source_by_rel.get(rel);state=proof.source_states.get(rel)
