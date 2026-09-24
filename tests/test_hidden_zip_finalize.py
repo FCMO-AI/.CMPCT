@@ -52,6 +52,14 @@ def test_mutation_during_snapshot_recipe_construction_is_rejected_before_commit(
     with pytest.raises(RuntimeError,match='changed before ordinary fallback'):finalize_deferred_hidden_files(builder,[item],min_verified_reuse=1)
     assert len(builder.recipes)==recipes_before;assert set(builder.cands)==cands_before;assert builder.canonical_deflate=={};assert not any(row[0]=='winner.bin' for row in builder.files)
 
+def test_mutation_during_private_recipe_construction_is_rejected_before_commit(tmp_path,monkeypatch):
+    payload=random.Random(113).randbytes(32*1024);_write_zip(tmp_path/'owner.zip',payload);builder=Builder(tmp_path);builder.scan();hidden=tmp_path/'winner.bin';_write_zip(hidden,payload);item=_defer(hidden,'winner.bin');recipes_before=len(builder.recipes);cands_before=set(builder.cands);original=stage_api.stage_vzip_recipe
+    def stage_then_mutate(*args,**kwargs):
+        staged=original(*args,**kwargs);replacement=tmp_path/'replacement.bin';_write_zip(replacement,random.Random(114).randbytes(32*1024));os.replace(replacement,hidden);return staged
+    monkeypatch.setattr(stage_api,'stage_vzip_recipe',stage_then_mutate)
+    with pytest.raises(RuntimeError,match='changed before ordinary fallback'):finalize_deferred_hidden_files(builder,[item],min_verified_reuse=1,max_live_snapshot_bytes=0)
+    assert len(builder.recipes)==recipes_before;assert set(builder.cands)==cands_before;assert builder.canonical_deflate=={};assert not any(row[0]=='winner.bin' for row in builder.files)
+
 def test_late_loser_drift_aborts_before_prepared_winner_commit(tmp_path):
     payload=random.Random(106).randbytes(32*1024);_write_zip(tmp_path/'owner.zip',payload);builder=Builder(tmp_path);builder.scan();recipes_before=len(builder.recipes);cands_before=set(builder.cands);winner=tmp_path/'winner.bin';loser=tmp_path/'loser.bin';_write_zip(winner,payload);_write_zip(loser,random.Random(107).randbytes(4096));winner_item=_defer(winner,'winner.bin');loser_item=_defer(loser,'loser.bin');replacement=tmp_path/'replacement.bin';_write_zip(replacement,random.Random(108).randbytes(4096));os.replace(replacement,loser)
     with pytest.raises(RuntimeError,match='changed before ordinary fallback'):finalize_deferred_hidden_files(builder,[winner_item,loser_item],min_verified_reuse=1)
