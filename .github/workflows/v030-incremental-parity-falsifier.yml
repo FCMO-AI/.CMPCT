@@ -47,8 +47,9 @@ jobs:
           name: v030-incremental-parity-${{ github.event.pull_request.head.sha || github.sha }}
           path: evidence-artifacts/incremental-parity.json
           if-no-files-found: error
-      - name: Enforce bounded oracle decision
+      - name: Enforce compact-retention byte floor
         if: always()
-        run: |
-          test '${{ steps.byte-floor.outcome }}' = success
-          test '${{ steps.locality.outcome }}' = success
+        run: test '${{ steps.byte-floor.outcome }}' = success
+      - name: Enforce compact-retention locality
+        if: always()
+        run: test '${{ steps.locality.outcome }}' = success
