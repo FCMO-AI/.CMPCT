@@ -71,6 +71,17 @@ jobs:
       - id: resource_gate
         continue-on-error: true
         run: python benchmarks/v030_hidden_zip_resource_gate.py --output benchmark-artifacts/hidden-zip-resource.json
+      # Product + resource evidence decides the active rehabilitation fork. Preserve it immediately so
+      # a later slow oracle or superseding PR commit cannot erase an already-completed decisive receipt.
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-hidden-zip-product-gain-retention-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/hidden-zip-product.json
+            benchmark-artifacts/hidden-zip-resource.json
+          if-no-files-found: error
+          retention-days: 90
       - if: always()
         run: python benchmarks/v030_hidden_zip_speed_oracle.py --output benchmark-artifacts/hidden-zip-speed-oracle.json
       - if: always()
@@ -80,13 +91,11 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-hidden-zip-product-gain-retention-${{ env.EVIDENCE_HEAD }}
+          name: v030-hidden-zip-oracles-${{ env.EVIDENCE_HEAD }}
           path: |
-            benchmark-artifacts/hidden-zip-product.json
-            benchmark-artifacts/hidden-zip-resource.json
             benchmark-artifacts/hidden-zip-speed-oracle.json
             benchmark-artifacts/hidden-zip-mode1-oracle.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 90
       - name: Enforce resource gate outcome
         if: always()
