@@ -1,49 +1,23 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 hidden-ZIP native product gate
 on:
-  pull_request:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'src/cmpct/native_hidden_zip_batch.py'
-      - 'src/cmpct/vzip_transaction.py'
-      - 'tests/test_v030_vzip_transaction.py'
-      - '.github/workflows/v030-hidden-zip-native-product.yml'
   workflow_dispatch:
 permissions: {contents: read}
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: v030-hidden-zip-native-product-manual-${{ github.sha }}
+  cancel-in-progress: false
 jobs:
-  classify:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    concurrency:
-      group: v030-hidden-zip-native-product-classifier-${{ github.event.pull_request.number || github.ref }}
-      cancel-in-progress: true
-    outputs: {run_deep: '${{ steps.scope.outputs.run_deep }}'}
-    steps:
-      - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
-      - id: scope
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          if [ "${{ github.event_name }}" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
-          git diff-tree --no-commit-id --name-only -r HEAD >/tmp/f
-          if grep -Eq '^(src/cmpct/native_hidden_zip_batch\.py|src/cmpct/vzip_transaction\.py|tests/test_v030_vzip_transaction\.py|\.github/workflows/v030-hidden-zip-native-product\.yml)$' /tmp/f; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
   evidence:
-    needs: classify
-    if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    concurrency:
-      group: v030-hidden-zip-native-product-receipt-${{ github.event.pull_request.head.sha || github.sha }}
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}'}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
       - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with: {python-version: '3.11', cache: pip}
