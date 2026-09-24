@@ -1,0 +1,36 @@
+name: CMPCT v0.30 incremental parity falsifier
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/v030_incremental_parity_falsifier.py'
+      - '.github/workflows/v030-incremental-parity-falsifier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  falsifier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Execute same-input three-arm falsifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence-artifacts
+          python experiments/v030_incremental_parity_falsifier.py | tee evidence-artifacts/incremental-parity.json
+      - name: Preserve decision receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-incremental-parity-${{ github.event.pull_request.head.sha || github.sha }}
+          path: evidence-artifacts/incremental-parity.json
+          if-no-files-found: error
