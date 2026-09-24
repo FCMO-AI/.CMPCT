@@ -9,5 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 crc32fast = "1.4"
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# Creator-side research boundary: zlib-rs is the current flate2 fast pure-Rust backend.
+# Keep it isolated from canonical cmpct-core until product evidence earns the dependency/safety cost.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 sha2 = "0.10"
