@@ -1,7 +1,5 @@
 from __future__ import annotations
-
 """Transactional cohort staging after candidate-scoped hidden-ZIP ownership proof."""
-
 from dataclasses import dataclass
 import hashlib,os,struct,tempfile,zipfile
 from pathlib import Path
@@ -10,18 +8,13 @@ from .hidden_zip import _stamp
 from .hidden_zip_candidates import CandidateOwnershipProof,ZipOwnerSource
 from .reuse_ownership import realized_reuse_fixed_point
 from .vzip_transaction import StagedVzipRecipe,commit_staged_vzip_prehashed,stage_vzip_recipe,stage_vzip_recipe_bytes
-
 MAX_STAGED_CANDIDATE_BYTES=256*1024*1024;MAX_STAGE_SOURCE_BYTES=256*1024*1024;SNAPSHOT_CHUNK=1024*1024;STAGE_SOURCE_PASSES=5
 STAGE_REJECTS=(OSError,ValueError,RuntimeError,struct.error,zipfile.BadZipFile)
-
 @dataclass(frozen=True)
 class StagedHiddenCohort:
     realized:frozenset[str];credit:dict[str,int];staged:dict[str,StagedVzipRecipe];excluded:frozenset[str];retained_candidate_bytes:int;source_bytes_read:int;temporary_bytes_written:int=0;temporary_bytes_read:int=0
-
 def _retained_bytes(staged):return sum(len(raw)+(0 if stream is None else len(stream)) for raw,_hint,stream,_ref in staged.candidates)
-
-def _revalidate_proven_source(source:ZipOwnerSource,proof:CandidateOwnershipProof)->tuple[bool,int]:
-    """Rebind staged immutable bytes to the live path immediately before cohort commit eligibility."""
+def _revalidate_proven_source(source,proof):
     state=proof.source_states.get(source.rel)
     if state is None:return False,0
     expected_stamp,expected_digest=state;expected_size=int(expected_stamp[2]);digest=hashlib.sha256();read=0
@@ -36,7 +29,6 @@ def _revalidate_proven_source(source:ZipOwnerSource,proof:CandidateOwnershipProo
             if _stamp(os.fstat(src.fileno()))!=expected_stamp:return False,read
     except OSError:return False,read
     return read==expected_size and digest.digest()==expected_digest,read
-
 def _snapshot_proven_source(source,proof,destination):
     state=proof.source_states.get(source.rel)
     if state is None:return False,0
@@ -55,32 +47,28 @@ def _snapshot_proven_source(source,proof,destination):
         if int(destination.stat().st_size)!=expected_size:return False,read
     except OSError:return False,read
     return True,read
-
 def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_candidate_bytes=MAX_STAGED_CANDIDATE_BYTES,max_stage_source_bytes=MAX_STAGE_SOURCE_BYTES,source_snapshots=None):
     sources=tuple(sources);source_by_rel={s.rel:s for s in sources};source_snapshots=source_snapshots or {}
     if len(source_by_rel)!=len(sources):raise ValueError('candidate owner rel paths must be unique')
     fixed={rel for rel,s in source_by_rel.items() if s.fixed and rel in proof.owner_identities};hidden=set(proof.owner_identities)-fixed;initial=set(proof.realized)&hidden
     staged={};excluded=set();retained=source_read=temp_written=temp_read=0
+    # Cache only decodes from candidates that survived authoritative ZIP CRC/length validation *and*
+    # the final live digest rebind. Key includes compressed/logical sizes, CRC and exact stream hash,
+    # so reuse cannot cross a different ZIP semantic descriptor merely because bytes collide by shape.
+    validated_deflates={}
     for rel in sorted(initial):
         source=source_by_rel.get(rel);state=proof.source_states.get(rel)
         if source is None or state is None:excluded.add(rel);continue
-        physical_size=int(state[0][2]);remaining=int(max_staged_candidate_bytes)-retained;candidate=None;snapshot=source_snapshots.get(rel)
+        physical_size=int(state[0][2]);remaining=int(max_staged_candidate_bytes)-retained;candidate=None;snapshot=source_snapshots.get(rel);candidate_cache=dict(validated_deflates)
         if snapshot is not None:
             if len(snapshot)!=physical_size or sha(snapshot)!=state[1]:excluded.add(rel);continue
             if physical_size>int(max_stage_source_bytes)-(source_read+temp_written+temp_read):excluded.add(rel);continue
-            try:candidate=stage_vzip_recipe_bytes(snapshot,max_retained_bytes=max(0,remaining),exact_stream_retention=True)
+            try:candidate=stage_vzip_recipe_bytes(snapshot,max_retained_bytes=max(0,remaining),exact_stream_retention=True,validated_deflates=candidate_cache)
             except STAGE_REJECTS:candidate=None
-            # The immutable Builder snapshot may be staged for milliseconds. Rebind only *after*
-            # staging so a mutation during recipe construction cannot slip between the old guard and
-            # commit. This preserves one live full-source read on the fast snapshot path, but moves it
-            # to the actual transaction boundary instead of merely checking before work begins.
             if candidate is not None:
                 current,read=_revalidate_proven_source(source,proof);source_read+=read
                 if not current:candidate=None
         else:
-            # The private-snapshot fallback needs both a validated copy and a final live rebind: the
-            # source can mutate while the private copy is being parsed. This path is intentionally
-            # slower and applies only when the bounded live snapshot optimization is unavailable.
             required=physical_size*(STAGE_SOURCE_PASSES+1)
             if required>int(max_stage_source_bytes)-(source_read+temp_written+temp_read):excluded.add(rel);continue
             try:
@@ -88,7 +76,7 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
                     private=Path(td)/'candidate.zip';current,read=_snapshot_proven_source(source,proof,private);source_read+=read
                     if not current:excluded.add(rel);continue
                     temp_written+=physical_size
-                    try:candidate=stage_vzip_recipe(private,max_retained_bytes=max(0,remaining),exact_stream_retention=True)
+                    try:candidate=stage_vzip_recipe(private,max_retained_bytes=max(0,remaining),exact_stream_retention=True,validated_deflates=candidate_cache)
                     except STAGE_REJECTS:candidate=None
                     temp_read+=physical_size*3
                     if candidate is not None:
@@ -98,11 +86,10 @@ def stage_stable_hidden_cohort(proof,sources,*,min_verified_reuse,max_staged_can
         if candidate is None:excluded.add(rel);continue
         cost=_retained_bytes(candidate)
         if cost>remaining:excluded.add(rel);continue
-        staged[rel]=candidate;retained+=cost
+        staged[rel]=candidate;retained+=cost;validated_deflates=candidate_cache
     realized,credit=realized_reuse_fixed_point(proof.owner_identities,hidden_owners=hidden,fixed_owners=fixed,excluded_owners=excluded,min_verified_reuse=int(min_verified_reuse))
     stable=set(realized)&hidden;staged={rel:r for rel,r in staged.items() if rel in stable};retained=sum(_retained_bytes(r) for r in staged.values())
     return StagedHiddenCohort(frozenset(realized),credit,staged,frozenset(excluded),int(retained),int(source_read),int(temp_written),int(temp_read))
-
 def commit_stable_hidden_cohort(builder,cohort):
     storage={}
     for rel in sorted(cohort.staged):
