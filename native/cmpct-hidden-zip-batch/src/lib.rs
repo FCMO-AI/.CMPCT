@@ -49,14 +49,14 @@ pub unsafe extern "C" fn cmpct_hidden_zip_validate_deflate_batch(
         if ranges.windows(2).any(|w| w[0].1 > w[1].0) { return Err(RANGE); }
         for (i, spec) in specs.iter().enumerate() {
             let stream = &src[spec.stream_offset..spec.stream_offset + spec.stream_len];
+            let logical = &mut dst[spec.output_offset..spec.output_offset + spec.output_len];
             let mut decoder = DeflateDecoder::new(stream);
-            let mut logical = Vec::with_capacity(spec.output_len.min(1024 * 1024));
-            (&mut decoder).take((spec.output_len as u64).saturating_add(1)).read_to_end(&mut logical).map_err(|_| FORMAT)?;
-            if logical.len() != spec.output_len || decoder.total_in() as usize != stream.len() { return Err(FORMAT); }
-            let mut crc = crc32fast::Hasher::new(); crc.update(&logical);
+            decoder.read_exact(logical).map_err(|_| FORMAT)?;
+            let mut extra = [0u8; 1];
+            if decoder.read(&mut extra).map_err(|_| FORMAT)? != 0 || decoder.total_in() as usize != stream.len() { return Err(FORMAT); }
+            let mut crc = crc32fast::Hasher::new(); crc.update(logical);
             if crc.finalize() != spec.crc32 { return Err(FORMAT); }
-            dst[spec.output_offset..spec.output_offset + spec.output_len].copy_from_slice(&logical);
-            digest_out[i*32..(i+1)*32].copy_from_slice(&Sha256::digest(&logical));
+            digest_out[i*32..(i+1)*32].copy_from_slice(&Sha256::digest(logical));
         }
         Ok(())
     });
@@ -79,5 +79,7 @@ mod tests {
         let rc=unsafe{cmpct_hidden_zip_validate_deflate_batch(stream.as_ptr(),stream.len(),&bad,1,out.as_mut_ptr(),out.len(),hashes.as_mut_ptr(),hashes.len())}; assert_eq!(rc,FORMAT);
         let mut tailed=stream.clone(); tailed.extend_from_slice(b"junk"); let tailed_job=HiddenZipDeflateJob{stream_len:tailed.len(),..job};
         let rc=unsafe{cmpct_hidden_zip_validate_deflate_batch(tailed.as_ptr(),tailed.len(),&tailed_job,1,out.as_mut_ptr(),out.len(),hashes.as_mut_ptr(),hashes.len())}; assert_eq!(rc,FORMAT);
+        let short=HiddenZipDeflateJob{output_len:job.output_len+1,..job}; let mut too_long=vec![0;short.output_len];
+        let rc=unsafe{cmpct_hidden_zip_validate_deflate_batch(stream.as_ptr(),stream.len(),&short,1,too_long.as_mut_ptr(),too_long.len(),hashes.as_mut_ptr(),hashes.len())}; assert_eq!(rc,FORMAT);
     }
 }
