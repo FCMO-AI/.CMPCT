@@ -112,6 +112,32 @@ def commit_staged_vzip(staged:StagedVzipRecipe,add_content:Callable):
     return staged.recipe
 
 
+def commit_staged_vzip_prehashed(staged:StagedVzipRecipe,builder):
+    """Commit a previously hashed hidden-VZIP stage without hashing every decoded member twice.
+
+    Staging already computes the SHA-256 identity returned in each recipe payload. Hidden winner commit
+    used to call ``Builder.add_content`` and recompute that same digest over every decoded member. This
+    helper reuses the staged identity but preserves Builder's exact Candidate/deflate accounting. It is
+    deliberately scoped to transactional hidden winners; ordinary Builder ingestion remains unchanged.
+    """
+    # Lazy import avoids a module cycle while keeping Candidate construction identical to Builder.
+    from .builder import Candidate
+    for raw,hint,stream,expected in staged.candidates:
+        h=bytes(expected);c=builder.cands.get(h)
+        if c is None:
+            c=Candidate(raw,{hint} if hint else set(),{});builder.cands[h]=c
+        else:
+            # A pre-existing content-addressed candidate is authoritative for these bytes. The staged
+            # digest was computed from ``raw`` in this same transaction, so no second whole-buffer hash
+            # is needed merely to rediscover the key.
+            if hint:c.hints.add(hint)
+        if stream is not None:
+            sh=sha(stream);slot=c.deflates.get(sh)
+            if slot is None:c.deflates[sh]=[stream,1]
+            else:slot[1]+=1
+    return staged.recipe
+
+
 def make_vzip_recipe_transactional(path:Path,add_content:Callable):
     staged=stage_vzip_recipe(path)
     if staged is None:return None
