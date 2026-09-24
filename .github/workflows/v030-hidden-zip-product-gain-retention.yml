@@ -10,6 +10,7 @@ on:
       - 'benchmarks/v030_hidden_zip_resource_gate.py'
       - 'benchmarks/v030_hidden_zip_speed_oracle.py'
       - 'benchmarks/v030_hidden_zip_mode1_oracle.py'
+      - 'benchmarks/v030_hidden_zip_physical_identity_oracle.py'
       - 'src/cmpct/v030_hidden_zip_builder.py'
       - 'src/cmpct/builder_hidden_zip.py'
       - 'src/cmpct/hidden_zip*.py'
@@ -44,7 +45,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "${{ github.event_name }}" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD >/tmp/f
-          if grep -Eq '^(benchmarks/v030_hidden_zip_(product_gain_retention|resource_gate|speed_oracle|mode1_oracle)\.py|src/cmpct/(v030_hidden_zip_builder|builder_hidden_zip|hidden_zip[^/]*|reuse_ownership|vzip_transaction)\.py|tests/test_(hidden_zip_finalize|hidden_zip_scan_integration|hidden_zip_stage|v030_vzip_transaction)\.py|\.github/workflows/v030-hidden-zip-product-gain-retention\.yml)$' /tmp/f; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -Eq '^(benchmarks/v030_hidden_zip_(product_gain_retention|resource_gate|speed_oracle|mode1_oracle|physical_identity_oracle)\.py|src/cmpct/(v030_hidden_zip_builder|builder_hidden_zip|hidden_zip[^/]*|reuse_ownership|vzip_transaction)\.py|tests/test_(hidden_zip_finalize|hidden_zip_scan_integration|hidden_zip_stage|v030_vzip_transaction)\.py|\.github/workflows/v030-hidden-zip-product-gain-retention\.yml)$' /tmp/f; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
   evidence:
     needs: classify
     if: needs.classify.outputs.run_deep == 'true'
@@ -65,14 +66,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - run: python -m py_compile benchmarks/v030_hidden_zip_product_gain_retention.py benchmarks/v030_hidden_zip_resource_gate.py benchmarks/v030_hidden_zip_speed_oracle.py benchmarks/v030_hidden_zip_mode1_oracle.py src/cmpct/v030_hidden_zip_builder.py src/cmpct/builder_hidden_zip.py src/cmpct/vzip_transaction.py
+      - run: python -m py_compile benchmarks/v030_hidden_zip_product_gain_retention.py benchmarks/v030_hidden_zip_resource_gate.py benchmarks/v030_hidden_zip_speed_oracle.py benchmarks/v030_hidden_zip_mode1_oracle.py benchmarks/v030_hidden_zip_physical_identity_oracle.py src/cmpct/v030_hidden_zip_builder.py src/cmpct/builder_hidden_zip.py src/cmpct/vzip_transaction.py
       - run: python -m pytest -q tests/test_hidden_zip_finalize.py tests/test_hidden_zip_scan_integration.py tests/test_hidden_zip_stage.py tests/test_v030_vzip_transaction.py
       - run: python benchmarks/v030_hidden_zip_product_gain_retention.py --output benchmark-artifacts/hidden-zip-product.json
       - id: resource_gate
         continue-on-error: true
         run: python benchmarks/v030_hidden_zip_resource_gate.py --output benchmark-artifacts/hidden-zip-resource.json
-      # Product + resource evidence decides the active rehabilitation fork. Preserve it immediately so
-      # a later slow oracle or superseding PR commit cannot erase an already-completed decisive receipt.
       - uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -87,6 +86,8 @@ jobs:
       - if: always()
         run: python benchmarks/v030_hidden_zip_mode1_oracle.py --output benchmark-artifacts/hidden-zip-mode1-oracle.json
       - if: always()
+        run: python benchmarks/v030_hidden_zip_physical_identity_oracle.py --output benchmark-artifacts/hidden-zip-physical-id.json
+      - if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-hidden-zip-product-gain-retention.yml
       - uses: actions/upload-artifact@v6
         if: always()
@@ -95,6 +96,7 @@ jobs:
           path: |
             benchmark-artifacts/hidden-zip-speed-oracle.json
             benchmark-artifacts/hidden-zip-mode1-oracle.json
+            benchmark-artifacts/hidden-zip-physical-id.json
           if-no-files-found: warn
           retention-days: 90
       - name: Enforce resource gate outcome
