@@ -61,6 +61,11 @@ for _name in dir(_PRODUCT):
     if not _name.startswith("__"):
         globals()[_name] = getattr(_PRODUCT, _name)
 
+# Re-exported immutable integers were copied into the promoted module before this candidate applied
+# its policy.  Publish the effective value explicitly so diagnostics cannot mistake stale facade
+# metadata for the Builder global that actually controls creation.
+R24_RELEASE_DEFLATE_REUSE_MIN_BYTES = 64 * 1024
+
 # Preserve an explicit machine-readable identity for receipts/introspection.
 PRODUCT_CANDIDATE = "v030-compact-r24-release-policy-v1"
 R24_COMPACT_DEFLATE_REUSE_MIN_BYTES = 64 * 1024
