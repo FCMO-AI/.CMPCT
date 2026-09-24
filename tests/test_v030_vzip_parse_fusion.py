@@ -24,3 +24,7 @@ def test_in_memory_fused_peak_bound_still_refuses_before_member_decode(monkeypat
     monkeypatch.setattr(zipfile.ZipFile,'read',counted_read)
     assert tx.stage_vzip_recipe_bytes(raw,max_retained_bytes=bound-1,exact_stream_retention=True) is None
     assert reads==0
+
+
+def test_in_memory_fused_parse_preserves_malformed_preflight_refusal():
+    assert tx.stage_vzip_recipe_bytes(b'not-a-zip',max_retained_bytes=1024,exact_stream_retention=True) is None
