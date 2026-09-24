@@ -32,10 +32,14 @@ jobs:
         id: medium
         continue-on-error: true
         run: python -c "import json; d=json.load(open('evidence-artifacts/decomposition.json')); r=next(x for x in d['rows'] if x['name']=='disable_medium_binary_only'); assert r['delta_vs_r24_bytes']<=0, r['delta_vs_r24_bytes']"
-      - name: Both mature defaults reach r24 floor
+      - name: Mature micro max and medium defaults reach r24 floor
         id: both
         continue-on-error: true
         run: python -c "import json; d=json.load(open('evidence-artifacts/decomposition.json')); r=next(x for x in d['rows'] if x['name']=='mature_micro_and_medium_defaults'); assert r['delta_vs_r24_bytes']<=0, r['delta_vs_r24_bytes']"
+      - name: All mature pack defaults reach r24 floor
+        id: all
+        continue-on-error: true
+        run: python -c "import json; d=json.load(open('evidence-artifacts/decomposition.json')); r=next(x for x in d['rows'] if x['name']=='all_mature_pack_defaults'); assert r['delta_vs_r24_bytes']<=0, r['delta_vs_r24_bytes']"
       - name: Preserve receipt
         if: always()
         uses: actions/upload-artifact@v4
@@ -49,3 +53,6 @@ jobs:
       - name: Enforce both-defaults arm
         if: always()
         run: test '${{ steps.both.outcome }}' = success
+      - name: Enforce all-mature-pack-defaults arm
+        if: always()
+        run: test '${{ steps.all.outcome }}' = success
