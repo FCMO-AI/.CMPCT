@@ -4,8 +4,8 @@ from __future__ import annotations
 Admission gifts the existing hidden winners and is untimed. Baseline native/Python arms perform matched
 exact-consumption, length, CRC, SHA-256 and materialization work. Identity-first arms validate/hash every
 occurrence once but export one byte-exact representative per logical identity, including a cohort-wide arm.
-Native receipts report both kernel wall and the caller-visible bridge wall including ctypes buffers and returned
-material/hash/offset conversion, so a fast kernel cannot hide ownership-transfer cost. No product credit.
+Native receipts report kernel wall and caller-visible bridge wall; the cohort arm additionally charges the
+source-buffer assembly its current FFI shape requires. No product/release credit.
 """
 import argparse, ctypes, hashlib, io, json, os, shutil, statistics, struct, time, zipfile, zlib
 from pathlib import Path
@@ -55,21 +55,21 @@ def _call(lib,path,native_first):
     identities=[(nh[i*32:(i+1)*32].hex(),int(j.output_len)) for i,j in enumerate(jobs)]
     return {'native_wall_s':nw,'native_bridge_wall_s':nb,'python_wall_s':pw,'dedup_native_wall_s':dw,'dedup_native_bridge_wall_s':db,'source_bytes':len(raw),'jobs':len(jobs),'compressed_bytes':sum(j.stream_len for j in jobs),'logical_bytes':out_off,'unique_logical_bytes':used,'unique_logical_objects':len(owners),'logical_identities':identities}
 def _cohort_dedup(lib,paths):
-    source=bytearray(); jobs=[]; expected=[]; out_off=0
-    for path in paths:
-        raw=path.read_bytes(); base=len(source); source+=raw
+    raws=[p.read_bytes() for p in paths]; join_t0=time.perf_counter(); source=b''.join(raws); join_wall=time.perf_counter()-join_t0; jobs=[]; expected=[]; out_off=0; base=0
+    for raw in raws:
         with zipfile.ZipFile(io.BytesIO(raw)) as z:
             for info in z.infolist():
                 if info.is_dir() or info.compress_type!=zipfile.ZIP_DEFLATED:continue
                 start,end=_range(raw,info); logical=z.read(info); expected.append((logical,hashlib.sha256(logical).digest())); jobs.append(Job(base+start,end-start,out_off,len(logical),int(info.CRC))); out_off+=len(logical)
-    wall,bridge,material,hashes,offsets,used=_dedup_native_arm(lib,bytes(source),jobs,out_off); owners={}
+        base+=len(raw)
+    wall,bridge,material,hashes,offsets,used=_dedup_native_arm(lib,source,jobs,out_off); owners={}
     for i,(logical,digest) in enumerate(expected):
         if hashes[i*32:(i+1)*32]!=digest:raise RuntimeError('cohort identity hash mismatch')
         off=offsets[i]
         if off+len(logical)>len(material) or material[off:off+len(logical)]!=logical:raise RuntimeError('cohort identity material mismatch')
         prior=owners.setdefault(digest,(off,len(logical)))
         if prior!=(off,len(logical)):raise RuntimeError('cohort owner contradiction')
-    return {'cohort_dedup_wall_s':wall,'cohort_dedup_bridge_wall_s':bridge,'cohort_unique_logical_bytes':used,'cohort_unique_logical_objects':len(owners)}
+    return {'cohort_dedup_wall_s':wall,'cohort_dedup_bridge_wall_s':bridge,'cohort_source_join_wall_s':join_wall,'cohort_charged_bridge_wall_s':bridge+join_wall,'cohort_unique_logical_bytes':used,'cohort_unique_logical_objects':len(owners)}
 def run(root):
     lib=ctypes.CDLL(str(LIB)); full=lib.cmpct_hidden_zip_validate_deflate_batch;full.argtypes=[ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(Job),ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t];full.restype=ctypes.c_int
     dedup=lib.cmpct_hidden_zip_validate_dedup_deflate_batch;dedup.argtypes=[ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(Job),ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(ctypes.c_size_t),ctypes.c_size_t,ctypes.POINTER(ctypes.c_size_t)];dedup.restype=ctypes.c_int
@@ -86,8 +86,8 @@ def run(root):
         logical=sum(p['logical_bytes'] for p in parts); unique=sum(ids.values())
         if cohort['cohort_unique_logical_bytes']!=unique or cohort['cohort_unique_logical_objects']!=len(ids):raise RuntimeError('cohort/global uniqueness disagreement')
         rows.append({'rep':rep,'native_wall_s':sum(p['native_wall_s'] for p in parts),'native_bridge_wall_s':sum(p['native_bridge_wall_s'] for p in parts),'python_wall_s':sum(p['python_wall_s'] for p in parts),'dedup_native_wall_s':sum(p['dedup_native_wall_s'] for p in parts),'dedup_native_bridge_wall_s':sum(p['dedup_native_bridge_wall_s'] for p in parts),**cohort,'winners':len(parts),'jobs':sum(p['jobs'] for p in parts),'compressed_bytes':sum(p['compressed_bytes'] for p in parts),'logical_bytes':logical,'unique_logical_bytes':unique,'duplicate_logical_bytes':logical-unique,'unique_logical_objects':len(ids),'per_container_unique_logical_bytes':sum(p['unique_logical_bytes'] for p in parts)})
-    med=lambda k:statistics.median(r[k] for r in rows); nm=med('native_wall_s'); nb=med('native_bridge_wall_s'); pm=med('python_wall_s'); dm=med('dedup_native_wall_s'); db=med('dedup_native_bridge_wall_s'); cm=med('cohort_dedup_wall_s'); cb=med('cohort_dedup_bridge_wall_s'); lm=med('logical_bytes'); um=med('unique_logical_bytes')
-    return {'schema':'cmpct-v030-hidden-zip-native-batch-oracle-v6','source_commit':os.environ.get('EVIDENCE_HEAD'),'evidence_class':'research-oracle','product_release_credit':False,'summary':{'native_kernel_wall_median_s':nm,'native_bridge_wall_median_s':nb,'python_wall_median_s':pm,'native_kernel_vs_python_ratio':nm/pm,'per_container_dedup_kernel_wall_median_s':dm,'per_container_dedup_bridge_wall_median_s':db,'cohort_dedup_kernel_wall_median_s':cm,'cohort_dedup_bridge_wall_median_s':cb,'cohort_dedup_bridge_vs_full_native_bridge_ratio':cb/nb,'jobs_median':med('jobs'),'compressed_bytes_median':med('compressed_bytes'),'logical_bytes_median':lm,'unique_logical_bytes_median':um,'duplicate_logical_bytes_median':lm-um,'unique_logical_fraction':um/lm if lm else 1.0,'unique_logical_objects_median':med('unique_logical_objects'),'per_container_unique_logical_bytes_median':med('per_container_unique_logical_bytes')},'contract':{'gifted_admission_untimed':True,'matched_exact_consumption_length_crc_sha256_materialization':True,'native_bridge_charges_ctypes_input_output_and_return_material':True,'identity_first_validates_every_occurrence_once':True,'cohort_identity_first_exports_one_exact_representative_globally':True,'identity_first_sha_collision_byte_check':True,'arm_order_alternates':True,'zipfile_independent_crosscheck':True,'logical_uniqueness_accounting_untimed':True,'office_only_generator_equivalent_by_independent_reseed':True,'reader_grammar_changed':False},'rows':rows}
+    med=lambda k:statistics.median(r[k] for r in rows); nm=med('native_wall_s'); nb=med('native_bridge_wall_s'); pm=med('python_wall_s'); dm=med('dedup_native_wall_s'); db=med('dedup_native_bridge_wall_s'); cm=med('cohort_dedup_wall_s'); cb=med('cohort_dedup_bridge_wall_s'); cc=med('cohort_charged_bridge_wall_s'); lm=med('logical_bytes'); um=med('unique_logical_bytes')
+    return {'schema':'cmpct-v030-hidden-zip-native-batch-oracle-v7','source_commit':os.environ.get('EVIDENCE_HEAD'),'evidence_class':'research-oracle','product_release_credit':False,'summary':{'native_kernel_wall_median_s':nm,'native_bridge_wall_median_s':nb,'python_wall_median_s':pm,'native_kernel_vs_python_ratio':nm/pm,'per_container_dedup_kernel_wall_median_s':dm,'per_container_dedup_bridge_wall_median_s':db,'cohort_dedup_kernel_wall_median_s':cm,'cohort_dedup_bridge_wall_median_s':cb,'cohort_source_join_wall_median_s':med('cohort_source_join_wall_s'),'cohort_charged_bridge_wall_median_s':cc,'cohort_charged_bridge_vs_full_native_bridge_ratio':cc/nb,'jobs_median':med('jobs'),'compressed_bytes_median':med('compressed_bytes'),'logical_bytes_median':lm,'unique_logical_bytes_median':um,'duplicate_logical_bytes_median':lm-um,'unique_logical_fraction':um/lm if lm else 1.0,'unique_logical_objects_median':med('unique_logical_objects'),'per_container_unique_logical_bytes_median':med('per_container_unique_logical_bytes')},'contract':{'gifted_admission_untimed':True,'matched_exact_consumption_length_crc_sha256_materialization':True,'native_bridge_charges_ctypes_input_output_and_return_material':True,'cohort_charged_bridge_adds_current_source_join':True,'identity_first_validates_every_occurrence_once':True,'cohort_identity_first_exports_one_exact_representative_globally':True,'identity_first_sha_collision_byte_check':True,'arm_order_alternates':True,'zipfile_independent_crosscheck':True,'logical_uniqueness_accounting_untimed':True,'office_only_generator_equivalent_by_independent_reseed':True,'reader_grammar_changed':False},'rows':rows}
 def main():
     p=argparse.ArgumentParser(); p.add_argument('--work-root',type=Path,default=Path('benchmark-artifacts/native-batch-work')); p.add_argument('--output',type=Path,default=Path('benchmark-artifacts/native-batch.json')); a=p.parse_args(); result=run(a.work_root); a.output.parent.mkdir(parents=True,exist_ok=True); a.output.write_text(json.dumps(result,indent=2)+'\n'); print(json.dumps(result['summary'],indent=2))
 if __name__=='__main__': main()
