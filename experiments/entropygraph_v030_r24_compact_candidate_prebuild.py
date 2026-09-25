@@ -18,7 +18,7 @@ def _worker(root: Path, out: Path) -> None:
     stats = product._locality_bounded_r24_build(Path(root), Path(out))
     print(
         json.dumps(
-            {"schema": "cmpct-v030-r24-prebuild-process-v1", "stats": stats},
+            {"schema": "cmpct-v030-r24-prebuild-process-v1", "stats": stats, "candidate": "v030-compact-r24-release-policy-v1"},
             separators=(",", ":"),
             default=str,
         )
