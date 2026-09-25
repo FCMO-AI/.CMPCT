@@ -9,19 +9,19 @@
   "active_product_bottleneck": {
     "id": "v030-convergence-two-reds",
     "observation": "Authority 94f33090 remains release-locked. Compression parity still has a deterministic r24 regression on neutral_hostile_v1/06_incremental_backups; #209's one-shot compact-retention/medium-binary policy candidate failed the unchanged historical-causality compression ablation and is retired. Separately, exact-head runtime has median_create_ratio=1.1065102273 vs <=1.10 while max create/extract/RSS/locality pass. #210 proved a zero-threshold G04 finalist guard byte-safe across all 15 frozen workloads and measured shifted_versions -0.380374 s in one paired G04 pass.",
-    "next_discriminator": "On productization branch agent/v030-g04-screen-productization-v5@401157f4, run focused tests then unchanged exact-head product runtime/full regression. The product branch preserves the zero-primary-candidate fast path so records with no structural nominees pay no new level-6 compression. Promotion remains blocked independently by the unresolved r24 compression parity red."
+    "next_discriminator": "PR #211 is the live product falsifier. Exact head 5d1ebc8 fixes an inherited test that incorrectly required speculative-work accounting identity; consume exact-head tests and unchanged r24 performance evidence. Engineering-evidence CI is separately red because the PR body lacks required dossier headings; this is evidence plumbing, not product evidence."
   },
   "primary_question": {
     "id": "g04-hierarchical-screen-zero-threshold-productization",
     "family": "D3 speculative-work / search-admission",
     "hypothesis": "After structural nomination, if the already-required level-6 screen shows no transformed candidate smaller than direct level-6 storage, skipping level-19 hierarchical finalists preserves the selected complete artifact while removing enough losing work to improve the narrow median-create debt.",
-    "status": "PRODUCTIZATION_BRANCH_LANDED_UNMEASURED",
+    "status": "PRODUCTIZATION_PR_LIVE_CI_PENDING",
     "evidence": [
       "#210 run 36018203324 @ 3bf34a390b5bd9fa50fb2cd8fc685d9dab488aa1; artifact 10819539461; sha256 edee34a8098d5a8ecc0eb5a9c1b6a7a0d8eca745011413e22a44a2a195bb2e8e",
       "15/15 frozen complete artifacts byte-identical; regressions=[]; changed_complete_artifacts=[]",
       "shifted_versions: five records with 48 screened candidates each; 15 exact finalists -> 0; paired wall delta -0.380374 s",
       "matrix total: 1002 exact finalists skipped; timing is noisy research evidence only",
-      "productization v5 401157f4 preserves no-primary fast path and adds focused guard tests; no CI/product receipt yet"
+      "#211 head 5d1ebc8aa708f758e6541ade67ccb0bd6ae3aaf3: semantic-owner guard + focused tests; inherited bounded-screen control now compares selected representation separately from exact-finalist work accounting"
     ],
     "prediction": "The semantic-owner mutation should preserve exact bytes and improve create time without adding work to zero-primary records. It may be sufficient to cross the narrow <=1.10 median-create gate, but no runtime credit exists until unchanged product evidence runs.",
     "kill": "Any deterministic archive-byte change, exactness failure, confirmed create/extract/RSS/locality regression, or failure to materially improve the unchanged product decision retires this finalist-recompression family without threshold gardening."
@@ -30,8 +30,8 @@
     {
       "id": "g04-zero-headroom-productization",
       "family": "execution/search-admission",
-      "status": "BRANCH_LANDED_UNMEASURED",
-      "evidence": "agent/v030-g04-screen-productization-v5@401157f4; #210 oracle green"
+      "status": "PR_LIVE_CI_PENDING",
+      "evidence": "#211 @ 5d1ebc8aa708f758e6541ade67ccb0bd6ae3aaf3; #210 oracle green"
     },
     {
       "id": "r24-parity-representation-admission",
@@ -128,7 +128,24 @@
       "evidence": "#191 stale bootstrap; structural repair proposed"
     }
   ],
-  "pending_jobs": [],
-  "next_action": "Open/attach productization v3 to review/CI when the connected PR-creation route permits it; run focused tests and unchanged exact-head product runtime/full regression. If runtime does not materially improve, retire the D3 finalist guard family. In parallel, do not forget the higher-lexicographic r24 compression parity red: reopen representation/admission rather than #209 threshold/cutoff variants.",
-  "last_reconciled": "2026-09-25T02:03-06:00"
+  "pending_jobs": [
+    {
+      "provider": "github-actions",
+      "run": "36132376908",
+      "source_sha": "5d1ebc8aa708f758e6541ade67ccb0bd6ae3aaf3",
+      "question": "#211 exact-head full regression",
+      "expected_artifact": "pytest diagnostic/result",
+      "decision_unlocked": "whether corrected control semantics and product guard preserve full regression"
+    },
+    {
+      "provider": "github-actions",
+      "run": "36132376990",
+      "source_sha": "5d1ebc8aa708f758e6541ade67ccb0bd6ae3aaf3",
+      "question": "#211 unchanged r24 performance gate",
+      "expected_artifact": "same-runner performance receipt",
+      "decision_unlocked": "whether productized guard materially improves product runtime without inherited gate regressions"
+    }
+  ],
+  "next_action": "Consume #211 runs 36132376908 and 36132376990 at exact head 5d1ebc8. If semantic/product gates survive but runtime does not materially improve, retire the D3 finalist guard family without threshold gardening. Engineering-evidence is independently blocked on missing PR dossier headings; repair metadata when the connector permits PR-body mutation.",
+  "last_reconciled": "2026-09-25T06:07-06:00"
 }
