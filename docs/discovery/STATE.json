@@ -9,7 +9,7 @@
   "active_product_bottleneck": {
     "id": "v030-convergence-two-reds",
     "observation": "Authority 94f33090 remains release-locked. Compression parity still has a deterministic r24 regression on neutral_hostile_v1/06_incremental_backups; #209's one-shot compact-retention/medium-binary policy candidate failed the unchanged historical-causality compression ablation and is retired. Separately, exact-head runtime has median_create_ratio=1.1065102273 vs <=1.10 while max create/extract/RSS/locality pass. #210 proved a zero-threshold G04 finalist guard byte-safe across all 15 frozen workloads and measured shifted_versions -0.380374 s in one paired G04 pass.",
-    "next_discriminator": "On productization branch agent/v030-g04-screen-productization-v3@6126c499, run focused tests then unchanged exact-head product runtime/full regression. The product branch preserves the zero-primary-candidate fast path so records with no structural nominees pay no new level-6 compression. Promotion remains blocked independently by the unresolved r24 compression parity red."
+    "next_discriminator": "On productization branch agent/v030-g04-screen-productization-v5@401157f4, run focused tests then unchanged exact-head product runtime/full regression. The product branch preserves the zero-primary-candidate fast path so records with no structural nominees pay no new level-6 compression. Promotion remains blocked independently by the unresolved r24 compression parity red."
   },
   "primary_question": {
     "id": "g04-hierarchical-screen-zero-threshold-productization",
@@ -21,7 +21,7 @@
       "15/15 frozen complete artifacts byte-identical; regressions=[]; changed_complete_artifacts=[]",
       "shifted_versions: five records with 48 screened candidates each; 15 exact finalists -> 0; paired wall delta -0.380374 s",
       "matrix total: 1002 exact finalists skipped; timing is noisy research evidence only",
-      "productization v3 6126c499 preserves no-primary fast path and adds focused guard tests; no CI/product receipt yet"
+      "productization v5 401157f4 preserves no-primary fast path and adds focused guard tests; no CI/product receipt yet"
     ],
     "prediction": "The semantic-owner mutation should preserve exact bytes and improve create time without adding work to zero-primary records. It may be sufficient to cross the narrow <=1.10 median-create gate, but no runtime credit exists until unchanged product evidence runs.",
     "kill": "Any deterministic archive-byte change, exactness failure, confirmed create/extract/RSS/locality regression, or failure to materially improve the unchanged product decision retires this finalist-recompression family without threshold gardening."
@@ -31,7 +31,7 @@
       "id": "g04-zero-headroom-productization",
       "family": "execution/search-admission",
       "status": "BRANCH_LANDED_UNMEASURED",
-      "evidence": "agent/v030-g04-screen-productization-v3@6126c499; #210 oracle green"
+      "evidence": "agent/v030-g04-screen-productization-v5@401157f4; #210 oracle green"
     },
     {
       "id": "r24-parity-representation-admission",
