@@ -15,14 +15,18 @@ import time
 from typing import Any
 
 DEFAULT_TIMEOUT_S: float | None = None
+DEFAULT_WORKER_MODULE = __name__
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class R24PrebuildProcess:
-    def __init__(self, root: Path, out: Path, *, timeout_s: float | None = DEFAULT_TIMEOUT_S):
+    def __init__(self, root: Path, out: Path, *, timeout_s: float | None = DEFAULT_TIMEOUT_S, worker_module: str = DEFAULT_WORKER_MODULE):
         self.root = Path(root)
         self.out = Path(out)
         self.timeout_s = None if timeout_s is None else float(timeout_s)
+        self.worker_module = str(worker_module)
+        if not self.worker_module:
+            raise ValueError("r24 prebuild worker module must be non-empty")
         if self.timeout_s is not None and self.timeout_s <= 0:
             raise ValueError("r24 prebuild timeout must be positive")
         self._proc: subprocess.Popen[str] | None = None
@@ -43,7 +47,7 @@ class R24PrebuildProcess:
         )
         self._started_at = time.monotonic()
         self._proc = subprocess.Popen(
-            [sys.executable, "-m", __name__, "--worker", "--root", str(self.root), "--out", str(self.out)],
+            [sys.executable, "-m", self.worker_module, "--worker", "--root", str(self.root), "--out", str(self.out)],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
