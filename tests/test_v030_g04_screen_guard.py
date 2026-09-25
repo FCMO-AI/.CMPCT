@@ -50,3 +50,17 @@ def test_positive_screen_still_prices_exact_finalists(monkeypatch):
     assert got["screened_candidates"] == 2
     assert got["exact_finalists"] == 2
     assert len(exact_calls) == 3
+
+
+def test_no_primary_candidates_preserve_zero_screen_compression_fast_path(monkeypatch):
+    raw = b"R" * HG.MIN_NODE_BYTES
+    monkeypatch.setattr(HG, "primary_candidates", lambda value: [])
+    monkeypatch.setattr(
+        HG,
+        "_compressed_size",
+        lambda value, level: (_ for _ in ()).throw(AssertionError("unexpected screen compression")),
+    )
+    got = HG.audition(raw)
+    assert got["kind"] == "direct"
+    assert got["screened_candidates"] == 0
+    assert got["exact_finalists"] == 0
