@@ -23,7 +23,7 @@ def _worker(root: Path, out: Path) -> None:
         raise RuntimeError(f"compact r24 child policy mismatch: {policy!r}")
     print(
         json.dumps(
-            {"schema": "cmpct-v030-r24-prebuild-process-v1", "stats": stats, "policy": policy},
+            {"schema": "cmpct-v030-r24-prebuild-process-v1", "stats": {**dict(stats), "r24_prebuild_candidate_policy": policy}, "policy": policy},
             separators=(",", ":"),
             default=str,
         )
