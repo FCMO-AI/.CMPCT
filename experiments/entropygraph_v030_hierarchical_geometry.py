@@ -315,6 +315,9 @@ def audition(raw: bytes) -> dict:
     if len(raw) < MIN_NODE_BYTES:
         return best
 
+    # Reuse the already-paid level-6 screen as a zero-threshold futility proof for exact finalists.
+    # Oracle #210 preserved every frozen complete-artifact winner with this discriminator.
+    direct_screen = _compressed_size(raw, SCREEN_LEVEL)
     screened: list[tuple[int, int, int, bool]] = []
     for primary in primary_candidates(raw):
         rows = raw.split(bytes((primary,)))
@@ -330,6 +333,10 @@ def audition(raw: bytes) -> dict:
                 screened.append((screen_bytes, primary, secondary, prefix_planes))
 
     screened.sort(key=lambda row: (row[0], row[3], row[1], row[2]))
+    if not screened or screened[0][0] >= direct_screen:
+        best["screened_candidates"] = len(screened)
+        best["exact_finalists"] = 0
+        return best
     finalists = screened[:MAX_EXACT_FINALISTS]
     for _, primary, secondary, prefix_planes in finalists:
         transformed = hierarchy_forward(raw, primary, secondary, prefix_planes=prefix_planes)
