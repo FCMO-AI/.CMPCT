@@ -55,6 +55,17 @@ def _no_medium_terminal(root, out):
 _BASE._build_medium_binary_terminal_if_eligible = _no_medium_terminal
 _PRODUCT._build_medium_binary_terminal_if_eligible = _no_medium_terminal
 
+# Reinstall the shipping r24 ownership seam with an explicit candidate-owned worker. Importing the
+# promoted facade above installed the canonical worker first; replacing it here is the experiment's
+# causal boundary, so the fresh interpreter that owns r24 bytes imports this candidate.
+from experiments import entropygraph_v030_r24_process_shipping as _R24_PROCESS_SHIPPING
+
+_R24_PROCESS_REGISTRY = _R24_PROCESS_SHIPPING.install_into_release_base(
+    _BASE,
+    worker_module="experiments.entropygraph_v030_r24_compact_candidate_prebuild",
+)
+_PRODUCT._R24_PROCESS_REGISTRY = _R24_PROCESS_REGISTRY
+
 # Re-export the promoted product after applying the two narrowly justified encoder-policy changes.
 # Functions retain their original globals in `_PRODUCT`, so callers of this module exercise the real
 # product boundary rather than a copied implementation.
