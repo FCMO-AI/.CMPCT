@@ -26,7 +26,7 @@ def main():
         return result
     eng._choose_pack_plan=choose;eng._compress_record=compress
     with tempfile.TemporaryDirectory(prefix="cmpct-pack-probe-") as td:
-        root=Path(td)/"neutral";corpus.build(root);work=root/args.workload
+        root=Path(td)/"neutral";corpus.corpus_ml(root);work=root/args.workload
         if not work.is_dir(): raise SystemExit(f"unknown workload {args.workload}")
         stats=eng._build_graph(work,Path(td)/"graph.cmpct")
     print(json.dumps({"schema":"cmpct-v030-pack-recompression-probe-v1","claim_boundary":"diagnostic only; no product credit","workload":args.workload,"graph_bytes":stats["graph_bytes"],"adaptive_pack_limit":stats["adaptive_pack_limit"],"selected_pack_groups":len(selected),"duplicate_selected_pack_calls":len(dups),"duplicate_logical_bytes":sum(x[0] for x in dups),"duplicate_payload_bytes":sum(x[1] for x in dups),"duplicate_level19_wall_s":sum(x[2] for x in dups)},indent=2,sort_keys=True))
