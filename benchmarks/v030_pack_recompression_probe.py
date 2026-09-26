@@ -28,6 +28,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix="cmpct-pack-probe-") as td:
         root=Path(td)/"probe"\n        if args.workload=="09_ml_artifacts": neutral.corpus_ml(root)\n        elif args.workload=="01_shifted_versions": hostile.shifted_versions(root)\n        else: raise SystemExit(f"unsupported workload {args.workload}")\n        work=root/args.workload
         if not work.is_dir(): raise SystemExit(f"unknown workload {args.workload}")
+        files=sorted(p for p in work.rglob("*") if p.is_file())
+        logical_bytes=sum(p.stat().st_size for p in files)
+        tree_sha256=(neutral.tree_hash(work) if args.workload=="09_ml_artifacts" else hostile.tree_hash(work))
         stats=eng._build_graph(work,Path(td)/"graph.cmpct")
-    print(json.dumps({"schema":"cmpct-v030-pack-recompression-probe-v1","claim_boundary":"diagnostic only; no product credit","workload":args.workload,"graph_bytes":stats["graph_bytes"],"adaptive_pack_limit":stats["adaptive_pack_limit"],"selected_pack_groups":len(selected),"duplicate_selected_pack_calls":len(dups),"duplicate_logical_bytes":sum(x[0] for x in dups),"duplicate_payload_bytes":sum(x[1] for x in dups),"duplicate_level19_wall_s":sum(x[2] for x in dups)},indent=2,sort_keys=True))
+    print(json.dumps({"schema":"cmpct-v030-pack-recompression-probe-v1","claim_boundary":"diagnostic only; no product credit","workload":args.workload,"logical_bytes":logical_bytes,"tree_sha256":tree_sha256,"graph_bytes":stats["graph_bytes"],"adaptive_pack_limit":stats["adaptive_pack_limit"],"selected_pack_groups":len(selected),"duplicate_selected_pack_calls":len(dups),"duplicate_logical_bytes":sum(x[0] for x in dups),"duplicate_payload_bytes":sum(x[1] for x in dups),"duplicate_level19_wall_s":sum(x[2] for x in dups)},indent=2,sort_keys=True))
 if __name__=="__main__":main()
