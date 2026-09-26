@@ -1,0 +1,30 @@
+{
+  "schema": "cmpct-v030-pack-recompression-local-derivation-v1",
+  "source_sha": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "workload": "neutral_hostile_v1/09_ml_artifacts",
+  "workload_tree_sha256": "efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d",
+  "logical_bytes": 18172774,
+  "environment": {
+    "zstd": "1.5.7",
+    "measurement": "local one-shot libzstd ZSTD_compress level 19 via ctypes"
+  },
+  "claim_boundary": "derivation/micro evidence only; not hosted release-runtime or product credit",
+  "current_source_observation": {
+    "pack_limits_kib": [64, 128, 256, 512, 1024, 2048],
+    "selected_under_current_locality_guard_kib": 512,
+    "selected_groups": 43,
+    "selected_read_amplification": 2.7997848319689664,
+    "selected_payload_bytes": 13798917
+  },
+  "trial_rows": [
+    {"limit_kib":64,"bytes_cost":13807652,"read_amp":1.0034368996169765,"groups":113,"level19_wall_s":1.914404503000469},
+    {"limit_kib":128,"bytes_cost":13800418,"read_amp":1.0536454698660755,"groups":105,"level19_wall_s":2.015073066000923},
+    {"limit_kib":256,"bytes_cost":13807430,"read_amp":1.3061531497612857,"groups":89,"level19_wall_s":1.9660820650003643},
+    {"limit_kib":512,"bytes_cost":13801196,"read_amp":2.7997848319689664,"groups":43,"level19_wall_s":1.6118955559990464},
+    {"limit_kib":1024,"bytes_cost":13795736,"read_amp":6.023347123559672,"groups":19,"level19_wall_s":1.8834084789998542},
+    {"limit_kib":2048,"bytes_cost":13794667,"read_amp":12.391720438497721,"groups":10,"level19_wall_s":2.5758637169999474}
+  ],
+  "repeat_selected_final_compression_wall_s": [1.6121478889999707,1.5795492140000533,1.6698445719999881,1.6123148240000091,1.6110162559999708],
+  "repeat_selected_median_wall_s": 1.6121478889999707,
+  "decision": "headroom is large enough to justify an exact byte-identical payload-reuse A/B; next evidence must run the repository probe/implementation under hosted CPython 3.11 with RSS charged"
+}
