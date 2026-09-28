@@ -4,6 +4,7 @@ import argparse
 import glob
 import hashlib
 import json
+import subprocess
 from pathlib import Path, PurePosixPath
 import sys
 from typing import Any
@@ -57,31 +58,79 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
     return data
 
 
-def fingerprint(manifest: dict[str, Any]) -> tuple[str, list[str]]:
-    """Hash the complete release-critical surface while excluding evidence receipts themselves.
-
-    Footnote: receipts are committed *after* the code they attest, so a commit SHA would be self-referential.
-    The stable solution is a content fingerprint over every implementation, native, benchmark, test, workflow
-    and release-policy path that can affect the evidence. Adding documentation/evidence later does not change
-    this fingerprint, but changing tested behavior or the evidence harness invalidates every old receipt.
-    """
-    paths: set[Path] = set()
+def _live_fingerprint_paths(manifest: dict[str, Any]) -> set[str]:
+    paths: set[str] = set()
     for pattern in manifest["fingerprint_globs"]:
         if not isinstance(pattern, str) or not pattern:
             raise ValueError("invalid fingerprint glob")
         for match in glob.glob(str(ROOT / pattern), recursive=True):
             candidate = Path(match)
             if candidate.is_file():
-                paths.add(candidate.resolve())
-    if not paths:
-        raise ValueError("release fingerprint matched no files")
+                paths.add(candidate.resolve().relative_to(ROOT).as_posix())
+    return paths
 
-    rows: list[str] = []
+
+def _tracked_fingerprint_paths(manifest: dict[str, Any]) -> list[str]:
+    """Resolve the candidate surface from Git-tracked source, not mutable build residue."""
+    pathspecs = []
+    for pattern in manifest["fingerprint_globs"]:
+        if not isinstance(pattern, str) or not pattern:
+            raise ValueError("invalid fingerprint glob")
+        pathspecs.append(f":(glob){pattern}")
+    proc = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "-z", "--", *pathspecs],
+        check=False,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        detail = proc.stderr.decode("utf-8", "replace").strip()
+        raise ValueError(f"cannot enumerate Git-tracked release fingerprint surface: {detail}")
+    rows = sorted({item for item in proc.stdout.decode("utf-8").split("\0") if item})
+    for rel in rows:
+        path = ROOT.joinpath(*PurePosixPath(rel).parts)
+        if not path.is_file():
+            raise ValueError(f"tracked release fingerprint file is missing: {rel}")
+    return rows
+
+
+def _known_build_residue(rel: str) -> bool:
+    parts = PurePosixPath(rel).parts
+    return bool(parts) and parts[0] == "native" and "target" in parts[1:]
+
+
+def _pathset_sha256(rows: list[str]) -> str:
     digest = hashlib.sha256()
-    for path in sorted(paths, key=lambda item: item.relative_to(ROOT).as_posix()):
-        rel = path.relative_to(ROOT).as_posix()
+    for rel in rows:
+        encoded = rel.encode("utf-8")
+        digest.update(len(encoded).to_bytes(4, "little"))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+def fingerprint(manifest: dict[str, Any]) -> tuple[str, list[str]]:
+    """Hash committed release-critical source while excluding mutable execution residue.
+
+    Receipts are committed *after* the code they attest, so a commit SHA would be self-referential.
+    The candidate identity therefore remains content-addressed, but its membership comes from Git-tracked
+    release source. Live build products may not silently enter identity merely because a recursive source
+    glob also matches a generated target/.../out/include or similar subtree.
+    """
+    rows = _tracked_fingerprint_paths(manifest)
+    if not rows:
+        raise ValueError("release fingerprint matched no tracked files")
+
+    live = _live_fingerprint_paths(manifest)
+    untracked = sorted(live.difference(rows))
+    unexpected = [rel for rel in untracked if not _known_build_residue(rel)]
+    if unexpected:
+        preview = ", ".join(unexpected[:5])
+        suffix = "" if len(unexpected) <= 5 else f" (+{len(unexpected) - 5} more)"
+        raise ValueError(f"untracked release-critical source intersects fingerprint surface: {preview}{suffix}")
+
+    digest = hashlib.sha256()
+    for rel in rows:
+        path = ROOT.joinpath(*PurePosixPath(rel).parts)
         content_sha = _sha256(path)
-        rows.append(rel)
         encoded = rel.encode("utf-8")
         digest.update(len(encoded).to_bytes(4, "little"))
         digest.update(encoded)
@@ -369,6 +418,7 @@ def check(manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
         "target_format_revision": manifest["target_format_revision"],
         "candidate_fingerprint": fp,
         "fingerprinted_files": len(fingerprint_paths),
+        "fingerprint_pathset_sha256": _pathset_sha256(fingerprint_paths),
         "required_receipts": len(manifest["required_receipts"]),
         "passed_receipts": passed,
         "failures": failures,
@@ -390,7 +440,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest = load_manifest(args.manifest)
     fp, paths = fingerprint(manifest)
     if args.print_fingerprint:
-        print(json.dumps({"candidate_fingerprint": fp, "files": paths}, indent=2))
+        print(json.dumps({"candidate_fingerprint": fp, "fingerprinted_files": len(paths), "fingerprint_pathset_sha256": _pathset_sha256(paths), "files": paths}, indent=2))
         return 0
     if args.template:
         print(json.dumps(template_for(args.template, manifest, fp), indent=2))

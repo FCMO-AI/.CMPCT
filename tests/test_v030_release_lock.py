@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,12 @@ from tools import check_v030_release_lock as lock
 
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _git_track(root: Path, *rels: str) -> None:
+    if not (root / ".git").exists():
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "--", *rels], check=True)
 
 
 def _manifest() -> dict:
@@ -93,6 +100,7 @@ def _fixture_root(tmp_path: Path) -> tuple[dict, str, Path]:
         ),
         encoding="utf-8",
     )
+    _git_track(tmp_path, "engine/codec.py", "benchmarks/v030_gate.py")
     manifest = _manifest()
     fingerprint, _ = lock.fingerprint(manifest)
     return manifest, fingerprint, evidence
@@ -356,9 +364,20 @@ def test_native_build_outputs_do_not_change_release_fingerprint(
     source = tmp_path / "native" / "cmpct-portable" / "src"
     source.mkdir(parents=True)
     (source / "lib.rs").write_text("pub const REVISION: u8 = 25;\n", encoding="utf-8")
-    target = tmp_path / "native" / "cmpct-portable" / "target" / "release"
-    target.mkdir(parents=True)
-    build_product = target / "cmpct-portable"
+    _git_track(tmp_path, "native/cmpct-portable/src/lib.rs")
+    generated = (
+        tmp_path
+        / "native"
+        / "cmpct-portable"
+        / "target"
+        / "release"
+        / "build"
+        / "zstd-sys-demo"
+        / "out"
+        / "include"
+    )
+    generated.mkdir(parents=True)
+    build_product = generated / "zstd.h"
     build_product.write_bytes(b"first-build")
     manifest = {
         "fingerprint_globs": [
@@ -366,6 +385,7 @@ def test_native_build_outputs_do_not_change_release_fingerprint(
             "native/**/Cargo.lock",
             "native/**/build.rs",
             "native/**/src/**/*",
+            "native/**/include/**/*",
             "native/**/tests/**/*",
             "native/**/benches/**/*",
             "native/**/vectors/**/*",
@@ -377,7 +397,37 @@ def test_native_build_outputs_do_not_change_release_fingerprint(
     build_product.write_bytes(b"different-machine-build")
     after, paths_after = lock.fingerprint(manifest)
 
-    # Footnote: Cargo target output is execution residue, not release source. If it participated in the
-    # fingerprint, identical source could invalidate receipts merely because a different runner built it.
+    # Cargo target output is execution residue even when its nested path accidentally satisfies a
+    # recursive source glob such as native/**/include/**/*.
     assert before == after
     assert paths == paths_after == ["native/cmpct-portable/src/lib.rs"]
+
+
+def test_untracked_release_source_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(lock, "ROOT", tmp_path)
+    source = tmp_path / "native" / "cmpct-portable" / "src"
+    source.mkdir(parents=True)
+    (source / "lib.rs").write_text("pub const REVISION: u8 = 25;\n", encoding="utf-8")
+    _git_track(tmp_path, "native/cmpct-portable/src/lib.rs")
+    (source / "generated.rs").write_text("pub const UNTRACKED: bool = true;\n", encoding="utf-8")
+    manifest = {"fingerprint_globs": ["native/**/src/**/*"]}
+
+    with pytest.raises(ValueError, match="untracked release-critical source"):
+        lock.fingerprint(manifest)
+
+
+def test_print_fingerprint_pathset_digest_is_stable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(lock, "ROOT", tmp_path)
+    manifest, fingerprint, _evidence = _fixture_root(tmp_path)
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    assert lock.main(["--manifest", str(manifest_path), "--print-fingerprint"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["candidate_fingerprint"] == fingerprint
+    assert payload["fingerprinted_files"] == 2
+    assert payload["fingerprint_pathset_sha256"] == lock._pathset_sha256(payload["files"])
