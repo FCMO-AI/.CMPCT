@@ -2,32 +2,29 @@ from __future__ import annotations
 
 """Whole-process-tree RSS companion for the promoted v0.30 product runtime gate.
 
-The canonical release runtime harness owns corpus generation, balanced execution order,
-candidate fingerprinting, source-tree validation, product verification, and the frozen
-1.25x RSS ceiling. Its normal worker records only RUSAGE_SELF, which cannot see short-lived
-descendant-process peaks in the current v0.30 architecture.
+This companion preserves ``benchmarks.v030_release_performance_product`` as the owner of
+corpus generation, balanced v0.29/v0.30 execution order, identity checks, release-product
+fingerprinting, and the frozen 1.25x RSS ceiling. It changes exactly one evidence boundary:
+fresh operation workers are charged for the live worker plus every descendant process.
 
-This companion changes exactly one evidence boundary: it reruns the same paired product harness
-with v030_perf_worker_tree_rss.py so pack/extract memory is charged to the live worker plus all
-descendants. Timing produced under the 10 ms sampler is diagnostic only and is deliberately not
-emitted as release timing evidence. The ordinary uninstrumented runtime court remains the sole
-timing authority.
-
-A green result therefore means only: on the same candidate fingerprint and frozen target set,
-whole-process-tree pack/extract peak RSS remains within the inherited 1.25x ratio ceiling.
+The 10 ms RSS sampler executes inside the operation window. Consequently timing values emitted
+by this companion are diagnostic only. Release timing remains owned by the ordinary
+uninstrumented product runtime court.
 """
 
 import argparse
+from collections import Counter
 import json
 from pathlib import Path
 
-from benchmarks import v030_release_performance as B
+from benchmarks import v030_release_performance as BASE
 from benchmarks import v030_release_performance_product as PRODUCT
 
 
-TREE_WORKER = B.ROOT / "benchmarks" / "v030_perf_worker_tree_rss.py"
+TREE_WORKER = BASE.ROOT / "benchmarks" / "v030_perf_worker_tree_rss.py"
 RSS_ACCOUNTING = "whole-process-tree-vmrss-10ms-with-parent-rumaxrss-floor"
-SCHEMA = "cmpct-v030-release-product-tree-rss-v1"
+SCHEMA = "cmpct-v030-release-product-tree-rss-v2"
+SAMPLE_INTERVAL_S = 0.01
 
 
 def _ratio(new: float, old: float) -> float:
@@ -35,12 +32,85 @@ def _ratio(new: float, old: float) -> float:
 
 
 def run(work_root: Path) -> dict:
-    original_worker = B.WORKER
+    receipts: list[dict] = []
+    original_worker = BASE.WORKER
+    original_run_worker = BASE._run_worker
+
+    def run_worker_with_tree_custody(*args: str) -> dict:
+        result = dict(original_run_worker(*args))
+        if result.get("rss_accounting") != RSS_ACCOUNTING:
+            raise RuntimeError(
+                f"whole-tree worker accounting drift: {result.get('rss_accounting')!r}"
+            )
+
+        samples = int(result.get("tree_rss_samples", 0))
+        errors = list(result.get("tree_sampler_errors") or [])
+        parent = int(result.get("parent_peak_rss_kib", -1))
+        sampled = int(result.get("sampled_tree_peak_rss_kib", -1))
+        decisive = int(result.get("peak_rss_kib", -1))
+        peak_processes = int(result.get("tree_peak_processes", 0))
+        sample_interval = float(result.get("sample_interval_s", -1.0))
+
+        if samples < 1:
+            raise RuntimeError("whole-tree worker produced no RSS samples")
+        if errors:
+            raise RuntimeError(f"whole-tree sampler errors: {errors!r}")
+        if parent < 0 or sampled < 0 or decisive < 0:
+            raise RuntimeError("whole-tree worker omitted RSS accounting fields")
+        if decisive < parent or decisive < sampled:
+            raise RuntimeError(
+                "whole-tree decisive peak undercounted a measured owner: "
+                f"decisive={decisive} parent={parent} sampled={sampled}"
+            )
+        if peak_processes < 1:
+            raise RuntimeError("whole-tree sampler never observed the root process")
+        if abs(sample_interval - SAMPLE_INTERVAL_S) > 1e-12:
+            raise RuntimeError(
+                f"whole-tree sampler interval drift: {sample_interval} != {SAMPLE_INTERVAL_S}"
+            )
+
+        receipts.append(
+            {
+                "engine": result.get("engine"),
+                "op": result.get("op"),
+                "parent_peak_rss_kib": parent,
+                "sampled_tree_peak_rss_kib": sampled,
+                "decisive_peak_rss_kib": decisive,
+                "tree_rss_samples": samples,
+                "tree_peak_processes": peak_processes,
+                "sample_interval_s": sample_interval,
+            }
+        )
+        return result
+
     try:
-        B.WORKER = TREE_WORKER
-        paired = PRODUCT.run(work_root)
+        BASE.WORKER = TREE_WORKER
+        BASE._run_worker = run_worker_with_tree_custody
+        paired = dict(PRODUCT.run(Path(work_root)))
     finally:
-        B.WORKER = original_worker
+        BASE._run_worker = original_run_worker
+        BASE.WORKER = original_worker
+
+    expected_receipts = (
+        len(BASE.TARGETS)
+        * len(BASE.REPETITION_ORDER)
+        * 2
+        * 3
+    )
+    if len(receipts) != expected_receipts:
+        raise RuntimeError(
+            f"whole-tree receipt count drift: {len(receipts)} != {expected_receipts}"
+        )
+
+    counts = Counter((item["engine"], item["op"]) for item in receipts)
+    expected_per_engine_op = len(BASE.TARGETS) * len(BASE.REPETITION_ORDER)
+    for engine in ("v029", "v030"):
+        for op in ("pack", "verify", "extract"):
+            if counts[(engine, op)] != expected_per_engine_op:
+                raise RuntimeError(
+                    "whole-tree operation custody drift: "
+                    f"{engine}/{op}={counts[(engine, op)]} != {expected_per_engine_op}"
+                )
 
     rows: list[dict] = []
     for row in paired["rows"]:
@@ -86,17 +156,22 @@ def run(work_root: Path) -> dict:
     max_rss_ratio = max(
         max(row["max_pack_rss_ratio"], row["max_extract_rss_ratio"]) for row in rows
     )
-    gate = {
-        "exact_target_count": len(rows) == len(B.TARGETS),
+    inherited_contract = dict(paired["contract"])
+    if float(inherited_contract["maximum_peak_rss_ratio"]) != BASE.MAX_PEAK_RSS_RATIO:
+        raise RuntimeError("inherited product RSS ceiling drift")
+
+    rss_gate = {
+        "exact_target_count": len(rows) == len(BASE.TARGETS),
         "stable_historical_baseline_identity": all(
             len(row["historical_tree_sha256"]) == 64 for row in rows
         ),
         "stable_product_identity": all(
             len(row["product_tree_sha256"]) == 64 for row in rows
         ),
-        "peak_rss_ratio": max_rss_ratio <= B.MAX_PEAK_RSS_RATIO,
+        "complete_operation_custody": len(receipts) == expected_receipts,
+        "peak_rss_ratio": max_rss_ratio <= BASE.MAX_PEAK_RSS_RATIO,
     }
-    gate["passed"] = all(gate.values())
+    rss_gate["passed"] = all(rss_gate.values())
 
     return {
         "schema": SCHEMA,
@@ -104,18 +179,28 @@ def run(work_root: Path) -> dict:
         "engine": paired["engine"],
         "release_facade": paired["release_facade"],
         "contract": {
-            "targets": [list(item) for item in B.TARGETS],
-            "repetition_order": [list(item) for item in B.REPETITION_ORDER],
-            "maximum_peak_rss_ratio": B.MAX_PEAK_RSS_RATIO,
+            "targets": [list(item) for item in BASE.TARGETS],
+            "repetition_order": [list(item) for item in BASE.REPETITION_ORDER],
+            "maximum_peak_rss_ratio": BASE.MAX_PEAK_RSS_RATIO,
             "rss_accounting": RSS_ACCOUNTING,
-            "worker": str(TREE_WORKER.relative_to(B.ROOT)),
+            "sample_interval_s": SAMPLE_INTERVAL_S,
+            "worker": str(TREE_WORKER.relative_to(BASE.ROOT)),
             "timing_credit": False,
-            "timing_authority": "benchmarks/v030_release_performance_product.py with its canonical uninstrumented worker",
-            "identity_rule": paired["contract"]["identity_rule"],
+            "timing_authority": (
+                "benchmarks/v030_release_performance_product.py with its "
+                "canonical uninstrumented worker"
+            ),
+            "identity_rule": inherited_contract["identity_rule"],
         },
         "rows": rows,
         "totals": {"max_peak_rss_ratio": max_rss_ratio},
-        "gate": gate,
+        "tree_rss_receipts": receipts,
+        "rss_gate": rss_gate,
+        "diagnostic_timing_gate": paired["gate"],
+        "claim_boundary": (
+            "same product-runtime target/order/identity/fingerprint with stronger "
+            "whole-process-tree RSS custody; timing is diagnostic only"
+        ),
     }
 
 
@@ -141,13 +226,13 @@ def main() -> None:
             {
                 "candidate_fingerprint": result["candidate_fingerprint"],
                 "totals": result["totals"],
-                "gate": result["gate"],
+                "rss_gate": result["rss_gate"],
             },
             indent=2,
         ),
         flush=True,
     )
-    if not result["gate"]["passed"]:
+    if not result["rss_gate"]["passed"]:
         raise SystemExit("v0.30 whole-process-tree RSS companion gate failed")
 
 
