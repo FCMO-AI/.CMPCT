@@ -1,0 +1,40 @@
+{
+  "schema": "cmpct-v030-current-staged-pack-work-lower-bound-v1",
+  "source_sha": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "claim_boundary": "exact current-staged structural work lower bound from authority source plus final-runtime artifact 10715126272; no wall-time or release credit",
+  "question": "After the promoted exact pack-length cache, how much level-19 pack work is still provably duplicate or decision-dead under current r25 staging?",
+  "candidate": "compose locality-first rejection of already->8x plans with singleton pack-length seeding from mandatory same-owner _direct_cost measurements; retain no compressed payloads",
+  "shifted": {
+    "unique_nodes": 165,
+    "delta_nodes": 153,
+    "roots": 12,
+    "pack_64k_read_amp": 1.0,
+    "pack_1m_read_amp": 6.106682680459861,
+    "pack_2m_read_amp": 12.0,
+    "selected_limit_bytes": 524288,
+    "selected_complete_bytes": 1678051,
+    "selected_groups": 5,
+    "guaranteed_singleton_seed_calls": 12,
+    "guaranteed_locality_prune_calls": 1,
+    "guaranteed_removed_level19_calls_per_child": 13,
+    "guaranteed_removed_raw_input_bytes_per_child_min": 3355572
+  },
+  "ml": {
+    "roots": 115,
+    "selected_limit_bytes": 1048576,
+    "selected_complete_bytes": 13823810,
+    "selected_groups": 19,
+    "pack_1m_read_amp": 6.077239906781672,
+    "pack_2m_read_amp": 12.502069821740939,
+    "forced_roots_over_64k_min": 14,
+    "forced_new_nonfinal_2m_groups_min": 6,
+    "guaranteed_removed_level19_calls_per_child_min": 20,
+    "guaranteed_removed_raw_input_bytes_per_child_strictly_greater_than": 16640851
+  },
+  "runtime_gate": {
+    "median_create_ratio": 1.1065102273141711,
+    "frozen_median_create_ceiling": 1.1,
+    "shifted_equal_seconds_per_rep_needed_for_ceiling": 0.34201846663001945
+  },
+  "decision": "Run one fresh-process current-staged A/B on Shifted+ML in both v0.28 and current discovery-neutral attempt5. Kill on any archive/tree/selected-limit change. If exact but immaterial, retire this pack exact-work family rather than threshold-gardening it."
+}
