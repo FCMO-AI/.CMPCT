@@ -8,36 +8,38 @@
   },
   "active_product_bottleneck": {
     "id": "v030-convergence-two-reds",
-    "observation": "Authority 94f33090 remains release-locked. Compression parity still has a deterministic r24 regression on neutral_hostile_v1/06_incremental_backups; #209's one-shot compact-retention/medium-binary policy candidate failed the unchanged historical-causality compression ablation and is retired. Separately, exact-head runtime has median_create_ratio=1.1065102273 vs <=1.10 while max create/extract/RSS/locality pass. #210 proved a zero-threshold G04 finalist guard byte-safe across all 15 frozen workloads and measured shifted_versions -0.380374 s in one paired G04 pass.",
-    "next_discriminator": "PR #211 is the live product falsifier. Exact head 5d1ebc8 fixes an inherited test that incorrectly required speculative-work accounting identity; consume exact-head tests and unchanged r24 performance evidence. Engineering-evidence CI is separately red because the PR body lacks required dossier headings; this is evidence plumbing, not product evidence."
+    "observation": "Authority 94f33090 remains release-locked. Compression parity has advanced: PR #212 correctly binds the compact-r24 nested byte owner and its focused Incremental Backups court is green; the unchanged 15-row compression/product matrix is now the next unpaid compression gate. Runtime remains independently red at median_create_ratio=1.1065102273 vs <=1.10. #210 proved the zero-threshold G04 finalist guard byte-safe across all 15 frozen workloads, deleting 1002/1062 exact finalists; #211 productizes that guard but still lacks result-bearing product-runtime/full-release evidence.",
+    "next_discriminator": "First, execute PR #212's unchanged 15-row compression/product matrix when a valid result-bearing route exists. For runtime, PR #211 current head eecbeebcb638610902258ca8ce9f7598d65a9258 has exact-head regression tests green; the earlier r24 core/ZIP performance run at 5d1ebc8 is green but does not measure the v0.30 r24/r25 selector. Run unchanged product runtime/full regression before any promotion or family retirement."
   },
   "primary_question": {
     "id": "g04-hierarchical-screen-zero-threshold-productization",
     "family": "D3 speculative-work / search-admission",
     "hypothesis": "After structural nomination, if the already-required level-6 screen shows no transformed candidate smaller than direct level-6 storage, skipping level-19 hierarchical finalists preserves the selected complete artifact while removing enough losing work to improve the narrow median-create debt.",
-    "status": "PRODUCTIZATION_PR_LIVE_CI_PENDING",
+    "status": "PRODUCTIZATION_CODE_GREEN_PRODUCT_RUNTIME_UNMEASURED",
     "evidence": [
       "#210 run 36018203324 @ 3bf34a390b5bd9fa50fb2cd8fc685d9dab488aa1; artifact 10819539461; sha256 edee34a8098d5a8ecc0eb5a9c1b6a7a0d8eca745011413e22a44a2a195bb2e8e",
       "15/15 frozen complete artifacts byte-identical; regressions=[]; changed_complete_artifacts=[]",
       "shifted_versions: five records with 48 screened candidates each; 15 exact finalists -> 0; paired wall delta -0.380374 s",
       "matrix total: 1002 exact finalists skipped; timing is noisy research evidence only",
-      "#211 head 5d1ebc8aa708f758e6541ade67ccb0bd6ae3aaf3: semantic-owner guard + focused tests; inherited bounded-screen control now compares selected representation separately from exact-finalist work accounting"
+      "#211 head 5d1ebc8aa708f758e6541ade67ccb0bd6ae3aaf3: semantic-owner guard + focused tests; inherited bounded-screen control now compares selected representation separately from exact-finalist work accounting",
+      "#211 current head eecbeebcb638610902258ca8ce9f7598d65a9258: 789-test exact-head regression suite green; r24 core/ZIP latest-head classifier skipped performance because the newest commit was discovery-only",
+      "#211 prior product-code head 5d1ebc8: r24 core/ZIP run 36132376990 green with 0 byte regressions on its 8-row release-parity court; claim boundary excludes v0.30 r24/r25 product runtime"
     ],
-    "prediction": "The semantic-owner mutation should preserve exact bytes and improve create time without adding work to zero-primary records. It may be sufficient to cross the narrow <=1.10 median-create gate, but no runtime credit exists until unchanged product evidence runs.",
+    "prediction": "The oracle's Shifted paired delta (-0.380374 s) is only ~0.038 s beyond the ~0.342 s equal-saving amount needed to move the inherited two-repetition median create ratio from 1.106510x to 1.10x. Because the oracle timing is visibly noisy on rows with zero finalist changes, unchanged product runtime evidence is decisive.",
     "kill": "Any deterministic archive-byte change, exactness failure, confirmed create/extract/RSS/locality regression, or failure to materially improve the unchanged product decision retires this finalist-recompression family without threshold gardening."
   },
   "frontier_candidates": [
     {
       "id": "g04-zero-headroom-productization",
       "family": "execution/search-admission",
-      "status": "PR_LIVE_CI_PENDING",
-      "evidence": "#211 @ 5d1ebc8aa708f758e6541ade67ccb0bd6ae3aaf3; #210 oracle green"
+      "status": "CODE_GREEN_PRODUCT_RUNTIME_UNMEASURED",
+      "evidence": "#210 exact oracle green; #211 current head eecbeebc regression suite green; unchanged v0.30 product runtime/full release evidence unpaid"
     },
     {
       "id": "r24-parity-representation-admission",
       "family": "representation/admission",
-      "status": "REOPEN_REQUIRED",
-      "evidence": "#209 exact-head product attempt failed unchanged compression ablation; cutoff/packing gardening retired"
+      "status": "PR212_FOCUSED_GREEN_FULL_MATRIX_PENDING",
+      "evidence": "#212 @ b878f40a: correctly-bound focused Incremental Backups court green and exact-head 789-test suite green; unchanged 15-row product matrix unpaid"
     },
     {
       "id": "content-zip-information-yield-admission",
@@ -100,7 +102,9 @@
     "r24_abba": "#202; helper proof 35681662327; canonical workflow mutation currently blocked by GitHub App workflows permission; ABBA still unmeasured",
     "ci_fanout": "coordination-only abbd7e7... again instantiated a broad historical workflow wave; #128",
     "g04_screen_zero_threshold": "#210 run 36018203324: 15/15 byte-identical complete artifacts; shifted_versions -0.380374 s paired G04 wall; 1002 finalists skipped matrix-wide; research timing only",
-    "r24_compact_policy_negative": "#209 run 36004181224 / artifact 10813164170: candidate failed unchanged compression ablation before runtime; family retired"
+    "r24_compact_policy_negative": "#209 run 36004181224 / artifact 10813164170: candidate failed unchanged compression ablation before runtime; family retired",
+    "r24_compact_policy_corrected": "#212 committed focused receipt: candidate <= same-run genuine r24 on accepted Incremental Backups under separate fresh interpreters + actual nested child; current head b878f40a differs from receipt source only by durable receipt + fresh-process launcher",
+    "g04_productization": "#211 current eecbeebc: exact-head regression suite green; no current product-runtime receipt. #210 timing suggests enough Shifted headroom only narrowly and is research/noise evidence."
   },
   "process_lessons": [
     {
@@ -128,24 +132,7 @@
       "evidence": "#191 stale bootstrap; structural repair proposed"
     }
   ],
-  "pending_jobs": [
-    {
-      "provider": "github-actions",
-      "run": "36132376908",
-      "source_sha": "5d1ebc8aa708f758e6541ade67ccb0bd6ae3aaf3",
-      "question": "#211 exact-head full regression",
-      "expected_artifact": "pytest diagnostic/result",
-      "decision_unlocked": "whether corrected control semantics and product guard preserve full regression"
-    },
-    {
-      "provider": "github-actions",
-      "run": "36132376990",
-      "source_sha": "5d1ebc8aa708f758e6541ade67ccb0bd6ae3aaf3",
-      "question": "#211 unchanged r24 performance gate",
-      "expected_artifact": "same-runner performance receipt",
-      "decision_unlocked": "whether productized guard materially improves product runtime without inherited gate regressions"
-    }
-  ],
-  "next_action": "Consume #211 runs 36132376908 and 36132376990 at exact head 5d1ebc8. If semantic/product gates survive but runtime does not materially improve, retire the D3 finalist guard family without threshold gardening. Engineering-evidence is independently blocked on missing PR dossier headings; repair metadata when the connector permits PR-body mutation.",
-  "last_reconciled": "2026-09-25T06:07-06:00"
+  "pending_jobs": [],
+  "next_action": "Execute #212's unchanged 15-row compression/product matrix first when an authorized result-bearing route exists. If that passes, consume unchanged product runtime/full-release evidence on #211's G04 guard (or equivalent combined candidate). Do not treat #211's r24 core/ZIP receipt as v0.30 product runtime evidence. PR #213 remains a diverse representation lane but its regenerated filesystem metadata should be frozen before buying the same-semantics hosted oracle.",
+  "last_reconciled": "2026-09-28T09:48:21-06:00"
 }
