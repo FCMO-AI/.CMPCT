@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,10 @@ from tools import check_v030_release_lock as core
 def _fingerprinted_manifest(root: Path, receipt_id: str = "runtime") -> tuple[dict, str]:
     engine = root / "engine"
     engine.mkdir(parents=True, exist_ok=True)
-    (engine / "candidate.py").write_text("REVISION = 25\n", encoding="utf-8")
+    candidate = engine / "candidate.py"
+    candidate.write_text("REVISION = 25\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "--", "engine/candidate.py"], check=True)
     manifest = {
         "fingerprint_globs": ["engine/**/*.py"],
         "required_task_states": [],
@@ -213,3 +217,19 @@ def test_strict_check_cannot_unlock_when_preflight_is_red(monkeypatch: pytest.Mo
     assert ok is False
     assert report["release_unlocked"] is False
     assert report["strict_input_failures"] == ["hostile evidence"]
+
+def test_strict_print_fingerprint_exposes_pathset_identity(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest = {"fingerprint_globs": ["engine/**/*.py"]}
+    paths = ["engine/a.py", "engine/b.py"]
+    monkeypatch.setattr(strict, "load_manifest_strict", lambda _path: manifest)
+    monkeypatch.setattr(core, "fingerprint", lambda _manifest: ("f" * 64, paths))
+
+    assert strict.main(["--print-fingerprint"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["candidate_fingerprint"] == "f" * 64
+    assert payload["fingerprinted_files"] == 2
+    assert payload["fingerprint_pathset_sha256"] == core._pathset_sha256(paths)
+    assert payload["files"] == paths
+
