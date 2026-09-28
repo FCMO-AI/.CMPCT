@@ -19,9 +19,12 @@ import zstandard as zstd
 
 from benchmarks import resemblance_hostile_corpus_v1 as HOSTILE
 from experiments import entropygraph_v030_bounded_drift_container_v1 as BDC
+from experiments import entropygraph_v030_canonical_final as CANONICAL
 from experiments import entropygraph_v030_product_fs as FS
-from experiments import entropygraph_v030_r25_manifest_admission as MANIFEST
-from experiments import entropygraph_v030_prefixgraph as PG
+from experiments.entropygraph_v030_prefixgraph_process_executor import (
+    PrefixGraphProcessExecutor,
+    SUPPORTED_PREFIX_LEVEL,
+)
 
 MAGIC = b"CMPNXBS1"
 HEADER = struct.Struct("<8sQQQ32s")
@@ -79,8 +82,8 @@ def _decode_semantic_sibling(blob: bytes) -> tuple[bytes, list[bytes]]:
 def _bind_members_to_manifest(manifest_raw: bytes, members: list[bytes]) -> dict[str, bytes]:
     decoded = FS.decode_manifest(
         manifest_raw,
-        max_path_bytes=4096,
-        max_entries=FS.DEFAULT_MAX_MANIFEST_ENTRIES,
+        max_path_bytes=CANONICAL.POLICY.R.MAX_PATH_BYTES,
+        max_entries=CANONICAL.MAX_MANIFEST_ENTRIES,
     )
     available: dict[tuple[int, bytes], list[bytes]] = {}
     for member in members:
@@ -124,13 +127,18 @@ def run(out_path: Path) -> dict:
         source_files = _source_files(source)
         expected_source_tree = _treehash(source_files)
 
+        # Bind candidate and control to the exact current r25 filesystem-admission envelope.
+        staged = work / "staged"
+        prepared = CANONICAL._prepare_profile_tree(source, staged)
         manifest_raw, regular_sources, _manifest_stats = FS.capture_filesystem_manifest(
             source,
-            max_path_bytes=4096,
-            max_profile_files=1024,
-            max_profile_logical_bytes=1 << 40,
-            max_entries=FS.DEFAULT_MAX_MANIFEST_ENTRIES,
+            max_path_bytes=CANONICAL.POLICY.R.MAX_PATH_BYTES,
+            max_profile_files=CANONICAL.MAX_PROFILE_FILES,
+            max_profile_logical_bytes=CANONICAL.MAX_PROFILE_LOGICAL_BYTES,
+            max_entries=CANONICAL.MAX_MANIFEST_ENTRIES,
         )
+        if prepared["source_manifest_raw"] != manifest_raw:
+            raise RuntimeError("candidate/control filesystem-v1 source semantics drift")
         members = [path.read_bytes() for path, _rel in regular_sources]
 
         started = time.perf_counter()
@@ -149,21 +157,28 @@ def run(out_path: Path) -> dict:
         max_amp = max(row.member_read_amplification for row in member_facts)
         max_decode = max(row.max_decode_unit_bytes for row in member_facts)
 
-        # Same-run exact PrefixGraph control on the product's admitted staged tree.
-        staged = work / "staged"
-        prepared = MANIFEST.prepare_profile_tree(
-            source,
-            staged,
-            max_path_bytes=4096,
-            max_profile_files=1024,
-            max_profile_logical_bytes=1 << 40,
-            max_entries=FS.DEFAULT_MAX_MANIFEST_ENTRIES,
-        )
+        # Same-run exact current PrefixGraph control: private semantic owner, level-15
+        # process custody, and the evidenced child-dead-before-G0-G4 lifetime boundary.
+        pg = CANONICAL.RC.PG
+        if pg.__name__ != "experiments._v030_canonical_prefixgraph":
+            raise RuntimeError(f"current PrefixGraph semantic-owner drift: {pg.__name__!r}")
+        if pg.build.__module__ != pg.__name__:
+            raise RuntimeError("current PrefixGraph build-callable custody drift")
         pg_path = work / "prefixgraph.cmpct"
-        pg_stats = PG.build(staged, pg_path)
-        pg_verify = PG.strong_verify(pg_path)
-        if not pg_verify.get("ok"):
-            raise RuntimeError("PrefixGraph control failed strong verification")
+        with PrefixGraphProcessExecutor() as executor:
+            pg_stats = dict(executor.submit(pg.build, staged, pg_path).result())
+            pg_receipt = dict(executor.last_receipt or {})
+        if pg_receipt.get("semantic_owner") != pg.__name__:
+            raise RuntimeError("current PrefixGraph child semantic-owner drift")
+        if int(pg_receipt.get("prefix_level", -1)) != SUPPORTED_PREFIX_LEVEL:
+            raise RuntimeError("current PrefixGraph child prefix-level drift")
+        pg_verify = dict(pg.strong_verify(pg_path))
+        staged_tree = pg.treehash(staged)
+        if not pg_verify.get("ok") or pg_verify.get("tree_sha256") != staged_tree:
+            raise RuntimeError("current PrefixGraph control failed strong verification")
+        pg_locality = dict(CANONICAL.RC._prefixgraph_locality(pg_path))
+        if not pg_locality.get("passed"):
+            raise RuntimeError("current PrefixGraph control failed locality")
 
         corrupted = bytearray(candidate_blob)
         corrupted[len(corrupted) // 2] ^= 0x01
@@ -200,8 +215,13 @@ def run(out_path: Path) -> dict:
             },
             "prefixgraph_same_run": {
                 **pg_stats,
+                "semantic_owner": pg_receipt["semantic_owner"],
+                "prefix_level": int(pg_receipt["prefix_level"]),
+                "process_receipt_schema": pg_receipt.get("schema"),
                 "physical_sha256": hashlib.sha256(pg_path.read_bytes()).hexdigest(),
                 "verified": bool(pg_verify.get("ok")),
+                "tree_sha256": pg_verify.get("tree_sha256"),
+                "max_member_read_amplification": pg_locality["max_member_read_amplification"],
             },
             "delta": {
                 "bounded_drift_minus_prefixgraph_bytes": len(candidate_blob) - pg_path.stat().st_size,
