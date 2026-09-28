@@ -418,6 +418,23 @@ def test_untracked_release_source_fails_closed(
         lock.fingerprint(manifest)
 
 
+def test_source_directory_named_target_is_not_treated_as_build_residue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(lock, "ROOT", tmp_path)
+    source = tmp_path / "native" / "cmpct-portable" / "src"
+    source.mkdir(parents=True)
+    (source / "lib.rs").write_text("pub const REVISION: u8 = 25;\n", encoding="utf-8")
+    _git_track(tmp_path, "native/cmpct-portable/src/lib.rs")
+    nested = source / "target"
+    nested.mkdir()
+    (nested / "generated.rs").write_text("pub const UNTRACKED: bool = true;\n", encoding="utf-8")
+    manifest = {"fingerprint_globs": ["native/**/src/**/*"]}
+
+    with pytest.raises(ValueError, match="untracked release-critical source"):
+        lock.fingerprint(manifest)
+
+
 def test_print_fingerprint_pathset_digest_is_stable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

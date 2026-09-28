@@ -95,7 +95,11 @@ def _tracked_fingerprint_paths(manifest: dict[str, Any]) -> list[str]:
 
 def _known_build_residue(rel: str) -> bool:
     parts = PurePosixPath(rel).parts
-    return bool(parts) and parts[0] == "native" and "target" in parts[1:]
+    if not parts or parts[0] != "native" or "target" not in parts[1:]:
+        return False
+    target_index = parts.index("target", 1)
+    source_segments = {"src", "include", "tests", "benches", "vectors", "golden"}
+    return any(index > target_index and part in source_segments for index, part in enumerate(parts))
 
 
 def _pathset_sha256(rows: list[str]) -> str:
