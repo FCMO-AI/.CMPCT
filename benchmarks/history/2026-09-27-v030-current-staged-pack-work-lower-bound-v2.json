@@ -1,0 +1,54 @@
+{
+  "schema": "cmpct-v030-current-staged-pack-work-lower-bound-v2",
+  "source_sha": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "parent_receipt": "benchmarks/history/2026-09-27-v030-current-staged-pack-work-lower-bound.json",
+  "claim_boundary": "exact structural lower bound from current authority source plus final-runtime artifact 10715126272; no wall-time, product, or release credit",
+  "candidate": "locality-first rejection of already->8x plans plus singleton pack-length seeding from mandatory same-owner _direct_cost measurements; retain no compressed payloads",
+  "exactness_basis": {
+    "singleton": "v0.28 _build_graph computes direct_costs from node_bytes before _choose_pack_plan; _direct_cost and singleton pack pricing use the same _compress_record level-19/raw-fallback law, so direct_cost-PH.size is the exact singleton payload length",
+    "locality": "when at least one <=8x plan exists, >8x plans cannot enter ordinary byte selection; preserve exact 512KiB baseline for wider-pack fallback and price all six when every plan is infeasible"
+  },
+  "shifted": {
+    "unique_nodes": 165,
+    "delta_nodes": 153,
+    "roots": 12,
+    "pack_64k_read_amp": 1,
+    "pack_1m_read_amp": 6.106682680459861,
+    "pack_2m_read_amp": 12,
+    "selected_limit_bytes": 524288,
+    "selected_complete_bytes": 1678051,
+    "selected_groups": 5,
+    "selected_payload_bytes": 1677786,
+    "guaranteed_singleton_seed_calls": 12,
+    "guaranteed_singleton_raw_bytes_min": 1677786,
+    "guaranteed_locality_prune_calls": 1,
+    "guaranteed_locality_raw_bytes_min": 1677786,
+    "guaranteed_removed_level19_calls_per_child": 13,
+    "guaranteed_removed_raw_input_bytes_per_child_min": 3355572
+  },
+  "ml": {
+    "roots": 115,
+    "pack_64k_read_amp": 1.0068789540160001,
+    "pack_1m_read_amp": 6.077239906781672,
+    "pack_2m_read_amp": 12.502069821740939,
+    "selected_limit_bytes": 1048576,
+    "selected_complete_bytes": 13823810,
+    "selected_groups": 19,
+    "selected_payload_bytes": 13822803,
+    "singleton_raw_fraction_min": 0.9931210459839999,
+    "singleton_raw_bytes_min": 13727716,
+    "forced_singleton_groups_min": 27,
+    "two_mib_groups_min": 7,
+    "forced_new_nonfinal_2m_groups_min": 6,
+    "forced_new_nonfinal_2m_raw_bytes_strict_gt": 9437184,
+    "guaranteed_removed_level19_calls_per_child_min": 33,
+    "guaranteed_removed_raw_input_bytes_per_child_strict_gt": 23164899
+  },
+  "runtime_gate": {
+    "median_create_ratio": 1.1065102273141711,
+    "frozen_median_create_ceiling": 1.1,
+    "shifted_equal_seconds_per_rep_needed_for_ceiling": 0.34201846663001945,
+    "shifted_v028_shared_owner_margin_min_s": 1.396334174000002
+  },
+  "decision": "Run one fresh-process current-staged A/B on Shifted+ML in both v0.28 and current discovery-neutral attempt5. Require exact archive/tree/selected-limit/fallback identity. If exact but immaterial, retire this pack exact-work family rather than threshold-gardening it."
+}
