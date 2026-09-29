@@ -10,6 +10,8 @@ a sketch collision can waste encoder work but cannot make an archive incorrect o
 """
 from __future__ import annotations
 
+from array import array
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from hashlib import blake2b
 from typing import Iterable, Sequence
@@ -52,6 +54,19 @@ class DeltaStats:
 class DeltaResult:
     payload: bytes
     stats: DeltaStats
+
+
+@dataclass(frozen=True)
+class PreparedDeltaBase:
+    """Exact reusable weak-checksum index for one immutable delta base.
+
+    Packed 64-bit rows sort by weak key then base offset. This preserves the
+    historical first-offset match rule while avoiding dict/list amplification.
+    """
+
+    base: bytes
+    block: int
+    entries: array
 
 
 @dataclass(frozen=True)
@@ -212,6 +227,88 @@ def _weak_roll(s1: int, s2: int, old: int, new: int, width: int) -> tuple[int, i
 
 def _weak_key(s1: int, s2: int) -> int:
     return (s2 << 16) | s1
+
+
+def prepare_delta_base(base: bytes, *, block: int = 64,
+                       max_base_index: int = 8 * 1024 * 1024) -> PreparedDeltaBase:
+    """Prepare the historical exact weak-checksum base index once.
+
+    Base bytes are retained by reference. Packed rows encode the 32-bit weak key
+    in the high half and the bounded base offset in the low half.
+    """
+    if block < 16:
+        raise ValueError("block size too small")
+    if len(base) > max_base_index:
+        raise ValueError("base exceeds delta index limit")
+    entries = array("Q")
+    for offset in range(0, len(base) - block + 1, block):
+        s1, s2 = _weak_init(base[offset:offset + block])
+        entries.append((_weak_key(s1, s2) << 32) | offset)
+    entries = array("Q", sorted(entries))
+    return PreparedDeltaBase(base=base, block=block, entries=entries)
+
+
+def delta_encode_prepared(prepared: PreparedDeltaBase, target: bytes) -> DeltaResult:
+    """Encode with a prebuilt base index while preserving delta_encode bytes/stats."""
+    base = prepared.base
+    block = prepared.block
+    if not target:
+        return DeltaResult(b"", DeltaStats(0, 0, 0, 0))
+    if len(base) < block or len(target) < block:
+        out = bytearray([0])
+        _put_varint(out, len(target))
+        out.extend(target)
+        return DeltaResult(bytes(out), DeltaStats(len(target), 0, 0, 1))
+
+    entries = prepared.entries
+    out = bytearray()
+    literal = bytearray()
+    copied = copy_ops = literal_ops = 0
+
+    def flush_literal() -> None:
+        nonlocal literal_ops
+        if not literal:
+            return
+        out.append(0)
+        _put_varint(out, len(literal))
+        out.extend(literal)
+        literal.clear()
+        literal_ops += 1
+
+    pos = 0
+    s1, s2 = _weak_init(target[:block])
+    while pos + block <= len(target):
+        weak = _weak_key(s1, s2)
+        lo = bisect_left(entries, weak << 32)
+        hi = bisect_right(entries, (weak << 32) | 0xFFFFFFFF)
+        match_offset = -1
+        for idx in range(lo, hi):
+            offset = entries[idx] & 0xFFFFFFFF
+            if base[offset:offset + block] == target[pos:pos + block]:
+                match_offset = offset
+                break
+        if match_offset >= 0:
+            length = block
+            limit = min(len(base) - match_offset, len(target) - pos)
+            while length < limit and base[match_offset + length] == target[pos + length]:
+                length += 1
+            flush_literal()
+            out.append(1)
+            _put_varint(out, match_offset)
+            _put_varint(out, length)
+            copied += length
+            copy_ops += 1
+            pos += length
+            if pos + block <= len(target):
+                s1, s2 = _weak_init(target[pos:pos + block])
+            continue
+        literal.append(target[pos])
+        if pos + block < len(target):
+            s1, s2 = _weak_roll(s1, s2, target[pos], target[pos + block], block)
+        pos += 1
+    literal.extend(target[pos:])
+    flush_literal()
+    return DeltaResult(bytes(out), DeltaStats(len(target) - copied, copied, copy_ops, literal_ops))
 
 
 def delta_encode(base: bytes, target: bytes, *, block: int = 64,
