@@ -61,13 +61,21 @@ def admit(
             selected_bytes=len(filesystem_v1_raw),
             saving_bytes=0,
         )
-    if not IFS4.semantics_equal_decoded(
-        original,
-        candidate,
-        max_path_bytes=max_path_bytes,
-        max_entries=max_entries,
-    ):
-        # A compact encoder bug is not a reason to publish changed filesystem semantics.
+    try:
+        exact = IFS4.semantics_equal_decoded(
+            original,
+            candidate,
+            max_path_bytes=max_path_bytes,
+            max_entries=max_entries,
+        )
+    except RuntimeError:
+        # implicit-v4 is optional. If an internally generated compact control falls outside its own bounded
+        # decoder grammar, preserve the already-validated filesystem-v1 control instead of turning a
+        # representation refusal into a product-creation failure. Hostile external controls are still
+        # rejected by the strict decoder at the read boundary.
+        exact = False
+    if not exact:
+        # A compact encoder bug or representation refusal is not a reason to publish changed filesystem semantics.
         return ManifestAdmission(
             raw=filesystem_v1_raw,
             encoding="filesystem-v1",
