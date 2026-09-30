@@ -1,0 +1,65 @@
+{
+  "schema": "cmpct-v030-analytics-inverse-root-oracle-prereg-v1",
+  "authority_head": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "source_identity": {
+    "suite": "neutral_hostile_v1",
+    "workload": "04_analytics_and_database",
+    "tree_sha256": "6d0854fe058a95258588b89dca653ac8f00c61f815c6127b179e86cc58b1789d",
+    "exact_current_product_bytes": 10392442,
+    "exact_current_product_selected": "r24-fallback",
+    "inherited_v029_floor_bytes": 6135325,
+    "external_zstd19_bytes": 9337546
+  },
+  "causal_relation": {
+    "npz": "features_compressed.npz",
+    "npz_bytes": 3556851,
+    "loose": "features.npy",
+    "loose_bytes": 3840128,
+    "exact_member_deflate_bytes": 3556442,
+    "member_plaintext_equals_loose": true,
+    "exact_raw_deflate_reproducible_levels": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "npz_other_member": "labels.npy",
+    "npz_other_member_stream_bytes": 151,
+    "npz_skeleton_bytes": 258
+  },
+  "lower_rung_oracle": {
+    "representation": [
+      "Store ordinary analytics roots as independently decodable 512-KiB Zstd-19 chunks.",
+      "Store NPZ skeleton + non-inverted labels stream.",
+      "Do not store the NPZ features Deflate payload; regenerate it exactly from authenticated loose features.npy through the proven deterministic raw-DEFLATE inverse.",
+      "Charge 64 bytes per physical chunk plus 352 bytes of inverse/integrity metadata beyond the exact NPZ skeleton+labels stream."
+    ],
+    "charged_complete_bytes": 6118470,
+    "margin_vs_inherited_v029_floor_bytes": 16855,
+    "margin_vs_external_zstd19_bytes": 3219076,
+    "measured_local_wall_s": 7.322970822,
+    "physical_chunk_bytes": 524288,
+    "zstd_level": 19
+  },
+  "stronger_controls": {
+    "32KiB_level18_charged_bytes": 6869133,
+    "64KiB_level18_charged_bytes": 6698368,
+    "128KiB_level18_charged_bytes": 6520038,
+    "256KiB_level18_charged_bytes": 6329368,
+    "512KiB_level18_charged_bytes": 6184219,
+    "interpretation": "The strict-v0.29 byte win appears only near the 512-KiB/level-19 corner; this is a narrow framing/locality margin, not broad headroom."
+  },
+  "decision_rule": {
+    "support": "Only an exact current-r25 framing oracle that keeps the complete artifact strictly below 6,135,325 B while preserving current integrity/recovery/locality semantics may earn an implementation attempt.",
+    "kill": "If real canonical headers, Merkle/index/manifest, inverse descriptors, or locality-preserving physical organization consume the 16,855-B margin, retire this simple inverse-root canonicalization rather than weaken the v0.29 floor or locality gate."
+  },
+  "exclusions": [
+    "No suffix or benchmark-name admission.",
+    "No selector relaxation: strict < inherited v0.29 floor remains mandatory.",
+    "No product/release credit from this oracle.",
+    "Do not revive the retired Office hidden-ZIP create-rehabilitation family; this is Analytics representation/subsumption."
+  ],
+  "next": "Price this exact information model using current canonical-r25 physical record/manifest/Merkle framing before implementation."
+}
