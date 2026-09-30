@@ -1,0 +1,20 @@
+{
+  "schema": "cmpct-v030-compact-r24-exposed-row-kill-screen-prereg-v1",
+  "date": "2026-09-29",
+  "authority_head": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "candidate_head": "b878f40a540162ab977776d7f90c3502d2749588",
+  "question": "Can any remaining directly exposed frozen product row retire the corrected compact-r24 candidate before the expensive 15-row historical-causality replay?",
+  "targets": [
+    "resemblance_hostile_v1/04_deflate_family",
+    "neutral_hostile_v1/07_incompressible_and_encrypted_like",
+    "resemblance_hostile_v1/05_incompressible",
+    "resemblance_hostile_v1/02_false_neighbors"
+  ],
+  "custody": "Generate each source once; build genuine r24 and compact product in separate fresh parent interpreters so candidate process-global policy cannot contaminate the control.",
+  "disproof": "Any deterministic candidate archive larger than same-run genuine r24, or an exact-size tie that does not conservatively retain r24, retires compact-r24.",
+  "green_boundary": "Four greens earn only the unchanged 15-row matrix; they are not promotion or release credit.",
+  "thresholds_changed": false,
+  "workloads_changed": false,
+  "comparator_semantics_changed": false,
+  "product_credit": false
+}
