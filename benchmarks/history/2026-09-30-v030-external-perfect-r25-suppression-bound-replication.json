@@ -1,0 +1,41 @@
+{
+  "schema": "cmpct-v030-external-perfect-r25-suppression-bound-replication-v1",
+  "source_authority_sha": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "source_artifact": {
+    "github_run_id": 35770822484,
+    "artifact_id": 10716410676,
+    "artifact_zip_sha256": "2c7bf873fa0fff5a04940fe38bcdf6abfd02fb5f3385a0f0ed4cb2d6be79e8e4",
+    "final_external_json_sha256": "625d3cd5668679e95facbb67ae11948f5bb2a9bd224ca988cdb2524198e58e9a",
+    "candidate_fingerprint": "6f298e1636ba42176b250f607be82159dd58b37626c1c8624d7d6ce4c75a6f8f"
+  },
+  "instrument_owner": {
+    "branch": "agent/phased3-external-opportunity-bound",
+    "path": "benchmarks/v030_external_perfect_r25_suppression_bound.py",
+    "blob_sha": "ab2daf1e13860764f24dc3c46c039c6993935a3b"
+  },
+  "replication": {
+    "current": {
+      "strict_zip_create_wins": 4,
+      "strict_zstd19_create_wins": 5,
+      "strict_joint_wins": 4
+    },
+    "perfect_r25_suppression_oracle": {
+      "aggregate_removed_wall_s": 224.47033039499996,
+      "strict_zip_create_wins": 7,
+      "strict_zstd19_create_wins": 12,
+      "strict_joint_wins": 4,
+      "create_delta_vs_current": {
+        "zip": 3,
+        "zstd19": 7
+      },
+      "joint_delta_vs_current": 0
+    },
+    "rows_with_joint_still_size_blocked": [
+      "neutral_hostile_v1/02_office_workspace",
+      "neutral_hostile_v1/04_analytics_and_database",
+      "neutral_hostile_v1/07_incompressible_and_encrypted_like"
+    ],
+    "interpretation": "Even an impossible retrospective gift that replaces every observed r24-fallback row's complete-product create wall with its measured r24 child wall improves create wins but cannot add a single strict joint win. Current joint domination is therefore representation/size-blocked independently of speculative-r25 execution debt."
+  },
+  "claim_boundary": "Independent replication against the exact current-authority external artifact. Impossible retrospective upper bound only; no safe pruning rule, product credit, promotion credit, or release authority."
+}
