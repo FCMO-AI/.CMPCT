@@ -33,8 +33,12 @@ def _historical_find_resync(base: bytes, target: bytes, i: int, j: int) -> tuple
 def _diagonal_case(k: int, *, seed: int) -> tuple[bytes, bytes]:
     rng = random.Random(seed)
     n = BD.MAX_RESYNC_BYTES + BD.SYNC_BYTES + 64
-    base = bytearray(rng.randbytes(n))
-    target = bytearray(rng.randbytes(n))
+    # Make every pre-k diagonal byte provably unequal. Independent random
+    # prefixes can accidentally create an earlier SYNC_BYTES window when the
+    # injected token overlaps it (for k=48, k-1 needs only one random byte to
+    # collide), which tests the fixture rather than the resync algorithm.
+    base = bytearray(b"\x00" * n)
+    target = bytearray(b"\x01" * n)
     token = rng.randbytes(BD.SYNC_BYTES)
     base[k : k + BD.SYNC_BYTES] = token
     target[k : k + BD.SYNC_BYTES] = token
