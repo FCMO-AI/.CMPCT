@@ -103,3 +103,20 @@ def test_non_bytes_and_oversized_member_inputs_fail_closed(monkeypatch: pytest.M
     monkeypatch.setattr(C.BD, "MAX_DECODE_UNIT", 64)
     with pytest.raises(ValueError):
         C.encode_container([b"x" * 65])
+
+
+def test_prefixgraph_substitution_on_current_prefixgraph_selected_rows(tmp_path) -> None:
+    from benchmarks import v030_bounded_drift_prefixgraph_substitution_oracle as oracle
+
+    rows = []
+    selected_specs = [spec for spec in oracle.SPECS if spec[3]]
+    assert [spec[1] for spec in selected_specs] == ["01_shifted_versions", "03_boundary_churn"]
+
+    for index, spec in enumerate(selected_specs):
+        work = tmp_path / f"selected-{index:02d}"
+        work.mkdir()
+        row = oracle._row(*spec, work)
+        rows.append(row)
+        assert row["decision"]["current_pg_selected_same_run"] is True
+        assert row["decision"]["substitution_nonregressing"] is True, row
+        assert row["decision"]["pg_winner_preserved_or_improved"] is True, row
