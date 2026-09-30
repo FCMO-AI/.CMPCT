@@ -7,55 +7,48 @@
     "source": "V030_EFFICIENCY_RECOVERY ACTIVE; repository/run truth outranks this staleable cache"
   },
   "active_product_bottleneck": {
-    "id": "efficiency-recovery",
-    "observation": "Current-upstream 35681729751 is product-red at 4/15 strict joint wins. Content-ZIP remains full-matrix supported research (#201). #203 productization exposed a new general-purpose hostile: pure level-6-first can make large level-0 streams far slower despite +1 attempt boundedness. The stronger cost-aware candidate preserves level 0 first and moves level 6 second; exact head 401abba1 contains canonical order (0,6,1,2,3,4,5,7,8,9) plus fail-closed tests. Fresh exact-head regression/performance evidence is pending.",
-    "next_discriminator": "Consume #203 cost-aware exact-head regression 35738603879 and unchanged r24 performance gate 35738603723 on 401abba1. Promote only if exactness, archive-size/timing gates and the new level-0 tail-cost safety survive; then productize hidden-ZIP information-yield admission separately under #204."
+    "id": "compact-r24-corrected-matrix",
+    "observation": "PR #212 exact head b878f40 has corrected nested-child custody, focused Incremental Backups parity green, and 11/11 visible exact-head workflows green. Repository coordination explicitly authorizes exactly one unchanged 15-row compression/product-parity matrix. Durable preregistration 9ed2920/de5d989 has zero workflow runs; the missing rung is result-bearing execution, not another compact-r24 policy/custody variant.",
+    "next_discriminator": "Execute exactly one unchanged b878-bound 15-row matrix. Any deterministic canonical-product byte regression retires compact-r24 without threshold/workload/comparator/evaluator gardening. A clean matrix advances to inherited runtime/RSS/selective/native/recovery/portability/external gates."
   },
   "primary_question": {
-    "id": "generic-zip-ownership",
-    "family": "representation-discovery+execution",
-    "hypothesis": "A cost-aware exhaustive order that keeps level 0 first and moves common exact level 6 second can retain most supported Office search benefit without the large level-0 CPU tail regression discovered against pure 6-first.",
-    "status": "PRODUCTIZATION_COST_AWARE_CODEC_LANDED_EVIDENCE_PENDING",
+    "id": "compact-r24-corrected-full-matrix",
+    "family": "product-compression+evidence-custody",
+    "hypothesis": "The correctly bound compact-r24 candidate that is non-regressing on the focused Incremental Backups blocker can preserve the unchanged full 15-row compression/product-parity matrix.",
+    "status": "FOCUSED_GREEN__FULL_MATRIX_UNEXECUTED__EVIDENCE_ROUTE_BLOCKED",
     "evidence": [
-      "34641565421/10280436333: information-yield -9,370,606 B, zero regressions; Office 6,074,838 B; hostiles pass",
-      "35690107132/10678438469: 180/180 exact streams; 1074 -> 180 attempts; CPU 2.22968 -> 0.56799 s",
-      "35694344404/10680097003: Office 6,074,842 -> 6,074,824 B; CPU 1.544365 -> 0.628505; wall 1.343497 -> 0.426692; exact/hostiles pass",
-      "35719088885/10690274379 source 9d324c39: three fresh 15-workload matrices; median-sum 181603782 -> 172233160 B; -9370622 B; zero regressed rows; Office admission=5; 14400 S_PACK range checks; artifact sha256 114260a8be4a31a1a9228902a000707e2206d64ac4ac980429c1a34de16e3e63",
-      "#203 exact head 401abba1: canonical cost-aware order (0,6,1,2,3,4,5,7,8,9); local 32 MiB level-0 hostile narrowed pure 6-first (~3.18x zeros, ~19.7x incompressible random CPU vs canonical); fresh product gates pending"
+      "PR #212 b878f40a540162ab977776d7f90c3502d2749588: corrected nested-child custody; 11/11 visible exact-head workflows green",
+      "focused receipt d35abe559cf2ed0504c85c319db9f826fa5ba443: candidate <= same-run genuine r24 on exact accepted Incremental Backups source",
+      "preregistration 9ed29202683bbab31b7dd326becea929b5dfe3be / de5d989b31dc10cde4a97d06451dea4c6871e959: one unchanged 15-row matrix, zero hosted runs",
+      "historical run 36004181224 proves the deep matrix route can execute but its Incremental Backups red came from superseded mis-bound custody and earns zero corrected-candidate credit"
     ],
-    "prediction": "(0,6,1,2,3,4,5,7,8,9) should preserve exact VZIP semantics and avoid the level-0 CPU cliff while retaining a large common-stream create-work reduction; hidden-ZIP admission remains a separate later seam.",
-    "kill": "Any canonical exact-stream/VZIP regression, archive-byte regression, confirmed create regression, unacceptable tail-cost regression, per-arm RSS debt, or locality failure blocks promotion. Pure 6-first is retired as a product candidate after the 32 MiB level-0 hostile."
+    "prediction": "Corrected compact-r24 should have zero deterministic canonical-product byte regressions on the unchanged matrix.",
+    "kill": "Any deterministic canonical-product byte regression retires compact-r24. No threshold, workload, comparator, evaluator, or custody gardening."
   },
   "frontier_candidates": [
     {
-      "id": "bounded-regret-deflate-productization",
+      "id": "compact-r24-full-matrix",
+      "family": "product-compression",
+      "status": "PRIMARY__PREREGISTERED__UNEXECUTED",
+      "evidence": "PR #212 b878f40; prereg 9ed2920/de5d989; focused blocker green"
+    },
+    {
+      "id": "bounded-drift-same-semantics",
+      "family": "representation",
+      "status": "HOSTED_ORACLE_ROUTE_READY__UNEXECUTED",
+      "evidence": "PR #213 37d9f09; test-only evidence head 5070f81; preserved local same-semantics delta -11,970 B; zero hosted result-bearing runs"
+    },
+    {
+      "id": "bounded-drift-resync-tail",
       "family": "execution",
-      "status": "COST_AWARE_IMPLEMENTED_EVIDENCE_PENDING",
-      "evidence": "#203 exact head 401abba1; cost-aware canonical codec mutation landed after pure 6-first tail-cost falsifier; regression/performance gates running"
+      "status": "EXACT_HEAD_CORRECTNESS_GREEN__PRODUCT_RUNTIME_UNCREDITED",
+      "evidence": "PR #215 88210d2; tests/r24-ZIP/native/R36/version/fuzz green; engineering-evidence metadata-only red; exact Shifted does not exercise optimized tail"
     },
     {
-      "id": "content-zip-information-yield-admission",
-      "family": "representation-discovery",
-      "status": "SUPPORTED_QUEUED_AFTER_203",
-      "evidence": "#201 / 35719088885 / 10690274379; #204 decision-complete"
-    },
-    {
-      "id": "r24-performance-harness-repair",
-      "family": "evidence-enablement",
-      "status": "CONVERGENCE_PR_BLOCKED_WORKFLOW_PERMISSION",
-      "evidence": "#202; helper mechanism proven 35681662327; release fingerprint landed; attempted canonical workflow mutation rejected because GitHub App token lacks workflows permission; no ABBA claim"
-    },
-    {
-      "id": "r25-publishability-pruning",
-      "family": "execution-architecture",
-      "status": "ADJACENT",
-      "evidence": "#194; ML +116 B pre-overlay becomes -161843 B winner, mandatory hostile"
-    },
-    {
-      "id": "serious-corpus-efficiency",
-      "family": "product-efficiency",
-      "status": "QUEUED",
-      "evidence": "#192"
+      "id": "g04-diverse-complete-artifact",
+      "family": "product-falsification",
+      "status": "REPRESENTATION_PROXY_RED__PRODUCT_COURT_UNEXECUTED",
+      "evidence": "PR #214 5a2443d generic CI reproduces 5848 > 5663 representation red; diverse complete-artifact instrument itself has not executed"
     }
   ],
   "saturated_families": [
@@ -132,26 +125,13 @@
     {
       "lesson": "Normative discovery doctrine should not duplicate temporal project state already owned by reconciled STATE/repository evidence.",
       "evidence": "#191 stale bootstrap; structural repair proposed"
-    }
-  ],
-  "pending_jobs": [
-    {
-      "provider": "github-actions",
-      "run": "35738603879",
-      "source_sha": "401abba1ba4a86c673db1c914033795c276afc6e",
-      "question": "#203 cost-aware exact-head full regression",
-      "expected_artifact": "test result/diagnostic",
-      "decision_unlocked": "whether cost-aware canonical search preserves full regression"
     },
     {
-      "provider": "github-actions",
-      "run": "35738603723",
-      "source_sha": "401abba1ba4a86c673db1c914033795c276afc6e",
-      "question": "#203 cost-aware unchanged r24 performance gate",
-      "expected_artifact": "ABBA release benchmark evidence",
-      "decision_unlocked": "whether cost-aware canonical search earns product promotion"
+      "lesson": "Treat Discovery STATE pending runs as staleable pointers: consume current GitHub run truth before allocating new work, and distinguish infrastructure/evidence-route failure from product loss.",
+      "evidence": "STATE still listed 35738603879/35738603723 as pending on 2026-09-30; current truth is cancelled tests plus r24-performance infrastructure failure from missing package-owned cmpct_core, not a product verdict."
     }
   ],
-  "next_action": "Consume #203 exact-head runs 35738603879 and 35738603723. Do not promote obsolete pure 6-first evidence. If cost-aware exactness/product gates survive, advance #204 content-driven information-yield admission as the next separate causal slice. Keep #202 nonblocking until a workflow-authorized route can land canonical zip-parity wiring.",
-  "last_reconciled": "2026-09-22T14:12Z"
+  "pending_jobs": [],
+  "next_action": "Execute the one preregistered corrected compact-r24 matrix on exact b878 source. If that route remains unavailable, the cheapest decision-changing adjacent court is PR #213's hosted same-semantics oracle. Do not spend another activation polishing compact-r24 policy/custody or G04 thresholds while their decisive courts remain unpaid.",
+  "last_reconciled": "2026-09-30T15:33-06:00"
 }
