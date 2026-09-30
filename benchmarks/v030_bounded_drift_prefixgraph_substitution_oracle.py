@@ -65,10 +65,9 @@ def _source_files(root: Path) -> dict[str, bytes]:
     }
 
 
-def _encode_semantic_sibling(manifest_raw: bytes, members: list[bytes]) -> bytes:
-    """Physically charge full filesystem-v1 semantics plus the generic BD container."""
+def _encode_semantic_sibling(manifest_raw: bytes, content: bytes) -> bytes:
+    """Physically charge full filesystem-v1 semantics around one already-built BD container."""
     manifest_stored = zstd.ZstdCompressor(level=MANIFEST_LEVEL).compress(manifest_raw)
-    content = BDC.encode_container(members)
     header = HEADER.pack(MAGIC, len(manifest_raw), len(manifest_stored), len(content), _h(manifest_raw))
     body = header + manifest_stored + content
     return body + TRAILER.pack(_h(body))
@@ -158,15 +157,25 @@ def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, 
     bd_started = time.perf_counter()
     bd_error = None
     bd_blob = None
+    bd_content = None
     bd_facts = None
     try:
-        bd_blob = _encode_semantic_sibling(manifest_raw, members)
+        bd_content = BDC.encode_container(members)
+        bd_blob = _encode_semantic_sibling(manifest_raw, bd_content)
+    except ValueError as exc:
+        # Only bounded resource refusal is a valid fallback. Correctness/integrity failures below
+        # are scientific failures and must never be converted into benign candidate unavailability.
+        bd_error = repr(exc)
+        bd_blob = None
+        bd_content = None
+    bd_create_s = time.perf_counter() - bd_started
+
+    if bd_blob is not None and bd_content is not None:
         decoded_manifest, decoded_members = _decode_semantic_sibling(bd_blob)
         restored = _bind_members_to_manifest(decoded_manifest, decoded_members)
         if decoded_manifest != manifest_raw or _treehash(restored) != source_tree:
             raise RuntimeError("bounded-drift semantic sibling changed source semantics")
-        content_blob = BDC.encode_container(members)
-        facts = [BDC.member_resource_facts(content_blob, i) for i in range(len(members))]
+        facts = [BDC.member_resource_facts(bd_content, i) for i in range(len(members))]
         bd_facts = {
             "max_member_read_amplification": max(x.member_read_amplification for x in facts),
             "max_decode_unit_bytes": max(x.max_decode_unit_bytes for x in facts),
@@ -179,10 +188,13 @@ def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, 
             pass
         else:
             raise RuntimeError("bounded-drift corruption was not rejected")
-    except (ValueError, RuntimeError) as exc:
-        bd_error = repr(exc)
-        bd_blob = None
-    bd_create_s = time.perf_counter() - bd_started
+
+    staged_tree = CANONICAL.RC.treehash(staged)
+    pg_contract_eligible, pg_contract_reason = CANONICAL.RC._prefixgraph_eligibility(staged, staged_tree)
+    if not pg_contract_eligible:
+        raise RuntimeError(
+            f"{suite}/{name} current PrefixGraph contract eligibility drift: {pg_contract_reason}"
+        )
 
     pg = CANONICAL.RC.PG
     if pg.__name__ != "experiments._v030_canonical_prefixgraph" or pg.build.__module__ != pg.__name__:
@@ -197,7 +209,8 @@ def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, 
         raise RuntimeError("PrefixGraph child semantic-owner drift")
     if int(pg_receipt.get("prefix_level", -1)) != SUPPORTED_PREFIX_LEVEL:
         raise RuntimeError("PrefixGraph child level drift")
-    staged_tree = pg.treehash(staged)
+    if pg.treehash(staged) != staged_tree:
+        raise RuntimeError("PrefixGraph staged-tree identity drift")
     pg_verify = dict(pg.strong_verify(pg_path))
     if not pg_verify.get("ok") or pg_verify.get("tree_sha256") != staged_tree:
         raise RuntimeError("PrefixGraph strong verification failed")
@@ -221,11 +234,17 @@ def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, 
         )
 
     bd_bytes = None if bd_blob is None else len(bd_blob)
-    projected_bytes = g04_bytes if bd_bytes is None else min(g04_bytes, bd_bytes)
+    bd_resource_safe = bool(
+        bd_facts is not None
+        and bd_facts["max_member_read_amplification"] <= 8.0
+        and bd_facts["max_decode_unit_bytes"] <= 8 * 1024 * 1024
+    )
+    bd_eligible = bd_bytes is not None and bd_resource_safe
+    projected_bytes = g04_bytes if not bd_eligible else min(g04_bytes, bd_bytes)
     current_bytes = min(g04_bytes, pg_bytes)
     substitution_nonregressing = projected_bytes <= current_bytes
     pg_winner_preserved = (not current_pg_selected) or (
-        bd_bytes is not None and bd_bytes <= pg_bytes
+        bd_eligible and bd_bytes is not None and bd_bytes <= pg_bytes
     )
 
     return {
@@ -240,6 +259,8 @@ def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, 
         },
         "bounded_drift": {
             "available": bd_blob is not None,
+            "resource_safe": bd_resource_safe,
+            "eligible_for_substitution": bd_eligible,
             "archive_bytes": bd_bytes,
             "create_s": bd_create_s,
             "error": bd_error,
@@ -260,6 +281,7 @@ def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, 
         },
         "decision": {
             "expected_current_pg_selected": expected_pg_selected,
+            "prefixgraph_contract_eligible_same_run": pg_contract_eligible,
             "current_pg_selected_same_run": current_pg_selected,
             "current_tournament_bytes": current_bytes,
             "projected_bd_plus_g04_bytes": projected_bytes,
