@@ -29,19 +29,26 @@ def _cases() -> list[bytes]:
     return [b"small-control", below, boundary, randomish, shifted, semicolon, _known_hierarchical_win()]
 
 
-def test_productized_bounded_screen_matches_proven_probe() -> None:
-    # The probe is now a frozen independent expression of the mechanism that earned productization.
-    # Keep it until the whole-product shipping gate lands so later edits cannot silently change semantics.
+def _semantic_result(result: dict) -> dict:
+    # The productized zero-threshold discriminator intentionally changes exact-finalist work accounting
+    # when the level-6 screen rejects a transform. Compare the selected representation and stored bytes,
+    # not the amount of speculative work used to reach that decision.
+    return {key: value for key, value in result.items() if key != "exact_finalists"}
+
+
+def test_productized_bounded_screen_preserves_probe_selected_representation() -> None:
+    # The older bounded-retention probe is an independent control for candidate construction/tie semantics.
+    # Productization may price fewer exact finalists, but must not alter the selected representation here.
     for raw in _cases():
-        assert HG.audition(raw) == PROBE.audition(raw)
+        assert _semantic_result(HG.audition(raw)) == _semantic_result(PROBE.audition(raw))
 
 
-def test_productized_bounded_screen_preserves_resource_counts() -> None:
-    raw = _cases()[-2]
-    shipping = HG.audition(raw)
-    probe = PROBE.audition(raw)
-    assert shipping["screened_candidates"] == probe["screened_candidates"]
-    assert shipping["exact_finalists"] == probe["exact_finalists"]
+def test_productized_bounded_screen_never_adds_exact_finalist_work() -> None:
+    for raw in _cases():
+        shipping = HG.audition(raw)
+        probe = PROBE.audition(raw)
+        assert shipping["screened_candidates"] == probe["screened_candidates"]
+        assert shipping["exact_finalists"] <= probe["exact_finalists"]
 
 
 def test_productized_bounded_screen_preserves_known_hierarchical_winner() -> None:

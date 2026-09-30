@@ -315,8 +315,17 @@ def audition(raw: bytes) -> dict:
     if len(raw) < MIN_NODE_BYTES:
         return best
 
+    # Preserve the historical zero-candidate fast path: do not add a direct level-6 compression to
+    # records for which structural nomination already proves there is nothing to screen.
+    primaries = primary_candidates(raw)
+    if not primaries:
+        return best
+
+    # Reuse the already-paid level-6 screen as a zero-threshold discriminator for exact finalists.
+    # Oracle #210 preserved every frozen complete-artifact winner with this discriminator.
+    direct_screen = _compressed_size(raw, SCREEN_LEVEL)
     screened: list[tuple[int, int, int, bool]] = []
-    for primary in primary_candidates(raw):
+    for primary in primaries:
         rows = raw.split(bytes((primary,)))
         for secondary in secondary_candidates(rows, primary):
             for prefix_planes in (False, True):
@@ -330,6 +339,10 @@ def audition(raw: bytes) -> dict:
                 screened.append((screen_bytes, primary, secondary, prefix_planes))
 
     screened.sort(key=lambda row: (row[0], row[3], row[1], row[2]))
+    if not screened or screened[0][0] >= direct_screen:
+        best["screened_candidates"] = len(screened)
+        best["exact_finalists"] = 0
+        return best
     finalists = screened[:MAX_EXACT_FINALISTS]
     for _, primary, secondary, prefix_planes in finalists:
         transformed = hierarchy_forward(raw, primary, secondary, prefix_planes=prefix_planes)
