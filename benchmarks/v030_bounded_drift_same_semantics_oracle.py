@@ -10,6 +10,7 @@ deterministic Shifted content family.
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import struct
 import tempfile
@@ -30,6 +31,7 @@ MAGIC = b"CMPNXBS1"
 HEADER = struct.Struct("<8sQQQ32s")
 TRAILER = struct.Struct("<32s")
 MANIFEST_LEVEL = 12
+FIXED_MTIME_NS = 1767225600 * 1_000_000_000  # 2026-01-01T00:00:00Z
 
 
 def _h(data: bytes) -> bytes:
@@ -111,6 +113,18 @@ def _treehash(files: dict[str, bytes]) -> str:
     return h.hexdigest()
 
 
+def _normalize_generated_metadata(root: Path) -> None:
+    """Freeze charged filesystem mtimes before either representation observes them."""
+    paths = sorted(root.rglob("*"), key=lambda p: (len(p.parts), p.as_posix()), reverse=True)
+    for path in paths:
+        try:
+            os.utime(path, ns=(FIXED_MTIME_NS, FIXED_MTIME_NS), follow_symlinks=False)
+        except (NotImplementedError, OSError):
+            if not path.is_symlink():
+                raise
+    os.utime(root, ns=(FIXED_MTIME_NS, FIXED_MTIME_NS))
+
+
 def _source_files(root: Path) -> dict[str, bytes]:
     return {
         path.relative_to(root).as_posix(): path.read_bytes()
@@ -124,6 +138,7 @@ def run(out_path: Path) -> dict:
         suite = work / "hostile"
         HOSTILE.build(suite)
         source = suite / "01_shifted_versions"
+        _normalize_generated_metadata(source)
         source_files = _source_files(source)
         expected_source_tree = _treehash(source_files)
 
@@ -191,7 +206,7 @@ def run(out_path: Path) -> dict:
             raise RuntimeError("bounded-drift semantic sibling corruption was not rejected")
 
         result = {
-            "schema": "cmpct-v030-bounded-drift-same-semantics-oracle-v1",
+            "schema": "cmpct-v030-bounded-drift-same-semantics-oracle-v2",
             "source": {
                 "suite": "resemblance_hostile_v1",
                 "name": "01_shifted_versions",
@@ -199,6 +214,8 @@ def run(out_path: Path) -> dict:
                 "logical_bytes": sum(map(len, source_files.values())),
                 "tree_sha256": expected_source_tree,
                 "filesystem_v1_bytes": len(manifest_raw),
+                "filesystem_v1_sha256": hashlib.sha256(manifest_raw).hexdigest(),
+                "fixed_mtime_ns": FIXED_MTIME_NS,
                 "selected_manifest_encoding": prepared["selected_manifest_encoding"],
                 "selected_manifest_bytes": int(prepared["selected_manifest_bytes"]),
             },
