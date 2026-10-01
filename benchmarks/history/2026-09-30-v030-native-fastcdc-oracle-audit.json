@@ -1,0 +1,11 @@
+{
+  "schema": "cmpct-v030-native-fastcdc-oracle-audit-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "research_branch": "agent/phased2-native-fastcdc-exact",
+  "status": "PRE_EXECUTION_HARNESS_AUDIT",
+  "finding": "The first local four-pair ABBA driver draft selected the upper-middle observation after sorting four improvement percentages. That is not the conventional even-sample median and could over-credit a noisy positive transfer.",
+  "required_repair_before_execution": "Use the arithmetic mean of the two middle observations for four-pair median wall and CPU improvement. Do not execute or credit the earlier draft.",
+  "scientific_effect": "No measured child/product result is changed because the driver has not executed on repository/hosted product state.",
+  "preregistered_kill_law_unchanged": "Any boundary/archive/selection mismatch OR non-positive median wall improvement in either co-critical child retires native FastCDC as a first-order shared-child route.",
+  "claim_boundary": "Evidence-harness correction only; no product or release credit."
+}
