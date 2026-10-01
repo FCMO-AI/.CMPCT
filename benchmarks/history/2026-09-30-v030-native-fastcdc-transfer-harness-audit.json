@@ -1,0 +1,31 @@
+{
+  "schema": "cmpct-v030-native-fastcdc-transfer-harness-audit-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "research_branch": "agent/phased2-native-fastcdc-exact",
+  "status": "PRE_EXECUTION_HARNESS_AUDIT",
+  "findings": [
+    {
+      "issue": "four-pair median custody",
+      "risk": "Selecting the upper-middle observation after sorting four pair improvements can over-credit a noisy candidate.",
+      "repair": "Use the conventional even-sample median: arithmetic mean of the two middle observations."
+    },
+    {
+      "issue": "candidate setup charging",
+      "risk": "Constructing/loading the native adapter before the child timer in both arms hides candidate-only CDLL/Gear setup cost.",
+      "repair": "Start wall/CPU timing before candidate-only native adapter construction; the control must not instantiate the candidate helper."
+    },
+    {
+      "issue": "resource accounting",
+      "risk": "Wall/CPU-only summaries could hide memory exported by the charged bytes-to-native copy.",
+      "repair": "Record per-pair RSS ratio plus median/max RSS ratio. The bytes-to-native copy remains charged."
+    },
+    {
+      "issue": "repetition gardening",
+      "risk": "Allowing arbitrary pair count after preregistration could create post-result repetition selection.",
+      "repair": "Fail closed unless exactly four preregistered ABBA pairs execute."
+    }
+  ],
+  "scientific_effect": "No child/product result is changed because no result-bearing native FastCDC child court has executed yet.",
+  "decision_law_unchanged": "Any boundary/archive/selection mismatch OR non-positive conventional-median wall improvement in either co-critical child retires native FastCDC as a first-order shared-child route.",
+  "claim_boundary": "Harness/evidence-custody correction only; no product or release credit."
+}
