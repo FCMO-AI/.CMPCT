@@ -1,0 +1,31 @@
+{
+  "schema": "cmpct-v030-fingerprint-custody-hardening-prereg-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "repair_owner_branch": "agent/phased2-release-fingerprint-custody",
+  "repair_owner_head": "64d9fff00951206a97dc9ef6555490af409008a5",
+  "question": "Can the existing tracked-source fingerprint repair be promoted without allowing physical release-source bytes or generated live-glob residue to diverge from the claimed Git candidate?",
+  "established_falsifications": [
+    "git status/diff cleanliness alone is insufficient because assume-unchanged and skip-worktree can hide working-tree mutations",
+    "content blob identity alone is insufficient for full physical custody because executable-mode drift can leave blob bytes unchanged",
+    "the existing native/**/target/** source-segment residue exception is broader than the currently justified Cargo build-script class"
+  ],
+  "proposed_invariant": [
+    "prove index release-surface state equals HEAD",
+    "enumerate stage-0 mode/object identity for each fingerprinted tracked path",
+    "compare physical file mode and Git blob object identity to that committed state",
+    "feed the same physical bytes into the candidate SHA-256",
+    "fail closed on unexpected live release-glob paths; retain any build-residue exception only after lifecycle evidence observes the actual class"
+  ],
+  "decisive_court": {
+    "stages": [
+      "checkout",
+      "after editable setup",
+      "after benchmark"
+    ],
+    "implementation": "run on the pre-repair live-glob checker",
+    "preserve_benchmark_exit_status": true,
+    "decision": "the first added/removed/content-changed fingerprint path owns the repair; if no lifecycle drift appears, retire setup/benchmark mutation as the explanation for that run"
+  },
+  "issue_130_topology_note": "Candidate-identity custody should be manifest-derived and accumulated base-to-head; expensive product jobs may remain newest-commit scoped. A fingerprint delta with stale receipts must surface strict release-lock red even when product benchmarks are skipped.",
+  "release_credit": false
+}
