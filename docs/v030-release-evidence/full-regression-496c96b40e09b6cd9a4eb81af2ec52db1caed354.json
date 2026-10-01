@@ -1,0 +1,39 @@
+{
+  "candidate_fingerprint": "579847b27d129254346aaaff408944f6521597d09f744a15d7e1f1c5474b81b2",
+  "candidate_sha": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "claim_boundary": "Binds the current exact-head full-regression facts required by docs/V030_RELEASE_LOCK.json. T00 remains separately gated on final-main ancestry reconciliation, post-reconciliation exact-head fast checks, and same-candidate T01-T03 evidence.",
+  "facts": {
+    "public_surface_green": true,
+    "tests_green": true,
+    "version_discipline_green": true
+  },
+  "schema": "cmpct-v030-full-regression-evidence-v1",
+  "sources": {
+    "public_proof": {
+      "artifact_id": 11127810725,
+      "conclusion": "success",
+      "job_id": 110108236828,
+      "proof_surface_contract": "coherent (cmpct-public-evidence-v1)",
+      "release_evidence_contract": "coherent; version=0.29.0; surface=0.29.k",
+      "run_id": 36780200158,
+      "viewport_classes": 16,
+      "workflow": "CMPCT public proof contract"
+    },
+    "tests": {
+      "artifact_id": 11127811356,
+      "conclusion": "success",
+      "job_id": 110108228965,
+      "public_surface_guard": "clean (2301 tracked text files checked)",
+      "pytest": "786 passed in 375.28s",
+      "run_id": 36780197530,
+      "workflow": "CMPCT tests"
+    },
+    "version_discipline": {
+      "conclusion": "success",
+      "job_id": 110108222350,
+      "observed": "core stays 0.29.0; surface=0.29.k; 563 presentation/repository path(s)",
+      "run_id": 36780195499,
+      "workflow": "CMPCT version discipline"
+    }
+  }
+}
