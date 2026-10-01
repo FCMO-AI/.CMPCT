@@ -1,0 +1,87 @@
+{
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "branch_content_state": "0 ahead / 0 behind authority; branch exists, high-level content writes blocked before execution",
+  "claim_boundary": "Preregistration/research evidence only. No child, product, canonical, release, external-comparator, or shipping credit.",
+  "controls": {
+    "attempt5_position_independent_discovery": "neutralized in both A/B arms",
+    "historical_v029_comparator": "untouched",
+    "native_historical_cdc": "not used; incompatible SplitMix64 Gear table",
+    "pack_plan_cache": "installed in both A/B arms"
+  },
+  "coordination_branch": "agent/phased2-native-fastcdc-exact",
+  "coordination_branch_start": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "decision_law": {
+    "advance": "Positive median wall transfer in both children on ML and Shifted earns only a complete shared-portfolio/product A/B; no release credit.",
+    "heldout_after_advance": "resemblance_hostile_v1/03_boundary_churn before product promotion",
+    "kill": "Any boundary/archive/selection mismatch OR non-positive median wall improvement in either co-critical child retires native FastCDC as a first-order shared-child route."
+  },
+  "hard_identity_gates": [
+    "archive_bytes identical",
+    "archive_sha256 identical",
+    "selected representation identical",
+    "FastCDC boundary oracle exact"
+  ],
+  "lower_rung_evidence": {
+    "current_runtime": {
+      "authoritative_gate_median_create_ratio": 1.1065102273141711,
+      "authoritative_gate_target": 1.1,
+      "current_shifted_attempt5_child_median_s": 41.1563253125,
+      "current_shifted_v028_child_median_s": 43.475220281499986,
+      "equal_seconds_reduction_needed_across_both_shifted_repetitions_s": 0.3420184666300214,
+      "equal_seconds_reduction_needed_pct_of_v030_shifted_median_wall": 0.5883615082682879,
+      "fraction_of_measured_scan_headroom_needed_for_authoritative_median_gate_pct": 8.19419241491098,
+      "fraction_of_measured_scan_headroom_needed_for_local_gate_pct": 7.982166422230599,
+      "measured_scan_headroom_s": 4.1739130509999995,
+      "note": "Frozen runtime gate computes the median of per-repetition ratios; with two repetitions this is their arithmetic mean, so this equal-seconds closure estimate is more faithful than ratio-of-medians.",
+      "shifted_ratio": 1.1063408550203335,
+      "shifted_v029_pack_median_s": 52.54317989949999,
+      "shifted_v030_pack_median_s": 58.130666575500015,
+      "unchanged_median_ceiling": 1.1,
+      "wall_reduction_needed_pct": 0.5731375634877741,
+      "wall_reduction_needed_s": 0.3331686860500227
+    },
+    "historical_pr154_profile": {
+      "attempt5": {
+        "fastcdc_calls": 4,
+        "fastcdc_self_pct": 10.774468373629032,
+        "fastcdc_self_s": 3.26222695,
+        "wall_s": 30.277382019000015
+      },
+      "v028": {
+        "fastcdc_calls": 4,
+        "fastcdc_self_pct": 11.011614657215175,
+        "fastcdc_self_s": 3.337299713,
+        "wall_s": 30.30708771500001
+      }
+    },
+    "shifted_exact_micro": {
+      "boundaries_exact": true,
+      "chunks_total": 198,
+      "claim_boundary": "micro/oracle only; no child/product/release credit",
+      "copy_charged": true,
+      "files": 18,
+      "native_median_s": 0.01192288299989741,
+      "native_wall_s": [0.012550234000173077,0.011525034999976924,0.01192288299989741],
+      "params": {"avg_size": 131072,"max_size": 524288,"min_size": 32768},
+      "python_median_s": 4.185835933999897,
+      "python_over_native_ratio": 351.07582067490836,
+      "python_wall_s": [4.185835933999897,4.210613215999956,4.073470394999958],
+      "scanned_bytes": 33525242,
+      "schema": "cmpct-phased2-20260930-shifted-fastcdc-micro-v1",
+      "tree_content_family": "resemblance_hostile_v1/01_shifted_versions"
+    }
+  },
+  "product_scope_law": {
+    "candidate_scope": "v0.30 spawned worker seam only, analogous to current pack-cache/discovery-neutral overrides",
+    "confirmed_direct_import_owners": [
+      "experiments/entropygraph_v028.py module global fastcdc",
+      "attempt-5 placement module global fastcdc via accepted.BASE.P"
+    ],
+    "global_src_cmpct_resemblance_replacement": "PROHIBITED_FOR_THIS_A_B",
+    "reason": "Historical v0.29 and v0.30 children import the same resemblance.FastCDC reference; a global acceleration would also accelerate the historical comparator and would not isolate v0.30 transfer."
+  },
+  "schema": "cmpct-phased2-20260930-1817-native-fastcdc-child-prereg-v1",
+  "scientific_question": "Can exact acceleration of the current resemblance.FastCDC scan reduce both co-critical v0.30 child walls without changing candidate bytes, while leaving historical v0.29 comparator execution unchanged?",
+  "timing_protocol": "4 paired fresh-process ABBA pairs per child/workload",
+  "workloads": ["neutral_hostile_v1/09_ml_artifacts","resemblance_hostile_v1/01_shifted_versions"]
+}
