@@ -1,0 +1,21 @@
+{
+  "schema": "cmpct-v030-pr212-matrix-route-audit-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "corrected_candidate_head": "b878f40a540162ab977776d7f90c3502d2749588",
+  "prereg_blob": "de5d989b31dc10cde4a97d06451dea4c6871e959",
+  "issue_212_strategic_comment": 5901548464,
+  "decision": "Exactly one unchanged 15-row matrix remains the next material action.",
+  "invalid_routes": {
+    "893233de8a5820b5760b6f83e5805830f663b232": "historical matrix runner executed superseded mis-bound custody; zero corrected-candidate credit",
+    "74865fa010916500cc2ab3ac0a153cdc70ac46b7": "nominal integration lacks corrected worker_module routing and corrected custody tests"
+  },
+  "result_route_requirements": [
+    "start from corrected b878 custody source",
+    "restore historical policy-boundary test and runtime/selective wrappers unchanged",
+    "rerun corrected child/facade/focused parity tests before matrix",
+    "bind result job to exact SHA and do not cancel an already-started receipt",
+    "use current runtime totals.max_peak_rss_ratio and selective totals.max_member_read_amplification schemas",
+    "preserve every frozen byte/runtime/locality threshold"
+  ],
+  "release_credit": false
+}
