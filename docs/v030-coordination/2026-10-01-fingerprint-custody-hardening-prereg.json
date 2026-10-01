@@ -27,5 +27,18 @@
     "decision": "the first added/removed/content-changed fingerprint path owns the repair; if no lifecycle drift appears, retire setup/benchmark mutation as the explanation for that run"
   },
   "issue_130_topology_note": "Candidate-identity custody should be manifest-derived and accumulated base-to-head; expensive product jobs may remain newest-commit scoped. A fingerprint delta with stale receipts must surface strict release-lock red even when product benchmarks are skipped.",
-  "release_credit": false
+  "release_credit": false,
+  "issue_130_dual_scope": {
+    "custody_scope": "accumulated pull-request/base -> exact-head intersection with V030_RELEASE_LOCK fingerprint_globs; this must remain true on unrelated follow-up commits while the PR still changes candidate identity",
+    "product_scope": "newest exact commit only, preserving the queue-safe split classifier for multi-hour product receipts",
+    "required_behavior": "a fingerprint delta with stale/missing receipts makes exact-head final-release custody visibly locked even when expensive product jobs are skipped",
+    "trigger_note": "the final release authority itself must not rely on a narrower hand-maintained pull_request.paths list to decide whether custody exists",
+    "mechanical_source": "emit Git :(glob) pathspecs from the same release-lock manifest/checker used by candidate identity; do not maintain a second regex for custody"
+  },
+  "test_migration": [
+    "release-lock fixtures must create a committed HEAD before fingerprinting",
+    "dirty tracked release source should fail before receipt evaluation",
+    "a separately committed source change must still prove old receipts stale under the new candidate fingerprint",
+    "final-release custody tests should separately ratchet manifest-derived custody closure and newest-commit product dependency closure"
+  ]
 }
