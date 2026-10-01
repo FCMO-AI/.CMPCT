@@ -1,0 +1,60 @@
+{
+  "schema": "cmpct-v030-prefixgraph-isolated-parallel-prereg-v1",
+  "source_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "branch": "agent/phased2-prefixgraph-isolated-parallel",
+  "question": "Can the already-promoted four-worker bounded PrefixGraph anchor scheduler be recomposed inside the current one-shot level-15 isolated child, preserving the child-before-G04 lifetime barrier, exact candidate set/tie law and bytes, while materially reducing the current Shifted create owner?",
+  "diagnosis": "D2 execution-composition regression: current PrefixGraphProcessExecutor calls the private canonical pg.build directly, bypassing the release-facing bounded four-worker anchor scheduler even though the isolated child is the current shipping path.",
+  "current_owner_evidence": {
+    "runtime_run": 35770822484,
+    "runtime_artifact": 10715126272,
+    "shifted_median_create_ratio": 1.1065102273141711,
+    "shifted_equal_saving_to_1_10_s": 0.3420184666300214,
+    "shifted_prefixgraph_create_s": [
+      9.864307118,
+      10.17072708400002
+    ],
+    "shifted_g04_create_s": [
+      47.977782665999996,
+      47.59740111999997
+    ],
+    "shifted_g04_transformed_records": 0
+  },
+  "inherited_evidence": {
+    "authority_comment": 5701098569,
+    "parallel_wrapper_blob": "4ab5737fa6cba2df0f4b06a313602b6f8fecc753",
+    "process_executor_blob": "d8459e76d690ea22c3f5cd0e676b0a316da1e09f",
+    "canonical_wrapper_blob": "e22156a60272e53dedc3f5cd9db9c408ecde2e4",
+    "note": "Historical diagnosis already identified that process isolation bypasses the promoted parallel scheduler. No current product source repairs that composition."
+  },
+  "control": "Current one-shot isolated child: exact private canonical PrefixGraph pg.build with level-15 codec, serial anchor tournament, child exits before G04.",
+  "candidate": "Same one-shot isolated child and level-15 codec, but apply the already-reviewed bounded four-worker winner-plus-inflight anchor scheduling logic to the same private pg owner. Do not overlap PrefixGraph with G04.",
+  "workloads": [
+    "resemblance_hostile_v1/01_shifted_versions",
+    "resemblance_hostile_v1/03_boundary_churn"
+  ],
+  "protocol": "4 fresh-process paired ABBA repetitions per workload; same generated source tree within each pair; preserve raw repeated wall/CPU/peak-RSS and exact archive identity.",
+  "hard_identity_gates": [
+    "archive_bytes identical control vs candidate",
+    "archive_sha256 identical control vs candidate",
+    "tree_sha256 identical and strong verification green",
+    "anchor nomination/count identical",
+    "selected anchor/tie result identical",
+    "prefix level remains exactly 15",
+    "child exits before any G04 construction"
+  ],
+  "materiality": [
+    "candidate median PrefixGraph child wall improvement >= 20% on Shifted",
+    "candidate median PrefixGraph child wall improvement >= 1.0 s on Shifted",
+    "Boundary Churn must show non-negative median wall transfer and exact bytes",
+    "record child peak RSS; no product credit until unchanged full runtime RSS gate <= 1.25"
+  ],
+  "kill": [
+    "any byte/tree/tie/anchor/prefix-level drift",
+    "loss of child-before-G04 lifetime barrier",
+    "Shifted median wall improvement <20% or <1.0 s",
+    "Boundary Churn median wall regression",
+    "full-product follow-up cannot preserve unchanged runtime/RSS thresholds"
+  ],
+  "success_handoff": "Only if the research child court survives, integrate the scheduler inside the isolated child and run unchanged full release runtime plus external-frontier evidence. Research green alone grants no release credit.",
+  "release_credit": false
+}
