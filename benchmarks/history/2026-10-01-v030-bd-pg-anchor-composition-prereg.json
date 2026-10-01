@@ -1,0 +1,19 @@
+{
+  "schema": "cmpct-v030-bd-pg-anchor-composition-falsifier-prereg-v1",
+  "date": "2026-10-01",
+  "branch": "agent/phased2-bd-pg-proof-composition-falsifier",
+  "source_authority": "agent/v030-authoritative-integration@496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "exact_mechanism_blobs": {
+    "bounded_drift_v1": "d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+    "prefixgraph": "34dd90012de7084141649acc52b605fd6cd00473"
+  },
+  "question": "Can the deterministic bounded-drift base safely replace PrefixGraph's complete anchor tournament while preserving exact complete-artifact minimum bytes?",
+  "prediction": "No. There exists a generic deterministic family where bounded drift's min-SHA base is not PrefixGraph's complete-artifact best anchor and forcing it regresses bytes.",
+  "stronger_control": "Current PrefixGraph complete anchor tournament over every admissible anchor.",
+  "kill_or_advance": {
+    "falsify_shortcut": "Any deterministic family with forced bounded-drift-base PrefixGraph bytes > best-tournament PrefixGraph bytes.",
+    "advance_shortcut": "Only if exhaustive/adversarial evidence plus a proof establishes equivalence; a finite green corpus alone is insufficient."
+  },
+  "claim_boundary": "Mechanism-level ownership falsifier only; no product/release credit.",
+  "release_credit": false
+}
