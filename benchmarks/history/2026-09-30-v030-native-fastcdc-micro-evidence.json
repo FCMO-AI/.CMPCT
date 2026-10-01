@@ -1,0 +1,33 @@
+{
+  "schema": "cmpct-v030-native-fastcdc-micro-evidence-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "research_branch": "agent/phased2-native-fastcdc-exact",
+  "exact_c_helper_path": "benchmarks/v030_resemblance_fastcdc_exact.c",
+  "exact_c_helper_blob": "35261e3eedd357ece0aa2a7fd57ae18792ff6a08",
+  "claim_boundary": "research micro/oracle evidence only; no child, product, canonical, release, or external-comparator credit",
+  "exactness": {
+    "randomized_cases": 100,
+    "randomized_total_bytes": 41514185,
+    "randomized_boundary_mismatches": 0,
+    "hostile_special_cases": 24,
+    "hostile_boundary_mismatches": 0,
+    "shifted_public_files": 18,
+    "shifted_public_bytes": 33525242,
+    "shifted_public_chunks": 198,
+    "shifted_boundary_identity": true
+  },
+  "isolated_scan": {
+    "copy_charged": true,
+    "python_median_s": 0.9302754610000648,
+    "native_median_s": 0.004680401999848982,
+    "python_over_native_ratio": 198.76080047890384
+  },
+  "shifted_complete_scan": {
+    "copy_charged": true,
+    "python_median_s": 4.185835933999897,
+    "native_median_s": 0.01192288299989741,
+    "python_over_native_ratio": 351.07582067490836
+  },
+  "decision": "The exact scan primitive has sufficient lower-rung headroom to justify the preregistered fresh-process shared-child A/B. Product transfer remains unmeasured.",
+  "kill_next": "Any archive/boundary/selection mismatch or non-positive median wall transfer in either co-critical child retires this first-order route."
+}
