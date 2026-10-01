@@ -1,0 +1,36 @@
+{
+  "candidate_fingerprint": "579847b27d129254346aaaff408944f6521597d09f744a15d7e1f1c5474b81b2",
+  "candidate_fingerprint_source": {
+    "evidence_index": 0,
+    "json_path": "candidate_fingerprint"
+  },
+  "evidence": [
+    {
+      "path": "docs/v030-release-evidence/full-regression-496c96b40e09b6cd9a4eb81af2ec52db1caed354.json",
+      "sha256": "e52578c5cc0233ad7742e5964ff1127d8b88c6722ab9bc65767964e5b9fd3ffb"
+    }
+  ],
+  "fact_sources": {
+    "facts.public_surface_green": {
+      "evidence_index": 0,
+      "json_path": "facts.public_surface_green"
+    },
+    "facts.tests_green": {
+      "evidence_index": 0,
+      "json_path": "facts.tests_green"
+    },
+    "facts.version_discipline_green": {
+      "evidence_index": 0,
+      "json_path": "facts.version_discipline_green"
+    }
+  },
+  "facts": {
+    "public_surface_green": true,
+    "tests_green": true,
+    "version_discipline_green": true
+  },
+  "id": "full-regression",
+  "owner_task": "T00",
+  "schema": "cmpct-v030-release-receipt-v1",
+  "status": "pass"
+}
