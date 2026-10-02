@@ -1,0 +1,36 @@
+{
+  "schema": "cmpct-v030-g04-first-pg-all-direct-custody-v1",
+  "date": "2026-10-02",
+  "authority_source_commit": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "research_branch": "agent/phased2-g04-first-pg-exact-incumbent",
+  "source_authority": {
+    "prefixgraph_path": "experiments/entropygraph_v030_prefixgraph.py",
+    "prefixgraph_blob": "34dd90012de7084141649acc52b605fd6cd00473"
+  },
+  "finding": "The exact PrefixGraph tournament contains one complete all-direct candidate before nominated anchor candidates. Any completed-G0-G4 incumbent proof must preserve that candidate explicitly; anchor lower-bound terminals cannot stand in for pricing the all-direct candidate.",
+  "exact_current_behavior": [
+    "direct_payloads are computed exactly once with Zstd-19",
+    "_serialize_candidate(..., anchor=None) constructs the complete all-direct artifact",
+    "all-direct initializes the PrefixGraph incumbent under exact key (archive_bytes, -1)",
+    "each nominated anchor candidate is then compared under exact key (archive_bytes, anchor)"
+  ],
+  "staged_r1_rule": [
+    "Build or reconstruct the exact all-direct PrefixGraph candidate from the same staged rels/raws/direct_payloads.",
+    "If all_direct_bytes < complete_g04_bytes, keep it live as a publishable PrefixGraph candidate.",
+    "Apply the cross-representation lower_bound >= complete_g04_bytes terminal only to an anchor continuation whose bound is sound.",
+    "On PrefixGraph-winner controls, the proof arm must reproduce the exact process-built PrefixGraph winner across the live all-direct candidate and all surviving anchors.",
+    "On G0-G4-winner controls, conclude G0-G4 only after all-direct is priced and every nominated anchor is either fully priced or safely proven non-publishable."
+  ],
+  "unchanged_invariants": {
+    "prefixgraph_anchor_nomination": false,
+    "prefixgraph_serializer": false,
+    "prefixgraph_tie_key": "(archive_bytes, -1 for all-direct else anchor)",
+    "cross_representation_terminal": ">=",
+    "grammar_changed": false,
+    "reader_changed": false,
+    "release_policy_changed": false
+  },
+  "claim_boundary": "Evidence-specification/custody correction only. It does not establish proof-firing, runtime, RSS, product selection or release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
