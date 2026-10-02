@@ -1,0 +1,19 @@
+{
+  "schema": "cmpct-v030-r24-child-local-shape-reuse-design-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "observation": [
+    "Builder.build executes scan before _build_micro_packs.",
+    "Builder.scan rows preserve one regular-path row as K_FILE or K_HARDLINK with source size in row[4].",
+    "micro_pack_target is consumed after scan, so exact regular-file count/largest can be derived child-locally after scan instead of transported from parent preflight.",
+    "wide_single_file remains pre-scan because it changes CDC chunking during scan."
+  ],
+  "preferred_route_if_attribution_positive": "Keep ownership child-local. Derive count/largest from already-required scan rows; use only an exact bounded pre-scan classifier for wide_single_file. Avoid parent shape-scalar IPC unless this simpler route is falsified.",
+  "concurrency": "Any process-seam mutation must reconcile agent/phased3-r24-custody-product-gate first. A child-local Builder-side route may avoid that collision.",
+  "evidence_needed": [
+    "hosted promoted-wrapper v2 attribution",
+    "real/hostile semantic agreement between mature _regular_user_shape and Builder.scan-derived count/largest",
+    "exact early wide-single predicate equivalence",
+    "final promoted archive byte/SHA identity and complete product timing if implemented"
+  ],
+  "release_credit": false
+}
