@@ -1,6 +1,10 @@
 {
+  "artifact_expires_at": "2026-10-14T21:36:26Z",
+  "artifact_id": 11127154655,
+  "artifact_zip_sha256": "b34955ce46de179cd83a959c53344d13bc1f0869d85bfb72d3ffad93064e6d24",
   "candidate_fingerprint": "579847b27d129254346aaaff408944f6521597d09f744a15d7e1f1c5474b81b2",
   "candidate_sha": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "claim_boundary": "Exact-current desktop package release facts aggregated from the three platform install artifacts. This evidence does not imply any other T01 receipt or physical Android gate.",
   "facts": {
     "canonical_codec_vectors_green": true,
     "linux_clean_install_green": true,
@@ -14,6 +18,7 @@
     "wheel_python_tag": "cp310.cp311.cp312.cp313.cp314",
     "windows_clean_install_green": true
   },
+  "job_id": 110109229634,
   "platform": {
     "macos-14": {
       "archive_sha256": "6824f2b543e188448a37974e79d94f1290afad2b4e87b42a7d8d9ad3b7afc2d5",
@@ -34,5 +39,22 @@
       "wheel_sha256": "0b9666ddbea0241164de72175927cc597afd83ff104db814deae2eb6b8a1acf8"
     }
   },
-  "schema": "cmpct-v030-desktop-package-evidence-v1"
+  "run_attempt": 1,
+  "run_id": 36780198594,
+  "schema": "cmpct-v030-desktop-package-evidence-v1",
+  "source_artifacts": {
+    "macos-14": {
+      "artifact_id": 11126513855,
+      "artifact_zip_sha256": "a3f753e4d7a69003471442fdeb3b60a643e65c4b3750fa5a6108dbc425720202"
+    },
+    "ubuntu-24.04": {
+      "artifact_id": 11126674667,
+      "artifact_zip_sha256": "0ef12d97f3466aa37b752b06b1897cdd84ab95941984e2404d9b1d6eb86d624e"
+    },
+    "windows-2025": {
+      "artifact_id": 11127446069,
+      "artifact_zip_sha256": "70d7f12e1516ec81d231e091e6a39de83d51de85e4a01dce2809b682e91e684a"
+    }
+  },
+  "workflow": "installed-native-package.yml"
 }
