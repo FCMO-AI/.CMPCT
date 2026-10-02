@@ -1,0 +1,13 @@
+{
+  "schema": "cmpct-v030-r24-shape-prewalk-gifted-control-prereg-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "problem": "Timing _regular_user_shape alone can overstate eliminable wall because that prewalk may warm filesystem metadata for the immediately following Builder.scan.",
+  "question": "When exact shape facts are gifted and _regular_user_shape returns them without a filesystem walk, does promoted-r24 outer create wall actually fall while final bytes and release policy facts stay identical?",
+  "mechanism": "Monkeypatch only base _regular_user_shape. Mature control executes it normally. Gifted arm returns the exact (regular_files, largest_regular_bytes) facts previously established for the same accepted source without walking that source during the measured build. Both arms call promoted release_product._locality_bounded_r24_build.",
+  "simpler_control": "This is stronger than phase timing because it prices the downstream Builder.scan under the altered cache/work sequence rather than assuming timed prewalk wall is fully removable.",
+  "prediction": "Many Tiny Files should retain a material net outer-wall saving if the duplicated metadata walk is genuinely removable; rows whose apparent phase cost is mostly cache warming should collapse toward zero net saving.",
+  "kill": "If gifted-shape median outer-wall saving is nonpositive or below 10% of the inherited strict-create gap on every row, retire shape-prewalk reuse even if direct helper timing was larger.",
+  "identity_gate": "Every mature/gifted output must have identical final promoted archive bytes/SHA-256 and identical regular-file/locality/micro-pack/wide-policy facts.",
+  "boundary": "Gifted shape is an oracle and earns no product credit. A positive result only justifies implementation work that discovers/reuses those facts generically and preserves mutable-source semantics.",
+  "release_credit": false
+}
