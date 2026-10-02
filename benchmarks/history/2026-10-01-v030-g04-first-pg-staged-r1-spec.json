@@ -1,0 +1,75 @@
+{
+  "schema": "cmpct-v030-g04-first-pg-staged-r1-spec-v1",
+  "authority_source_commit": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "research_branch": "agent/phased2-g04-first-pg-exact-incumbent",
+  "question": "After exact canonical r25 filesystem staging, does a completed unchanged G0-G4 artifact still let the weak exact PrefixGraph lower bound eliminate material work on known G0-G4 winners while preserving the exact process-built PrefixGraph winner bytes/SHA/anchor on all four controls?",
+  "source_custody": {
+    "canonical_final": "experiments/entropygraph_v030_canonical_final.py",
+    "canonical_final_impl_blob": "0be940591d52cb5dd4285fe1d472526d33c47a4b",
+    "canonical_final_bulk_v1_blob": "e22156a60272e53dedc3fd5ad9db9c408ecde2e4",
+    "release_candidate_blob": "3713602ba835e89cc3ea022bd07557395e594190",
+    "prefixgraph_blob": "34dd90012de7084141649acc52b605fd6cd00473",
+    "prefixgraph_process_executor_blob": "d8459e76d690ea22c3f5cd0e676b0a316da1e09f",
+    "exact_lb_oracle_blob": "444ace20cc4f8d6dca41948ae7d0a26c5b835365",
+    "neutral_corpus_blob": "9346995246f293fa03ea73e8782b809998588f71",
+    "resemblance_corpus_blob": "335169bd6eb336b6d444cfbd34c291101262c3a9"
+  },
+  "controls": [
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "02_office_workspace",
+      "role": "G0-G4 winner",
+      "tree_sha256": "aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57"
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "role": "PrefixGraph winner",
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd"
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "03_boundary_churn",
+      "role": "PrefixGraph winner",
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d"
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "04_deflate_family",
+      "role": "G0-G4 winner",
+      "tree_sha256": "527a9e356e923e5bcc26566a8f677a7f7277af1577493e09c2bdca1b6d17154a"
+    }
+  ],
+  "exact_execution_order": [
+    "Regenerate only the four target user trees and fail closed against frozen historical tree SHA-256 identities.",
+    "Call the canonical _prepare_profile_tree exactly once per target; G0-G4 and PrefixGraph consume the same staged tree.",
+    "Build unchanged canonical-private G0-G4 on the staged tree and retain its complete exact bytes as the external incumbent.",
+    "Build unchanged canonical-private PrefixGraph through PrefixGraphProcessExecutor. The executor is one-shot and deliberately accepts only experiments._v030_canonical_prefixgraph.build; do not replace it with a custom proof callable.",
+    "Replay the existing weak lower bound independently on the exact same staged bytes using level-15 raw-content prefix compression and cross-representation terminal HEADER+FOOTER+forced exact payload >= complete G0-G4 bytes.",
+    "For every non-terminal anchor, rebuild through the unchanged PrefixGraph serializer with the same level-15 prefix codec and require the resulting exact winning PrefixGraph bytes, SHA-256 and anchor to equal the process-built control.",
+    "Strong-verify both complete artifacts, record PrefixGraph locality, terminal anchors, probe counts and all fallback/error states."
+  ],
+  "invariants": {
+    "same_staged_tree": true,
+    "g04_serializer_changed": false,
+    "prefixgraph_anchor_nomination_changed": false,
+    "prefixgraph_serializer_changed": false,
+    "prefix_level": 15,
+    "unseen_payload_lower_bound_bytes": 0,
+    "metadata_lower_bound_bytes": 0,
+    "cross_representation_terminal": ">=",
+    "terminal_reason": "current inner selector publishes PrefixGraph only when pg_bytes < g04_bytes; equality retains G0-G4",
+    "reader_changed": false,
+    "grammar_changed": false,
+    "locality_law_changed": false
+  },
+  "decision_rule": {
+    "green": "All four exact PrefixGraph winner bytes/SHA/anchors match the process-built control; Shifted and Boundary winning anchors remain live; aggregate eliminated prefix-compression fraction across Office+Deflate staged loser controls is >=20%.",
+    "negative": "Any exact winner identity/anchor drift, loss of Shifted or Boundary, locality/resource-law drift, or <20% aggregate staged proof firing.",
+    "green_next_rung": "Only a green staged R1 earns promoted-product ABBA with genuine r24 still concurrent and complete wall/CPU/recursive process-tree RSS/temp-I/O accounting."
+  },
+  "product_credit": false,
+  "release_credit": false,
+  "executable_status": "UNLANDED",
+  "block_note": "A normal high-level attempt to add the executable benchmark was blocked by the platform safety boundary during this activation; no low-level Git bypass is authorized."
+}
