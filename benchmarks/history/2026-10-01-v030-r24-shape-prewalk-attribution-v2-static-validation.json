@@ -1,0 +1,20 @@
+{
+  "schema": "cmpct-v030-r24-shape-prewalk-attribution-v2-static-validation-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "instrument_blob": "a8f48c35c2bd8d9cf78ea5ca657036165b946550",
+  "promoted_wrapper": "experiments.entropygraph_v030_release_product._locality_bounded_r24_build",
+  "timed_helper": "experiments.entropygraph_v030_release_product_base._regular_user_shape",
+  "checks": {
+    "imports_promoted_product": true,
+    "monkeypatches_only_base_shape_helper": true,
+    "calls_promoted_r24_wrapper": true,
+    "exact_gap_constants_match_corrected_prereg": true,
+    "alternates_instrument_control_order": true,
+    "requires_final_archive_byte_sha_identity": true,
+    "requires_release_policy_fact_identity": true
+  },
+  "status": "STATIC_EXACTNESS_REPAIR_COMPLETE__HOSTED_ATTRIBUTION_UNEXECUTED",
+  "claim_boundary": "This receipt validates instrument source wiring only. It does not execute the instrument and earns no attribution/product/release credit.",
+  "next": "Run v2 on exact accepted sources in hosted/result-bearing compute. Preserve the preregistered 10% gap kill/narrow rule.",
+  "release_credit": false
+}
