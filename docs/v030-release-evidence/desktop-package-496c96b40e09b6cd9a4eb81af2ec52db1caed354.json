@@ -1,0 +1,38 @@
+{
+  "candidate_fingerprint": "579847b27d129254346aaaff408944f6521597d09f744a15d7e1f1c5474b81b2",
+  "candidate_sha": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "facts": {
+    "canonical_codec_vectors_green": true,
+    "linux_clean_install_green": true,
+    "macos_clean_install_green": true,
+    "no_ambient_zstd_dependency": true,
+    "platform_dependency_inspection_recorded": true,
+    "representative_archive_create_read_extract": true,
+    "same_artifact_cpython_310_through_314_green": true,
+    "sdist_first_wheel_build": true,
+    "wheel_abi_tag": "none",
+    "wheel_python_tag": "cp310.cp311.cp312.cp313.cp314",
+    "windows_clean_install_green": true
+  },
+  "platform": {
+    "macos-14": {
+      "archive_sha256": "6824f2b543e188448a37974e79d94f1290afad2b4e87b42a7d8d9ad3b7afc2d5",
+      "dict_vector_sha256": "0c265b0a03ec404b40749d13212420813cb546a6eecf5dcd0397f20ce15e23a6",
+      "wheel_name": "cmpct-0.29.0-cp310.cp311.cp312.cp313.cp314-none-macosx_10_12_universal2.whl",
+      "wheel_sha256": "b8dd8b062d9ac56729bcaa998ba3abae20f6925d4fb9144502a35afb8725d728"
+    },
+    "ubuntu-24.04": {
+      "archive_sha256": "6824f2b543e188448a37974e79d94f1290afad2b4e87b42a7d8d9ad3b7afc2d5",
+      "dict_vector_sha256": "0c265b0a03ec404b40749d13212420813cb546a6eecf5dcd0397f20ce15e23a6",
+      "wheel_name": "cmpct-0.29.0-cp310.cp311.cp312.cp313.cp314-none-linux_x86_64.whl",
+      "wheel_sha256": "45ac5cf7f6adbe06c2910f012ab1355bc958955768574c72a5decba6ed5fb7d3"
+    },
+    "windows-2025": {
+      "archive_sha256": "3722374c51b82887b9ead48543559d2206050225cd5dedba66dff35696e32de0",
+      "dict_vector_sha256": "0c265b0a03ec404b40749d13212420813cb546a6eecf5dcd0397f20ce15e23a6",
+      "wheel_name": "cmpct-0.29.0-cp310.cp311.cp312.cp313.cp314-none-win_amd64.whl",
+      "wheel_sha256": "0b9666ddbea0241164de72175927cc597afd83ff104db814deae2eb6b8a1acf8"
+    }
+  },
+  "schema": "cmpct-v030-desktop-package-evidence-v1"
+}
