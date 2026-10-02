@@ -19,6 +19,7 @@ import time
 import zstandard as zstd
 
 from benchmarks import neutral_hostile_corpus_v1 as NEUTRAL
+from benchmarks import neutral_hostile_determinism_repair_v6 as NEUTRAL_REPAIR
 from benchmarks import resemblance_hostile_corpus_v1 as HOSTILE
 from experiments import entropygraph_v030_bounded_drift_container_v1 as BDC
 from experiments import entropygraph_v030_canonical_final as CANONICAL
@@ -120,7 +121,11 @@ def _build_source(work: Path, suite: str, name: str) -> Path:
     root = work / "source-root"
     root.mkdir(parents=True, exist_ok=True)
     if suite == "neutral_hostile_v1" and name == "02_office_workspace":
+        # The frozen Office identity belongs to the accepted repair-v6 substrate. Bind that
+        # producer/normalizer before measuring bounded drift; candidate semantics are unchanged.
+        NEUTRAL_REPAIR.install_generation_hooks(NEUTRAL)
         NEUTRAL.corpus_office(root)
+        NEUTRAL_REPAIR.normalize_workload(root / name)
     elif suite == "resemblance_hostile_v1" and name == "01_shifted_versions":
         HOSTILE.shifted_versions(root)
     elif suite == "resemblance_hostile_v1" and name == "03_boundary_churn":
