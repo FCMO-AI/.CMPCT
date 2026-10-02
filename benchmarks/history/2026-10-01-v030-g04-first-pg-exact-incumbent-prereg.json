@@ -1,0 +1,49 @@
+{
+  "schema": "cmpct-v030-g04-first-pg-exact-incumbent-prereg-v1",
+  "source_commit": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "authority_branch": "agent/v030-authoritative-integration",
+  "question": "Can a complete G0-G4 incumbent, built before PrefixGraph, safely terminate provably non-publishable PrefixGraph anchors early enough to reduce complete canonical create cost without changing bytes, tie law, locality, or memory ownership?",
+  "baseline": "Canonical promoted r25 uses prefixgraph_process_isolation=True in the rebound release-candidate path; PrefixGraph child completes/exits before G0-G4. PrefixGraph only publishes when pg_bytes < g04_bytes; equal bytes retain G0-G4.",
+  "mechanism": "Reverse only the inner construction order for the experiment: build unchanged complete G0-G4 first, then run PrefixGraph with the existing exact lower-bound probe using complete g04_bytes as an external incumbent. Terminate an anchor when immutable framing plus already-forced exact payload bytes >= g04_bytes, because equality cannot publish PrefixGraph under current cross-representation tie law.",
+  "controls": {
+    "control": "unchanged canonical inner path: PrefixGraph isolated child then G0-G4",
+    "candidate": "unchanged G0-G4 then exact-incumbent PrefixGraph probe",
+    "mandatory_winner_controls": [
+      "resemblance_hostile_v1/01_shifted_versions",
+      "resemblance_hostile_v1/03_boundary_churn"
+    ],
+    "mandatory_loser_controls": [
+      "neutral_hostile_v1/02_office_workspace",
+      "neutral_hostile_v1/15_deflate_family"
+    ]
+  },
+  "invariants": [
+    "same exact input tree",
+    "same G0-G4 bytes/serializer",
+    "same PrefixGraph anchor nomination and raw-prefix codec",
+    "same PrefixGraph winning-candidate serializer",
+    "same <=8x locality law",
+    "same final inner selector",
+    "same final r24-vs-r25 floor",
+    "exact ties retain G0-G4"
+  ],
+  "evidence": [
+    "final archive bytes/SHA/tree and selected representation must match control",
+    "selected PrefixGraph anchor must match whenever PrefixGraph wins",
+    "complete wall and CPU",
+    "whole-process-tree RSS",
+    "prefix compression count and terminal anchors",
+    "temporary I/O/materialization",
+    "all fallback/error states"
+  ],
+  "kill": [
+    "any final archive/tree/representation drift",
+    "loss of Shifted or Boundary PrefixGraph winner",
+    "any locality/tie/resource-law change",
+    "material whole-process-tree RSS regression",
+    "exact lower bound almost never terminates on known G0-G4 winners",
+    "complete product wall improvement is non-material after order reversal"
+  ],
+  "claim_boundary": "Research preregistration only. No product/release credit until a fresh-process A/B executes on this exact source and then survives product gates.",
+  "release_credit": false
+}
