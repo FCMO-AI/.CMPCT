@@ -1,0 +1,43 @@
+{
+  "candidate_fingerprint": "579847b27d129254346aaaff408944f6521597d09f744a15d7e1f1c5474b81b2",
+  "candidate_fingerprint_source": {
+    "evidence_index": 0,
+    "json_path": "candidate_fingerprint"
+  },
+  "evidence": [
+    {
+      "path": "docs/v030-release-evidence/desktop-package-496c96b40e09b6cd9a4eb81af2ec52db1caed354.json",
+      "sha256": "e14a15c5d7541e131354b35d147ecedadb5f0fe51796ed3c3e65622193becc18"
+    }
+  ],
+  "fact_sources": {
+    "facts.canonical_codec_vectors_green": {"evidence_index": 0, "json_path": "facts.canonical_codec_vectors_green"},
+    "facts.linux_clean_install_green": {"evidence_index": 0, "json_path": "facts.linux_clean_install_green"},
+    "facts.macos_clean_install_green": {"evidence_index": 0, "json_path": "facts.macos_clean_install_green"},
+    "facts.no_ambient_zstd_dependency": {"evidence_index": 0, "json_path": "facts.no_ambient_zstd_dependency"},
+    "facts.platform_dependency_inspection_recorded": {"evidence_index": 0, "json_path": "facts.platform_dependency_inspection_recorded"},
+    "facts.representative_archive_create_read_extract": {"evidence_index": 0, "json_path": "facts.representative_archive_create_read_extract"},
+    "facts.same_artifact_cpython_310_through_314_green": {"evidence_index": 0, "json_path": "facts.same_artifact_cpython_310_through_314_green"},
+    "facts.sdist_first_wheel_build": {"evidence_index": 0, "json_path": "facts.sdist_first_wheel_build"},
+    "facts.wheel_abi_tag": {"evidence_index": 0, "json_path": "facts.wheel_abi_tag"},
+    "facts.wheel_python_tag": {"evidence_index": 0, "json_path": "facts.wheel_python_tag"},
+    "facts.windows_clean_install_green": {"evidence_index": 0, "json_path": "facts.windows_clean_install_green"}
+  },
+  "facts": {
+    "canonical_codec_vectors_green": true,
+    "linux_clean_install_green": true,
+    "macos_clean_install_green": true,
+    "no_ambient_zstd_dependency": true,
+    "platform_dependency_inspection_recorded": true,
+    "representative_archive_create_read_extract": true,
+    "same_artifact_cpython_310_through_314_green": true,
+    "sdist_first_wheel_build": true,
+    "wheel_abi_tag": "none",
+    "wheel_python_tag": "cp310.cp311.cp312.cp313.cp314",
+    "windows_clean_install_green": true
+  },
+  "id": "desktop-package",
+  "owner_task": "T01",
+  "schema": "cmpct-v030-release-receipt-v1",
+  "status": "pass"
+}
