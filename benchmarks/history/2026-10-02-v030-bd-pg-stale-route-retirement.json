@@ -1,0 +1,17 @@
+{
+  "schema": "cmpct-v030-bounded-drift-prefixgraph-stale-route-retirement-v1",
+  "authority": "d3311714f20d70f328f835865040b2c396fe3780",
+  "repaired_branch": "agent/phased2-bd-pg-selected-row-court-v2",
+  "repaired_oracle_blob": "354453eaf8c7566a1f84e9acb829ccdb9c3f5d27",
+  "superseded_branch": "agent/phased2-bd-pg-substitution-oracle-run",
+  "superseded_oracle_blob": "ad104b340c375676896f5a9926b55728dd3b39c1",
+  "reason": "The older route predates current resource-safety, PrefixGraph-contract, and Office deterministic-substrate checks. It must not be used as the result-bearing selected-row court.",
+  "repaired_requirements": [
+    "bounded resource refusal is the only benign bounded-drift fallback",
+    "bounded-drift candidate must satisfy <=8x member amplification and <=8 MiB decode unit to be eligible",
+    "current PrefixGraph eligibility and process semantic owner must be revalidated in the same run",
+    "accepted Office repair-v6 producer/normalizer is bound before the frozen Office identity check"
+  ],
+  "scientific_scope": "The selected-row question remains Shifted plus Boundary because those are the current PrefixGraph winners. This receipt retires only the stale execution route, not the bounded-drift substitution hypothesis.",
+  "release_credit": false
+}
