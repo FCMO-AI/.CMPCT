@@ -1,0 +1,16 @@
+{
+  "schema": "cmpct-v030-r24-shape-prewalk-attribution-correction-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "branch_head_observed": "f8315b3449ef079ca59a096a6249abd51d546eb2",
+  "probe_status": "QUARANTINED",
+  "exactness_blocker": "The landed probe calls entropygraph_v030_release_product_base._locality_bounded_r24_build directly, but the shipping child imports entropygraph_v030_release_product and calls its promoted wrapper, which performs the current dead-dictionary post-pass.",
+  "required_repair": [
+    "Import promoted release_product as PRODUCT and base implementation as BASE.",
+    "Monkeypatch only BASE._regular_user_shape for timing.",
+    "Call PRODUCT._locality_bounded_r24_build for both instrumented and control builds.",
+    "Use the exact inherited strict-create gaps already recorded in the corrected preregistration.",
+    "Require paired final archive bytes and SHA-256 identity plus policy-fact identity."
+  ],
+  "implementation_boundary": "Attribution remains research/evidence-enablement. A positive result must reconcile the existing child-process owner before productization and then graduate to full promoted-product timing.",
+  "release_credit": false
+}
