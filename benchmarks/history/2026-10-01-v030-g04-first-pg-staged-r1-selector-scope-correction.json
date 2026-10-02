@@ -1,0 +1,27 @@
+{
+  "schema": "cmpct-v030-g04-first-pg-staged-r1-selector-scope-correction-v1",
+  "authority_source_commit": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "research_branch": "agent/phased2-g04-first-pg-exact-incumbent",
+  "supersedes_interpretation": "Do not require the proof arm to reconstruct the internal PrefixGraph winner on controls where completed G0-G4 already wins.",
+  "reason": "The proposed terminal is a cross-representation publication proof. Current selection publishes PrefixGraph only when exact pg_bytes < complete g04_bytes. A candidate whose sound lower bound reaches complete G0-G4 bytes cannot publish; determining which losing PrefixGraph candidate would have won the internal PrefixGraph-only tournament is unnecessary work.",
+  "required_reference": "Process-build unchanged canonical-private PrefixGraph once on every control as the full reference and retain its exact bytes, SHA-256, anchor, locality and strong-verification evidence.",
+  "g04_winner_controls": "The proof arm must preserve final inner selection as G0-G4 and may terminate all provably non-publishable PrefixGraph candidates. It need not reconstruct a losing internal PrefixGraph-only winner.",
+  "prefixgraph_winner_controls": "The true process-built PrefixGraph winning anchor must remain live, and the surviving proof tournament must exactly reproduce its bytes, SHA-256, anchor and locality.",
+  "unchanged_invariants": {
+    "same_staged_tree": true,
+    "g04_serializer_changed": false,
+    "prefixgraph_anchor_nomination_changed": false,
+    "prefixgraph_serializer_changed": false,
+    "prefix_level": 15,
+    "unseen_payload_lower_bound_bytes": 0,
+    "metadata_lower_bound_bytes": 0,
+    "cross_representation_terminal": ">=",
+    "reader_changed": false,
+    "grammar_changed": false,
+    "locality_law_changed": false,
+    "minimum_office_deflate_eliminated_prefix_fraction": 0.20
+  },
+  "claim_boundary": "Evidence-specification correction only. No product bytes, runtime, RSS, reader, grammar, release gate or release authority changes.",
+  "product_credit": false,
+  "release_credit": false
+}
