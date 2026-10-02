@@ -1,0 +1,17 @@
+{
+  "schema": "cmpct-v030-bounded-drift-prefixgraph-authority-reconciliation-v1",
+  "branch": "agent/phased2-bd-pg-selected-row-court-v2",
+  "branch_head_before_receipt": "7acf47580eb985d749d67d712139cde4bdfb844e",
+  "prior_authority": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "current_authority": "d3311714f20d70f328f835865040b2c396fe3780",
+  "authority_delta": [
+    "docs/discovery/STATE.json"
+  ],
+  "product_source_changed": false,
+  "scientific_effect": "none; the selected-row preregistration and repaired substitution oracle remain bound to unchanged product/benchmark source. The branch is behind only coordination/discovery-state history, not a competing implementation.",
+  "current_oracle_blob": "354453eaf8c7566a1f84e9acb829ccdb9c3f5d27",
+  "selected_row_prereg_commit": "85ae70a76fbccf7dcf38ada648ef89b792cff0c5",
+  "stale_route_retirement_commit": "7acf47580eb985d749d67d712139cde4bdfb844e",
+  "execution_status": "UNEXECUTED",
+  "release_credit": false
+}
