@@ -1,0 +1,18 @@
+{
+  "schema": "cmpct-v030-g04-first-pg-exact-incumbent-prereg-correction-v1",
+  "repository_branch": "agent/phased2-g04-first-pg-exact-incumbent",
+  "source_commit": "b9c10cd19459a24953411503e1bff811569ec158",
+  "source_prereg_blob": "0a60f374c7b9cea55c18b4e8bf52ff4218fab3ab",
+  "problem": "The landed preregistration contains a corpus identifier typo for the Deflate-family loser control.",
+  "incorrect_identifier": "neutral_hostile_v1/15_deflate_family",
+  "correct_identifier": "resemblance_hostile_v1/04_deflate_family",
+  "proof": "Repository corpus truth locates Deflate Family in benchmarks/resemblance_hostile_corpus_v1.py as 04_deflate_family.",
+  "hypothesis_change": false,
+  "comparator_change": false,
+  "threshold_change": false,
+  "semantic_change": false,
+  "execution_status": "UNEXECUTED",
+  "binding_rule": "Any result-bearing execution of this preregistration must use resemblance_hostile_v1/04_deflate_family and must treat the original incorrect identifier as superseded by this append-only correction receipt.",
+  "claim_boundary": "Custody repair only. No product, benchmark, promotion, merge, tag, version or release credit.",
+  "release_credit": false
+}
