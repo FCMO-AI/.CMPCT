@@ -1,0 +1,18 @@
+{
+  "schema": "cmpct-v030-bounded-drift-prefixgraph-selected-row-theorem-v1",
+  "branch": "agent/phased2-bd-pg-selected-row-court-v2",
+  "authority": "d3311714f20d70f328f835865040b2c396fe3780",
+  "selector": "current=min(g04,pg); projected=g04 if bounded drift is ineligible, otherwise min(g04,bd)",
+  "finite_model": {
+    "domain": "g04,pg,bd in 0..15; bounded-drift eligibility boolean",
+    "states": 8192,
+    "failures": 0
+  },
+  "result": [
+    "If g04<=pg, projected<=current for every bounded-drift state.",
+    "If pg<g04, projected<=current iff bounded drift is eligible and bd<=pg."
+  ],
+  "decision": "Only current PrefixGraph winners can falsify the next byte-substitution court. Shifted and Boundary are decisive; Office and Deflate remain later fallback/fidelity controls.",
+  "claim_boundary": "Selector algebra only; no concrete bounded-drift byte, runtime, semantics, integrity, locality, admission, product, or release credit.",
+  "release_credit": false
+}
