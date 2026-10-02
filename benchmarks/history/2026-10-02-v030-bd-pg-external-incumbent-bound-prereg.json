@@ -1,0 +1,61 @@
+{
+  "schema": "cmpct-v030-bd-pg-external-incumbent-bound-prereg-v1",
+  "source_branch": "agent/phased1-bd-pg-external-incumbent-bound",
+  "parent_head": "a6846a42fd9c69ef24cb215f36beb18c247a5ee7",
+  "authority": "d3311714f20d70f328f835865040b2c396fe3780",
+  "product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "inherited_selected_row_prereg": "85ae70a76fbccf7dcf38ada648ef89b792cff0c5",
+  "inherited_oracle_blob": "354453eaf8c7566a1f84e9acb829ccdb9c3f5d27",
+  "question": "If a complete-semantics bounded-drift candidate is already an exact smaller incumbent on the current PrefixGraph-winning Shifted and Boundary rows, can that stronger external incumbent make a monotone PrefixGraph physical lower bound terminate enough prefix-compression trials to justify a safe suppression/productization rung?",
+  "changed_frame": "The retired PrefixGraph lower-bound family compared anchors only against the current PrefixGraph incumbent. This court changes the incumbent with new representation evidence: a complete-semantics bounded-drift archive that is smaller than current PrefixGraph. The bound remains exact; only the threshold changes.",
+  "decisive_rows": [
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd"
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "03_boundary_churn",
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d"
+    }
+  ],
+  "exact_lower_bound": "HEADER.size + FOOTER.size + sum(final payload sizes already materialized for the anchor); both metadata copies and every future payload are gifted as zero bytes. Therefore any omitted physical component can only increase the final candidate.",
+  "controls": {
+    "prefix_level": 15,
+    "current_prefixgraph_owner": "experiments._v030_canonical_prefixgraph",
+    "current_tie_law": "(archive_bytes, anchor)",
+    "bounded_drift_must_be_complete_semantics": true,
+    "bounded_drift_resource_law": {
+      "max_member_read_amplification": 8,
+      "max_decode_unit_bytes": 8388608
+    }
+  },
+  "required_precondition": "The same run must show bounded drift eligible/resource-safe and complete bytes <= the exact current PrefixGraph winner before any PrefixGraph suppression credit exists.",
+  "measurements": [
+    "all-direct PrefixGraph bytes",
+    "exact PrefixGraph winner bytes/anchor",
+    "bounded-drift complete semantic bytes",
+    "total prefix-compression trials",
+    "trials spent before exact external-incumbent prune",
+    "trials avoided",
+    "per-anchor prune point/lower bound",
+    "anchors fully eliminated before completion",
+    "exact tree/integrity/locality"
+  ],
+  "survival_hurdle": {
+    "exact_selected_result_preserved": true,
+    "minimum_prefix_trial_reduction_each_decisive_row": 0.2,
+    "rationale": "Match the historical branch-bound materiality hurdle, but require it on both current decisive rows. Lower values are valid negative knowledge but insufficient to reopen PrefixGraph lower-bound productization."
+  },
+  "kill_or_narrow": [
+    "bounded drift is not a same-run exact smaller/equal incumbent on either decisive PrefixGraph winner",
+    "any suppression would change the exact selected bytes/tie law",
+    "prefix-trial reduction <20% on either decisive row",
+    "semantic, integrity, locality, or decode-unit drift",
+    "the court only recovers the same weak PrefixGraph-incumbent behavior without material extra pruning"
+  ],
+  "claim_boundary": "Research-only R3 headroom court. A green result may justify implementing exact early termination against an externally owned bounded-drift incumbent. It grants no product/runtime/release credit and does not authorize skipping PrefixGraph without the exact bound.",
+  "release_credit": false,
+  "execution_status": "UNEXECUTED"
+}
