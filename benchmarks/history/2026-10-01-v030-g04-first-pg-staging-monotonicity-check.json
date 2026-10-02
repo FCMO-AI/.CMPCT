@@ -1,0 +1,21 @@
+{
+  "schema": "cmpct-v030-g04-first-pg-staging-monotonicity-check-v1",
+  "authority_source_commit": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "proof_firing_receipt": "benchmarks/history/2026-10-01-v030-g04-first-pg-proof-firing.json",
+  "finite_checks": 1079100,
+  "failures": 0,
+  "finite_domain": "1..5 user decisions; each forced payload cost 0..4; threshold 1..20; one added manifest cost 0..4 at every insertion position",
+  "property": "If the user-only nonnegative forced-payload sequence reaches the external-incumbent threshold after k user decisions, adding one nonnegative manifest decision anywhere cannot require more than k user decisions to reach that same threshold.",
+  "implication": {
+    "office_guaranteed_existing_user_probe_eliminations_after_staging": 113,
+    "office_full_21_member_probe_matrix": 420,
+    "office_guaranteed_full_matrix_fraction": 0.26904761904761904,
+    "deflate_guaranteed_existing_user_probe_eliminations_after_staging": 43,
+    "deflate_full_15_member_probe_matrix": 210,
+    "deflate_guaranteed_full_matrix_fraction": 0.20476190476190476
+  },
+  "unmeasured": ["manifest-as-anchor candidate", "staged selected anchor", "wall", "CPU", "whole-process-tree RSS", "temporary I/O", "promoted outer product"],
+  "decision": "STAGED_R1_RETAINS_A_MATERIAL_PROOF_FIRING_FLOOR_BUT_STILL_OWES_EXECUTION",
+  "claim_boundary": "Finite abstract check plus static bound only. No staged product or release credit.",
+  "release_credit": false
+}
