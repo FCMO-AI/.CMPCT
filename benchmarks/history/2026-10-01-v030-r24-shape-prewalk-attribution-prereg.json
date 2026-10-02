@@ -6,40 +6,40 @@
   "rows": [
     {
       "label": "neutral_hostile_v1/01_developer_repository",
-      "inherited_exact_head_r24_create_s": 0.273713,
-      "inherited_strict_create_target_s": 0.172193,
-      "inherited_gap_s": 0.101520
+      "inherited_exact_head_r24_create_s": 0.27999303299998246,
+      "inherited_strict_create_target_s": 0.17847542699999508,
+      "inherited_gap_s": 0.10151760599998738
     },
     {
       "label": "neutral_hostile_v1/06_incremental_backups",
-      "inherited_exact_head_r24_create_s": 0.377235,
-      "inherited_strict_create_target_s": 0.145395,
-      "inherited_gap_s": 0.231840
+      "inherited_exact_head_r24_create_s": 0.5801893840000503,
+      "inherited_strict_create_target_s": 0.34835367400000905,
+      "inherited_gap_s": 0.23183571000004122
     },
     {
       "label": "neutral_hostile_v1/08_many_tiny_files",
-      "inherited_exact_head_r24_create_s": 0.571954451,
-      "inherited_strict_create_target_s": 0.491457067,
-      "inherited_gap_s": 0.080497384
+      "inherited_exact_head_r24_create_s": 0.5719544510000105,
+      "inherited_strict_create_target_s": 0.4914570669998284,
+      "inherited_gap_s": 0.08049738400018214
     },
     {
       "label": "resemblance_hostile_v1/04_deflate_family",
-      "inherited_exact_head_r24_create_s": 0.029968,
-      "inherited_strict_create_target_s": 0.015568,
-      "inherited_gap_s": 0.014400
+      "inherited_exact_head_r24_create_s": 0.019051761000127954,
+      "inherited_strict_create_target_s": 0.00464787099986097,
+      "inherited_gap_s": 0.014403890000266983
     }
   ],
-  "inherited_gap_boundary": "Values are inherited from the preserved exact-head external result-bearing evidence used by the campaign. They are used only to size the hypothesis. Hosted attribution must report its own direct phase timings and must not transplant local timing into a product claim.",
+  "inherited_gap_boundary": "Exact values come from independent exact-head external rerun job 110504525498, artifact 11185290175, artifact ZIP SHA-256 cb5e1952302f316e7a5d8b19aa76733c99cf87ba3f33ad99555671bf5336c4d1, source 94f3309011ca6f6014b1f61ce6058e8ce01ca00f. These child-create values size the hypothesis only; hosted attribution must report its own phase timings and cannot claim complete-product create victory from child timing.",
   "instrument": {
     "repetitions": 5,
     "source": "exact repaired external corpus generation + normalization path from benchmarks/v030_external_competitors.py",
-    "builder": "current authority experiments/entropygraph_v030_release_product_base.py::_locality_bounded_r24_build",
+    "builder": "current promoted experiments/entropygraph_v030_release_product.py::_locality_bounded_r24_build; monkeypatch only entropygraph_v030_release_product_base._regular_user_shape so the promoted wrapper stays in the measured byte path",
     "measurement": "wrap only _regular_user_shape with perf_counter while preserving exact build semantics; retain full r24 create_s, archive bytes/SHA-256, regular-file count, largest member, micro-pack target and policy facts",
     "control": "archive bytes/SHA-256 and policy facts must be identical across repetitions; any mismatch invalidates attribution"
   },
   "prediction": "Many Tiny Files should show material prewalk ownership because the source contains 5000 tiny files and the prewalk duplicates the metadata traversal immediately repeated by Builder.scan. Developer Repository and Incremental Backups are expected to show smaller fractions; Deflate Family should be too small to generalize the mechanism.",
   "kill": "If median _regular_user_shape wall is less than 10% of the inherited strict-create gap on every row, retire source-shape prewalk reuse as the next r24 creation lane. If only Many Tiny Files is material, narrow the implementation opportunity to broad many-entry trees rather than claiming a universal four-row fix.",
   "promotion_boundary": "Attribution is research/evidence-enablement only. Any source-shape reuse implementation must preserve exact r24 archive bytes, locality facts, wide-single-file admission, medium-binary policy, recovery/integrity and full release gates. No comparator, threshold, workload, timing boundary or byte tolerance may change.",
-  "decision_after_positive": "Prefer eliminating or reusing metadata work through a general Builder/source-shape interface; do not special-case workload identity or thresholds derived from the four rows.",
+  "decision_after_positive": "If hosted attribution is material, reconcile the child-process owner and pass only immutable source-shape scalars through the existing process seam; do not special-case workload identity.",
   "release_credit": false
 }
