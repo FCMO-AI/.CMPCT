@@ -1,0 +1,17 @@
+{
+  "schema": "cmpct-v030-r24-shape-gifted-control-static-validation-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "instrument_blob": "08efd9a3b218af6b1791b324470163fe5d626f17",
+  "checks": {
+    "imports_v2": true,
+    "calls_promoted_wrapper": true,
+    "patches_only_shape": true,
+    "alternates_order": true,
+    "identity_gate": true,
+    "exact_gap_source": true,
+    "prereg_bound": true
+  },
+  "status": "STATIC_WIRING_GREEN__HOSTED_UNEXECUTED",
+  "evidence_boundary": "The gifted arm precomputes exact shape facts outside measured build and is intentionally an optimistic oracle. It prices downstream scan/cache interaction better than helper timing, but it earns no product credit and does not price a generic discovery mechanism.",
+  "release_credit": false
+}
