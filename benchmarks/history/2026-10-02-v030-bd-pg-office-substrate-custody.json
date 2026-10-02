@@ -1,0 +1,26 @@
+{
+  "schema": "cmpct-v030-bd-pg-office-substrate-custody-v1",
+  "date": "2026-10-02",
+  "branch": "agent/phased2-bd-pg-selected-row-court-v2",
+  "source_authority": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "repaired_commit": "d40645a81275c1089eaff9eca96e005af1cd331b",
+  "repaired_oracle_path": "benchmarks/v030_bounded_drift_prefixgraph_substitution_oracle.py",
+  "repaired_oracle_blob": "354453eaf8c7566a1f84e9acb829ccdb9c3f5d27",
+  "accepted_office": {
+    "suite": "neutral_hostile_v1",
+    "workload": "02_office_workspace",
+    "tree_sha256": "aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57",
+    "files": 20,
+    "logical_bytes": 16063798,
+    "authority_record": "benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json"
+  },
+  "defect": "The hardened four-row oracle previously called raw NEUTRAL.corpus_office while asserting the accepted repaired Office identity.",
+  "correction": [
+    "import benchmarks.neutral_hostile_determinism_repair_v6 as NEUTRAL_REPAIR",
+    "install_generation_hooks(NEUTRAL) before Office generation",
+    "normalize_workload(root / name) after Office generation"
+  ],
+  "invariant": "No workload, threshold, comparator, candidate mechanism, archive grammar, reader, selector or release policy changes.",
+  "claim_boundary": "Evidence-enablement/corpus-custody repair only. The four-row selected-owner court remains unexecuted and earns no bounded-drift product or release credit.",
+  "release_credit": false
+}
