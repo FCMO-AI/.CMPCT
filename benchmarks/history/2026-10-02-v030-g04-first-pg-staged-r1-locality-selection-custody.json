@@ -1,0 +1,27 @@
+{
+  "schema": "cmpct-v030-g04-first-pg-staged-r1-locality-selection-custody-v1",
+  "date": "2026-10-02",
+  "authority_source_commit": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "research_branch": "agent/phased2-g04-first-pg-exact-incumbent",
+  "source_authority": {
+    "canonical_final_bulk_v1_blob": "e22156a60272e53dedc3fd5ad9db9c408ecde2e4",
+    "release_admission_blob": "b319b3212f3f2d5e7edbd12c3499553407ad54a4"
+  },
+  "finding": "Canonical inner publication is not a byte-only pg<g04 comparison. PrefixGraph must first be strictly smaller than complete G0-G4 and then pass authenticated-metadata locality; otherwise G0-G4 remains selected.",
+  "exact_current_law": [
+    "If pg_bytes >= g04_bytes, PrefixGraph is rejected as complete-artifact-not-smaller.",
+    "If pg_bytes < g04_bytes, canonical admission computes PrefixGraph locality from authenticated metadata.",
+    "PrefixGraph publishes only when locality.passed is true; a smaller nonlocal PrefixGraph candidate is rejected as locality-ceiling.",
+    "All-direct PrefixGraph has no prefix dependencies and therefore has 1.0 member-read amplification, but it must still remain an explicit candidate in the proof tournament."
+  ],
+  "staged_r1_rule": [
+    "Build the unchanged process-owned PrefixGraph reference and record its exact bytes/SHA/anchor plus canonical locality verdict.",
+    "Define the reference final inner winner as PrefixGraph only when pg_bytes < g04_bytes AND locality.passed; otherwise select G0-G4.",
+    "On PrefixGraph-winning controls, the proof arm must reproduce the exact reference PrefixGraph bytes/SHA/anchor; identical bytes imply identical locality.",
+    "On G0-G4-winning controls, a proof arm may only claim selection identity after accounting for both exact complete bytes and canonical locality. Do not treat a smaller but locality-red PrefixGraph reference as a product winner.",
+    "The cross-representation anchor lower-bound terminal remains sound at lower_bound >= complete_g04_bytes because such an anchor cannot satisfy the necessary strict-byte condition for publication regardless of locality."
+  ],
+  "claim_boundary": "Evidence-specification correction only. No product code, threshold, locality ceiling, grammar, reader, selector or release authority changes.",
+  "product_credit": false,
+  "release_credit": false
+}
