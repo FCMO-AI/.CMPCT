@@ -1,0 +1,21 @@
+{
+  "schema": "cmpct-v030-g04-first-pg-staged-r1-metadata-custody-v1",
+  "authority_source_commit": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "research_branch": "agent/phased2-g04-first-pg-exact-incumbent",
+  "finding": "The four frozen generator tree SHA-256 values bind path and regular-file content, but canonical r25 filesystem-v1 staging additionally authenticates mode, mtime_ns, uid, gid and xattrs. Therefore a frozen content-tree SHA alone does not imply a cross-run byte-identical staged filesystem-control member.",
+  "source_authority": {
+    "product_fs_blob": "72404386775be4576365cc687784f4e4f752d9de",
+    "manifest_admission_blob": "15dbd46446315ce48d636d4731d5573fd3452ea1"
+  },
+  "r1_rule": [
+    "Preserve the frozen path+content tree identity for every control.",
+    "Normalize generated path mtimes to Unix epoch before canonical staging, matching accepted cross-encoder corpus practice.",
+    "Do not silently rewrite uid, gid, modes or xattrs merely to force a historical staged hash.",
+    "Record the complete filesystem-v1 manifest SHA-256/bytes, selected control encoding/SHA-256/bytes, uid/gid/mode/xattr summary and staged PrefixGraph tree identity for every row.",
+    "Require G0-G4 and PrefixGraph arms within a row to consume the exact same staged tree."
+  ],
+  "claim_boundary": "A single-run staged R1 may establish exact same-input proof firing and selection identity without claiming cross-host staged-byte determinism. Any later cross-run or release claim must bind the full authenticated filesystem metadata substrate or use an already accepted deterministic metadata contract.",
+  "effect_on_existing_evidence": "No change to the selector theorem, frozen content controls, 20% proof-firing threshold, reader/grammar/locality law, or prior user-anchor monotonicity result.",
+  "product_credit": false,
+  "release_credit": false
+}
