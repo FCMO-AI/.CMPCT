@@ -1,0 +1,45 @@
+{
+  "schema": "cmpct-v030-r24-shape-prewalk-attribution-prereg-v1",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "question": "How much of canonical-r24 child create wall on the four external rows that still lose even under perfect r25 suppression is owned by the release-only _regular_user_shape prewalk, before Builder.scan walks/stats the tree again?",
+  "mechanism": "experiments/entropygraph_v030_release_product_base.py::_locality_bounded_r24_build performs _regular_user_shape(root) before cmpct.builder.Builder.build(); Builder.build begins with Builder.scan(), a second full source-tree traversal. The prewalk exists only to derive regular-file count/largest-member facts that set release micro-pack locality and wide-single-file policy.",
+  "rows": [
+    {
+      "label": "neutral_hostile_v1/01_developer_repository",
+      "inherited_exact_head_r24_create_s": 0.273713,
+      "inherited_strict_create_target_s": 0.172193,
+      "inherited_gap_s": 0.101520
+    },
+    {
+      "label": "neutral_hostile_v1/06_incremental_backups",
+      "inherited_exact_head_r24_create_s": 0.377235,
+      "inherited_strict_create_target_s": 0.145395,
+      "inherited_gap_s": 0.231840
+    },
+    {
+      "label": "neutral_hostile_v1/08_many_tiny_files",
+      "inherited_exact_head_r24_create_s": 0.571954451,
+      "inherited_strict_create_target_s": 0.491457067,
+      "inherited_gap_s": 0.080497384
+    },
+    {
+      "label": "resemblance_hostile_v1/04_deflate_family",
+      "inherited_exact_head_r24_create_s": 0.029968,
+      "inherited_strict_create_target_s": 0.015568,
+      "inherited_gap_s": 0.014400
+    }
+  ],
+  "inherited_gap_boundary": "Values are inherited from the preserved exact-head external result-bearing evidence used by the campaign. They are used only to size the hypothesis. Hosted attribution must report its own direct phase timings and must not transplant local timing into a product claim.",
+  "instrument": {
+    "repetitions": 5,
+    "source": "exact repaired external corpus generation + normalization path from benchmarks/v030_external_competitors.py",
+    "builder": "current authority experiments/entropygraph_v030_release_product_base.py::_locality_bounded_r24_build",
+    "measurement": "wrap only _regular_user_shape with perf_counter while preserving exact build semantics; retain full r24 create_s, archive bytes/SHA-256, regular-file count, largest member, micro-pack target and policy facts",
+    "control": "archive bytes/SHA-256 and policy facts must be identical across repetitions; any mismatch invalidates attribution"
+  },
+  "prediction": "Many Tiny Files should show material prewalk ownership because the source contains 5000 tiny files and the prewalk duplicates the metadata traversal immediately repeated by Builder.scan. Developer Repository and Incremental Backups are expected to show smaller fractions; Deflate Family should be too small to generalize the mechanism.",
+  "kill": "If median _regular_user_shape wall is less than 10% of the inherited strict-create gap on every row, retire source-shape prewalk reuse as the next r24 creation lane. If only Many Tiny Files is material, narrow the implementation opportunity to broad many-entry trees rather than claiming a universal four-row fix.",
+  "promotion_boundary": "Attribution is research/evidence-enablement only. Any source-shape reuse implementation must preserve exact r24 archive bytes, locality facts, wide-single-file admission, medium-binary policy, recovery/integrity and full release gates. No comparator, threshold, workload, timing boundary or byte tolerance may change.",
+  "decision_after_positive": "Prefer eliminating or reusing metadata work through a general Builder/source-shape interface; do not special-case workload identity or thresholds derived from the four rows.",
+  "release_credit": false
+}
