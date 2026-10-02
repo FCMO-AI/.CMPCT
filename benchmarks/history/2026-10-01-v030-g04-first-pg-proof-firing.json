@@ -1,0 +1,75 @@
+{
+  "schema": "cmpct-v030-g04-first-pg-external-incumbent-proof-firing-v1",
+  "authority_source_commit": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "research_branch": "agent/phased2-g04-first-pg-exact-incumbent",
+  "mechanism_sources": {
+    "prefixgraph": "34dd90012de7084141649acc52b605fd6cd00473",
+    "prefixgraph_process_executor": "d8459e76d690ea22c3f5cd0e676b0a316da1e09f",
+    "resemblance_hostile_corpus": "335169bd6eb336b6d444cfbd34c291101262c3a9",
+    "neutral_hostile_corpus": "9346995246f293fa03ea73e8782b809998588f71",
+    "neutral_hostile_repair_v1": "ae5cf151b5741843a8161478e2cc2921d60d540c"
+  },
+  "question": "Does a completed exact G0-G4 incumbent make the existing weak PrefixGraph lower bound fire materially on known G0-G4 winner controls while leaving known PrefixGraph winners live?",
+  "terminal_law": "For cross-representation publication, terminate a PrefixGraph anchor when HEADER+FOOTER+already-forced exact payload bytes >= completed G0-G4 bytes. Unseen payload and metadata lower bounds remain zero. Equality is terminal because current inner selector retains G0-G4 on ties.",
+  "prefix_codec": "raw-content Zstd level 15",
+  "results": [
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "02_office_workspace",
+      "role": "G0-G4 winner / PrefixGraph loser",
+      "tree_sha256": "aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57",
+      "g04_bytes": 5954226,
+      "user_prefixgraph_anchors": 20,
+      "terminal_user_anchors": 20,
+      "possible_user_anchor_prefix_compressions": 380,
+      "attempted_user_anchor_prefix_compressions": 267,
+      "eliminated_user_anchor_prefix_compressions": 113,
+      "eliminated_fraction": 0.29736842105263156
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "04_deflate_family",
+      "role": "G0-G4 winner / PrefixGraph loser",
+      "tree_sha256": "527a9e356e923e5bcc26566a8f677a7f7277af1577493e09c2bdca1b6d17154a",
+      "g04_bytes": 14771,
+      "user_prefixgraph_anchors": 14,
+      "terminal_user_anchors": 14,
+      "possible_user_anchor_prefix_compressions": 182,
+      "attempted_user_anchor_prefix_compressions": 139,
+      "eliminated_user_anchor_prefix_compressions": 43,
+      "eliminated_fraction": 0.23626373626373626
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "03_boundary_churn",
+      "role": "PrefixGraph winner control",
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+      "g04_bytes": 80078,
+      "user_prefixgraph_anchors": 12,
+      "terminal_user_anchors": 0,
+      "best_user_prefixgraph_anchor": 9,
+      "best_user_prefixgraph_bytes": 75708,
+      "current_promoted_prefixgraph_bytes": 75981
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "role": "PrefixGraph winner control",
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "g04_bytes": 1723282,
+      "user_prefixgraph_anchor_0_bytes": 1700303,
+      "user_prefixgraph_anchor_0_terminal": false,
+      "user_prefixgraph_anchor_1_terminal": false,
+      "current_promoted_prefixgraph_bytes": 1700594
+    }
+  ],
+  "aggregate_loser_controls": {
+    "possible_user_anchor_prefix_compressions": 562,
+    "eliminated_user_anchor_prefix_compressions": 156,
+    "eliminated_fraction": 0.2775800711743772
+  },
+  "staging_monotonicity": "Current r25 staging adds an authenticated filesystem-control member while preserving regular user member bytes. For an existing user anchor, this cannot reduce a forced-payload lower bound after the corresponding user decisions. The measured existing-user-anchor eliminations therefore survive staging as a lower bound, while the new manifest-as-anchor candidate and exact staged economics remain unmeasured.",
+  "decision": "CHEAP_KILL_CONDITION_FALSIFIED__ADVANCE_TO_EXACT_STAGED_R1",
+  "claim_boundary": "Mechanism/proof-firing evidence only. This receipt does not execute the exact staged canonical tournament, promoted outer r24-vs-r25 product, wall/CPU/RSS/I/O court, or release gates. No product or release credit.",
+  "release_credit": false
+}
