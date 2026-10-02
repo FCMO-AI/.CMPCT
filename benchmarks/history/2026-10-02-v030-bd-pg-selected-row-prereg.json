@@ -1,0 +1,68 @@
+{
+  "schema": "cmpct-v030-bounded-drift-prefixgraph-selected-row-prereg-v1",
+  "source_authority": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "branch": "agent/phased2-bd-pg-selected-row-court-v2",
+  "source_head_before_prereg": "72ba30aad02bd8790b8764c0bcc6632b586d8975",
+  "oracle": {
+    "path": "benchmarks/v030_bounded_drift_prefixgraph_substitution_oracle.py",
+    "blob_sha": "354453eaf8c7566a1f84e9acb829ccdb9c3f5d27"
+  },
+  "question": "On rows where current PrefixGraph actually wins over unchanged G0-G4, can complete-semantics bounded drift replace PrefixGraph without a byte, semantics, integrity, locality, or decode-unit regression?",
+  "selection_algebra": {
+    "current": "min(g04_bytes, prefixgraph_bytes)",
+    "projected": "g04_bytes when bounded drift is unavailable/resource-unsafe; otherwise min(g04_bytes, bounded_drift_bytes)",
+    "implication": "Rows where G0-G4 already wins cannot regress final bytes while G0-G4 remains unchanged. Only current PrefixGraph-winning rows can falsify the byte-substitution hypothesis."
+  },
+  "decisive_rows": [
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "expected_tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "expected_current_prefixgraph_selected": true
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "03_boundary_churn",
+      "expected_tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+      "expected_current_prefixgraph_selected": true
+    }
+  ],
+  "deferred_controls": [
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "02_office_workspace",
+      "role": "fallback/source-fidelity control after the decisive selected-row court; unchanged G0-G4 already wins"
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "04_deflate_family",
+      "role": "fallback/source-fidelity control after the decisive selected-row court; unchanged G0-G4 already wins"
+    }
+  ],
+  "required_green_conditions": [
+    "current_pg_selected_same_run == true on both decisive rows",
+    "prefixgraph_contract_eligible_same_run == true",
+    "bounded_drift.eligible_for_substitution == true",
+    "bounded_drift.resource_safe == true",
+    "bounded_drift.max_member_read_amplification <= 8.0",
+    "bounded_drift.max_decode_unit_bytes <= 8388608",
+    "prefixgraph.max_member_read_amplification <= 8.0",
+    "decision.substitution_nonregressing == true",
+    "decision.pg_winner_preserved_or_improved == true"
+  ],
+  "kill_or_narrow": [
+    "bounded drift unavailable or resource-unsafe on either current PrefixGraph winner",
+    "bounded drift complete bytes > PrefixGraph bytes on either current PrefixGraph winner",
+    "source/filesystem semantics drift",
+    "integrity/locality/decode-unit violation"
+  ],
+  "claim_boundary": "A green two-row selected-owner court earns only the next bounded product implementation/ABBA rung. It does not establish generic prospective admission, product create-time improvement, reader/native/recovery/platform parity, release authority, or v0.30 promotion.",
+  "evidence_context": {
+    "hosted_same_semantics_pr213_head": "a0bf0e4c0826cb02a2235d9b15b69c5facac56f3",
+    "hosted_test_run": 36852455946,
+    "hosted_test_result": "success; 787 passed in 289.85s",
+    "rationale": "The hosted prerequisite is already green. This prereg narrows the next decision to the only rows that can change substitution survival."
+  },
+  "execution_status": "UNEXECUTED",
+  "release_credit": false
+}
