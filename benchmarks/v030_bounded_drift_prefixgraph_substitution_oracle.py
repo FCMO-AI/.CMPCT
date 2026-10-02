@@ -181,9 +181,30 @@ def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, 
         if decoded_manifest != manifest_raw or _treehash(restored) != source_tree:
             raise RuntimeError("bounded-drift semantic sibling changed source semantics")
         facts = [BDC.member_resource_facts(bd_content, i) for i in range(len(members))]
+        # The semantic sibling must charge the decoded filesystem manifest too.  BDC's
+        # member facts intentionally know only about the shared content context, while
+        # this court claims equal filesystem semantics.  PrefixGraph locality is also a
+        # decoded-context metric, so excluding manifest bytes here would undercharge the
+        # bounded-drift side of the same-semantics comparison.
+        semantic_rows = [
+            {
+                "logical_size": fact.logical_size,
+                "decoded_context_bytes": len(manifest_raw) + fact.decoded_context_bytes,
+                "max_decode_unit_bytes": max(len(manifest_raw), fact.max_decode_unit_bytes),
+                "member_read_amplification": (
+                    len(manifest_raw) + fact.decoded_context_bytes
+                ) / max(1, fact.logical_size),
+            }
+            for fact in facts
+        ]
         bd_facts = {
-            "max_member_read_amplification": max(x.member_read_amplification for x in facts),
-            "max_decode_unit_bytes": max(x.max_decode_unit_bytes for x in facts),
+            "filesystem_manifest_decode_bytes": len(manifest_raw),
+            "max_member_read_amplification": max(
+                row["member_read_amplification"] for row in semantic_rows
+            ),
+            "max_decode_unit_bytes": max(
+                row["max_decode_unit_bytes"] for row in semantic_rows
+            ),
         }
         corrupted = bytearray(bd_blob)
         corrupted[len(corrupted) // 2] ^= 1
