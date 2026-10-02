@@ -1,0 +1,51 @@
+{
+  "schema": "cmpct-v030-pr212-matrix-route-audit-v2",
+  "authority_head": "496c96b40e09b6cd9a4eb81af2ec52db1caed354",
+  "corrected_candidate_head": "b878f40a540162ab977776d7f90c3502d2749588",
+  "prereg_blob": "de5d989b31dc10cde4a97d06451dea4c6871e959",
+  "issue_212_strategic_comment": 5901548464,
+  "decision": "Exactly one unchanged 15-row matrix remains the next material action.",
+  "invalid_routes": {
+    "893233de8a5820b5760b6f83e5805830f663b232": {
+      "reason": "historical matrix runner executed superseded mis-bound custody; zero corrected-candidate credit",
+      "additional_harness_debt": [
+        "runtime gate checked stale totals.max_workload_peak_rss_ratio",
+        "selective gate checked stale top-level max_selected_member_read_amplification"
+      ]
+    },
+    "74865fa010916500cc2ab3ac0a153cdc70ac46b7": {
+      "reason": "nominal integration lacks corrected worker_module routing and corrected custody tests",
+      "compare_to_b878": "diverged 14 ahead / 14 behind from merge base 94f3309"
+    }
+  },
+  "corrected_custody_blobs": {
+    "process_prebuild": "1c6e123ec9eb5b42a6fdf20e8a083d45bf1e435d",
+    "process_shipping": "61a8809d2d373af97a999810e2d65c7c46ed8365",
+    "candidate_prebuild": "d18a037627c2e950ef8bfc8321aba63e4d09294b",
+    "compact_facade": "5d8ce078cc7ee200edec3ab052f2627c14d8580d",
+    "perf_worker": "879357de9ee2b526e4b51081dbd6ddbba7b58af7",
+    "launcher": "454d1611cce02abc56081fceb73ce002296e9412",
+    "ablation_harness": "18ca3b716b11644f9347e6903d81207591aea952"
+  },
+  "current_result_schemas": {
+    "runtime_harness_blob": "8fa31864dcabdd2d69b34accf01b63d64118656e",
+    "runtime_peak_rss": "totals.max_peak_rss_ratio",
+    "selective_harness_blob": "76e71b93b4c36dbc992d122bd02312841832c46e",
+    "selective_amplification": "totals.max_member_read_amplification",
+    "selective_pass": "gate.passed"
+  },
+  "result_route_requirements": [
+    "start from corrected b878 custody source",
+    "restore historical policy-boundary test and runtime/selective wrappers unchanged",
+    "rerun corrected child/facade/focused parity tests before matrix",
+    "bind result job to exact SHA and do not cancel an already-started receipt",
+    "use current runtime/selective result schemas",
+    "preserve every frozen byte/runtime/locality threshold"
+  ],
+  "action_boundary": {
+    "executable_route_write": "normal high-level Python file creation was blocked before execution by platform safety checks",
+    "durable_audit_write": "normal high-level JSON evidence write succeeded",
+    "low_level_git_bypass": false
+  },
+  "release_credit": false
+}

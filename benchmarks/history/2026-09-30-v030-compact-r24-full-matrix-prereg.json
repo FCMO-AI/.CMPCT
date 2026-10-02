@@ -1,0 +1,41 @@
+{
+  "schema": "cmpct-v030-compact-r24-full-matrix-prereg-v1",
+  "source_head": "b878f40a540162ab977776d7f90c3502d2749588",
+  "source_branch": "agent/v030-r24-compact-source-replication",
+  "focused_execution_source_head": "9d9418b7152373421e5f47d5d38970bfc76e2b1c",
+  "focused_receipt_blob": "d35abe559cf2ed0504c85c319db9f826fa5ba443",
+  "post_focused_source_delta": {
+    "commits": 2,
+    "files": [
+      "benchmarks/history/2026-09-27-v030-compact-r24-focused-parity.json",
+      "tools/run_v030_compact_candidate.py"
+    ],
+    "product_byte_owner_changed": false,
+    "interpretation": "Current b878 differs from the focused green execution source only by durable evidence and the fresh-process launcher; corrected custody/product byte-owning code is unchanged."
+  },
+  "evidence_branch": "agent/phased3-pr212-b878-custody-matrix",
+  "decision": "run exactly one unchanged 15-row compression/product-parity matrix after re-proving corrected nested-child custody",
+  "custody_blobs": {
+    "process_prebuild": "1c6e123ec9eb5b42a6fdf20e8a083d45bf1e435d",
+    "process_shipping": "61a8809d2d373af97a999810e2d65c7c46ed8365",
+    "candidate_prebuild": "d18a037627c2e950ef8bfc8321aba63e4d09294b",
+    "compact_facade": "5d8ce078cc7ee200edec3ab052f2627c14d8580d",
+    "launcher": "454d1611cce02abc56081fceb73ce002296e9412",
+    "ablation_harness": "18ca3b716b11644f9347e6903d81207591aea952"
+  },
+  "preconditions": [
+    "child effective-policy custody regression passes",
+    "candidate facade child-custody regression passes",
+    "focused Incremental Backups parity remains green"
+  ],
+  "frozen_gates": {
+    "accepted_v029_bytes": 137499525,
+    "workloads_regressed": 0,
+    "workloads_improved_min": 3,
+    "saving_vs_v029_bytes_min": 687783,
+    "max_selected_member_read_amplification": 8,
+    "canonical_product_regressions": 0
+  },
+  "kill": "any deterministic product-row byte regression retires compact-r24; no threshold, workload, comparator or evaluator gardening",
+  "note": "Existing phased2 full-matrix branches diverged before the corrected worker_module custody and are not valid evidence surfaces."
+}
