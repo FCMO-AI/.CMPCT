@@ -8,18 +8,18 @@
   },
   "active_product_bottleneck": {
     "id": "compact-r24-corrected-matrix",
-    "observation": "PR #212 exact head b878f40 has corrected nested-child custody, focused Incremental Backups parity green, and 11/11 visible exact-head workflows green. Repository coordination explicitly authorizes exactly one unchanged 15-row compression/product-parity matrix. Durable preregistration 9ed2920/de5d989 has zero workflow runs; the missing rung is result-bearing execution, not another compact-r24 policy/custody variant.",
-    "next_discriminator": "Execute exactly one unchanged b878-bound 15-row matrix. Any deterministic canonical-product byte regression retires compact-r24 without threshold/workload/comparator/evaluator gardening. A clean matrix advances to inherited runtime/RSS/selective/native/recovery/portability/external gates."
+    "observation": "PR #212 exact head b878f40 has corrected nested-child custody, focused Incremental Backups parity green, and 11/11 visible exact-head workflows green. PR #217 exact head e235686 is the clean evidence route: 4 ahead / 0 behind b878, net delta only two benchmarks/history custody receipts, 7/7 visible exact-head workflows green. The one unchanged 15-row compression/product-parity matrix is still unexecuted because the normal workflow-file write is blocked; the missing rung is execution, not another compact-r24 policy/custody variant.",
+    "next_discriminator": "Execute exactly one unchanged b878-bound 15-row matrix through PR #217 when a normal authorized workflow write is available. Any deterministic canonical-product byte regression retires compact-r24 without threshold/workload/comparator/evaluator gardening. If that route remains unavailable, execute the already-preregistered repaired bounded-drift selected-row substitution court on current PrefixGraph winners."
   },
   "primary_question": {
     "id": "compact-r24-corrected-full-matrix",
     "family": "product-compression+evidence-custody",
     "hypothesis": "The correctly bound compact-r24 candidate that is non-regressing on the focused Incremental Backups blocker can preserve the unchanged full 15-row compression/product-parity matrix.",
-    "status": "FOCUSED_GREEN__FULL_MATRIX_UNEXECUTED__EVIDENCE_ROUTE_BLOCKED",
+    "status": "FOCUSED_GREEN__PR217_ROUTE_GREEN__FULL_MATRIX_UNEXECUTED__WORKFLOW_WRITE_BLOCKED",
     "evidence": [
       "PR #212 b878f40a540162ab977776d7f90c3502d2749588: corrected nested-child custody; 11/11 visible exact-head workflows green",
       "focused receipt d35abe559cf2ed0504c85c319db9f826fa5ba443: candidate <= same-run genuine r24 on exact accepted Incremental Backups source",
-      "preregistration 9ed29202683bbab31b7dd326becea929b5dfe3be / de5d989b31dc10cde4a97d06451dea4c6871e959: one unchanged 15-row matrix, zero hosted runs",
+      "PR #217 e235686d2a9fd4757c5478526600f410e59c6eb8: clean evidence route, 4 ahead / 0 behind b878, net delta only two history receipts, 7/7 visible exact-head workflows green",
       "historical run 36004181224 proves the deep matrix route can execute but its Incremental Backups red came from superseded mis-bound custody and earns zero corrected-candidate credit"
     ],
     "prediction": "Corrected compact-r24 should have zero deterministic canonical-product byte regressions on the unchanged matrix.",
@@ -29,14 +29,14 @@
     {
       "id": "compact-r24-full-matrix",
       "family": "product-compression",
-      "status": "PRIMARY__PREREGISTERED__UNEXECUTED",
-      "evidence": "PR #212 b878f40; prereg 9ed2920/de5d989; focused blocker green"
+      "status": "PRIMARY__PR217_ROUTE_GREEN__MATRIX_UNEXECUTED",
+      "evidence": "PR #212 b878f40 source green; PR #217 e235686 clean history-only route green; one unchanged matrix still blocked at workflow-file creation"
     },
     {
       "id": "bounded-drift-same-semantics",
       "family": "representation",
-      "status": "HOSTED_ORACLE_ROUTE_READY__UNEXECUTED",
-      "evidence": "PR #213 37d9f09; test-only evidence head 5070f81; preserved local same-semantics delta -11,970 B; zero hosted result-bearing runs"
+      "status": "HOSTED_GATE_GREEN__SELECTED_ROW_PREREG_LANDED__COURT_UNEXECUTED",
+      "evidence": "PR #213 a0bf0e4 exact-head pytest 36852455946: 787 passed, including hosted same-semantics strict-byte/integrity/locality/resource gate. Repaired substitution oracle blob 354453e on branch agent/phased2-bd-pg-selected-row-court-v2; selected-row prereg commit 85ae70a limits decisive court to current PrefixGraph winners Shifted+Boundary; zero branch workflow runs."
     },
     {
       "id": "bounded-drift-resync-tail",
@@ -47,8 +47,8 @@
     {
       "id": "g04-diverse-complete-artifact",
       "family": "product-falsification",
-      "status": "REPRESENTATION_PROXY_RED__PRODUCT_COURT_UNEXECUTED",
-      "evidence": "PR #214 5a2443d generic CI reproduces 5848 > 5663 representation red; diverse complete-artifact instrument itself has not executed"
+      "status": "REPRESENTATION_PROXY_RED__SINGLE_HOSTILE_PRODUCT_NONREGRESSING__DIVERSE_BUNDLE_UNEXECUTED__LOWER_LEVERAGE",
+      "evidence": "PR #210 preserved 15/15 complete artifacts while eliminating 1002/1062 exact HG finalists; PR #211 hostile reverses L6/L19 by 185 B but its added complete-artifact non-regression test passed; PR #214 diverse instrument is one 27-file bundled A/B and remains unexecuted."
     }
   ],
   "saturated_families": [
@@ -99,7 +99,10 @@
     "scan_fusion_negative": "35703345978/10683147417: bytes/RSS identical, CPU/wall not improved",
     "r25_bound_hostile": "35681729751 ML g04 pre=13836789, v029 floor=13836673 (+116 B), overlay=13674830 (-161843 B)",
     "r24_abba": "#202; helper proof 35681662327; canonical workflow mutation currently blocked by GitHub App workflows permission; ABBA still unmeasured",
-    "ci_fanout": "coordination-only abbd7e7... again instantiated a broad historical workflow wave; #128"
+    "ci_fanout": "coordination-only abbd7e7... again instantiated a broad historical workflow wave; #128",
+    "compact_r24_pr217": "PR #217 e235686d2a9fd4757c5478526600f410e59c6eb8: 7/7 visible exact-head workflows green; tests 789 passed; generic r24/ZIP route validation 0 confirmed regressions and byte-identical base/candidate archives. Not the authorized 15-row product matrix.",
+    "bounded_drift_hosted": "PR #213 a0bf0e4c0826cb02a2235d9b15b69c5facac56f3: exact-head pytest 36852455946 finished 787 passed. Hosted test directly fail-closes unless bounded drift is strictly smaller than same-run PrefixGraph with exact Shifted tree, exact filesystem semantics, corruption rejection, <=8 MiB decode unit, <=8x bounded-drift locality, verified PrefixGraph and <=8x PrefixGraph locality.",
+    "bounded_drift_selected_row_prereg": "agent/phased2-bd-pg-selected-row-court-v2 commit 85ae70a76fbccf7dcf38ada648ef89b792cff0c5 preregisters the cheapest decisive substitution court: Shifted + Boundary only. Office/Deflate remain fallback/fidelity controls because unchanged G0-G4 already wins and cannot regress final bytes."
   },
   "process_lessons": [
     {
@@ -129,9 +132,13 @@
     {
       "lesson": "Treat Discovery STATE pending runs as staleable pointers: consume current GitHub run truth before allocating new work, and distinguish infrastructure/evidence-route failure from product loss.",
       "evidence": "STATE still listed 35738603879/35738603723 as pending on 2026-09-30; current truth is cancelled tests plus r24-performance infrastructure failure from missing package-owned cmpct_core, not a product verdict."
+    },
+    {
+      "lesson": "Count scientific decision rows from selector algebra, not from an inherited broader control set. If unchanged fallback G0-G4 already wins, those rows cannot falsify bounded-drift-for-PrefixGraph byte substitution; current PrefixGraph winners are the cheapest decisive court.",
+      "evidence": "PR #213 hosted gate green; repaired substitution oracle 354453e; selected-row prereg 85ae70a"
     }
   ],
   "pending_jobs": [],
-  "next_action": "Execute the one preregistered corrected compact-r24 matrix on exact b878 source. If that route remains unavailable, the cheapest decision-changing adjacent court is PR #213's hosted same-semantics oracle. Do not spend another activation polishing compact-r24 policy/custody or G04 thresholds while their decisive courts remain unpaid.",
-  "last_reconciled": "2026-09-30T15:33-06:00"
+  "next_action": "Execute PR #212's one unchanged matrix through PR #217 when the normal workflow write is available. If that route remains unavailable, execute the repaired bounded-drift selected-row court from commit 85ae70a on Shifted+Boundary. Then G0-G4-first exact-incumbent staged R1; keep PR #214 diverse G04 bundle as a lower-leverage bounded falsifier.",
+  "last_reconciled": "2026-10-02T06:25:34-06:00"
 }
