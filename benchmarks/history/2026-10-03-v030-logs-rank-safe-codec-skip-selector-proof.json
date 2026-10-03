@@ -1,0 +1,35 @@
+{
+  "schema": "cmpct-v030-logs-rank-safe-codec-skip-selector-proof-v1",
+  "authority_parent": "d3311714f20d70f328f835865040b2c396fe3780",
+  "prereg_commit": "1bf1f0ee32ca62851987c28043107ec282e93309",
+  "current_selector": {
+    "recognized_rank": {
+      "zstd": 0,
+      "gzip": 1,
+      "xz": 2
+    },
+    "shipping_allowed": [
+      "gzip",
+      "zstd"
+    ],
+    "inherited_semantics": "discover recognized matches -> choose minimum rank per target -> post-filter selected edge to allowed codecs"
+  },
+  "theorem": "A disallowed codec may be skipped before decode only when its known rank is strictly worse than every known allowed codec rank. If the allowed set contains an unknown/unranked codec, disable this pruning conservatively. Better-ranked disallowed codecs remain observable because they can mask worse-ranked allowed candidates under choose-min-then-filter semantics.",
+  "exhaustive_check": {
+    "present_subsets_of_current_three_codecs": 8,
+    "allowed_sets_over_current_three_plus_one_unknown_symbol": 16,
+    "total_cases": 128,
+    "equivalent_cases": 128,
+    "mismatches": 0
+  },
+  "shipping_consequence": "With current allowed={gzip,zstd}, xz is the only recognized rank-safe pre-decode skip.",
+  "negative_control": "If allowed={gzip} and both zstd+gzip match, full discovery selects zstd then post-filter emits no edge. Blindly skipping all disallowed codecs would expose gzip and change semantics.",
+  "implementation_boundary": [
+    "Full discovery remains default when allowed_codecs is omitted.",
+    "Preserve the existing post-filter as semantic authority even after pre-decode pruning.",
+    "Unknown allowed codec ranks disable pruning rather than extrapolating rank dominance.",
+    "Record skipped sidecar count/stored bytes as observability, not archive metadata."
+  ],
+  "claim_boundary": "Selector algebra/property evidence only. Exact-head implementation tests and hosted product A/B remain mandatory before product/release credit.",
+  "release_credit": false
+}
