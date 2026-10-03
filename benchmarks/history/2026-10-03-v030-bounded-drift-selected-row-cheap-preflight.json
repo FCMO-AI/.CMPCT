@@ -1,0 +1,39 @@
+{
+  "claim_boundary": "Research/oracle evidence only. Cross-run PrefixGraph bytes and local zstd framing cannot substitute for the same-run hosted court. No selector, grammar, reader, release, runtime, external-frontier or product credit.",
+  "decision": "CHEAP_PREFLIGHT_SURVIVES: bounded drift is projected smaller than the current PrefixGraph reference on both decisive rows while staying below the 8x amplification and 8 MiB decode-unit limits. This is sufficient headroom to justify the already-preregistered hosted same-run court, but it is not substitution/product credit.",
+  "method": "Lower-rung local reimplementation of the exact bounded-drift primitive/container and semantic-sibling framing on the two preregistered decisive hostile content trees. The PrefixGraph comparator bytes are the source-current external artifact values, not a same-run local PrefixGraph build. Filesystem-manifest storage is conservatively charged at the maximum observed zstd-12 size across the prior 8-realization custody probe.",
+  "recorded_at_utc": "2026-10-03T13:46:00Z",
+  "release_credit": false,
+  "rows": {
+    "boundary": {
+      "bd_content_bytes": 72550,
+      "bd_stats": {"base_raw": 812012, "base_stored": 71473, "patch_raw": 1439, "patch_stored": 535},
+      "conservative_hosted_metadata_projection": {"delta_vs_current_external_prefixgraph_bytes": -2705, "ratio_vs_current_external_prefixgraph": 0.9643989944854635, "semantic_sibling_bytes_projected": 73276, "source_manifest_raw_bytes": 1004, "source_manifest_zstd12_bytes_max_observed": 630},
+      "logical_bytes": 9744144,
+      "members": 12,
+      "prefixgraph_reference_archive_bytes": 75981,
+      "resource_facts": {"max_decode_unit_bytes": 812012, "max_decode_unit_limit_bytes": 8388608, "max_member_read_amplification": 2.0029494638010275, "passes_8MiB_decode_unit": true, "passes_8x_amplification": true},
+      "tree": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d"
+    },
+    "shifted": {
+      "bd_content_bytes": 1687642,
+      "bd_stats": {"base_raw": 1862598, "base_stored": 1677956, "patch_raw": 22770, "patch_stored": 8899},
+      "conservative_hosted_metadata_projection": {"delta_vs_current_external_prefixgraph_bytes": -11944, "ratio_vs_current_external_prefixgraph": 0.99297657171553, "semantic_sibling_bytes_projected": 1688650, "source_manifest_raw_bytes": 1522, "source_manifest_zstd12_bytes_max_observed": 912},
+      "logical_bytes": 33525242,
+      "members": 18,
+      "prefixgraph_reference_archive_bytes": 1700594,
+      "resource_facts": {"max_decode_unit_bytes": 1862620, "max_decode_unit_limit_bytes": 8388608, "max_member_read_amplification": 2.0131034238359464, "passes_8MiB_decode_unit": true, "passes_8x_amplification": true},
+      "tree": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd"
+    }
+  },
+  "schema": "cmpct-v030-bounded-drift-selected-row-cheap-preflight-v1",
+  "source_custody": {
+    "bounded_drift_container_blob": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "bounded_drift_primitive_blob": "d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+    "external_artifact_id": 11185290175,
+    "external_artifact_zip_sha256": "cb5e1952302f316e7a5d8b19aa76733c99cf87ba3f33ad99555671bf5336c4d1",
+    "hosted_substitution_oracle_blob": "8d364cee995ceb94fd9e9fc9c541e2b44f6844f0",
+    "hostile_generator_blob": "335169bd6eb336b6d444cfbd34c291101262c3a9",
+    "product_fs_blob": "72404386775be4576365cc687784f4e4f752d9de"
+  }
+}
