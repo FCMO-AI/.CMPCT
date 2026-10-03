@@ -1,0 +1,59 @@
+{
+  "schema": "cmpct-v030-logs-rank-safe-codec-skip-prereg-v1",
+  "frozen_before_product_result": true,
+  "authority_parent": "d3311714f20d70f328f835865040b2c396fe3780",
+  "question": "Can shipping Logs v3 avoid decoding a provably rank-dominated disallowed xz sidecar without changing archive bytes, admitted inverse edges, semantics, or failure behavior for allowed gzip/zstd, and with decision-changing create/resource improvement?",
+  "mechanism": {
+    "selector": "discover all matches -> choose minimum CODEC_RANK -> product post-filter to allowed_inverse_codecs",
+    "current_rank": {
+      "zstd": 0,
+      "gzip": 1,
+      "xz": 2
+    },
+    "shipping_allowed": [
+      "gzip",
+      "zstd"
+    ],
+    "proposed_rule": "Skip a disallowed codec before decode only when its rank is strictly worse than every known allowed codec rank. Better-ranked disallowed codecs remain observable because they can mask a worse-ranked allowed winner under choose-then-filter semantics.",
+    "current_safe_skip": [
+      "xz"
+    ]
+  },
+  "invariants": [
+    "No benchmark/workload identity in dispatch or admission.",
+    "Full-discovery behavior remains the default for research callers when allowed_codecs is omitted.",
+    "Shipping valid Logs archive bytes and SHA must be identical to a same-input full-discovery control.",
+    "Final admitted inverse-edge targets/sources/codecs must be identical to the same-input full-discovery-then-filter control.",
+    "Malformed or oversized disallowed xz must remain ordinary user bytes and must not abort shipping Logs construction.",
+    "Malformed supported gzip/zstd remains fail-closed; no parser-error weakening.",
+    "Existing archive grammar, reader, recovery, locality/decode ceilings, and release comparators remain unchanged."
+  ],
+  "product_ab": {
+    "exact_input": "same generated source tree, staged once per paired arm where applicable",
+    "minimum_repetitions": 5,
+    "order": "alternating/ABBA where harness supports it",
+    "measure": [
+      "complete create wall",
+      "create CPU",
+      "whole process-tree peak RSS",
+      "archive bytes/SHA",
+      "strong verify",
+      "edge identity",
+      "skipped sidecar/stored-byte observability"
+    ],
+    "success": "Exactness/semantics gates all green and create/resource evidence is materially favorable enough to justify full external-matrix confirmation.",
+    "kill": "Any byte/SHA/tree/edge semantic change on valid input, any supported-codec failure masking, or no decision-changing create/resource headroom."
+  },
+  "current_external_context": {
+    "artifact": 11185290175,
+    "candidate_fingerprint": "6f298e1636ba42176b250f607be82159dd58b37626c1c8624d7d6ce4c75a6f8f",
+    "logs_cmpct_bytes": 3550294,
+    "logs_zip_bytes": 5442141,
+    "logs_zstd19_bytes": 4358684,
+    "logs_cmpct_create_s": 0.653414,
+    "logs_zip_create_s": 0.640991,
+    "logs_zstd19_create_s": 7.144843,
+    "strict_zip_create_deficit_s": 0.012423
+  },
+  "claim_boundary": "Preregistration only. No product/release credit until exact-head tests plus hosted same-run product A/B and inherited gates pass."
+}
