@@ -1,0 +1,58 @@
+{
+  "schema": "cmpct-v030-logs-rank-safe-codec-skip-local-probe-v1",
+  "authority_parent": "d3311714f20d70f328f835865040b2c396fe3780",
+  "prereg_commit": "1bf1f0ee32ca62851987c28043107ec282e93309",
+  "claim_boundary": "Lower-rung local exact-corpus mechanism evidence only. No product/release credit.",
+  "environment": {
+    "python": "3.13.5",
+    "zstd_cli": "1.5.7",
+    "platform": "Linux x86_64"
+  },
+  "corpus_reconstruction": {
+    "generator_blob": "9346995246f293fa03ea73e8782b809998588f71",
+    "repair_v1_blob": "ae5cf151b5741843a8161478e2cc2921d60d540c",
+    "all_six_raw_logs_match_current_runtime": true,
+    "both_xz_sidecars_match_current_runtime": true,
+    "zstd_sidecar_matches_current_runtime": true,
+    "gzip_sizes_match_current_runtime": true,
+    "gzip_container_hashes_match_current_runtime": false,
+    "gzip_note": "Local Python/zlib emits different deterministic gzip container bytes, but both gzip members decode to the exact current raw logs. Timing claim is mechanism-local, not archive-byte reproduction."
+  },
+  "selector": {
+    "full_decoded_sidecars": 5,
+    "full_decoded_plain_bytes": 12263744,
+    "rank_safe_decoded_sidecars": 3,
+    "rank_safe_decoded_plain_bytes": 7357149,
+    "skipped_sidecars": 2,
+    "skipped_stored_bytes": 745600,
+    "final_shipping_edges_identical": true,
+    "final_edge_codecs": [
+      "gzip",
+      "gzip",
+      "zstd"
+    ]
+  },
+  "paired_probe": {
+    "pairs": 61,
+    "order": "ABBA",
+    "baseline_wall_median_s": 0.06109847599998375,
+    "candidate_wall_median_s": 0.033628983000028256,
+    "paired_wall_saving_median_s": 0.027283174999979565,
+    "baseline_cpu_median_s": 0.05586435400000056,
+    "candidate_cpu_median_s": 0.028440110999998325,
+    "paired_cpu_saving_median_s": 0.0273877409999983,
+    "paired_wall_saving_p10_s": 0.025378367599989814,
+    "paired_wall_saving_p90_s": 0.02970967400003701,
+    "candidate_faster_pairs": 60,
+    "note": "The local scanner uses zstd CLI for the one zstd decode because python-zstandard is absent; the identical zstd operation is present in both arms. xz/gzip use Python stdlib as current source does."
+  },
+  "current_external_context": {
+    "artifact": 11185290175,
+    "cmpct_create_s": 0.653414,
+    "zip_create_s": 0.640991,
+    "strict_zip_create_deficit_s": 0.012423,
+    "local_paired_scan_saving_multiple_of_external_gap": 2.196203448844884
+  },
+  "decision": "Proceed to hosted exact-head product A/B when normal source writes are available. The critical xz/raw/zstd corpus identities reproduce, shipping edge identity is unchanged, and local paired removable scan wall exceeds the current external ZIP create deficit. No transfer credit before hosted product evidence.",
+  "release_credit": false
+}
