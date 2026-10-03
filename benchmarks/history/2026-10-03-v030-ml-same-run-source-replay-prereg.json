@@ -1,0 +1,58 @@
+{
+  "schema": "cmpct-v030-ml-same-run-source-replay-prereg-v1",
+  "recorded_at": "2026-10-03T08:00:00-06:00",
+  "authority_head": "d3311714f20d70f328f835865040b2c396fe3780",
+  "historical_green_source": "4bdb6f761ea370b7f1c5a1bc11f2fa3ed0e79a8a",
+  "current_product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "question": "On one runner and one third-party dependency closure, does current source remain above the existing ML create ceiling while historical exact-green source remains at or below it?",
+  "rationale": {
+    "current_exact_source_job_level_ml_create_ratios": [
+      1.2861129120225927,
+      1.2907496827365676,
+      1.2718851067912218
+    ],
+    "existing_ceiling": 1.25,
+    "historical_exact_green_ratio": 1.2310722870863735,
+    "current_debt_reproduced": true,
+    "causal_owner_unresolved": true,
+    "note": "Cross-run wall time and inner-order sensitivity are material; current release debt is real, but source lineage versus environment/runtime cannot be assigned honestly from separate hosted runs."
+  },
+  "experiment": {
+    "outer_order": [
+      "historical",
+      "current",
+      "current",
+      "historical"
+    ],
+    "workload": "neutral_hostile_v1/09_ml_artifacts",
+    "inner_order": "inherit the repository performance harness unchanged: (v029,v030), then (v030,v029)",
+    "environment": "one ubuntu-24.04 runner; same Python version and pinned third-party dependency closure for both source-specific editable installs",
+    "custody": [
+      "exact source SHAs",
+      "pip freeze for both source environments",
+      "uname and zstd version",
+      "input-tree SHA identities",
+      "accepted-v0.29 byte baseline",
+      "archive bytes and emitted candidate fingerprints",
+      "raw inner repetition measurements"
+    ]
+  },
+  "immutable_decision_law": {
+    "ceiling": 1.25,
+    "source_lineage_supported": "current conventional median > 1.25 and historical conventional median <= 1.25",
+    "environment_or_shared_runtime_dominates": "current conventional median > 1.25 and historical conventional median > 1.25",
+    "current_red_not_reproduced": "current conventional median <= 1.25 and historical conventional median <= 1.25",
+    "current_source_not_owner": "current conventional median <= 1.25 and historical conventional median > 1.25"
+  },
+  "hard_invariants": [
+    "no threshold change",
+    "no workload change beyond narrowing this causal court to the already-red ML row",
+    "no timing-boundary change inside either source's inherited performance harness",
+    "no benchmark-corpus identity change",
+    "no comparator weakening",
+    "no release/product credit from this research court alone"
+  ],
+  "next_if_source_lineage_supported": "Run the already-owned exact native FastCDC child-transfer court only if FastCDC remains a plausible owner after the same-run source comparison.",
+  "next_if_not_supported": "Do not optimize product code from cross-run intuition; localize environment/shared-runtime ownership or improve measurement before reopening mechanism work.",
+  "claim_boundary": "Research/causal-attribution preregistration only. No product, release, version, selector, format or performance credit."
+}
