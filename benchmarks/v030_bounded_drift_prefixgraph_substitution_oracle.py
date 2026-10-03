@@ -43,6 +43,14 @@ SPECS = (
     ("resemblance_hostile_v1", "04_deflate_family", "527a9e356e923e5bcc26566a8f677a7f7277af1577493e09c2bdca1b6d17154a", False),
 )
 
+DECISIVE_KEYS = {
+    ("resemblance_hostile_v1", "01_shifted_versions"),
+    ("resemblance_hostile_v1", "03_boundary_churn"),
+}
+DECISIVE_SPECS = tuple(spec for spec in SPECS if (spec[0], spec[1]) in DECISIVE_KEYS)
+if {(spec[0], spec[1]) for spec in DECISIVE_SPECS} != DECISIVE_KEYS:
+    raise RuntimeError("selected-row oracle decisive-set drift")
+
 
 def _h(data: bytes) -> bytes:
     return hashlib.sha256(data).digest()
@@ -135,6 +143,52 @@ def _build_source(work: Path, suite: str, name: str) -> Path:
     else:
         raise RuntimeError(f"unknown substitution-oracle workload: {suite}/{name}")
     return root / name
+
+
+def _prefixgraph_complete_operation_locality(archive: Path) -> dict:
+    """Measure the actual r25 filesystem-control + user-content context for every regular user member.
+
+    PrefixGraph admission preflight prices only graph-record context.  This court compares complete user
+    operations, so it must also charge the authenticated filesystem manifest that resolves a user path to
+    the underlying content identity.  Reuse the canonical profile reader instead of inventing a second
+    PrefixGraph model.
+    """
+    manifest_raw, manifest_stats = CANONICAL._read_profile_member(archive, FS.FILESYSTEM_MANIFEST)
+    content_identities = CANONICAL._profile_content_identities(archive)
+    decoded, _encoding = CANONICAL.MANIFEST_ADMISSION.decode_from_content_identities(
+        manifest_raw,
+        content_identities=content_identities,
+        max_path_bytes=CANONICAL.POLICY.R.MAX_PATH_BYTES,
+        max_entries=CANONICAL.MAX_MANIFEST_ENTRIES,
+    )
+    manifest_context = int(manifest_stats["decoded_context_bytes"])
+    rows = []
+    worst = 0.0
+    for rel, (expected_size, expected_digest) in sorted(decoded["regular"].items()):
+        raw, content_stats = CANONICAL._read_profile_member(archive, rel)
+        if len(raw) != int(expected_size) or hashlib.sha256(raw).digest() != bytes(expected_digest):
+            raise RuntimeError(f"PrefixGraph complete-operation identity mismatch for {rel}")
+        content_context = int(content_stats["decoded_context_bytes"])
+        decoded_context = manifest_context + content_context
+        amplification = decoded_context / max(1, len(raw))
+        worst = max(worst, amplification)
+        rows.append(
+            {
+                "path": rel,
+                "logical_bytes": len(raw),
+                "filesystem_manifest_decoded_context_bytes": manifest_context,
+                "content_decoded_context_bytes": content_context,
+                "decoded_context_bytes": decoded_context,
+                "decoded_context_amplification": amplification,
+            }
+        )
+    return {
+        "max_member_read_amplification": worst,
+        "filesystem_manifest_decoded_context_bytes": manifest_context,
+        "passed": worst <= 8.0,
+        "rows": rows,
+        "accounting_source": "canonical-profile-filesystem-manifest-plus-content-v1",
+    }
 
 
 def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, work: Path) -> dict:
@@ -240,9 +294,12 @@ def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, 
     pg_verify = dict(pg.strong_verify(pg_path))
     if not pg_verify.get("ok") or pg_verify.get("tree_sha256") != staged_tree:
         raise RuntimeError("PrefixGraph strong verification failed")
-    pg_locality = dict(CANONICAL.RC._prefixgraph_locality(pg_path))
+    pg_admission_locality = dict(CANONICAL.RC._prefixgraph_locality(pg_path))
+    if not pg_admission_locality.get("passed"):
+        raise RuntimeError("PrefixGraph admission-preflight locality failed")
+    pg_locality = _prefixgraph_complete_operation_locality(pg_path)
     if not pg_locality.get("passed"):
-        raise RuntimeError("PrefixGraph locality failed")
+        raise RuntimeError("PrefixGraph complete-operation locality failed")
 
     g04_path = work / "g04.cmpct"
     g04_started = time.perf_counter()
@@ -298,6 +355,14 @@ def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, 
             "create_s": pg_create_s,
             "physical_sha256": hashlib.sha256(pg_path.read_bytes()).hexdigest(),
             "max_member_read_amplification": pg_locality["max_member_read_amplification"],
+            "filesystem_manifest_decoded_context_bytes": pg_locality[
+                "filesystem_manifest_decoded_context_bytes"
+            ],
+            "locality_accounting": pg_locality["accounting_source"],
+            "admission_preflight_max_member_read_amplification": pg_admission_locality[
+                "max_member_read_amplification"
+            ],
+            "operation_rows": pg_locality["rows"],
             "stats": pg_stats,
         },
         "g04": {
@@ -318,11 +383,12 @@ def _row(suite: str, name: str, expected_tree: str, expected_pg_selected: bool, 
     }
 
 
-def run(out_path: Path) -> dict:
+def run(out_path: Path, *, decisive_only: bool = False) -> dict:
     rows = []
+    specs = DECISIVE_SPECS if decisive_only else SPECS
     with tempfile.TemporaryDirectory(prefix="cmpct-bd-pg-substitution-") as td:
         root = Path(td)
-        for index, spec in enumerate(SPECS):
+        for index, spec in enumerate(specs):
             work = root / f"row-{index:02d}"
             work.mkdir()
             rows.append(_row(*spec, work))
@@ -339,6 +405,7 @@ def run(out_path: Path) -> dict:
             "current PrefixGraph-eligible row while G0-G4 remains unchanged?"
         ),
         "rows": rows,
+        "court_scope": "decisive-prefixgraph-winners" if decisive_only else "all-prefixgraph-eligible-controls",
         "decision": (
             "SUBSTITUTION_RUNG_SURVIVES" if survives else "SUBSTITUTION_RUNG_FALSIFIED_OR_NARROWED"
         ),
@@ -361,8 +428,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--require-survival", action="store_true")
+    parser.add_argument(
+        "--decisive-only",
+        action="store_true",
+        help="run only the preregistered current PrefixGraph-winning Shifted + Boundary rows",
+    )
     args = parser.parse_args()
-    result = run(args.output)
+    result = run(args.output, decisive_only=args.decisive_only)
     print(json.dumps(result, indent=2, sort_keys=True))
     if args.require_survival and not result["survives"]:
         raise SystemExit("bounded-drift-for-PrefixGraph substitution did not survive the preregistered court")
