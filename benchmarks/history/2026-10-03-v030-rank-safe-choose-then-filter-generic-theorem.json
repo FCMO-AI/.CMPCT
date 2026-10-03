@@ -1,0 +1,39 @@
+{
+  "schema": "cmpct-v030-rank-safe-choose-then-filter-generic-theorem-v1",
+  "research_parent": "af35fa13fa12dea67e4b45dc95a75d7ffe1b11ad",
+  "scope": "Generic selector algebra; independent of gzip/xz/zstd names and current benchmark identity.",
+  "theorem": "For a selector that chooses the lexicographic minimum (codec_rank, source_index, codec) and then filters the winner to an allowed codec set, a disallowed candidate can be removed before evaluation if its known codec rank is strictly worse than every known allowed codec rank. If any allowed codec has unknown rank, pruning is disabled.",
+  "exhaustive_generic_model": {
+    "codec_count": 4,
+    "distinct_rank_permutations": 24,
+    "source_indexes_per_codec": 2,
+    "candidate_atoms": 8,
+    "candidate_subsets": 256,
+    "allowed_sets_over_four_known_plus_one_unknown": 32,
+    "total_cases": 196608,
+    "equivalent_cases": 196608,
+    "mismatches": 0
+  },
+  "proof_boundary": [
+    "Ranks are total and distinct at codec-class level, matching current CODEC_RANK semantics.",
+    "Same-codec source-index ties remain untouched because the rule removes whole disallowed codec classes only when rank-dominated.",
+    "Unknown allowed ranks conservatively disable pruning.",
+    "This theorem proves selector equivalence only; parser side effects/resource behavior and product archive identity remain separate evidence obligations."
+  ],
+  "current_logs_instantiation": {
+    "rank": {
+      "zstd": 0,
+      "gzip": 1,
+      "xz": 2
+    },
+    "allowed": [
+      "gzip",
+      "zstd"
+    ],
+    "rank_safe_disallowed_skip": [
+      "xz"
+    ]
+  },
+  "claim_boundary": "Derivation/executable finite-model evidence only. No product or release credit.",
+  "release_credit": false
+}
