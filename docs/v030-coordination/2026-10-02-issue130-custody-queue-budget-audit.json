@@ -1,0 +1,23 @@
+{
+  "schema": "cmpct-v030-issue130-custody-queue-budget-audit-v1",
+  "parent_prereg": "docs/v030-coordination/2026-10-02-issue130-exact-custody-prereg.json",
+  "authority_head": "d3311714f20d70f328f835865040b2c396fe3780",
+  "observation": "The new candidate-custody lane is a cheap current-head guard, not a long-running scientific receipt. Exact-SHA non-cancelling scheduling would preserve obsolete red guard jobs after a newer PR head exists and recreates avoidable pending-run inventory.",
+  "unchanged_invariant": [
+    "checkout and evaluate exactly EVIDENCE_HEAD",
+    "run tools/check_v030_release_lock.py --json before setup/build",
+    "upload candidate-custody.json under if: always()",
+    "a fingerprint/receipt/task-state red must remain red",
+    "heavy compression/runtime/external receipts remain exact-SHA and cancel-in-progress=false"
+  ],
+  "refined_scheduling": {
+    "candidate_custody_group": "PR/ref scoped, same scheduling key class as the existing latest-head-impact classifier",
+    "candidate_custody_cancel_in_progress": true,
+    "exactness_source": "EVIDENCE_HEAD checkout + explicit git rev-parse equality, not the concurrency key",
+    "heavy_jobs": "unchanged exact-SHA non-cancelling groups"
+  },
+  "ci_topology_fit": "The current split-receipt topology checker requires PR/ref cancelling classifier custody plus exact-SHA non-cancelling result jobs; it does not require every cheap guard job to use exact-SHA non-cancelling scheduling.",
+  "benefit": "Preserves Issue #130 truth while avoiding one durable pending custody job per superseded long-lived-PR commit.",
+  "kill": "If cancelling an obsolete custody job can hide the current head's lock state, reject this refinement. The current head must always receive one exact-head custody result.",
+  "claim_boundary": "CI scheduling/evidence-custody refinement only. No release, product, threshold, receipt or benchmark credit."
+}
