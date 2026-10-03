@@ -1,0 +1,49 @@
+{
+  "schema": "cmpct-v030-logs-rank-safe-codec-skip-multisource-proof-v1",
+  "authority_parent": "d3311714f20d70f328f835865040b2c396fe3780",
+  "research_parent": "59c4aee0c550950da000b51ffed30a361dbba8d7",
+  "source_blobs": {
+    "scanner": "1de8a1b861b01dc9be22d5ebb0491208279d7e89",
+    "logs_v2": "8fc6ece83517127e37aea559b2379d757f199efa",
+    "logs_v3": "9aaccd15133bbf059f671d15d3e85ec0b14c8f0e",
+    "release_logs_wrapper": "8aae9097fdb4681c1c1761458c2c918bbd3f15b0"
+  },
+  "selector": {
+    "codec_rank": {
+      "zstd": 0,
+      "gzip": 1,
+      "xz": 2
+    },
+    "inherited_order": "minimum (codec_rank, source_index, codec) per logical target, then product post-filter to allowed_inverse_codecs",
+    "shipping_allowed": [
+      "gzip",
+      "zstd"
+    ]
+  },
+  "theorem": "A disallowed candidate may be skipped before decode only when its known codec rank is strictly worse than every known allowed codec rank. If any allowed codec is unknown/unranked, pruning is disabled. The rule preserves the inherited minimum-rank/source-index winner before the existing post-filter.",
+  "exhaustive_model": {
+    "source_indexes_per_codec": 3,
+    "candidate_atoms": 9,
+    "candidate_subsets": 512,
+    "allowed_sets_over_current_codecs_plus_one_unknown_symbol": 16,
+    "total_cases": 8192,
+    "equivalent_cases": 8192,
+    "mismatches": 0
+  },
+  "proof_sketch": [
+    "If the baseline winner is allowed, every skipped candidate has worse codec rank and cannot outrank it.",
+    "If the baseline winner is disallowed but not rank-dominated, it remains visible and continues to mask later allowed candidates.",
+    "If the baseline winner is disallowed and rank-dominated, no allowed candidate can be present: any present allowed candidate would have lower rank and would already have won. Removing the dominated winner therefore still yields no allowed edge.",
+    "Same-codec source-index ordering is untouched because pruning operates only by codec class and never removes an allowed codec."
+  ],
+  "shipping_consequence": "For current allowed={gzip,zstd}, xz is the only recognized codec that is rank-safe to skip before decode.",
+  "negative_control": "With allowed={gzip}, zstd is disallowed but rank 0. If zstd and gzip both match, full discovery selects zstd and the post-filter emits no edge. Blind unsupported-codec skipping would incorrectly expose gzip.",
+  "implementation_boundary": [
+    "Full discovery remains default for research callers when allowed_inverse_codecs is omitted.",
+    "The existing V2 post-filter remains the semantic authority after prospective pruning.",
+    "Unknown allowed codec ranks disable pruning conservatively.",
+    "Skipped-sidecar telemetry is build evidence only and must not alter archive bytes."
+  ],
+  "claim_boundary": "Selector derivation/property evidence only. Exact-head implementation tests, hostile supported/disallowed codec cases, hosted same-input product A/B and unchanged external gates remain mandatory before product/release credit.",
+  "release_credit": false
+}
