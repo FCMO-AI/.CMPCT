@@ -1,0 +1,41 @@
+{
+  "schema": "cmpct-v030-logs-rank-safe-codec-skip-admission-coupling-v1",
+  "authority_parent": "d3311714f20d70f328f835865040b2c396fe3780",
+  "research_parent": "6b1cc0fda9ed3f067841a3df5d6fa8737a39d8b0",
+  "source_blobs": {
+    "release_logs_wrapper": "8aae9097fdb4681c1c1761458c2c918bbd3f15b0",
+    "logs_v3": "9aaccd15133bbf059f671d15d3e85ec0b14c8f0e",
+    "logs_v2": "8fc6ece83517127e37aea559b2379d757f199efa",
+    "shared_scanner": "1de8a1b861b01dc9be22d5ebb0491208279d7e89"
+  },
+  "frontdoor": {
+    "structural_suffixes": [
+      ".gz",
+      ".zst"
+    ],
+    "minimum_sidecar_pairs": 2,
+    "xz_participates_in_prefilter": false,
+    "positive_prefilter_only": "A trusted positive prefilter removes a duplicate tree walk but cannot admit a Logs archive by itself."
+  },
+  "final_admission": {
+    "minimum_inverse_edges": 2,
+    "minimum_saving_vs_r24_bytes": 1048576,
+    "maximum_logs_to_r24_ratio": 0.8,
+    "maximum_member_read_amplification": 8,
+    "maximum_decode_unit_bytes": 8388608,
+    "inverse_edge_count_source": "V3/V2 final allowed-codec edge map; native supported inverse codecs are gzip and zstd."
+  },
+  "consequence": [
+    "A malformed or valid xz sidecar cannot make an otherwise ineligible source enter the Logs terminal because the frontdoor proof ignores xz.",
+    "After entry, xz cannot contribute to the final shipping inverse-edge count because canonical V3 filters to gzip/zstd.",
+    "Therefore rank-safe xz pre-decode pruning removes only speculative relation-discovery work/failure exposure; xz bytes remain ordinary authenticated direct user data.",
+    "The optimization can still change product behavior on a source that already has >=2 gzip/zstd structural witnesses plus malformed xz: current code may abort/fallback during irrelevant xz decoding, while the candidate can continue to exact gzip/zstd admission. That intended robustness change must remain covered by exact same-input product tests."
+  ],
+  "non_claims": [
+    "This does not authorize skipping malformed supported gzip/zstd discovery.",
+    "This does not grant archive-byte identity without the exact-head product A/B.",
+    "This does not change release admission thresholds or codec support."
+  ],
+  "claim_boundary": "Source-structure/admission derivation only; no product or release credit.",
+  "release_credit": false
+}
