@@ -1,6 +1,11 @@
-from benchmarks import v030_release_selective_read_product as gate
+from __future__ import annotations
 
-gate.B.WORKER = gate.B.ROOT / "benchmarks" / "v030_perf_worker_compact_r24.py"
+"""Unchanged selective-read product gate with only the fresh-process worker rebound to the bounded candidate."""
+from pathlib import Path
+
+from benchmarks import v030_release_selective_read_product as product_gate
+
+product_gate.B.WORKER = Path(__file__).with_name("v030_perf_worker_compact_r24.py")
 
 if __name__ == "__main__":
-    gate.main()
+    product_gate.main()
