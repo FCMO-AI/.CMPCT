@@ -1,0 +1,58 @@
+{
+  "schema": "cmpct-v030-prefixgraph-isolated-parallel-staged-input-addendum-v1",
+  "date": "2026-10-02",
+  "branch_before_addendum": "agent/phased3-prefixgraph-isolated-parallel-profile-fix@5954965bd335181266024474ede9aa6e8319cf2c",
+  "original_prereg_blob": "decc063865d25ec8a070276c0b6d93dabd49cb93",
+  "original_oracle_blob": "a4fa21e20f154bd56330c340f6b8d41065f3bf34",
+  "authority_head_reconciled": "d3311714f20d70f328f835865040b2c396fe3780",
+  "status": "PROSPECTIVE_HARNESS_REPAIR_REQUIRED_BEFORE_FIRST_RESULT",
+  "question_unchanged": "Can the already-promoted four-worker bounded PrefixGraph anchor scheduler be recomposed inside the current one-shot level-15 isolated child, preserving the child-before-G04 lifetime barrier, exact candidate set/tie law and bytes, while materially reducing the current Shifted create owner?",
+  "custody_defect": {
+    "original_oracle_input": "raw generated user workload root",
+    "shipping_input": "CANONICAL._prepare_profile_tree(user_root, staged_root) output",
+    "why_material": "Shipping PrefixGraph receives regular graph members plus the authenticated filesystem-control member. The raw-root court therefore prices a different file set, tree identity and archive than the shipping child.",
+    "original_oracle_verifier": "research PrefixGraph strong_verify",
+    "shipping_verifier": "canonical strong_verify, which authenticates the selected filesystem control and reconstructs the user-visible semantic tree"
+  },
+  "repair_only": [
+    "stage each frozen raw workload once through exact current CANONICAL._prepare_profile_tree before either serial or parallel child invocation",
+    "compute source user-tree identity with CANONICAL.treehash(raw_source)",
+    "compute staged content-graph identity with CANONICAL.RC.PG.treehash(staged_root)",
+    "apply CANONICAL.RC._prefixgraph_eligibility to the staged root and staged graph identity",
+    "invoke both unchanged serial and parallel children on the same staged root",
+    "verify each archive through CANONICAL.strong_verify and require exact user-tree, staged content-tree, filesystem-control SHA and filesystem-entry identity"
+  ],
+  "unchanged": {
+    "semantic_owner": "experiments._v030_canonical_prefixgraph",
+    "prefix_level": 15,
+    "candidate_scheduler": "existing bounded four-worker winner-plus-inflight PrefixGraph scheduler",
+    "pairs_per_workload": 4,
+    "pair_order": "ABBA",
+    "workloads": [
+      "resemblance_hostile_v1/01_shifted_versions",
+      "resemblance_hostile_v1/03_boundary_churn"
+    ],
+    "identity_gates": [
+      "archive bytes and SHA identical serial vs parallel",
+      "selected anchor and anchor-audition count identical",
+      "staged content-graph tree identical",
+      "user-visible semantic tree identical",
+      "authenticated filesystem-control identity identical",
+      "child exits before any G04 construction"
+    ],
+    "materiality": [
+      "Shifted median child build wall improvement >=20%",
+      "Shifted median child build wall saving >=1.0 s",
+      "Boundary Churn median child build wall non-regression"
+    ],
+    "promotion_boundary": "Research green earns only unchanged full product runtime/RSS/external follow-up; no release credit."
+  },
+  "kill": [
+    "any archive/user-tree/staged-tree/filesystem-control/anchor/count/prefix-level/process-boundary drift",
+    "Shifted materiality gate fails",
+    "Boundary Churn median wall regresses",
+    "full-product follow-up cannot preserve unchanged runtime/RSS thresholds"
+  ],
+  "result_observed_before_addendum": false,
+  "release_credit": false
+}
