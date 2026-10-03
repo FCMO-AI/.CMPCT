@@ -1,0 +1,58 @@
+{
+  "schema": "cmpct-v030-logs-rank-safe-codec-skip-hosted-baseline-custody-v1",
+  "authority_head": "d3311714f20d70f328f835865040b2c396fe3780",
+  "workflow_run": 37006668700,
+  "job": 110836448132,
+  "executed_head": "7188663dbe71aed437ec81e54d732227e9f0735e",
+  "executed_head_relation_to_authority": {
+    "ahead": 5,
+    "behind": 0,
+    "effective_file_delta": [],
+    "interpretation": "PR #56 merge commit ancestry differs but its tree has no file delta versus d331 authority; this is source-equivalent baseline evidence, not a literal d331 exact-head run."
+  },
+  "artifact": {
+    "id": 11226171887,
+    "name": "v030-logs-inverse-edge-7188663dbe71aed437ec81e54d732227e9f0735e",
+    "upload_zip_sha256": "81aee8cc628730e193178be2371842a051a1f6f800d048336936c51290be919c"
+  },
+  "exact_inverse_edge_baseline": {
+    "accepted_v029_bytes": 3550609,
+    "decoded_sidecars": 5,
+    "decoded_sidecar_plain_bytes": 12263744,
+    "inverse_edges": 3,
+    "inverse_edge_targets": [
+      "app-00.log",
+      "app-01.log",
+      "app-02.log"
+    ],
+    "inverse_edge_sources": [
+      "app-00.log.gz",
+      "app-01.log.gz",
+      "app-02.log.zst"
+    ],
+    "source_plan_s": 0.07511856599995781,
+    "max_member_read_amplification": 3.002135695007078,
+    "max_decode_unit_bytes": 7354596,
+    "zip": {
+      "archive_bytes": 5442141,
+      "create_s": 0.6382421540000109
+    },
+    "zstd19": {
+      "archive_bytes": 4358684,
+      "create_s": 7.737278265999976
+    },
+    "closest_research_candidate": {
+      "level": 9,
+      "archive_bytes": 3710138,
+      "create_s": 0.2112823219999882,
+      "no_regression_vs_v029": false
+    }
+  },
+  "relevance_to_rank_safe_xz_court": [
+    "This result-bearing hosted baseline confirms the current scanner spends 75.119 ms in source scan/hash/sidecar decode/exact-edge discovery/segment planning before candidate encoding.",
+    "It confirms five sidecars are decoded to discover the same three gzip/gzip/zstd edges targeted by the preregistered xz pruning law.",
+    "It does not measure the rank-safe candidate and therefore grants no speedup/product credit."
+  ],
+  "claim_boundary": "Hosted source-equivalent research baseline only; not the canonical Logs product A/B and not release credit.",
+  "release_credit": false
+}
