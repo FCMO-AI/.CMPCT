@@ -1,0 +1,66 @@
+{
+  "schema": "cmpct-v030-logs-rank-safe-codec-skip-execution-custody-v1",
+  "recorded_at_utc": "2026-10-03T08:00:00Z",
+  "authority": {
+    "branch": "agent/v030-authoritative-integration",
+    "head": "d3311714f20d70f328f835865040b2c396fe3780",
+    "discovery_state_blob": "b7b95564c3e112b69aea2b5202f0dd6c31a42b0b"
+  },
+  "research_branch": {
+    "branch": "agent/phased3-logs-rank-safe-codec-skip",
+    "observed_head_before_write": "349b720e3467541dc01e59a665f20990f2fd666c",
+    "ahead_of_authority": 3,
+    "behind_authority": 0,
+    "preexisting_delta_paths": [
+      "benchmarks/history/2026-10-03-v030-logs-rank-safe-codec-skip-local-probe.json",
+      "benchmarks/history/2026-10-03-v030-logs-rank-safe-codec-skip-prereg.json",
+      "benchmarks/history/2026-10-03-v030-logs-rank-safe-codec-skip-selector-proof.json"
+    ]
+  },
+  "exact_head_ci_truth": {
+    "authority_external_competitors": {
+      "run_id": 37006668607,
+      "head_sha": "d3311714f20d70f328f835865040b2c396fe3780",
+      "classifier_job": {
+        "id": 110836447120,
+        "conclusion": "success"
+      },
+      "deep_external_job": {
+        "id": 110837037477,
+        "conclusion": "skipped"
+      },
+      "artifacts": 0,
+      "conclusion": "Classifier/topology success only; no exact-head external competitor matrix was executed."
+    },
+    "authority_logs_selector_shadow": {
+      "run_id": 37006668708,
+      "head_sha": "d3311714f20d70f328f835865040b2c396fe3780",
+      "changes_job": {
+        "id": 110836447356,
+        "conclusion": "success"
+      },
+      "external_shadow_job": {
+        "id": 110836984054,
+        "conclusion": "skipped"
+      },
+      "prefilter_abba_job": {
+        "id": 110836984435,
+        "conclusion": "skipped"
+      },
+      "conclusion": "Classifier success only; no exact-head Logs selector external shadow or prefilter ABBA result."
+    }
+  },
+  "trigger_reconciliation": {
+    "logs_selector_external_shadow": "A future change to experiments/entropygraph_v030_logs_inverse_profile*.py or the release Logs candidate is in the existing deep external-shadow trigger set.",
+    "external_competitors": "A future change to experiments/entropygraph_v030_*.py is in the existing strict external-competitor deep trigger set.",
+    "implication": "A product-source implementation can earn deep hosted evidence through existing CI once it lands on a PR-to-main surface; current green classifier runs must not be cited as that evidence."
+  },
+  "write_boundary": {
+    "attempted_product_source_update": "BLOCKED_BEFORE_EXECUTION_BY_PLATFORM_SAFETY",
+    "low_level_git_bypass_attempted": false,
+    "result": "No product source mutation and no result-bearing hosted run exists for the rank-safe xz mechanism."
+  },
+  "next_decisive_action": "Land the preregistered scanner/V2 seam through the normal source-write path, run exact selector/adversarial tests and a paired same-input product A/B, then use unchanged external gates if the A/B is green.",
+  "product_credit": false,
+  "release_credit": false
+}
