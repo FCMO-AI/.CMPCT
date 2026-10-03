@@ -1,0 +1,42 @@
+{
+  "schema": "cmpct-v030-issue130-exact-custody-prereg-v1",
+  "authority_head": "d3311714f20d70f328f835865040b2c396fe3780",
+  "issue": 130,
+  "hosted_false_green": {
+    "exact_head": "6f860621c9597ab9ac965d5ea81fc79003776dbd",
+    "fingerprinted_change": ".github/workflows/v030-placement-edge-process-oracle.yml",
+    "final_authority_run": 35338231082,
+    "classifier_job": 105577956101,
+    "classifier_conclusion": "success",
+    "classifier_message": "Accumulated PR paths matched, but newest exact commit cannot affect final-release authority.",
+    "result_jobs": "contracts/compression/runtime/external all skipped"
+  },
+  "current_owners": {
+    "final_authority_workflow_blob": "b8877d03584a881df91bb638233eee5bff1ff906",
+    "strict_release_lock_blob": "cb66609746f1f056a6f41173831f7faf58182939",
+    "strict_checker_blob": "297637503ea80bd852d2e464e7f4ddd90db93b48",
+    "final_custody_test_blob": "a441f1e87f87dca367b8ec06e33c677141c6eead"
+  },
+  "falsified_repairs": [
+    "Repair only the newest-head regex: insufficient because pull_request.paths can prevent workflow instantiation.",
+    "Reuse fingerprint_globs with fnmatch.fnmatchcase: not equivalent to the strict checker recursive glob semantics.",
+    "Add another hand-maintained fingerprint regex/list: creates a second semantic owner and can drift again."
+  ],
+  "selected_architecture": {
+    "candidate_custody": "Run the exact strict release-lock front door on every PR to main, before setup/build, bound to EVIDENCE_HEAD.",
+    "heavy_product_work": "Keep existing literal git diff-tree --no-commit-id --name-only -r HEAD classifier for expensive compression/runtime/external jobs.",
+    "workflow_trigger": "Remove final-authority pull_request.paths so candidate custody cannot be narrower than release identity.",
+    "artifact": "Always upload candidate-custody.json, including truthful red results.",
+    "thresholds_changed": false,
+    "workloads_changed": false,
+    "comparators_changed": false,
+    "receipt_assertions_changed": false
+  },
+  "prediction": "On the historical Issue #130 witness, strict candidate custody would run and report LOCKED instead of allowing a classifier-only green workflow.",
+  "kill_or_repair": [
+    "Any design that still allows a fingerprinted change to skip strict candidate custody is rejected.",
+    "Any repair that weakens release-lock assertions, task-state law, fingerprint coverage, or heavy evidence thresholds is rejected.",
+    "If CI topology rejects unconditional cheap custody, repair topology law only by preserving the same exact-head custody invariant rather than restoring a narrower trigger."
+  ],
+  "claim_boundary": "Preregistration/evidence-custody only. No product, receipt, merge, tag, version or release credit."
+}
