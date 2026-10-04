@@ -1,0 +1,66 @@
+{
+  "schema": "cmpct-v030-ml-wrapper-custody-prereg-v1",
+  "created_at": "2026-10-03T09:06:00-06:00",
+  "authority_base": "d3311714f20d70f328f835865040b2c396fe3780",
+  "product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "question": "On exact current product source and one hosted runner, does the canonical performance worker path materially increase the accepted-v0.29→v0.30 ML create ratio relative to the older v2 worker path, when both time the same engine.build calls on one deterministic ML source tree?",
+  "mechanism_hypothesis": "The canonical worker imports the canonical v0.30 product identity engine before starting its operation timer even when measuring v0.29. The v2 worker does not. That pre-timer import can warm current-product/shared dependencies for the v0.29 baseline without equivalently helping v0.30, making the canonical v0.30/v0.29 ratio worse even though engine.build semantics are unchanged.",
+  "prediction": {
+    "primary": "The same-run conventional median canonical-worker create ratio will exceed the same-run v2-worker ratio on ML.",
+    "stronger_signal": "If canonical median is >1.25 while v2 median is <=1.25, wrapper/worker custody rather than product-source lineage is sufficient to explain the release-gate split.",
+    "falsifier": "If the two worker paths have materially overlapping paired ratios and the canonical-v2 median delta is not directionally positive, this worker-path hypothesis is not the runtime owner."
+  },
+  "court": {
+    "source_tree": "neutral_hostile_v1/09_ml_artifacts generated once by the current frozen corpus builder and reused by all arms",
+    "workers": [
+      "benchmarks/v030_perf_worker_v2.py",
+      "benchmarks/v030_perf_worker_canonical.py"
+    ],
+    "engines": [
+      "v029",
+      "v030"
+    ],
+    "pairs_per_worker": 4,
+    "engine_orders": [
+      [
+        "v029",
+        "v030"
+      ],
+      [
+        "v030",
+        "v029"
+      ],
+      [
+        "v030",
+        "v029"
+      ],
+      [
+        "v029",
+        "v030"
+      ]
+    ],
+    "worker_block_order": [
+      "v2",
+      "canonical",
+      "canonical",
+      "v2",
+      "canonical",
+      "v2",
+      "v2",
+      "canonical"
+    ],
+    "statistic": "For each worker path, compute four per-pair v030/v029 pack_wall ratios and the conventional even-sample median (mean of the middle two sorted ratios).",
+    "charge": "Each worker is invoked as its unchanged fresh Python subprocess. Worker import/setup before its own operation timer remains exactly whatever that worker currently owns; parent orchestration time is not credited.",
+    "identity": [
+      "same deterministic source tree SHA-256 domain",
+      "same v0.29 archive bytes across both worker paths",
+      "same v0.30 archive bytes across both worker paths",
+      "same per-engine tree identity across both worker paths"
+    ],
+    "unchanged_release_ceiling": 1.25
+  },
+  "credit_boundary": "Research/custody attribution only. A result does not change product code, release thresholds, candidate fingerprint authority, or grant release credit.",
+  "next_if_positive": "Localize the smallest worker-path cause, beginning with canonical worker's unconditional pre-timer product-identity import on v0.29, then rerun the unchanged release-performance court only after a causal repair.",
+  "next_if_negative": "Do not tune the worker path. Return to the already-preregistered same-run historical-current source replay or the next strongest runtime owner test.",
+  "safety": "No archive format, selector, workload, comparator, threshold, integrity, recovery, path, locality, timing boundary inside either worker, or release law is modified."
+}
