@@ -21,7 +21,7 @@
   "exact_head_ci": {
     "workflow_runs": 0,
     "combined_statuses": 0,
-    "status": "UNEXECUTED"
+    "status": "UNEXECUTED_AFTER_IMPLEMENTATION"
   },
   "kill": [
     "any accepted physical-byte drift",
@@ -29,5 +29,24 @@
     "any early rejection before the first irreversible patch-budget crossing",
     "any resource/integrity regression"
   ],
-  "claim_boundary": "Research implementation only. No r25 grammar, selector, admission, product, release or external-frontier credit."
+  "claim_boundary": "Research implementation only. No r25 grammar, selector, admission, product, release or external-frontier credit.",
+  "local_validation": {
+    "environment": "local reconstructed source with a system-zstd-backed zstandard compatibility shim; lower-rung only",
+    "focused_tests": {
+      "cases": 4,
+      "result": "PASS",
+      "checks": [
+        "accepted physical-byte equality against frozen pre-fail-fast encoder on canonical/reversed/duplicate families",
+        "first irreversible patch-budget crossing stops after one program under a zero/tiny test cap"
+      ]
+    },
+    "randomized_differential": {
+      "trials": 30,
+      "accepted": 22,
+      "rejected": 8,
+      "mismatches": 0,
+      "rejected_with_avoided_programs": 3
+    },
+    "boundary": "This does not substitute for repository Python-zstandard CI or exact-head hosted tests."
+  }
 }
