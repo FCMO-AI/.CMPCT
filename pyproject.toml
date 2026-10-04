@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cmpct"
-version = "0.29.0"
+version = "0.30.0"
 description = "Compact archive format prototype with adaptive codecs, deduplication, streaming access, and recovery metadata"
 authors = [{ name = "FCMO AI" }]
 requires-python = ">=3.10"
