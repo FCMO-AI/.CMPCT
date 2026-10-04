@@ -3,15 +3,15 @@
   "status": "ACTIVE",
   "authority": {
     "canonical_release": "v0.29.0 / r24 on main@123865efe4000ae58064c94c5f3fbe1a0597e26a",
-    "active_frontier": "agent/v030-authoritative-integration@d3311714f20d70f328f835865040b2c396fe3780",
+    "active_frontier": "agent/v030-authoritative-integration@16b89044eeabb29f361d793ce960de875b1281de",
     "product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
     "candidate_fingerprint": "6f298e1636ba42176b250f607be82159dd58b37626c1c8624d7d6ce4c75a6f8f",
     "note": "Repository, exact-head run and artifact truth outrank this staleable cache."
   },
   "active_product_bottleneck": {
     "id": "compact-r24-corrected-matrix",
-    "observation": "PR #217 exact head e235686d2a9fd4757c5478526600f410e59c6eb8 is the clean corrected-candidate evidence route; its existing executor agent/phased3-pr217-corrected-matrix-exec@b5f11fca2dfd55b142155620c6429daf581b8c30 remains unexecuted. Generic exact-head greens are not the authorized 15-row matrix.",
-    "next_discriminator": "Execute exactly one unchanged candidate-bound 15-row matrix through the existing executor when its established result-bearing route is writable. Do not create another executor variant."
+    "observation": "PR #217 exact head e235686d2a9fd4757c5478526600f410e59c6eb8 remains the clean corrected-candidate evidence route. Its existing executor agent/phased3-pr217-corrected-matrix-exec@6af2fcc18c02566b35923473672a753574bdd7b0 is six commits ahead / zero behind PR #217, carries the exact historical policy-boundary control plus current runtime/selective wrappers, and still has zero result-bearing workflow runs. Generic exact-head greens are not the authorized 15-row matrix.",
+    "next_discriminator": "Execute exactly one unchanged candidate-bound 15-row matrix through the existing executor when its legitimate deep result-bearing route is writable. Do not create another executor variant."
   },
   "primary_question": {
     "id": "compact-r24-corrected-full-matrix",
@@ -20,8 +20,8 @@
     "kill": "Any deterministic canonical-product byte regression retires compact-r24 without threshold, workload, comparator, evaluator or custody gardening.",
     "status": "BLOCKED",
     "evidence": [
-      "PR #217 e235686d2a9fd4757c5478526600f410e59c6eb8 remains the corrected evidence route; its visible generic CI does not include the authorized matrix.",
-      "Executor agent/phased3-pr217-corrected-matrix-exec@b5f11fca2dfd55b142155620c6429daf581b8c30 remains unexecuted."
+      "PR #217 e235686d2a9fd4757c5478526600f410e59c6eb8 remains the corrected evidence route; visible generic CI does not include the authorized matrix.",
+      "Existing executor agent/phased3-pr217-corrected-matrix-exec@6af2fcc18c02566b35923473672a753574bdd7b0 is exact-head aligned to PR #217, carries the exact historical policy-boundary control and current runtime/selective wrappers, and has zero result-bearing workflow runs."
     ]
   },
   "frontier_candidates": [
@@ -30,7 +30,7 @@
       "family": "runtime-evidence-ownership",
       "question": "On one deterministic current ML tree, does the unchanged canonical worker produce a materially worse v0.30/v0.29 create ratio than the unchanged v2 worker?",
       "status": "READY",
-      "evidence": "Exact current source/fingerprint is v2-green at 1.244515635x and canonical-red at 1.286112912x / 1.290749683x / 1.271885107x. PR #218 / agent/phased1-ml-wrapper-custody-court@5bb1c71a20c10cda55e836935900a1a10b080012 owns the frozen same-source court; no result-bearing court has executed."
+      "evidence": "Exact current source/fingerprint is v2-green at 1.244515635x and canonical-red at 1.286112912x / 1.290749683x / 1.271885107x. PR #218 / agent/phased1-ml-wrapper-custody-court@5bb1c71a20c10cda55e836935900a1a10b080012 owns the frozen same-source court; no result-bearing court has executed. Static source audit narrows a positive mechanism to broader process/import/cache/global-state custody rather than simple late loading of the v0.29 algorithm."
     },
     {
       "id": "bounded-drift-selected-row",
