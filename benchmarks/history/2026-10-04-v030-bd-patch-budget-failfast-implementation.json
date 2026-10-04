@@ -1,0 +1,33 @@
+{
+  "schema": "cmpct-v030-bd-patch-budget-failfast-implementation-v1",
+  "recorded_at": "2026-10-04",
+  "branch": "agent/phased1-bd-patch-budget-failfast",
+  "implementation_head": "5c4f8941ef1e2da0ba6916d1e07c4014c8f90a40",
+  "parent_research_head": "a48d015b6a2a9fca98bdb11b3339a35381c8cc7e",
+  "implementation": {
+    "path": "experiments/entropygraph_v030_bounded_drift_container_v1.py",
+    "previous_blob": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "new_blob": "4b154de96cddef95e6ff06a3191fffdcb11360a3",
+    "change": "Build canonical edit programs sequentially and fail immediately before appending the first program whose addition would exceed MAX_CONTEXT_BYTES.",
+    "semantic_reason": "Shared patch length is monotone and MAX_CONTEXT_BYTES is already a hard representation invariant. Once the next program crosses the cap, later work cannot restore validity.",
+    "accepted_semantics": "Canonical member order, edit-program construction, offsets, compressed contexts and physical bytes are intended unchanged for accepted containers.",
+    "rejected_semantics": "Same ValueError class/message, earlier only after the first irreversible cap crossing."
+  },
+  "inherited_evidence": {
+    "resemblance_oracle": "benchmarks/history/2026-10-04-v030-bd-patch-budget-failfast-oracle.json",
+    "randomized_differential": "benchmarks/history/2026-10-04-v030-bd-patch-budget-failfast-randomized-differential.json",
+    "resync_composition": "benchmarks/history/2026-10-04-v030-bd-patch-budget-resync-composition.json"
+  },
+  "exact_head_ci": {
+    "workflow_runs": 0,
+    "combined_statuses": 0,
+    "status": "UNEXECUTED"
+  },
+  "kill": [
+    "any accepted physical-byte drift",
+    "any changed rejection class/message",
+    "any early rejection before the first irreversible patch-budget crossing",
+    "any resource/integrity regression"
+  ],
+  "claim_boundary": "Research implementation only. No r25 grammar, selector, admission, product, release or external-frontier credit."
+}
