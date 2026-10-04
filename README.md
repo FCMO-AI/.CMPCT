@@ -15,7 +15,7 @@
 
   **[Website](https://fcmo-ai.github.io/.CMPCT/)** · **[Browser Lab](https://fcmo-ai.github.io/.CMPCT/#lab)** · **[Benchmarks](docs/BENCHMARKS.md)** · **[Format](docs/FORMAT.md)** · **[Roadmap](docs/ROADMAP.md)** · **[Agent entrypoint](docs/CURRENT_STATE.md)**
 
-  <sub>core v0.29.0 · canonical format r24 · surface 0.29.k · pre-1.0</sub>
+  <sub>core v0.30.0 · canonical base format r24 · surface 0.30.a · pre-1.0</sub>
 
   <br><br>
 
@@ -42,33 +42,27 @@
 
 CMPCT is not “Zstd with a new extension” and it is not satisfied by winning one hand-picked directory. The target is a stronger default archive across **size, speed, random access, fidelity, integrity, recovery, updates and modern storage semantics** without quietly exporting the cost somewhere else.
 
-## Latest verified frontier
+## Latest released checkpoint
 
-**Project v0.29.0 — Mosaic / Residual Program Packing** advances the verified research engine while the shipping canonical format remains **revision 24**.
+**Project v0.30.0** is a rolling pre-1.0 checkpoint. It does **not** claim strict 15/15 domination.
 
-| v0.29 research evidence | Result |
+The strongest preserved historical external receipt currently records:
+
+| External scoreboard | CMPCT wins |
 |---|---:|
-| Portable inherited-frontier portfolio | **137,501,815 B** |
-| Direct v0.28 base | 137,550,416 B |
-| Exact saving | **48,601 B (0.035333%)** |
-| Portable workloads | **15** |
-| Improved / regressed | **2 / 0** |
-| Exact v0.28 fallbacks | **13 / 15** |
-| Hostile mechanism suites | **4.407362% smaller**, 9 improved / 0 regressed across 18 workloads |
-| Fixed hostile scheduler | **182.454 s → 97.944 s median (-46.318%)**, byte-identical selected archive |
+| ZIP size | **15 / 15** |
+| Zstd-19 size | **7 / 15** |
+| ZIP create | **4 / 15** |
+| Zstd-19 create | **5 / 15** |
+| Strict joint size+create | **4 / 15** |
 
-On the deterministic 724-file / 93,526,384-byte resemblance-hostile aggregate, accepted attempt #5 stores **47,147,764 B**. On that same tree, ZPAQ method 5 stores 47,062,639 B, solid tar+Zstd-19 stores 47,065,652 B, 7z/LZMA2 stores 47,430,343 B, Borg stores 76,461,311 B and ZIP/Deflate-9 stores 76,690,799 B.
+That receipt is historical-fingerprint evidence, not an exact-current-fingerprint 15/15 release claim.
 
-These rows are **matched stored-byte comparisons, not semantic-parity claims**. Solid archives, backup repositories and CMPCT expose different selective-read, update, integrity and recovery tradeoffs. The durable release record is [`docs/releases/v0.29.0.md`](docs/releases/v0.29.0.md); machine-readable evidence lives under [`benchmarks/history/`](benchmarks/history/).
+The strict target — beat ZIP/Deflate-9 and solid Zstd-19 in both complete size and create time on
+**15/15 workloads with no ties** — is now a **CMPCT 1.0 graduation target**. v0.31 starts immediately.
 
-### Shipping vs frontier
-
-| Authority | Current state | Meaning |
-|---|---|---|
-| **Canonical reader/writer** | **format r24** | What `python -m cmpct create` writes and canonical readers must understand. |
-| **Research frontier** | **CMPNX11 / v0.29.0** | Experimental Mosaic + Residual Program Packing engine; not canonical r24 syntax. |
-| **Public surface** | **0.29.k** | Repository/site/docs presentation only; it does not alter archive semantics or consume a core version. |
-| **License** | **Apache-2.0 proposed** | Proposal only. It is not yet the finalized public grant. |
+See [v0.30.0 release notes](docs/releases/v0.30.0.md),
+[rolling pre-1.0 policy](docs/PRE1_RELEASE_POLICY.md), and [Roadmap](docs/ROADMAP.md).
 
 ## What CMPCT can do today
 
@@ -225,7 +219,7 @@ The site may be visually and rhetorically aggressive. It may not blur those boun
 CMPCT does not treat the numeric project version as a commit counter. There are three different version axes:
 
 1. **Numeric core project version (`MAJOR.MINOR.PATCH`)** — reserved for a material improvement to CMPCT itself: archive/engine capability, compression or speed, reliability, recovery, portability/interoperability, or another product-level gain. After the historical v0.27.1 checkpoint, normal core advancement moves the `MAJOR.MINOR` line and uses `PATCH=0` for packaging compatibility.
-2. **Surface revision (`MAJOR.MINOR.LETTER`)** — site animation/design, documentation cleanup, repository presentation, workflow ergonomics and similar non-format work. The current surface milestone is **`0.29.k`**. It does not independently change `pyproject.toml` and does not require a synthetic benchmark record.
+2. **Surface revision (`MAJOR.MINOR.LETTER`)** — site animation/design, documentation cleanup, repository presentation, workflow ergonomics and similar non-format work. The current surface milestone is **`0.30.a`**. It does not independently change `pyproject.toml` and does not require a synthetic benchmark record.
 3. **On-disk format revision** — changes only when readers need new archive grammar/storage semantics. The canonical executable format remains **r24**.
 
 A core release can improve encoder policy, speed, reliability or interoperability without changing the on-disk revision, but it must still earn its numeric number with durable evidence. A research milestone can likewise advance the project line while keeping experimental bytes explicitly non-canonical. A site or repository beautification pass can be useful and substantial without pretending CMPCT itself became a new format release.
