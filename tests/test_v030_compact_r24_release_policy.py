@@ -6,7 +6,7 @@ import sys
 
 
 def test_compact_r24_candidate_policy_boundary_isolated_from_test_process():
-    # The candidate intentionally patches the preserved release Builder at import time. Exercise it
+    # The candidate intentionally patches the preserved release Builder at import time.  Exercise it
     # in a fresh interpreter so this regression test cannot contaminate unrelated canonical tests.
     code = r'''
 import json
@@ -27,7 +27,12 @@ print(json.dumps({
     "revision_equal": candidate.REVISION == base.REVISION,
 }))
 '''
-    proc = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True)
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     receipt = json.loads(proc.stdout)
     assert receipt == {
         "candidate": "v030-compact-r24-release-policy-v1",
