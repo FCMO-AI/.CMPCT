@@ -15,6 +15,7 @@ MAX_RESYNC_BYTES = 1024
 MAX_DECODE_UNIT = 8 * 1024 * 1024
 MAX_RECORDS = 262_144
 _COMMON_CHUNK = 4096
+_ZERO_SYNC_RUN = b"\x00" * SYNC_BYTES
 
 
 @dataclass(frozen=True)
@@ -72,11 +73,36 @@ def _common_prefix_len(a: bytes, b: bytes, ai: int, bi: int) -> int:
 
 def _find_resync(base: bytes, target: bytes, i: int, j: int) -> tuple[int, int]:
     rem_b, rem_t = len(base) - i, len(target) - j
-    for k in range(1, min(MAX_RESYNC_BYTES, rem_b, rem_t) + 1):
-        if min(rem_b-k, rem_t-k) < SYNC_BYTES:
-            break
-        if base[i+k:i+k+SYNC_BYTES] == target[j+k:j+k+SYNC_BYTES]:
-            return k, k
+
+    # Preserve the historically cheap early-exit path for one synchronization
+    # window, then evaluate the remaining same-offset candidates in one bounded
+    # C-backed XOR. A SYNC_BYTES zero run exists iff the historical slices are
+    # equal, so the earliest returned k and all downstream bytes are unchanged.
+    diagonal_n = min(
+        MAX_RESYNC_BYTES,
+        rem_b - SYNC_BYTES,
+        rem_t - SYNC_BYTES,
+    )
+    if diagonal_n > 0:
+        scalar_n = min(SYNC_BYTES, diagonal_n)
+        for k in range(1, scalar_n + 1):
+            if base[i+k:i+k+SYNC_BYTES] == target[j+k:j+k+SYNC_BYTES]:
+                return k, k
+
+        if scalar_n < diagonal_n:
+            start_k = scalar_n + 1
+            candidate_n = diagonal_n - scalar_n
+            window_n = candidate_n + SYNC_BYTES - 1
+            base_window = base[i+start_k:i+start_k+window_n]
+            target_window = target[j+start_k:j+start_k+window_n]
+            diff = (
+                int.from_bytes(base_window, "big")
+                ^ int.from_bytes(target_window, "big")
+            ).to_bytes(window_n, "big")
+            zero_at = diff.find(_ZERO_SYNC_RUN)
+            if zero_at >= 0:
+                return start_k + zero_at, start_k + zero_at
+
     candidates: list[tuple[int, int]] = []
     if rem_b >= SYNC_BYTES:
         token = base[i:i+SYNC_BYTES]
