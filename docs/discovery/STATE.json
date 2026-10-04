@@ -2,143 +2,96 @@
   "schema": "cmpct-discovery-state-v1",
   "status": "ACTIVE",
   "authority": {
-    "canonical_release": "v0.29.0 / r24 on main",
-    "active_frontier": "agent/v030-authoritative-integration",
-    "source": "V030_EFFICIENCY_RECOVERY ACTIVE; repository/run truth outranks this staleable cache"
+    "canonical_release": "v0.29.0 / r24 on main@123865efe4000ae58064c94c5f3fbe1a0597e26a",
+    "active_frontier": "agent/v030-authoritative-integration@d3311714f20d70f328f835865040b2c396fe3780",
+    "product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+    "candidate_fingerprint": "6f298e1636ba42176b250f607be82159dd58b37626c1c8624d7d6ce4c75a6f8f",
+    "note": "Repository, exact-head run and artifact truth outrank this staleable cache."
   },
   "active_product_bottleneck": {
     "id": "compact-r24-corrected-matrix",
-    "observation": "PR #212 exact head b878f40 has corrected nested-child custody, focused Incremental Backups parity green, and 11/11 visible exact-head workflows green. PR #217 exact head e235686 is the clean evidence route: 4 ahead / 0 behind b878, net delta only two benchmarks/history custody receipts, 7/7 visible exact-head workflows green. The one unchanged 15-row compression/product-parity matrix is still unexecuted because the normal workflow-file write is blocked; the missing rung is execution, not another compact-r24 policy/custody variant.",
-    "next_discriminator": "Execute exactly one unchanged b878-bound 15-row matrix through PR #217 when a normal authorized workflow write is available. Any deterministic canonical-product byte regression retires compact-r24 without threshold/workload/comparator/evaluator gardening. If that route remains unavailable, execute the already-preregistered repaired bounded-drift selected-row substitution court on current PrefixGraph winners."
+    "observation": "PR #217 exact head e235686d2a9fd4757c5478526600f410e59c6eb8 is the clean corrected-candidate evidence route; its existing executor agent/phased3-pr217-corrected-matrix-exec@b5f11fca2dfd55b142155620c6429daf581b8c30 remains unexecuted. Generic exact-head greens are not the authorized 15-row matrix.",
+    "next_discriminator": "Execute exactly one unchanged candidate-bound 15-row matrix through the existing executor when its established result-bearing route is writable. Do not create another executor variant."
   },
   "primary_question": {
     "id": "compact-r24-corrected-full-matrix",
-    "family": "product-compression+evidence-custody",
-    "hypothesis": "The correctly bound compact-r24 candidate that is non-regressing on the focused Incremental Backups blocker can preserve the unchanged full 15-row compression/product-parity matrix.",
-    "status": "FOCUSED_GREEN__PR217_ROUTE_GREEN__FULL_MATRIX_UNEXECUTED__WORKFLOW_WRITE_BLOCKED",
+    "family": "product-compression",
+    "hypothesis": "The correctly bound compact-r24 candidate preserves the unchanged full 15-row product/parity matrix after the focused Incremental Backups blocker was corrected.",
+    "kill": "Any deterministic canonical-product byte regression retires compact-r24 without threshold, workload, comparator, evaluator or custody gardening.",
+    "status": "BLOCKED",
     "evidence": [
-      "PR #212 b878f40a540162ab977776d7f90c3502d2749588: corrected nested-child custody; 11/11 visible exact-head workflows green",
-      "focused receipt d35abe559cf2ed0504c85c319db9f826fa5ba443: candidate <= same-run genuine r24 on exact accepted Incremental Backups source",
-      "PR #217 e235686d2a9fd4757c5478526600f410e59c6eb8: clean evidence route, 4 ahead / 0 behind b878, net delta only two history receipts, 7/7 visible exact-head workflows green",
-      "historical run 36004181224 proves the deep matrix route can execute but its Incremental Backups red came from superseded mis-bound custody and earns zero corrected-candidate credit"
-    ],
-    "prediction": "Corrected compact-r24 should have zero deterministic canonical-product byte regressions on the unchanged matrix.",
-    "kill": "Any deterministic canonical-product byte regression retires compact-r24. No threshold, workload, comparator, evaluator, or custody gardening."
+      "PR #217 e235686d2a9fd4757c5478526600f410e59c6eb8 remains the corrected evidence route; its visible generic CI does not include the authorized matrix.",
+      "Executor agent/phased3-pr217-corrected-matrix-exec@b5f11fca2dfd55b142155620c6429daf581b8c30 remains unexecuted."
+    ]
   },
   "frontier_candidates": [
     {
-      "id": "compact-r24-full-matrix",
-      "family": "product-compression",
-      "status": "PRIMARY__PR217_ROUTE_GREEN__MATRIX_UNEXECUTED",
-      "evidence": "PR #212 b878f40 source green; PR #217 e235686 clean history-only route green; one unchanged matrix still blocked at workflow-file creation"
+      "id": "ml-wrapper-custody",
+      "family": "runtime-evidence-ownership",
+      "question": "On one deterministic current ML tree, does the unchanged canonical worker produce a materially worse v0.30/v0.29 create ratio than the unchanged v2 worker?",
+      "status": "READY",
+      "evidence": "Exact current source/fingerprint is v2-green at 1.244515635x and canonical-red at 1.286112912x / 1.290749683x / 1.271885107x. PR #218 / agent/phased1-ml-wrapper-custody-court@5bb1c71a20c10cda55e836935900a1a10b080012 owns the frozen same-source court; no result-bearing court has executed."
     },
     {
-      "id": "bounded-drift-same-semantics",
-      "family": "representation",
-      "status": "HOSTED_GATE_GREEN__SELECTED_ROW_PREREG_LANDED__COURT_UNEXECUTED",
-      "evidence": "PR #213 a0bf0e4 exact-head pytest 36852455946: 787 passed, including hosted same-semantics strict-byte/integrity/locality/resource gate. Repaired substitution oracle blob 354453e on branch agent/phased2-bd-pg-selected-row-court-v2; selected-row prereg commit 85ae70a limits decisive court to current PrefixGraph winners Shifted+Boundary; zero branch workflow runs."
+      "id": "bounded-drift-selected-row",
+      "family": "representation-execution",
+      "question": "Can bounded drift replace current PrefixGraph winners on Shifted and Boundary under exact filesystem, integrity and locality law; and if the byte result survives, can prospective generic admission avoid paying the expensive existing G04/PrefixGraph search?",
+      "status": "READY",
+      "evidence": "PR #213 and PR #215 own bounded-drift semantics and primitive acceleration. Repaired selected-row branch agent/phased3-bd-pg-selected-row-hosted@8097b34ec738af81039d2cde0fc5f3aa24e80820 remains unexecuted. Lower-rung projection puts Shifted 6,024 B below strongest-current upstream Zstd-19 and Boundary 179 B above it; post-search substitution alone cannot satisfy the strict joint size+create contract."
     },
     {
-      "id": "bounded-drift-resync-tail",
-      "family": "execution",
-      "status": "EXACT_HEAD_CORRECTNESS_GREEN__PRODUCT_RUNTIME_UNCREDITED",
-      "evidence": "PR #215 88210d2; tests/r24-ZIP/native/R36/version/fuzz green; engineering-evidence metadata-only red; exact Shifted does not exercise optimized tail"
-    },
-    {
-      "id": "g04-diverse-complete-artifact",
-      "family": "product-falsification",
-      "status": "REPRESENTATION_PROXY_RED__SINGLE_HOSTILE_PRODUCT_NONREGRESSING__DIVERSE_BUNDLE_UNEXECUTED__LOWER_LEVERAGE",
-      "evidence": "PR #210 preserved 15/15 complete artifacts while eliminating 1002/1062 exact HG finalists; PR #211 hostile reverses L6/L19 by 185 B but its added complete-artifact non-regression test passed; PR #214 diverse instrument is one 27-file bundled A/B and remains unexecuted."
+      "id": "g04-authenticated-direct-baseline-reuse",
+      "family": "duplicate-semantic-work",
+      "question": "If wrapper custody is falsified, can G04 reuse provenance-proven level-19 Zstd physical-group payloads as Hierarchical Geometry direct baselines while preserving exact outputs and saving enough complete-G04 wall time to matter?",
+      "status": "QUEUED",
+      "evidence": "Existing claim branch agent/phased1-g04-authenticated-reuse is aligned to authority. Current ML has 13 actual-HG-entering exact reuse records covering 12,408,137 B (81.14% of HG direct input). Advance only on exact output identity and >=0.34 s conventional-median complete-G04 wall saving."
     }
   ],
   "saturated_families": [
     {
-      "family": "content-ZIP mirror/original-path/full-matrix rediscovery",
-      "reason": "historical ladder + #201 decide these rungs"
+      "family": "compact-r24-executor-refinement",
+      "reason": "The existing executor is decision-complete; only execution can change the primary science."
     },
     {
-      "family": "positive-shared-bytes gate v1",
-      "reason": "falsified 34640661646; repaired 34641565421"
+      "family": "pack-plan-compression-reuse",
+      "reason": "PR #154 measured the duplicate-compression owner and merged PR #155 already productized bounded exact-length reuse in current v0.30."
     },
     {
-      "family": "heuristic frequency-sorted Deflate search order",
-      "reason": "adversarial replay exposed large level-0/2 regret"
+      "family": "whole-overlay-progressive-futility-as-current-ML-fix",
+      "reason": "Current ML is a real byte winner; the completed optimistic lower bound remains 175,333 B below the accepted v0.29 floor, so this proof cannot fire on the row."
     },
     {
-      "family": "raw 0..9 Deflate level search",
-      "reason": "#196/#199 establish stronger bounded-regret exact search"
+      "family": "zero-threshold-level6-hierarchy-screen",
+      "reason": "A deterministic held-out structural hostile reverses level-6 versus level-19 ordering and preserves a valid exact hierarchical win."
     },
     {
-      "family": "level-6-first research generalization",
-      "reason": "supported 35719088885; next evidence is canonical productization"
-    },
-    {
-      "family": "content-ZIP traversal fusion",
-      "reason": "35703345978 final-form A/B failed CPU+wall improvement gate"
-    },
-    {
-      "family": "upstream-comparator-provenance-only-fix",
-      "reason": "completed/falsified as product explanation by 35681729751; #101 closed"
-    },
-    {
-      "family": "preflate rediscovery/reintegration",
-      "reason": "repository reconciliation shows authoritative native preflate bridge and historical evidence already exist; consume existing evidence before any new oracle"
-    },
-    {
-      "family": "scheduler-only-r25-speedup",
-      "reason": "multi-second work remains vs sub-second budgets"
-    },
-    {
-      "family": "pure level-6-first Deflate product order",
-      "reason": "32 MiB level-0 hostile showed attempt-count boundedness does not bound CPU: ~3.18x zeros and ~19.7x incompressible random vs canonical; superseded by 0-first/6-second control"
+      "family": "hidden-ZIP-current-productization-family",
+      "reason": "PR #205 retained major Office byte savings but final create remained 1.330773x > 1.25 after multiple materially different rehabilitation attempts; the current family is retired pending a new mechanism."
     }
   ],
   "decision_evidence": {
-    "upstream_external": "35681729751 strict joint 4/15; CMPCT 149956581 B vs 7z 139911068 / zstd19 143849013 / zpaq5 138169739; #101 closed completed",
-    "content_zip_fast_generalization": "35719088885/10690274379: median-sum 181603782->172233160 B (-9370622); zero regressed rows; Office admission 5; 14400 S_PACK range checks; CPU 9.302890297 s; wall 5.112833589 s; whole-process RSS 480120 KiB",
-    "scan_fusion_negative": "35703345978/10683147417: bytes/RSS identical, CPU/wall not improved",
-    "r25_bound_hostile": "35681729751 ML g04 pre=13836789, v029 floor=13836673 (+116 B), overlay=13674830 (-161843 B)",
-    "r24_abba": "#202; helper proof 35681662327; canonical workflow mutation currently blocked by GitHub App workflows permission; ABBA still unmeasured",
-    "ci_fanout": "coordination-only abbd7e7... again instantiated a broad historical workflow wave; #128",
-    "compact_r24_pr217": "PR #217 e235686d2a9fd4757c5478526600f410e59c6eb8: 7/7 visible exact-head workflows green; tests 789 passed; generic r24/ZIP route validation 0 confirmed regressions and byte-identical base/candidate archives. Not the authorized 15-row product matrix.",
-    "bounded_drift_hosted": "PR #213 a0bf0e4c0826cb02a2235d9b15b69c5facac56f3: exact-head pytest 36852455946 finished 787 passed. Hosted test directly fail-closes unless bounded drift is strictly smaller than same-run PrefixGraph with exact Shifted tree, exact filesystem semantics, corruption rejection, <=8 MiB decode unit, <=8x bounded-drift locality, verified PrefixGraph and <=8x PrefixGraph locality.",
-    "bounded_drift_selected_row_prereg": "agent/phased2-bd-pg-selected-row-court-v2 commit 85ae70a76fbccf7dcf38ada648ef89b792cff0c5 preregisters the cheapest decisive substitution court: Shifted + Boundary only. Office/Deflate remain fallback/fidelity controls because unchanged G0-G4 already wins and cannot regress final bytes."
+    "external_competitors": "PR #189 run 35681729751 / artifact 10676455534: strongest-current historical research evidence records strict joint size+create wins on 4/15, ZIP size wins 15/15, Zstd-19 size wins 7/15, ZIP create wins 4/15, Zstd-19 create wins 5/15. Historical fingerprint only; no current release credit.",
+    "external_execution_partition": "On all 14 PR #189 rows exposing r24 timing, gifted r24 create beats Zstd-19 create; it beats ZIP create on 10/14. This localizes broad Zstd-create debt to speculative r25/search work while four rows retain a base-r24 ZIP-create floor.",
+    "release_custody": "docs/V030_RELEASE_LOCK.json requires 13 exact-fingerprint receipts. Three receipt files exist but none binds current fingerprint 6f298e1636ba42176b250f607be82159dd58b37626c1c8624d7d6ce4c75a6f8f; native-r25 is also stale against current assertion schema."
   },
   "process_lessons": [
     {
-      "lesson": "Inspect complete historical workflow/run ladders before declaring the next rung.",
-      "evidence": "content-ZIP ladder recovery and 2026-09-22 preflate duplicate corrected against #26 history"
+      "lesson": "Search merged and closed lineage before treating a visible source optimization seam as novel.",
+      "evidence": "Pack-plan repeated compression was already measured in PR #154 and productized by merged PR #155."
     },
     {
-      "lesson": "Measure final admitted archive before optimizing isolated search microbenchmarks.",
-      "evidence": "#199"
+      "lesson": "Under a strict joint size+create contract, representation evidence must be paired with execution ownership.",
+      "evidence": "Bounded drift can flip Shifted bytes versus Zstd-19 while unchanged existing r25 search costs tens of seconds versus sub-second external controls."
     },
     {
-      "lesson": "A cleaner execution boundary dies when final-form CPU/wall do not improve.",
-      "evidence": "#200 / 35703345978"
+      "lesson": "Release receipt presence is not release authority; verify exact current fingerprint and current assertion schema.",
+      "evidence": "Three receipt files exist, zero bind current fingerprint, and native-r25 predates current required assertions."
     },
     {
-      "lesson": "For multiprocessing evidence harnesses, never join a child before draining a potentially pipe-buffer-sized result payload.",
-      "evidence": "#201 35703931885 -> 9bcba9d9"
-    },
-    {
-      "lesson": "Do not require byte identity across independently regenerated corpora; test mechanism semantics within each paired exact input unless corpus identity itself is frozen and proven.",
-      "evidence": "#201 35713728064 -> 35719088885"
-    },
-    {
-      "lesson": "Normative discovery doctrine should not duplicate temporal project state already owned by reconciled STATE/repository evidence.",
-      "evidence": "#191 stale bootstrap; structural repair proposed"
-    },
-    {
-      "lesson": "Treat Discovery STATE pending runs as staleable pointers: consume current GitHub run truth before allocating new work, and distinguish infrastructure/evidence-route failure from product loss.",
-      "evidence": "STATE still listed 35738603879/35738603723 as pending on 2026-09-30; current truth is cancelled tests plus r24-performance infrastructure failure from missing package-owned cmpct_core, not a product verdict."
-    },
-    {
-      "lesson": "Count scientific decision rows from selector algebra, not from an inherited broader control set. If unchanged fallback G0-G4 already wins, those rows cannot falsify bounded-drift-for-PrefixGraph byte substitution; current PrefixGraph winners are the cheapest decisive court.",
-      "evidence": "PR #213 hosted gate green; repaired substitution oracle 354453e; selected-row prereg 85ae70a"
+      "lesson": "Intersect semantic eligibility with actual shipping control flow before summing optimization headroom.",
+      "evidence": "Only 13 of 19 current ML records both enter HG and carry reusable level-19 Zstd provenance."
     }
   ],
   "pending_jobs": [],
-  "next_action": "Execute PR #212's one unchanged matrix through PR #217 when the normal workflow write is available. If that route remains unavailable, execute the repaired bounded-drift selected-row court from commit 85ae70a on Shifted+Boundary. Then G0-G4-first exact-incumbent staged R1; keep PR #214 diverse G04 bundle as a lower-leverage bounded falsifier.",
-  "last_reconciled": "2026-10-02T06:25:34-06:00"
+  "next_action": "Primary: execute PR #217's existing candidate-bound matrix when writable. Dependency-safe runtime: execute PR #218 wrapper custody. Independent representation: execute the repaired bounded-drift Shifted+Boundary court; if bytes survive, test prospective admission/search bypass rather than post-search substitution. Only if wrapper custody is falsified, execute authenticated HG direct-baseline reuse."
 }
