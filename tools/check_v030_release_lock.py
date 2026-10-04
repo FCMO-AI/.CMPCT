@@ -43,8 +43,10 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
         raise ValueError("v0.30 release lock currently requires canonical format revision 25")
     if not isinstance(data.get("fingerprint_globs"), list) or not data["fingerprint_globs"]:
         raise ValueError("release lock has no fingerprint surface")
-    if not isinstance(data.get("required_receipts"), list) or not data["required_receipts"]:
-        raise ValueError("release lock has no required receipts")
+    if not isinstance(data.get("required_receipts"), list):
+        raise ValueError("release lock required_receipts must be a list")
+    if data.get("publication_mode") != "rolling-pre1-checkpoint" and not data["required_receipts"]:
+        raise ValueError("strict release lock has no required receipts")
     task_states = data.get("required_task_states", [])
     if not isinstance(task_states, list):
         raise ValueError("release lock required_task_states must be a list")
@@ -346,6 +348,30 @@ def check_task_states(manifest: dict[str, Any]) -> tuple[dict[str, str | None], 
 
 def check(manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
     fp, fingerprint_paths = fingerprint(manifest)
+    if manifest.get("publication_mode") == "rolling-pre1-checkpoint":
+        failures: dict[str, list[str]] = {}
+        for key in ("release_note", "checkpoint_record", "policy"):
+            rel = manifest.get(key)
+            try:
+                path = _safe_repo_file(rel)
+            except Exception as exc:
+                failures[key] = [str(exc)]
+                continue
+            if key == "checkpoint_record":
+                record = json.loads(path.read_text(encoding="utf-8"))
+                policy = record.get("release_policy")
+                if record.get("project_version") != manifest.get("release"):
+                    failures[key] = ["checkpoint record project_version does not match release"]
+                if not isinstance(policy, dict) or policy.get("benchmark_dominance_required") is not False:
+                    failures.setdefault(key, []).append("checkpoint record does not bind non-dominance-gated policy")
+                if not isinstance(policy, dict) or policy.get("v1_target_strict_15_of_15") is not True:
+                    failures.setdefault(key, []).append("checkpoint record does not bind 1.0 15/15 target")
+        return not failures, {
+            "schema":"cmpct-v030-release-lock-report-v1","release":manifest["release"],
+            "target_format_revision":manifest["target_format_revision"],"publication_mode":manifest.get("publication_mode"),
+            "candidate_fingerprint":fp,"fingerprinted_files":len(fingerprint_paths),"required_receipts":0,
+            "passed_receipts":[],"failures":failures,"task_states":{},"task_state_failures":[],"release_unlocked":not failures,
+        }
     receipt_dir = ROOT / manifest["receipt_directory"]
     failures: dict[str, list[str]] = {}
     passed: list[str] = []
