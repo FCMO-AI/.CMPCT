@@ -1,0 +1,39 @@
+{
+  "schema": "cmpct-v030-bd-patch-budget-resync-composition-v1",
+  "recorded_at": "2026-10-04",
+  "authority": "cd2886bda7580a56e1efab8132b0b9477c52bd55",
+  "owner_branch": "agent/phased1-bd-patch-budget-failfast",
+  "failfast_evidence_commit": "1140e9a423103048eb35e99133cac9abbdb41921",
+  "pr215_head": "88210d2adb21fc6eace88794aa1bda222a6cdefa",
+  "current_primitive_blob": "d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+  "pr215_primitive_blob": "0f3975c49186b2173b182ad8e7d8f938b9b2439a",
+  "question": "Are exact patch-budget fail-fast and PR215 resync acceleration substitutes or complementary mechanisms on hard-cap rejected bounded-drift families?",
+  "exact_sources": {
+    "false_neighbors_tree": "3427fd306a10a7c293d4303323d64948ee74d4065353bf99310cfed34dc73d0e",
+    "incompressible_tree": "1efe49fb1adb16ef911f64f44d41629db599dbeef264d72fd8f26e40515130e4"
+  },
+  "result": {
+    "false_neighbors": {
+      "first_overflow_program_index_zero_based": 143,
+      "programs_built_to_overflow": 144,
+      "remaining_programs_failfast_avoids": 456,
+      "current_historical_primitive_wall_s_to_overflow": 7.732489259999966,
+      "pr215_exact_primitive_wall_s_to_overflow": 0.4576903229999516,
+      "pr215_speedup_to_same_exact_overflow": 16.893495
+    },
+    "incompressible": {
+      "first_overflow_program_index_zero_based": 63,
+      "programs_built_to_overflow": 64,
+      "remaining_programs_failfast_avoids": 16,
+      "current_historical_primitive_wall_s_to_overflow": 7.53790347000006,
+      "pr215_exact_primitive_wall_s_to_overflow": 0.43131738599970504,
+      "pr215_speedup_to_same_exact_overflow": 17.475324
+    }
+  },
+  "decision": "COMPLEMENTARY_NOT_SUBSTITUTES. Fail-fast removes provably useless tail programs after the irreversible shared-context overflow; PR215 removes pathological cost inside each program needed to reach that same exact overflow. On these rejected exact families the combination changes the practical rejection cost far more than either mechanism's decisive Shifted/Boundary micro alone suggests.",
+  "scope": "Rejected bounded-drift candidate economics only. Shifted and Boundary remain accepted and see no fail-fast call-count reduction; PR215 changes their edit-program construction only about 3 percent.",
+  "next": "If source writes become available, keep the fail-fast patch and PR215 exact primitive causally separate in review, but evaluate their composition on rejected families before claiming bounded-drift search carrying cost is acceptable.",
+  "claim_boundary": "Local exact-source research timing only; different local runs are not hosted product timing. No product, merge, external-frontier or release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
