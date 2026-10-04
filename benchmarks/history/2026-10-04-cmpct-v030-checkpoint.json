@@ -1,0 +1,44 @@
+{
+  "schema": "cmpct-v030-checkpoint-release-v1",
+  "date": "2026-10-04",
+  "project_version": "0.30.0",
+  "release_type": "rolling-pre1-checkpoint",
+  "authoritative_product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "release_policy": {
+    "benchmark_dominance_required": false,
+    "known_losses_must_be_preserved": true,
+    "v1_target_strict_15_of_15": true,
+    "v1_competitors": [
+      "ZIP/Deflate-9",
+      "solid Zstd-19"
+    ],
+    "v1_dimensions": [
+      "complete_archive_size",
+      "create_wall_time"
+    ],
+    "v1_no_ties": true
+  },
+  "preserved_external_frontier": {
+    "evidence_scope": "historical fingerprint; not exact-current-fingerprint release authority",
+    "source": "PR #189 run 35681729751 / artifact 10676455534 as summarized in Discovery state",
+    "workloads": 15,
+    "cmpct_wins_zip_size": 15,
+    "cmpct_wins_zstd19_size": 7,
+    "cmpct_wins_zip_create": 4,
+    "cmpct_wins_zstd19_create": 5,
+    "cmpct_strict_joint_size_create_wins": 4
+  },
+  "historical_compression_context": {
+    "accepted_v029_bytes": 137499525,
+    "historical_v030_candidate_aggregate_bytes": 134888445,
+    "historical_v030_saving_vs_v029_bytes": 2611080,
+    "historical_v030_smaller_than_v029_pct": 1.8989738328186951,
+    "qualification": "Historical candidate context only; not a fresh exact-current-fingerprint release receipt."
+  },
+  "decision": {
+    "publish_v030_checkpoint": true,
+    "strict_15_of_15_gate_moved_to_v1": true,
+    "begin_next_line": "0.31",
+    "historical_negative_evidence_rewritten": false
+  }
+}
