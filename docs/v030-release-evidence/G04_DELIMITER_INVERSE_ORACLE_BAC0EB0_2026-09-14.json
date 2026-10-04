@@ -1,0 +1,54 @@
+{
+  "schema": "cmpct-v030-research-evidence-v1",
+  "recorded_date": "2026-09-14",
+  "status": "PASS",
+  "evidence_class": "research-oracle",
+  "product_release_credit": false,
+  "claim": "Replacing the canonical G04 delimiter inverse's rectangular-prefix/ragged-tail reconstruction with a block/active-row strided-slice reconstruction preserves exact bytes but recovers only a narrow amount of inverse wall time on neutral_hostile_v1/09_ml_artifacts.",
+  "source": {
+    "repository": "FCMO-AI/.CMPCT",
+    "branch": "agent/v030-authoritative-integration",
+    "experiment_head_sha": "bac0eb0b4f7b5c0c7464c4f7b4658df65ea8b0b7",
+    "workflow_run_id": 34833491080,
+    "workflow_job_id": 103941975705,
+    "artifact_id": 10343561408,
+    "artifact_name": "v030-g04-delimiter-oracle-bac0eb0b4f7b5c0c7464c4f7b4658df65ea8b0b7",
+    "artifact_sha256": "f10aa6d1a7a55e62f29f37668801e1daf40e4d880f204b152786dfd2526b3610",
+    "engine": "v030-g04-delimiter-inverse-oracle-v1"
+  },
+  "contract": {
+    "suite": "neutral_hostile_v1",
+    "workload": "09_ml_artifacts",
+    "record_id": 18,
+    "codec": "zstd",
+    "logical_size": 1048576,
+    "encoded_bytes": 1048585,
+    "compressed_payload_bytes": 1368,
+    "delimiter": 44,
+    "segment_count": 45979,
+    "max_segment_length": 27,
+    "unique_segment_lengths": 12,
+    "repetitions_each": 15,
+    "same_exact_encoded_bytes": true,
+    "candidate_bytes_equal_current": true,
+    "candidate_crc_sha_match_archive": true,
+    "product_code_changed": false,
+    "release_thresholds_changed": false
+  },
+  "measurements": {
+    "current_median_s": 0.13699160600000937,
+    "candidate_median_s": 0.12983795399999565,
+    "speedup_x": 1.0550967708564936,
+    "time_reduction_fraction": 0.05221963745729963,
+    "saved_s": 0.007153652000013722,
+    "prior_median_policy_verify_wall_s": 0.24356014199999265,
+    "simple_upper_bound_projected_policy_verify_s_if_saving_transfers_additively": 0.23640648999997893,
+    "simple_upper_bound_projected_policy_reduction_fraction": 0.029371193255479124
+  },
+  "decision": {
+    "result": "NARROW_POSITIVE_DO_NOT_PRODUCTIZE_THIS_VARIANT",
+    "reason": "The candidate is exact and repeatably faster, but it leaves the same 45,979 per-segment bytearray ownership model in place and saves only about 7.15 ms from a roughly 137 ms inverse. Even under the generous assumption that the full microbenchmark saving transfers additively to the prior 243.56 ms policy-verification measurement, the upper-bound whole-policy improvement is only about 2.94%. The result therefore narrows the causal owner: loop/block scheduling is not the dominant remaining opportunity.",
+    "next_question": "Does eliminating per-segment Python buffers entirely—reconstructing into one contiguous logical output with a native/vectorized scatter—recover a materially larger share of the delimiter inverse cost while preserving exact bytes and existing resource bounds?"
+  },
+  "scope": "One-record, one-workload research oracle. The projected whole-policy reduction is a derived upper bound, not measured product evidence."
+}

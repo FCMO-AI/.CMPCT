@@ -1,0 +1,142 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 Shifted content-defined shared store
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  cdc-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact source head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile bounded native CDC helper and oracle
+        run: |
+          set -euo pipefail
+          gcc -O3 -std=c11 -Wall -Wextra -Werror benchmarks/native/v030_cdc_boundaries.c -o "$RUNNER_TEMP/cmpct-v030-cdc-boundaries"
+          python -m py_compile benchmarks/v030_shifted_cdc_store_oracle.py
+          python tools/check_ci_topology.py .github/workflows/v030-shifted-cdc-store-oracle.yml
+          python tools/check_public_surface.py
+      - name: Run exact complete-artifact CDC frontier
+        env:
+          CMPCT_CDC_HELPER: ${{ runner.temp }}/cmpct-v030-cdc-boundaries
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shifted_cdc_store_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-cdc-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-cdc.json"
+      - name: Derive payload-versus-framing representation floor
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-shifted-cdc.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          src=Path('benchmark-artifacts/v030-shifted-cdc.json')
+          d=json.loads(src.read_text())
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          zstd=int(d['comparators']['tar_zstd19_solid']['archive_bytes'])
+          rows=[]
+          for arm in d['arms']:
+              payload=int(arm['unique_payload_bytes'])
+              archive=int(arm['archive_bytes'])
+              framing=archive-payload
+              assert framing >= 0
+              rows.append({
+                  'average_chunk_bytes': int(arm['average_chunk_bytes']),
+                  'level': int(arm['level']),
+                  'archive_bytes': archive,
+                  'unique_payload_bytes': payload,
+                  'framing_control_bytes': framing,
+                  'payload_gap_vs_zstd19_bytes': payload-zstd,
+                  'archive_gap_vs_zstd19_bytes': archive-zstd,
+                  'payload_alone_beats_zstd19': payload < zstd,
+                  'complete_archive_beats_zstd19': archive < zstd,
+              })
+          best=min(rows, key=lambda r:(r['unique_payload_bytes'],r['archive_bytes'],r['average_chunk_bytes'],r['level']))
+          out={
+              'schema':'cmpct-v030-shifted-cdc-payload-floor-v1',
+              'source_commit':os.environ['EVIDENCE_HEAD'],
+              'zstd19_bytes':zstd,
+              'rows':rows,
+              'best_payload':best,
+              'decision_if_payload_floor_above_zstd19':'RETIRE_FAMILY',
+              'decision_if_payload_below_but_complete_above':'ITERATE_SAME_FAMILY',
+              'decision_if_complete_strict_size_win':'evaluate creation-time gate before PROMOTE_NEXT_PREREQUISITE',
+              'release_credit':False,
+          }
+          Path('benchmark-artifacts/v030-shifted-cdc-floor.json').write_text(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
+          PY
+      - name: Enforce research honesty and R4 decision boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-shifted-cdc.json
+          test -f benchmark-artifacts/v030-shifted-cdc-floor.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-cdc.json').read_text())
+          f=json.loads(Path('benchmark-artifacts/v030-shifted-cdc-floor.json').read_text())
+          assert d['schema']=='cmpct-v030-shifted-cdc-store-oracle-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['diagnosis']=='D4' and d['radicality']=='R4'
+          assert 'S1' in d['saturation'] and d['rps']>=80
+          c=d['contract']
+          assert c['benchmark_identity_used_in_representation'] is False
+          assert c['content_defined_chunk_ownership'] is True
+          assert c['creation_prices_helper_execution_and_all_candidate_work'] is True
+          assert c['max_decode_unit_bytes'] <= 8*1024*1024
+          assert c['release_credit'] is False
+          assert len(d['arms'])==3
+          for a in d['arms']:
+              assert a['tree_verified'] is True
+              assert a['max_decode_unit_bytes'] <= 8*1024*1024
+              assert a['max_member_read_amplification'] <= 8.0
+              assert a['total_chunk_refs'] >= a['unique_chunks']
+              assert len(a['artifact_sha256'])==64
+          assert f['schema']=='cmpct-v030-shifted-cdc-payload-floor-v1'
+          assert f['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert f['zstd19_bytes']==int(d['comparators']['tar_zstd19_solid']['archive_bytes'])
+          assert len(f['rows'])==len(d['arms'])
+          assert f['release_credit'] is False
+          assert d['summary']['release_credit'] is False
+          PY
+      - name: Upload exact R4 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-cdc-store-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-shifted-cdc.json
+            benchmark-artifacts/v030-shifted-cdc-floor.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Terminal negative is preserved in docs/V030_SHIFTED_CDC_STORE_FAMILY_TERMINAL.md.
+# The retired exact CDC-store ownership family remains manually replayable for audit or genuine reopening evidence,
+# but no longer consumes automatic push/PR runner capacity without a new causal reason to reopen the family.

@@ -1,0 +1,82 @@
+name: CMPCT v0.30 streaming micropack audition referee
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_r24_micropack_streaming_audition_referee.py
+      - benchmarks/v030_r24_micropack_content_retained_state_referee.py
+      - benchmarks/v030_r24_micropack_content_economic_admission.py
+      - benchmarks/v030_r24_locality_derived_micropack_referee.py
+      - benchmarks/v030_r24_locality_derived_micropack_hostile_transfer.py
+      - benchmarks/v030_compact_pack_control_attribution.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-micropack-streaming-audition.yml
+
+permissions:
+  contents: read
+
+jobs:
+  streaming-audition:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Compile referee
+        run: python -m py_compile benchmarks/v030_r24_micropack_streaming_audition_referee.py
+      - name: Execute streaming audition referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r24_micropack_streaming_audition_referee \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-streaming-audition-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-streaming-audition.json"
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-streaming-audition.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-streaming-audition-v1'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert d['genesis_rescore'] is False
+          assert d['verdict'] in {'STREAMING_AUDITION_EARNED','RETIRE_STREAMING_AUDITION'}
+          dev=d['sources']['origin_developer']['medians']
+          tiny=d['sources']['origin_tiny_files']['medians']
+          outs={
+              'v':'earned' if d['verdict']=='STREAMING_AUDITION_EARNED' else 'retire',
+              'idf':str(len(d['identity_failures'])),
+              'cpur':str(len(d['material_cpu_regressions'])),
+              'rssn':str(len(d['origin_rss_improvements'])),
+              'devrss':str(dev['peak_rss_delta_kib']),
+              'tinyrss':str(tiny['peak_rss_delta_kib']),
+          }
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+              for k,v in outs.items(): fh.write(f'{k}={v}\n')
+          print(json.dumps({'verdict':d['verdict'],'identity_failures':d['identity_failures'],'cpu_regressions':d['material_cpu_regressions'],'rss_improvements':d['origin_rss_improvements'],'developer':dev,'tiny':tiny},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-streamaud-${{ steps.receipt.outputs.v || 'nosummary' }}-idf${{ steps.receipt.outputs.idf }}-cpur${{ steps.receipt.outputs.cpur }}-rss${{ steps.receipt.outputs.rssn }}-dev${{ steps.receipt.outputs.devrss }}-tiny${{ steps.receipt.outputs.tinyrss }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-streaming-audition.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only: exact admission-decision and archive-identity falsifier.

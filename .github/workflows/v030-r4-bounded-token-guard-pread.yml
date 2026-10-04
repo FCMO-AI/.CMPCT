@@ -1,0 +1,81 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 bounded token guard pread referee
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_bounded_token_guard_pread_referee.py'
+      - '.github/workflows/v030-r4-bounded-token-guard-pread.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-bounded-token-guard-pread-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  bounded-token-guard-pread:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install zstandard
+      - run: python -m py_compile benchmarks/v030_r4_bounded_token_guard_pread_referee.py
+      - name: Run protocol-bounded physical reader referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_bounded_token_guard_pread_referee.py --output benchmark-artifacts/v030-r4-bounded-token-guard-pread.json
+      - name: Assert receipt integrity, not verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-bounded-token-guard-pread.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['format_bound']['max_copy_token_bits']==48
+          assert d['contract']['no_endpoint_probe_io']
+          assert d['contract']['guard_is_rfc1951_derived_not_swept']
+          print(json.dumps({'input':d['input'],'failures':d['failures'],'summary':d['summary'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - name: Persist scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' >/tmp/receipt.md
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-bounded-token-guard-pread.json'));s=d['summary']
+          print('### v0.30 RFC-1951 bounded-token-guard pread — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- hypothesis: **{'SUPPORTED' if d['hypothesis']['protocol_bounded_guard_pread_supported'] else 'FALSE'}**; failures `{d['failures']}`")
+          print(f"- raw/compressed/anchors/probes: `{d['input']['raw_bytes']}` / `{d['input']['compressed_bytes']}` / `{d['input']['anchors']}` / `{d['input']['probes']}`")
+          print(f"- calls: 8-byte `{s['pread8_calls']}` -> guarded `{s['guarded_calls']}` ({s['guarded_call_reduction_pct']:.2f}% reduction); max/request `{s['max_guarded_calls']}`")
+          print(f"- physical: max `{s['max_physical_bytes']} B`, max overfetch `{s['max_overfetch_bytes']} B`, fallbacks `{s['max_fallbacks']}`")
+          print(f"- wall diagnostic: guarded/8-byte `{s['guarded_vs_pread8_wall_ratio']:.3f}x`; guarded/resident `{s['guarded_vs_resident_wall_ratio']:.3f}x`")
+          print('- 48-bit guard is derived from RFC-1951 code/extra-bit maxima; no endpoint probes, sweep, or new persisted metadata; no Office/release credit.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-bounded-token-guard-pread.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-bounded-token-guard-pread-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-bounded-token-guard-pread.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity; JSON owns scientific verdict.

@@ -1,0 +1,99 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 r24 prebuild overlap RSS oracle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  r24-prebuild-overlap-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen runtime-corpus dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact scheduling oracle
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_product.py \
+            experiments/entropygraph_v030_release_product_base.py \
+            experiments/entropygraph_v030_prefixgraph_parallel.py \
+            benchmarks/v030_release_performance.py \
+            benchmarks/v030_r24_prebuild_overlap_rss_worker.py \
+            benchmarks/v030_r24_prebuild_overlap_rss_oracle.py
+      - name: Measure shipping against serial and combined schedule
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_prebuild_overlap_rss_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-prebuild-overlap-rss-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-prebuild-overlap-rss.json"
+      - name: Enforce exact-byte diagnostic boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-r24-prebuild-overlap-rss.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-prebuild-overlap-rss.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-prefixgraph-combined-rss-v2'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert int(d['rounds'])==2
+          assert len(d['rows'])==3
+          assert d['experiment_valid'] is True
+          assert d['selector_change'] is False
+          assert d['release_credit'] is False
+          c=d['contract']
+          for key in (
+              'archive_bytes_changed','candidate_set_changed','serializer_changed','tie_law_changed',
+              'selector_changed','grammar_changed','integrity_changed','locality_limit_changed',
+              'decode_unit_limit_changed','recovery_changed','production_schedule_changed',
+          ):
+              assert c[key] is False
+          for row in d['rows']:
+              assert len(row['repetitions'])==2
+              shas=set(); sizes=set(); trees=set()
+              for rep in row['repetitions']:
+                  for key in ('shipping','serial_r24','serial_r24_pg2'):
+                      shas.add(rep[key]['archive_sha256'])
+                      sizes.add(int(rep[key]['archive_bytes']))
+                      trees.add(rep[key]['tree_sha256'])
+              assert len(shas)==1 and len(sizes)==1 and len(trees)==1
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-prebuild-overlap-rss.yml
+      - name: Upload overlap/RSS evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-prefixgraph-combined-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r24-prebuild-overlap-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Terminal negative retained for manual reproduction. Exact scheduling evidence already showed that r24/r25
+# top-level overlap is not the owner of Shifted's large RSS regression; serial boundaries did not recover useful
+# memory within the runtime envelope. Automatic capacity is reserved for live PrefixGraph-context attribution.

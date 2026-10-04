@@ -1,0 +1,92 @@
+name: CMPCT v0.30 G04 streamer work attribution
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - experiments/v030_g04_streamer_work_attribution.py
+      - .github/workflows/v030-g04-streamer-work-attribution.yml
+      - experiments/entropygraph_v030_release_product.py
+      - experiments/entropygraph_v030_release_product_base.py
+      - experiments/entropygraph_v030_canonical_final.py
+      - experiments/entropygraph_v030_canonical_final_impl.py
+      - experiments/entropygraph_v030_release_reader_policy.py
+      - experiments/entropygraph_v030_release_reader.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  streamer-work-attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and codec dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile attribution oracle
+        run: python -m py_compile experiments/v030_g04_streamer_work_attribution.py
+      - name: Run G04 streamer work attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_g04_streamer_work_attribution.py \
+            --work-root "$RUNNER_TEMP/v030-g04-streamer-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/g04-streamer-work.json"
+      - name: Validate evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('benchmark-artifacts/g04-streamer-work.json')
+          assert p.is_file(), 'oracle did not publish evidence'
+          d = json.loads(p.read_text())
+          assert d['engine'] == 'v030-g04-streamer-work-attribution-v1'
+          assert d['status'] == 'PASS', d.get('error')
+          assert d['evidence_class'] == 'research-oracle'
+          assert d['product_release_credit'] is False
+          c = d['contract']
+          assert c['suite'] == 'neutral_hostile_v1'
+          assert c['workload'] == '09_ml_artifacts'
+          assert c['v030_selected'] == 'g04-overlay'
+          assert c['record_count'] > 0
+          assert c['node_count'] > 0
+          assert c['file_count'] > 0
+          assert c['fresh_process_per_sample'] is True
+          assert c['same_archive_all_operations'] is True
+          assert c['product_code_changed'] is False
+          assert c['release_thresholds_changed'] is False
+          for op in ('session_open', 'policy_verify'):
+              assert len(d['samples'][op]) == 5
+          cmp = d['comparison']
+          assert cmp['unique_physical_record_count'] == c['record_count']
+          assert cmp['median_physical_record_reads'] >= 0
+          assert cmp['physical_record_read_multiplicity'] >= 0
+          PY
+      - name: Upload streamer-work evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-streamer-work-${{ github.sha }}
+          path: benchmark-artifacts/g04-streamer-work.json
+          if-no-files-found: error
+          retention-days: 90

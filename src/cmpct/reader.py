@@ -8,7 +8,8 @@ from pathlib import Path
 import msgpack
 
 from .codec import *
-from .codec import _hash_sparse, _wav_parts, _ld, _sz, _z, _zck
+from .codec import _hash_sparse, _wav_parts, _ld, _sz
+from .native_codec import DictDecoder
 from .path_policy import canonical_logical_path
 
 def _safe_output_path(dest:Path,rel:str)->Path:
@@ -36,11 +37,10 @@ class CMPCT:
                 canonical_seen.add(key)
         except ValueError as exc:
             raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
-        self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._dctx=None;self._ddict=None;self._dict_bytes=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
+        self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
     def close(self):
         if getattr(self,'mm',None):self.mm.close();self.mm=None
-        if self._ddict:_z.ZSTD_freeDDict(self._ddict);self._ddict=None
-        if self._dctx:_z.ZSTD_freeDCtx(self._dctx);self._dctx=None
+        if self._zdict_decoder:self._zdict_decoder.close();self._zdict_decoder=None
         if self._inflater and _ld is not None:_ld.libdeflate_free_decompressor(self._inflater);self._inflater=None
         if self._executor:self._executor.shutdown(wait=True);self._executor=None
         self.f.close()
@@ -119,18 +119,13 @@ class CMPCT:
         return dst.raw[:usize]
 
     def _zdict_decode(self,comp:bytes,usize:int)->bytes:
-        # Digested dictionaries and the decompression context are cached per open archive. v0.6
-        # rebuilt these objects on every tiny-file read, which was measurable at microsecond scale.
+        # Load the archive dictionary once into the package-owned native DCtx.  This preserves the
+        # measured tiny-file lifetime benefit without retaining a second Python-owned DDict/buffer.
         with self._zdict_lock:
-            if self._ddict is None:
+            if self._zdict_decoder is None:
                 if self.dict_idx is None:raise IOError('missing Zstd dictionary')
-                d=self._blob(self.dict_idx);self._dict_bytes=d;db=ctypes.create_string_buffer(d);self._dict_buf=db
-                self._ddict=_z.ZSTD_createDDict(db,len(d));self._dctx=_z.ZSTD_createDCtx()
-                if not self._ddict or not self._dctx:raise MemoryError('unable to initialize Zstd dictionary decoder')
-            src=ctypes.create_string_buffer(comp);dst=ctypes.create_string_buffer(usize)
-            n=_zck(_z.ZSTD_decompress_usingDDict(self._dctx,dst,usize,src,len(comp),self._ddict))
-            if n!=usize:raise IOError('Zstd dictionary length mismatch')
-            return dst.raw[:n]
+                self._zdict_decoder=DictDecoder(self._blob(self.dict_idx))
+            return self._zdict_decoder.decompress(comp,usize)
 
     def _blob(self,idx:int)->bytes:
         with self._cache_lock:
@@ -449,7 +444,7 @@ class CMPCT:
             elif storage and storage[0]==S_SPARSE:
                 # Create the logical length first, then write only allocated data extents. The gaps
                 # remain filesystem holes instead of consuming disk blocks full of zeros.
-                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,mode or 0o666)
+                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_BINARY',0),mode or 0o666)
                 try:
                     os.ftruncate(fd,size)
                     for off,ln,ids in storage[1]:
@@ -457,11 +452,15 @@ class CMPCT:
                         for idx in ids:
                             b=self._blob(idx);view=memoryview(b)
                             while view:
-                                n=os.pwrite(fd,view,q);view=view[n:];q+=n
+                                if hasattr(os,'pwrite'):
+                                    n=os.pwrite(fd,view,q)
+                                else:
+                                    os.lseek(fd,q,os.SEEK_SET);n=os.write(fd,view)
+                                view=view[n:];q+=n
                 finally:os.close(fd)
             else:
                 raw=self.read(rel)
-                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,mode or 0o666)
+                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_BINARY',0),mode or 0o666)
                 try:
                     view=memoryview(raw)
                     while view:

@@ -1,0 +1,159 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 logs selector external shadow
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-selector-external-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      abba: ${{ steps.filter.outputs.abba }}
+      external: ${{ steps.filter.outputs.external }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
+            echo 'abba=true' >> "$GITHUB_OUTPUT"
+            echo 'external=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          abba=false
+          external=false
+          if grep -Eq '^(experiments/entropygraph_v030_release_product(_logs_candidate)?\.py|benchmarks/v030_logs_prefilter_reuse_abba\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|\.github/workflows/v030-logs-selector-external-shadow\.yml)$' <<<"$changed"; then abba=true; fi
+          if grep -Eq '^(experiments/entropygraph_v030_release_product_logs_candidate\.py|experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_logs_inverse_profile.*\.py|experiments/entropygraph_v030_product_fs\.py|benchmarks/v030_logs_selector_external_shadow\.py|benchmarks/v030_external_competitors(_canonical)?\.py|tests/test_v030_logs_selector_candidate\.py|\.github/workflows/v030-logs-selector-external-shadow\.yml)$' <<<"$changed"; then external=true; fi
+          echo "abba=$abba" >> "$GITHUB_OUTPUT"
+          echo "external=$external" >> "$GITHUB_OUTPUT"
+
+  logs-prefilter-reuse-abba:
+    needs: changes
+    if: needs.changes.outputs.abba == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install product and frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run exact full-build prefilter ownership ABBA
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_prefilter_reuse_abba.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-prefilter-reuse-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-prefilter-reuse.json"
+      - name: Enforce claim boundary and exact identity
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-logs-prefilter-reuse.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-prefilter-reuse.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-prefilter-reuse-abba-v2'
+          g=d['promotion_gate']
+          assert g['exact_product_identity'] is True
+          assert g['candidate_captured_one_shared_frontdoor'] is True
+          assert g['candidate_terminal_second_scan_eliminated'] is True
+          assert d['claim_boundary'].startswith('A/B ownership oracle only')
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-logs-prefilter-reuse-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-logs-prefilter-reuse.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  logs-selector-external-shadow:
+    needs: changes
+    if: needs.changes.outputs.external == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 540
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install product, frozen corpus and external compressors
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd p7zip-full zpaq gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile and test candidate facade
+        run: |
+          python -m py_compile experiments/entropygraph_v030_release_product_logs_candidate.py benchmarks/v030_logs_selector_external_shadow.py
+          python -m pytest -q tests/test_v030_logs_selector_candidate.py
+      - name: Run exact all-15 external selector shadow
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_selector_external_shadow.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-selector-external-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-selector-external.json"
+      - name: Independently enforce material selector advance
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-selector-external.json').read_text())
+          p=d['candidate_promotion_gate']; f=d['candidate_frontier']
+          assert p['exact_workload_count'] and p['all_cmpct_trees_verified'] and p['only_logs_row_terminalized']
+          assert p['logs_is_strict_four_way_win'] and p['zip_size_frontier_preserved']
+          assert p['zstd_size_frontier_materially_advances'] and p['full_four_way_frontier_materially_advances']
+          assert f['zip_size_wins']==15 and f['zstd_size_wins']>=7 and f['full_four_way_wins']>=4
+          assert f['terminal_logs_rows']==['neutral_hostile_v1/05_logs_and_telemetry']
+          assert p['passed'] is True
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-selector-external-shadow.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-logs-selector-external-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-logs-selector-external.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Each PR synchronization pays only the tiny head-commit classifier. Deep jobs run only when the newest commit
+# changes their lane, and unrelated later commits do not cancel an exact receipt already in flight.

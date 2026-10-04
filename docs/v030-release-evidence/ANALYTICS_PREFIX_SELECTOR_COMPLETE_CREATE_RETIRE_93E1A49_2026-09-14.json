@@ -1,0 +1,50 @@
+{
+  "schema": "cmpct-v030-analytics-prefix-selector-complete-create-adjudication-v1",
+  "status": "research-only negative; no product, release, R4, or canonical-r25 credit",
+  "product_credit": false,
+  "release_credit": false,
+  "source_head": "93e1a4915df8da7dbb597793042465ae45655387",
+  "workflow_run_id": 34870124290,
+  "workflow_job_id": 104064519528,
+  "artifact_id": 10358424504,
+  "artifact_zip_sha256": "0c03169167771d5d0a7f58c57e6979bee94338c9bbc47d485a7bab59b0650d9a",
+  "target": "neutral_hostile_v1/04_analytics_and_database",
+  "frozen_rule": {
+    "min_size_bytes": 262144,
+    "prefix_bytes": 4096,
+    "prefix_codec": "zstd-1",
+    "max_prefix_zstd1_ratio_ppm": 700000
+  },
+  "bytes": {
+    "selector": 6134940,
+    "l15": 6569053,
+    "l19": 6135703,
+    "zip_deflate9": 10707777,
+    "accepted_v029": 6135172
+  },
+  "median_complete_create_s": {
+    "selector": 8.544402212999984,
+    "l15": 1.1479642959999978,
+    "l19": 8.768845041999953,
+    "zip_deflate9": 1.5246327060000056
+  },
+  "selector_shape": {
+    "probed_packs": 50,
+    "selected_l19_packs": 45,
+    "rejected_l15_packs": 5
+  },
+  "derived": {
+    "selector_saving_vs_l15_bytes": 434113,
+    "selector_margin_vs_v029_bytes": -232,
+    "selector_speedup_vs_global_l19_fraction": 0.02559548354714447,
+    "selector_to_zip_time_ratio": 5.604236469134195
+  },
+  "verdict": "RETIRE_PREFIX_SELECTOR_AS_CURRENT_ECONOMIC_ROUTE",
+  "interpretation": [
+    "The frozen path-blind 4 KiB prefix rule physically reproduces the oracle byte win: 6,134,940 B, 232 B below the accepted v0.29 Analytics artifact.",
+    "That density win is economically unusable in the measured complete-create path: median selector creation is 8.5444 s versus 1.5246 s for fresh ZIP/Deflate-9.",
+    "The prefix selector is only about 2.56% faster than global L19, far below the predeclared 20% material-speedup alternative gate.",
+    "Therefore the result falsifies the current route 'cheap 4 KiB admission probe + L19 on the 45 paying packs' as a practical product solution, without falsifying the underlying observation that high effort can recover Analytics density."
+  ],
+  "claim_boundary": "This is exact-head research evidence on one frozen Analytics workload and a complete-create research surface. It does not establish held-out transfer, canonical r25 integration, 15-workload domination, or release readiness. Thresholds and comparator settings were not changed after measurement."
+}

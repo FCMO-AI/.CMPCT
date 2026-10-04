@@ -1,0 +1,71 @@
+name: CMPCT v0.30 G04 fastpath causal extract
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_g04_fastpath_causal_extract.py
+      - .github/workflows/v030-g04-fastpath-causal-extract.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  causal-extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile causal oracle
+        run: python -m py_compile benchmarks/v030_g04_fastpath_causal_extract.py
+      - name: Run same-archive fast-vs-historical extraction
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_fastpath_causal_extract.py \
+            --work-root "$RUNNER_TEMP/v030-g04-fastpath-causal" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/g04-fastpath-causal.json"
+      - name: Validate evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/g04-fastpath-causal.json').read_text())
+          assert d['status']=='PASS', d.get('error')
+          assert d['product_release_credit'] is False
+          c=d['contract']; q=d['comparison']
+          assert c['same_archive_bytes'] is True
+          assert c['same_shipping_extract_frontdoor'] is True
+          assert c['only_reader_inverse_binding_differs'] is True
+          assert c['fresh_process_each_extract'] is True
+          assert c['runtime_thresholds_changed'] is False
+          assert len(d['samples']['fast'])==5 and len(d['samples']['historical'])==5
+          assert q['fast_over_historical_ratio'] > 0
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-g04-fastpath-causal-${{ github.sha }}
+          path: benchmark-artifacts/g04-fastpath-causal.json
+          if-no-files-found: error
+          retention-days: 90

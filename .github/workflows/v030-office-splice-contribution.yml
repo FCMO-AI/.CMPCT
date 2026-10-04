@@ -1,0 +1,92 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Office splice contribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_office_splice_contribution.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_direct_v5.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_direct_v4.py'
+      - 'benchmarks/v030_federated_embedded_fs_v7_effort_oracle.py'
+      - 'benchmarks/v030_federated_selective_effort_oracle.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'experiments/entropygraph_v025.py'
+      - '.github/workflows/v030-office-splice-contribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-office-splice-contribution-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  contribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile contribution oracle
+        run: python -m py_compile benchmarks/v030_office_splice_contribution.py
+      - name: Capture exact historical splice contribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_office_splice_contribution \
+            --work-root "$RUNNER_TEMP/v030-office-splice" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-office-splice.json"
+      - name: Ratchet diagnostic boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-office-splice.json').read_text())
+          assert d['schema']=='cmpct-v030-office-splice-contribution-v1'
+          assert d['archive_bytes'] > 0
+          assert d['exact_raw_final_identity'] is True
+          assert d['eligible_subfile_pair_count'] >= 0
+          assert d['selected_splice_edges'] >= 0
+          assert d['historical_build_stats']['splices'] == d['selected_splice_edges']
+          c=d['contract']
+          assert c['frozen_office_source'] is True
+          assert c['raw_final_eg07_byte_identity_required'] is True
+          assert c['historical_engine_changed'] is False
+          assert c['release_credit'] is False
+          assert d['release_credit'] is False
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-office-splice-contribution.yml
+      - name: Upload exact-head diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-office-splice-contribution-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-office-splice.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. No selector/release credit; a zero result only authorizes generic futility research.

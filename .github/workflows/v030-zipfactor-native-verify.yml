@@ -1,0 +1,147 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 ZIP-factor native verification oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_zipfactor_native_verify_oracle.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'native/cmpct-portable/**'
+      - 'native/cmpct-core/**'
+      - 'native/cmpct-zipfactor-v3-ffi/**'
+      - '.github/workflows/v030-zipfactor-native-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zipfactor-native-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_zipfactor_native_verify_oracle\.py|experiments/entropygraph_v030_zipfactor_compact_v3\.py|native/(cmpct-portable|cmpct-core|cmpct-zipfactor-v3-ffi)/|\.github/workflows/v030-zipfactor-native-verify\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect ZIP-factor native verification.'
+          fi
+
+  native-verify:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install benchmark dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile oracle and exact v3 preparity verifier
+        run: |
+          python -m py_compile benchmarks/v030_zipfactor_native_verify_oracle.py
+          cargo build --release --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-zipfactor-v3-preparity
+      - name: Preserve native correctness before timing
+        run: |
+          cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
+          cargo clippy --manifest-path native/cmpct-portable/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path native/cmpct-portable/Cargo.toml zipfactor -- --nocapture
+      - name: Run exact Python-vs-native verification A/B
+        run: |
+          python -m benchmarks.v030_zipfactor_native_verify_oracle \
+            --work-root "$RUNNER_TEMP/v030-zipfactor-native-verify" \
+            --native-binary "$GITHUB_WORKSPACE/native/cmpct-portable/target/release/cmpct-zipfactor-v3-preparity" \
+            --output "$RUNNER_TEMP/v030-zipfactor-native-verify.json"
+      - name: Ratchet identity, hostile rejection and promotion boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from experiments import entropygraph_v030_zipfactor_compact_v3 as V3
+          p=Path(os.environ['RUNNER_TEMP'])/'v030-zipfactor-native-verify.json'
+          e=json.loads(p.read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-native-verify-oracle-v1'
+          c=e['contract']
+          assert c['rounds']==5
+          assert c['minimum_native_verify_speedup']==0.20
+          assert c['native_compile_inside_timing'] is False
+          assert c['native_process_startup_inside_timing'] is True
+          assert c['archive_bytes_changed'] is False
+          assert c['selector_change'] is False and c['release_credit'] is False
+          assert e['candidate']['profile']==V3.PROFILE
+          assert e['candidate']['revision']=='25'
+          assert float(e['candidate']['max_member_read_amplification']) <= 8.0
+          assert int(e['candidate']['max_decode_unit_bytes']) <= 8*1024*1024
+          assert len(e['python_verify_samples_s'])==5
+          assert len(e['native_verify_samples_s'])==5
+          assert e['native_rejects_corruption'] is True
+          assert e['experiment_valid'] is True
+          assert e['release_credit'] is False
+          if e['promotion_signal']:
+              assert float(e['native_verify_speedup']) >= 0.20
+              assert float(e['native_verify_median_s']) < float(e['python_verify_median_s'])
+          PY
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zipfactor-native-verify-${{ env.EVIDENCE_HEAD }}
+          path: ${{ runner.temp }}/v030-zipfactor-native-verify.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-native-verify.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+# Research-only A/B. CMP25Z3 remains deliberately outside PortableArchive production dispatch while its
+# recovery/platform promotion gates are incomplete. A positive result identifies the native verification path
+# to productize; it does not itself change selector behavior or earn release credit.

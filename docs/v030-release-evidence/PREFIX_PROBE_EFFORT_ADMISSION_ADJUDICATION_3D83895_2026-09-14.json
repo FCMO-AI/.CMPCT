@@ -1,0 +1,68 @@
+{
+  "schema": "cmpct-v030-prefix-probe-effort-adjudication-v1",
+  "source_commit": "3d83895d53b6dd714e25ede33c81f64e29ab4329",
+  "source_run_id": 34867305025,
+  "source_job": "prefix-probe-effort",
+  "source_artifact_id": 10357377694,
+  "source_artifact_name": "v030-prefix-probe-effort-3d83895d53b6dd714e25ede33c81f64e29ab4329",
+  "source_artifact_digest": "sha256:6428c3777d0cd7e789ba1a81d295d5ce966422262215bab5325913007835d394",
+  "status": "research-only adjudication; no product, release, R4, complete-create, or transfer credit",
+  "release_credit": false,
+  "product_credit": false,
+  "scope_correction": {
+    "original_combined_verdict": "PREFIX_ONLY_FAMILY_CLEARS_BOTH_DENSITY_FLOORS",
+    "why_combined_verdict_is_not_a_product_claim": "The Office measurement is a CMPNX5/canonical-filesystem physical-pack surface of about 6.1 MB, while 12,480,771 B is the accepted complete v0.29 product archive. Being below that complete-product number on this narrower surface is not evidence that the prefix selector closes Office's complete-product generalization debt.",
+    "preservation_rule": "Do not rewrite the frozen source artifact. Interpret its Office 'meets_v029_density' flag only as arithmetic emitted by that oracle, not as a valid cross-scope product comparison."
+  },
+  "frozen_rule_of_interest": {
+    "min_size_bytes": 262144,
+    "prefix_bytes": 4096,
+    "prefix_codec": "zstd-1",
+    "max_prefix_zstd1_ratio_ppm": 700000
+  },
+  "analytics": {
+    "accepted_v029_bytes": 6135172,
+    "l15_archive_bytes": 6569053,
+    "l19_archive_bytes": 6135703,
+    "pack_count": 64,
+    "true_paying_packs": 45,
+    "prefix_observation_wall_s": 0.0011425437405705452,
+    "selected_packs": 45,
+    "true_winners_retained": 45,
+    "false_positives": 0,
+    "oracle_saving_bytes": 434113,
+    "oracle_archive_bytes": 6134940,
+    "margin_vs_accepted_v029_bytes": -232,
+    "scientific_read": "STRONG_POSITIVE_ADMISSION_SIGNAL",
+    "claim": "A 4 KiB prefix Zstd-1 ratio plus pack size reproduces the byte-optimal 45-pack Analytics L15/L19 admission set found by the earlier full-L15 feature, without using full-pack compressed size as a selector input. Physical and complete-create economics remain unproven here."
+  },
+  "office": {
+    "accepted_v029_complete_product_bytes": 12480771,
+    "l15_physical_pack_surface_bytes": 6157547,
+    "l19_physical_pack_surface_bytes": 6029961,
+    "l15_to_l19_pack_surface_headroom_bytes": 127586,
+    "pack_count": 9,
+    "true_paying_packs": 7,
+    "prefix_observation_wall_s": 0.0014813672751188278,
+    "selective_rule_256k_ratio_0_70": {
+      "selected_packs": 1,
+      "true_winners_retained": 1,
+      "false_positives": 0,
+      "oracle_saving_bytes": 37980,
+      "fraction_of_pack_surface_headroom_recovered": 0.2976815638079413
+    },
+    "size_only_like_rule_256k_ratio_1_00": {
+      "selected_packs": 7,
+      "true_winners_retained": 5,
+      "false_positives": 2,
+      "oracle_saving_bytes": 113838,
+      "fraction_of_pack_surface_headroom_recovered": 0.8922452306679416
+    },
+    "scientific_read": "PREFIX_COMPRESSIBILITY_INSUFFICIENT_AS_SELECTIVE_OFFICE_SIGNAL",
+    "claim": "The selective 0.70 prefix threshold identifies only one of seven byte-paying Office packs and recovers about 29.8% of this narrow L15-to-L19 pack-surface headroom. Relaxing the ratio toward 1.0 recovers more bytes mainly by admitting most large packs, which collapses toward nonselective high effort and does not explain or close the complete-product Office debt."
+  },
+  "next_decision": {
+    "analytics": "Run a charged physical compression-stage referee for the frozen 256 KiB + 4 KiB-prefix-ratio<=0.70 selector. If it materially removes double-compression overhead with exact bytes, advance only to complete-create and held-out transfer testing.",
+    "office": "Do not use the combined-v1 density flag as evidence of resolution. Seek a different cheap causal signal or representation owner; simple prefix compressibility is not selective enough in this fixed family."
+  }
+}

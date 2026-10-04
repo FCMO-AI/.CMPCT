@@ -1,0 +1,43 @@
+{
+  "schema": "cmpct-v030-negative-evidence-v1",
+  "source_commit": "f59ee2108603167f4f1ebb1c7c9d06a6f592ff7c",
+  "workflow_run_id": 33350517324,
+  "artifact_digest": "sha256:ed2a3453ce09520a3406146a4ef348bec651946dfd41f99c0edad5944c806a11",
+  "target": "resemblance_hostile_v1/01_shifted_versions",
+  "hypothesis": "Reducing the PrefixGraph level-19 Zstd window can materially lower the four-worker live RSS footprint while retaining deterministic no-larger bytes and the frozen creation-time envelope.",
+  "result": "falsified_as_material_rss_fix",
+  "baseline": {
+    "archive_bytes": 1700242,
+    "archive_sha256": "8994cb83c2f62944795144ee775d9395147681bb1156892d72d4cc5d4ca417fe",
+    "median_build_s": 4.651169578999998,
+    "median_incremental_build_peak_rss_kib": 299168.0,
+    "window_log": 23
+  },
+  "arms": {
+    "window-m1": {
+      "window_log": 22,
+      "deterministic": true,
+      "byte_ratio_to_baseline": 1.0,
+      "wall_ratio_to_baseline": 1.0038469130604888,
+      "rss_ratio_to_baseline": 0.9906005989945449
+    },
+    "window-m2": {
+      "window_log": 21,
+      "deterministic": true,
+      "byte_ratio_to_baseline": 1.0,
+      "wall_ratio_to_baseline": 1.0104536636805357,
+      "rss_ratio_to_baseline": 0.9937760723071987
+    },
+    "window-m3": {
+      "window_log": 20,
+      "deterministic": true,
+      "byte_ratio_to_baseline": 8.334945260733472,
+      "wall_ratio_to_baseline": 1.5972822513380127,
+      "rss_ratio_to_baseline": 2.0831974007915286
+    }
+  },
+  "conclusion": "The Zstd window family is terminal for the Shifted RSS blocker. Window 22/21 preserve exact archive identity but save under one percent RSS; window 20 changes the winner and catastrophically worsens bytes, time and memory. Together with the chain/hash and allocator-arena negative evidence, further parameter tuning is lower value than changing the lifetime/ownership of concurrently materialized anchor-audition work while preserving the exact candidate set and tournament.",
+  "release_credit": false,
+  "release_thresholds_changed": false,
+  "benchmark_identity_dispatch": false
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "cmpct-v030-release-lock-manifest-v1",
+  "release": "0.30.0",
+  "target_format_revision": 25,
+  "publication_mode": "rolling-pre1-checkpoint",
+  "policy": "docs/PRE1_RELEASE_POLICY.md",
+  "release_note": "docs/releases/v0.30.0.md",
+  "checkpoint_record": "benchmarks/history/2026-10-04-cmpct-v030-checkpoint.json",
+  "product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "prior_strict_contract_parent": "cd2886bda7580a56e1efab8132b0b9477c52bd55",
+  "dominance_target": {
+    "required_for_release": false,
+    "target_version": "1.0.0",
+    "workloads": 15,
+    "competitors": [
+      "ZIP/Deflate-9",
+      "solid Zstd-19"
+    ],
+    "dimensions": [
+      "complete_archive_size",
+      "create_wall_time"
+    ],
+    "strict_no_ties": true
+  },
+  "receipt_directory": "docs/v030-release-receipts",
+  "required_task_states": [],
+  "fingerprint_globs": [
+    "pyproject.toml",
+    "src/**/*.py",
+    "native/**/*.rs",
+    "native/**/*.toml",
+    "experiments/entropygraph_v030_*.py",
+    "docs/PRE1_RELEASE_POLICY.md",
+    "docs/V030_RELEASE_GATES.md",
+    "docs/V030_RELEASE_LOCK.json",
+    "docs/releases/v0.30.0.md",
+    "benchmarks/history/2026-10-04-cmpct-v030-checkpoint.json"
+  ],
+  "required_receipts": []
+}

@@ -1,53 +1,51 @@
 # Roadmap to CMPCT 1.0
 
+## 1.0 graduation target — strict 15/15 domination
+
+The benchmark objective that previously gated v0.30 is now explicitly a **CMPCT 1.0** target.
+
+Under equivalent semantics and controlled same-input measurement, CMPCT 1.0 should strictly beat both
+ordinary ZIP/Deflate-9 and solid Zstd-19 in complete archive size **and** creation wall time on
+**15/15 frozen serious workloads, with no ties**.
+
+This target does not gate v0.30, v0.31 or other 0.x checkpoints. Pre-1.0 releases are rolling material
+checkpoints under `docs/PRE1_RELEASE_POLICY.md`. Their losses remain visible and feed the next line.
+
+The 1.0 target may not be obtained by weakening correctness, selective access, filesystem fidelity,
+integrity, recovery, resource bounds, portability, timing boundaries or benchmark semantics.
+
 ## P0 — make the prototype defensible
 
-- Convert the monolithic Python prototype into a small reference package without changing on-disk
-  semantics accidentally.
-- Add golden conformance archives and byte-exact round-trip vectors.
-- Add property/fuzz testing for parser bounds, corrupt indexes, corrupt blob headers, malicious paths,
-  truncated generations, chunk maps, sparse extents and nested recipes.
-- Make all optional accelerators genuinely optional, with clear feature discovery and fallbacks.
-- Re-run the universal benchmark in reproducible CI rather than relying on one development machine.
+- Maintain golden conformance archives and byte-exact round-trip vectors.
+- Property/fuzz test parser bounds, corrupt indexes/records, malicious paths and recovery.
+- Keep optional accelerators optional and portable.
+- Keep the universal benchmark reproducible in CI.
 
 ## P0 — format completeness
 
-- Freeze a codec/transform registry.
-- Specify deterministic mode.
-- Define ownership, timestamps, xattrs, ACLs, Windows metadata and path normalization precisely.
-- Design authenticated encryption and key derivation; do not inherit weak legacy ZIP crypto.
-- Define split-volume archives and streaming/non-seekable creation.
-- Define remote HTTP/object-store range access and partial verification.
+- Freeze codec/transform registry and deterministic mode.
+- Finish ownership/timestamps/xattrs/ACLs/path normalization contracts.
+- Define encryption, split volumes, streaming/non-seekable creation and remote range access.
 
 ## P1 — size frontier
 
-- Integrate a licensed, audited reversible DEFLATE preprocessor (preflate-class technique) so
-  entropy-dense nested Deflate streams can be represented as plaintext + compact reconstruction data
-  instead of being stored verbatim.
-- Generalize reversible preprocessors for other common already-compressed structures only when they
-  are demonstrably worthwhile and byte-exact.
-- Improve adaptive representation selection with cheap probes so expensive codecs are not run merely
-  to discover they lose.
-- Explore cross-archive/global content-addressed stores as an optional layer; standalone `.cmpct`
-  archives must remain self-contained by default.
+- Pursue licensed audited reversible compressed-stream preprocessing where economically justified.
+- Generalize exact preprocessors only when complete product economics survive.
+- Improve content-driven admission so expensive losing codecs are not built unnecessarily.
+- Explore optional global stores without sacrificing self-contained archive defaults.
 
 ## P1 — performance frontier
 
-- Native Rust/C++ core with memory-safe parser boundaries and SIMD-friendly codec dispatch.
-- Parallel create/extract/verify with deterministic ordering.
-- Zero-copy mmap/range-backed reads where the stored representation permits it.
-- Efficient content-defined chunking on multi-gigabyte inputs without reading entire files into RAM.
+- Move material hot paths into the shared memory-safe native core where evidence supports it.
+- Reduce speculative candidate/search work.
+- Improve parallel create/extract/verify deterministically.
+- Continue zero-copy/range-backed and scalable CDC work.
 
 ## P1 — ecosystem
 
-- Stable CLI and library API.
-- FUSE/WinFsp read-only mount before 1.0; writable mount after transactional semantics are proven.
-- Native file-manager integrations where practical.
-- Import/export for ZIP, tar, tar.zst and 7z where licensing/tooling permits.
-- MIME/media type registration and platform file association after the 1.0 byte contract is frozen.
+- Stable CLI/library API, mounts, platform integrations and import/export endpoints.
 
 ## Rule for new features
 
-A new feature is accepted only if it improves a meaningful workload without causing an unexplained
-regression elsewhere. Optional complexity must be capability-gated. The canonical format should stay
-small, inspectable, recoverable and implementable by third parties.
+A new feature must be evidence-backed, content/structure driven, bounded and honest about exported costs.
+Pre-1.0 releases need not win every workload; losses remain visible.

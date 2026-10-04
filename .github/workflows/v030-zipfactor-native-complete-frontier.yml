@@ -1,0 +1,153 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 ZIP-factor native complete frontier
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_zipfactor_native_complete_frontier.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'native/cmpct-portable/**'
+      - '.github/workflows/v030-zipfactor-native-complete-frontier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zipfactor-native-complete-frontier-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_(zipfactor_native_complete_frontier|external_competitors)\.py|experiments/entropygraph_v030_zipfactor_compact_v3\.py|native/cmpct-portable/|\.github/workflows/v030-zipfactor-native-complete-frontier\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect ZIP-factor native complete frontier.'
+          fi
+
+  complete-frontier:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install exact comparator dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile oracle and exact v3 preparity verifier
+        run: |
+          python -m py_compile benchmarks/v030_zipfactor_native_complete_frontier.py
+          cargo build --release --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-zipfactor-v3-preparity
+      - name: Preserve native correctness before timing
+        run: |
+          cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
+          cargo clippy --manifest-path native/cmpct-portable/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path native/cmpct-portable/Cargo.toml zipfactor -- --nocapture
+      - name: Run complete rotated external frontier
+        run: |
+          python -m benchmarks.v030_zipfactor_native_complete_frontier \
+            --work-root "$RUNNER_TEMP/v030-zipfactor-native-complete" \
+            --native-binary "$GITHUB_WORKSPACE/native/cmpct-portable/target/release/cmpct-zipfactor-v3-preparity" \
+            --output "$RUNNER_TEMP/v030-zipfactor-native-complete.json"
+      - name: Ratchet exact four-way boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'v030-zipfactor-native-complete.json'
+          e=json.loads(p.read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-native-complete-frontier-v2'
+          c=e['contract']
+          assert c['rounds']==9
+          assert c['cmpct_timing']=='exact-v3-build-plus-native-strong-verify'
+          assert c['native_process_startup_inside_timing'] is True
+          assert c['native_compile_inside_timing'] is False
+          assert c['external_identity_domain']=='frozen-external-treehash'
+          assert c['cmpct_identity_domain']=='canonical-r25-semantic-tree'
+          assert c['ties_fail'] is True
+          assert c['archive_bytes_changed'] is False
+          assert c['selector_change'] is False and c['release_credit'] is False
+          assert e['experiment_valid'] is True
+          assert len(e['samples_s']['cmpct'])==9
+          assert len(e['samples_s']['zip'])==9
+          assert len(e['samples_s']['zstd19'])==9
+          assert e['candidate']['tree_sha256']==e['source_identity']['canonical_tree_sha256']
+          assert e['source_identity']['external_tree_sha256']
+          assert e['candidate']['max_member_read_amplification'] <= 8.0
+          assert e['candidate']['max_decode_unit_bytes'] <= 8*1024*1024
+          assert e['sizes']['cmpct'] < e['sizes']['zip']
+          assert e['sizes']['cmpct'] < e['sizes']['zstd19']
+          assert e['release_credit'] is False
+          expected=(
+              e['sizes']['cmpct'] < e['sizes']['zip']
+              and e['sizes']['cmpct'] < e['sizes']['zstd19']
+              and e['medians_s']['cmpct'] < e['medians_s']['zip']
+              and e['medians_s']['cmpct'] < e['medians_s']['zstd19']
+          )
+          assert e['strict_four_way_win'] is expected
+          assert e['promotion_signal'] is expected
+          Path(os.environ['RUNNER_TEMP']).joinpath('v030-zipfactor-native-complete-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zipfactor-native-complete-${{ env.EVIDENCE_HEAD }}
+          path: |
+            ${{ runner.temp }}/v030-zipfactor-native-complete.json
+            ${{ runner.temp }}/v030-zipfactor-native-complete-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-native-complete-frontier.yml
+
+# Research-only complete frontier. Exact evidence currently shows the representation already wins bytes against
+# both competitors while complete build+native-verify misses ZIP creation by a narrow execution gap. A positive
+# future result advances ZIP-factor toward recovery/platform productization; it cannot by itself enable production
+# dispatch, alter the selector, or earn v0.30 release credit. Exact-newest-head admission prevents unrelated PR
+# commits from replaying this native frontier.

@@ -1,0 +1,150 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 r24 numeric-path control oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/codec.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_composition_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_composition_oracle_v2.py'
+      - 'benchmarks/v030_r24_numeric_path_control_oracle.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - '.github/workflows/v030-r24-numeric-path-control.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-numeric-path-control-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(src/cmpct/(builder|codec)\.py|experiments/entropygraph_v030_release_product\.py|benchmarks/v030_r24_compact_control_oracle\.py|benchmarks/v030_r24_compact_control_composition_oracle(_v2)?\.py|benchmarks/v030_r24_numeric_path_control_oracle\.py|benchmarks/v030_release_generalization\.py|benchmarks/(neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|\.github/workflows/v030-r24-numeric-path-control\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect the numeric-path proof.'
+          fi
+
+  numeric-path-control:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile numeric-path evidence surface
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r24_compact_control_oracle.py \
+            benchmarks/v030_r24_compact_control_composition_oracle.py \
+            benchmarks/v030_r24_compact_control_composition_oracle_v2.py \
+            benchmarks/v030_r24_numeric_path_control_oracle.py
+      - name: Run exact all-15 numeric-path compact-control proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_numeric_path_control_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-numeric-path-control-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-numeric-path-control.json"
+      - name: Independently enforce exactness and no-regression boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-numeric-path-control.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-numeric-path-control-v1'
+          assert d['contract']['workloads']==15
+          assert d['contract']['release_credit'] is False
+          assert d['contract']['two_authenticated_control_copies_retained'] is True
+          assert d['contract']['physical_payload_records_unchanged'] is True
+          assert set(d['contract']['policy_inputs'])=={'previous_canonical_path','current_canonical_path'}
+          assert 'benchmark_name' in d['contract']['forbidden_policy_inputs']
+          assert 'content_hash' in d['contract']['forbidden_policy_inputs']
+          assert len(d['rows'])==15
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['zero_projected_byte_regressions'] is True
+          assert d['gate']['passed'] is True
+          assert d['summary']['regressions']==[]
+          assert all(r['semantic_index_roundtrip_exact'] for r in d['rows'])
+          assert all(r['two_control_copies'] for r in d['rows'])
+          assert all(r['payload_records_unchanged'] for r in d['rows'])
+          assert all(r['projected_bytes']<=r['shipping_bytes'] for r in d['rows'])
+          if d['gate']['promotion_signal']:
+              assert d['summary']['aggregate_incremental_saving_vs_base_compact_bytes']>0
+              assert d['summary']['encrypted_like_incremental_saving_bytes']>0
+              assert d['summary']['numeric_selected_workloads']
+          PY
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/v030-r24-numeric-path-control-candidate.txt
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-numeric-path-control.yml
+      - name: Upload numeric-path evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-numeric-path-control-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-r24-numeric-path-control.json
+            benchmark-artifacts/v030-r24-numeric-path-control-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Exact all-15 evidence has shown a content-agnostic canonical-path control representation can save bytes with zero
+# projected regressions while retaining two authenticated control copies and unchanged physical payload records.
+# This remains a research handoff: productization still owes bounded reader/recovery semantics, native/Android parity,
+# exact fingerprint binding and ordinary release authority. Exact-head scoping prevents unrelated PR commits from
+# repeatedly consuming a three-hour proof slot.

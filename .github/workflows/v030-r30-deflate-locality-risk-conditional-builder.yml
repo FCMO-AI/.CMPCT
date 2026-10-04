@@ -1,0 +1,192 @@
+name: CMPCT v0.30 R30 Deflate locality-risk conditional Builder
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+# Diagnostic only. A positive result authorizes only the superseding global/protected-workload Builder.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'benchmarks/v030_r30_deflate_locality_risk_conditional_builder.py'
+      - 'docs/v030-rnd/R30_DEFLATE_LOCALITY_RISK_CONDITIONAL_BUILDER_PREREG.md'
+      - '.github/workflows/v030-r30-deflate-locality-risk-conditional-builder.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-r30-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+
+      - name: Classify exact latest-head commit
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r30_deflate_locality_risk_conditional_builder\.py|docs/v030-rnd/R30_DEFLATE_LOCALITY_RISK_CONDITIONAL_BUILDER_PREREG\.md|\.github/workflows/v030-r30-deflate-locality-risk-conditional-builder\.yml)$'; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  r30-builder:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    concurrency:
+      group: cmpct-v030-r30-deflate-locality-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 64
+
+      - name: Bind frozen product and corpus substrate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a HEAD
+          for path in \
+            src/cmpct/builder.py \
+            src/cmpct/codec.py \
+            experiments/entropygraph_v030_release_product.py \
+            benchmarks/neutral_hostile_corpus_v1.py \
+            benchmarks/neutral_hostile_determinism_repair_v1.py \
+            benchmarks/v030_release_ablation_canonical.py \
+            benchmarks/v030_perf_worker_canonical.py; do
+            base_blob="$(git rev-parse "b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a:$path")"
+            head_blob="$(git rev-parse "HEAD:$path")"
+            if [ "$base_blob" != "$head_blob" ]; then
+              echo "Frozen R30 substrate drift: $path $base_blob -> $head_blob" >&2
+              exit 1
+            fi
+          done
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen diagnostic dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Bind frozen generator-provided full-backups identity
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          from benchmarks import v030_release_ablation_canonical as A
+
+          root = Path('benchmark-artifacts/r30-generator-binding')
+          shutil.rmtree(root, ignore_errors=True)
+          found = False
+          for suite, source, expected in A._build_corpora(root):
+              if suite == 'neutral_hostile_v1' and source.name == '06_incremental_backups':
+                  found = True
+                  assert expected.get('baseline_identity') == 'neutral-hostile-repair-v6', expected
+                  observed = A.RC.treehash(source)
+                  expected_tree = expected['tree_sha256']
+                  assert observed == expected_tree, (
+                      f'R30 generator identity mismatch: {observed} != {expected_tree}'
+                  )
+                  assert (source / 'snapshot_2.zip').is_file(), 'R30 nested source member missing'
+                  break
+          assert found, 'R30 frozen Incremental Backups target was not generated'
+          PY
+
+      - name: Compile frozen R30 instrument
+        run: python -m py_compile benchmarks/v030_r30_deflate_locality_risk_conditional_builder.py
+
+      - name: Run frozen R30 conditional Builder
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r30_deflate_locality_risk_conditional_builder.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r30-deflate-locality-risk-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r30-deflate-locality-risk.json"
+
+      - name: Enforce frozen R30 completeness and decision law
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path('benchmark-artifacts/r30-deflate-locality-risk.json')
+          assert p.is_file(), 'R30 result was not published'
+          d = json.loads(p.read_text())
+          assert d['schema'] == 'cmpct-v030-r30-deflate-locality-risk-conditional-builder-v1'
+          assert d['authority_product_substrate_head'] == 'b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a'
+          assert d['repetitions'] == 3
+          assert d['locality_ceiling'] == 8.0
+          assert d['mature_deflate_reuse_min'] == 65536
+          assert set(d['targets']) == {'full-backups', 'nested-only'}
+          assert d['generator_observed_tree_sha256'] == d['generator_expected_tree_sha256'], (
+              'R30 result escaped the frozen repaired generator identity'
+          )
+          for target in d['targets'].values():
+              assert set(target['arms']) == {'release-all-exact', 'mature-64k', 'locality-risk-v1'}
+              for arm in target['arms'].values():
+                  assert len(arm['repetitions']) == 3
+                  assert arm['median']['strong_verify_ok']
+                  for row in arm['repetitions']:
+                      assert row['strong_verify_ok']
+                      assert row['virtual_members']
+                      assert all(m['decoded_context_bytes'] is not None for m in row['virtual_members'])
+          assert d['decision'] in {
+              'PROMOTE_CONDITIONAL_TO_GLOBAL_BUILDER',
+              'BYTE_WIN_LOCALITY_FAIL',
+              'BYTE_WIN_RUNTIME_OR_RSS_DEBT',
+              'NO_MATERIAL_CONDITIONAL_WIN',
+              'SUBSTRATE_OR_CORRECTNESS_FAILURE',
+          }
+          if d['decision'] == 'PROMOTE_CONDITIONAL_TO_GLOBAL_BUILDER':
+              assert d['decision_inputs'] == {
+                  'conditional_saves_full_backups': True,
+                  'byte_nonregression_both_targets': True,
+                  'locality_within_8x_both_targets': True,
+                  'no_material_runtime_regression_both_targets': True,
+                  'rss_within_10pct_both_targets': True,
+              }
+          PY
+
+      - name: Upload immutable R30 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r30-deflate-locality-risk-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r30-deflate-locality-risk.json
+          if-no-files-found: error
+          retention-days: 90

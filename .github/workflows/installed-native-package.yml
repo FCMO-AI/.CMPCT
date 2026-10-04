@@ -1,0 +1,217 @@
+# ci-lane: deep
+name: CMPCT installed native package
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "MANIFEST.in"
+      - "native/cmpct-core/**"
+      - "tests/installed_native_package_smoke.py"
+      - ".github/workflows/installed-native-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CMPCT_WHEEL_PYTHON_TAG: cp310.cp311.cp312.cp313.cp314
+
+jobs:
+  installed-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    concurrency:
+      group: cmpct-installed-native-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build source distribution only
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --sdist
+      - name: Build wheel strictly from sdist and retag to supported CPython minors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/cmpct-installed"
+          if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
+          "$PY" -m pip install --upgrade pip wheel
+          mkdir -p "$RUNNER_TEMP/wheels-original" "$RUNNER_TEMP/wheels"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+            export ARCHFLAGS="-arch arm64 -arch x86_64"
+          fi
+          "$PY" -m pip wheel --no-deps dist/*.tar.gz -w "$RUNNER_TEMP/wheels-original"
+          cp "$RUNNER_TEMP"/wheels-original/cmpct-*.whl "$RUNNER_TEMP/wheels/"
+          cd "$RUNNER_TEMP/wheels"
+          ORIGINAL=$(echo cmpct-*.whl)
+          "$PY" -m wheel tags --python-tag="$CMPCT_WHEEL_PYTHON_TAG" --abi-tag=none --remove "$ORIGINAL"
+          test "$(find . -maxdepth 1 -name 'cmpct-*.whl' | wc -l)" -eq 1
+      - name: Clean-install and smoke installed cdylib
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
+          "$PY" -m pip install "$RUNNER_TEMP"/wheels/cmpct-*.whl
+          (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee installed-native-smoke.json
+      - name: Inspect installed dependency closure
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
+          LIB=$(cd "$RUNNER_TEMP" && "$PY" -c 'import importlib.util,pathlib; p=pathlib.Path(next(iter(importlib.util.find_spec("cmpct").submodule_search_locations))); print(next(x for x in p.glob("cmpct_core*") if x.is_file()))')
+          echo "library=$LIB" | tee installed-native-deps.txt
+          if [ "$RUNNER_OS" = "Linux" ]; then ldd "$LIB" | tee -a installed-native-deps.txt; ! ldd "$LIB" | grep -i 'libzstd'; fi
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            otool -L "$LIB" | tee -a installed-native-deps.txt
+            ! otool -L "$LIB" | grep -i 'libzstd'
+            lipo -info "$LIB" | tee -a installed-native-deps.txt
+            lipo -info "$LIB" | grep -q 'arm64'
+            lipo -info "$LIB" | grep -q 'x86_64'
+          fi
+          if [ "$RUNNER_OS" = "Windows" ]; then objdump -p "$LIB" | grep 'DLL Name:' | tee -a installed-native-deps.txt; ! objdump -p "$LIB" | grep -i 'libzstd'; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installed-native-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            installed-native-smoke.json
+            installed-native-deps.txt
+            ${{ runner.temp }}/wheels/cmpct-*.whl
+          if-no-files-found: error
+          retention-days: 14
+
+  python-compatibility:
+    needs: installed-package
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+        python: ['3.10','3.11','3.12','3.13','3.14']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: installed-native-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: installed-artifact
+      - name: Install identical per-OS wheel and exercise shipping product
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHEEL=$(find installed-artifact -name 'cmpct-*.whl' -type f -print -quit)
+          test -n "$WHEEL"
+          python -m pip install --upgrade pip
+          python -m pip install "$WHEEL"
+          (cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee python-compat-smoke.json
+          python - <<'PY'
+          import json
+          s=json.load(open('python-compat-smoke.json'))
+          assert s['representative_archive_create_read_extract'] is True
+          assert s['shipping_python_no_ambient_zstd'] is True
+          assert s['python_zstandard_absent'] is True
+          assert s['dict_vector_bytes']==104
+          PY
+
+  desktop-package-evidence:
+    needs: [installed-package, python-compatibility]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: installed-native-*-${{ github.event.pull_request.head.sha || github.sha }}
+          path: installed-evidence
+      - name: Aggregate fingerprint-bound desktop package evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint > "$RUNNER_TEMP/desktop-package-fingerprint.json"
+          FP="$(python - <<'PYFP'
+          import json, os, pathlib
+          data=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'desktop-package-fingerprint.json').read_text())
+          value=data.get('candidate_fingerprint')
+          assert isinstance(value,str) and len(value)==64,value
+          print(value)
+          PYFP
+          )"
+          export FP
+          python - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          root=Path('installed-evidence')
+          expected={'ubuntu-24.04','macos-14','windows-2025'}
+          found={}
+          for os_name in expected:
+              matches=[p for p in root.iterdir() if p.is_dir() and p.name.startswith('installed-native-'+os_name+'-')]
+              assert len(matches)==1,(os_name,matches)
+              found[os_name]=matches[0]
+          platform={}
+          for os_name,p in found.items():
+              smoke_files=list(p.rglob('installed-native-smoke.json'))
+              dep_files=list(p.rglob('installed-native-deps.txt'))
+              wheels=list(p.rglob('cmpct-*.whl'))
+              assert len(smoke_files)==1,(os_name,smoke_files)
+              assert len(dep_files)==1,(os_name,dep_files)
+              assert len(wheels)==1,(os_name,wheels)
+              s=json.loads(smoke_files[0].read_text())
+              assert s['representative_archive_create_read_extract'] is True
+              assert s['shipping_python_no_ambient_zstd'] is True
+              assert s['python_zstandard_absent'] is True
+              assert s['dict_vector_bytes']==104
+              assert dep_files[0].read_text().strip()
+              wheel=wheels[0]
+              assert '-cp310.cp311.cp312.cp313.cp314-none-' in wheel.name,wheel.name
+              platform[os_name]={
+                  'archive_sha256':s['representative_archive_sha256'],
+                  'dict_vector_sha256':s['dict_vector_sha256'],
+                  'wheel_name':wheel.name,
+                  'wheel_sha256':hashlib.sha256(wheel.read_bytes()).hexdigest(),
+              }
+          evidence={
+              'schema':'cmpct-v030-desktop-package-evidence-v1',
+              'candidate_fingerprint':os.environ['FP'].strip(),
+              'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+              'facts':{
+                  'sdist_first_wheel_build':True,
+                  'linux_clean_install_green':True,
+                  'macos_clean_install_green':True,
+                  'windows_clean_install_green':True,
+                  'representative_archive_create_read_extract':True,
+                  'canonical_codec_vectors_green':True,
+                  'no_ambient_zstd_dependency':True,
+                  'platform_dependency_inspection_recorded':True,
+                  'same_artifact_cpython_310_through_314_green':True,
+                  'wheel_python_tag':'cp310.cp311.cp312.cp313.cp314',
+                  'wheel_abi_tag':'none',
+              },
+              'platform':platform,
+          }
+          Path('desktop-package-evidence.json').write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(evidence,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-package-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: desktop-package-evidence.json
+          if-no-files-found: error
+          retention-days: 14

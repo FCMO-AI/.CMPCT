@@ -1,0 +1,86 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 PrefixGraph worker-count RSS frontier
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  worker-count-rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic Shifted dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile and bind exact evidence head
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m py_compile \
+            benchmarks/v030_prefixgraph_worker_count_rss_worker.py \
+            benchmarks/v030_prefixgraph_worker_count_rss_oracle.py \
+            experiments/entropygraph_v030_prefixgraph.py \
+            experiments/entropygraph_v030_prefixgraph_parallel.py
+      - name: Measure 1/2/3/4-worker exact-byte frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_prefixgraph_worker_count_rss_oracle.py \
+            --work-root benchmark-artifacts/v030-prefixgraph-worker-count-rss-work \
+            --output benchmark-artifacts/v030-prefixgraph-worker-count-rss.json
+      - name: Enforce diagnostic boundary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path('benchmark-artifacts/v030-prefixgraph-worker-count-rss.json')
+          assert path.is_file(), 'PrefixGraph worker-count RSS oracle did not publish evidence'
+          data=json.loads(path.read_text())
+          assert data['schema']=='cmpct-v030-prefixgraph-worker-count-rss-v1'
+          assert data['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert data['experiment_valid'] is True
+          assert data['exact_archive_identity_all_arms'] is True
+          assert data['promotion_signal'] is False
+          assert data['release_credit'] is False
+          assert set(data['summary'])=={'1','2','3','4'}
+          contract=data['contract']
+          assert contract['fresh_process_per_measurement'] is True
+          assert contract['strong_verification_preserved'] is True
+          assert contract['production_worker_policy_changed'] is False
+          for key in ('candidate_set_changed','serializer_changed','tie_law_changed','threshold_changed'):
+              assert contract[key] is False
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-worker-count-rss.yml
+      - name: Upload exact-head worker-count evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-worker-count-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-prefixgraph-worker-count-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Terminal diagnostic retained for manual reproduction. Exact fresh-process evidence established the 1/2/3/4
+# memory/time frontier and ruled out worker-count tuning as a release solution: lower concurrency saves RSS but
+# violates the useful creation-time envelope. Automatic capacity moves to the CCtx attribution frontier instead.

@@ -1,0 +1,90 @@
+name: CMPCT v0.30 G04 verification-layer attribution
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - experiments/v030_g04_verify_layer_attribution.py
+      - .github/workflows/v030-g04-verify-layer-attribution.yml
+      - experiments/entropygraph_v030_release_product.py
+      - experiments/entropygraph_v030_release_product_base.py
+      - experiments/entropygraph_v030_canonical_final.py
+      - experiments/entropygraph_v030_canonical_final_impl.py
+      - experiments/entropygraph_v030_release_reader_policy.py
+      - experiments/entropygraph_v030_release_reader.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-layer-attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and codec dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile attribution oracle
+        run: python -m py_compile experiments/v030_g04_verify_layer_attribution.py
+      - name: Run G04 verification-layer attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_g04_verify_layer_attribution.py \
+            --work-root "$RUNNER_TEMP/v030-g04-verify-layer" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/g04-verify-layer.json"
+      - name: Validate evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('benchmark-artifacts/g04-verify-layer.json')
+          assert p.is_file(), 'oracle did not publish evidence'
+          d = json.loads(p.read_text())
+          assert d['engine'] == 'v030-g04-verify-layer-attribution-v1'
+          assert d['status'] == 'PASS', d.get('error')
+          assert d['evidence_class'] == 'research-oracle'
+          assert d['product_release_credit'] is False
+          c = d['contract']
+          assert c['suite'] == 'neutral_hostile_v1'
+          assert c['workload'] == '09_ml_artifacts'
+          assert c['v030_selected'] == 'g04-overlay'
+          assert c['historical_substrate_tree_sha256']
+          assert c['semantic_user_tree_sha256']
+          assert c['content_graph_tree_sha256']
+          assert c['content_graph_logical_bytes'] > 0
+          assert c['fresh_process_per_sample'] is True
+          assert c['same_archive_all_operations'] is True
+          assert c['product_code_changed'] is False
+          assert c['release_thresholds_changed'] is False
+          for op in ('policy_verify', 'canonical_verify'):
+              assert len(d['samples'][op]) == 5
+          assert d['comparison']['canonical_over_policy_ratio'] > 0
+          PY
+      - name: Upload verification-layer evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-verify-layer-${{ github.sha }}
+          path: benchmark-artifacts/g04-verify-layer.json
+          if-no-files-found: error
+          retention-days: 90

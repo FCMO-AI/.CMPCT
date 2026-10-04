@@ -1,0 +1,43 @@
+{
+  "research_lane": "R41",
+  "productization_commit": "45b1754d92bfe5d5f7774e8e50021c7605320b9c",
+  "mechanism": "bounded ordered worker-pull in Builder file-candidate hashing",
+  "transport_workflow_self_removed": true,
+  "staging_patch_consumed_and_removed": true,
+  "product_evidence": true,
+  "engineering_evidence_dossier_reconciled": true,
+  "merge_condition": "final exact-head generic CI must be green",
+  "evidence_run_id": 35250937875,
+  "evidence_artifact_id": 10509298835,
+  "evidence_artifact_sha256": "fc87f951e155350731f69c4db1c45c30b64576cfe5bd4ebca1188685de5dc0eb",
+  "baseline_sha": "94dd456ff508ae4e60ba9230bc071fdc9cc4708d",
+  "candidate_source_sha": "055925617d0ce14b5ad272bc2fcd04af5db34126",
+  "promotion_criterion": {
+    "archive_identity": "exact",
+    "median_wall_saving_ms_each_frozen_r40_target": 2.0,
+    "process_tree_cpu_ratio_max": 1.03,
+    "peak_rss_ratio_max": 1.05
+  },
+  "results": {
+    "full": {
+      "archive_identity": true,
+      "baseline_wall_s_median": 0.45097105700000384,
+      "candidate_wall_s_median": 0.4465688940000092,
+      "wall_s_saved": 0.00440216299999463,
+      "cpu_ratio": 0.9946838756565245,
+      "rss_ratio": 1.000281237444757,
+      "passes": true
+    },
+    "nested": {
+      "archive_identity": true,
+      "baseline_wall_s_median": 0.3845778820000021,
+      "candidate_wall_s_median": 0.37610794600000474,
+      "wall_s_saved": 0.008469935999997347,
+      "cpu_ratio": 0.9895904943599922,
+      "rss_ratio": 1.0007257552390456,
+      "passes": true
+    }
+  },
+  "decision": "PRODUCT_GATE_PASSES",
+  "note": "Seven alternating isolated repetitions per arm and target. Exact archive identity held on every repetition. This is the bounded R41 product court; no claim is made that the mechanism closes the larger v0.30 release-performance gap."
+}

@@ -1,0 +1,193 @@
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 PrefixGraph isolation Builder hostile review v2
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'docs/v030-rnd/R25_PREFIXGRAPH_ISOLATION_PRODUCTIZATION_V2_PREREG.md'
+      - 'docs/v030-rnd/R25_SHIFTED_SERIALIZED_METADATA_CAUSAL_V2_RESULT.md'
+      - 'benchmarks/v030_r25_prefixgraph_isolation_productization_worker.py'
+      - 'benchmarks/v030_r25_prefixgraph_isolation_productization_v2_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_release_performance_tree_rss.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_prefixgraph_process_executor.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-prefixgraph-isolation-productization-v2.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/v030-rnd/R25_PREFIXGRAPH_ISOLATION_PRODUCTIZATION_V2_PREREG.md'
+      - 'docs/v030-rnd/R25_SHIFTED_SERIALIZED_METADATA_CAUSAL_V2_RESULT.md'
+      - 'benchmarks/v030_r25_prefixgraph_isolation_productization_worker.py'
+      - 'benchmarks/v030_r25_prefixgraph_isolation_productization_v2_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_release_performance_tree_rss.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_prefixgraph_process_executor.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-prefixgraph-isolation-productization-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-pg-isolation-productization-v2-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(docs/v030-rnd/R25_PREFIXGRAPH_ISOLATION_PRODUCTIZATION_V2_PREREG\.md|docs/v030-rnd/R25_SHIFTED_SERIALIZED_METADATA_CAUSAL_V2_RESULT\.md|benchmarks/v030_r25_prefixgraph_isolation_productization_worker\.py|benchmarks/v030_r25_prefixgraph_isolation_productization_v2_oracle\.py|benchmarks/v030_release_performance\.py|benchmarks/v030_release_performance_tree_rss\.py|experiments/entropygraph_v030_canonical_final(_impl)?\.py|experiments/entropygraph_v030_prefixgraph_process_executor\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-prefixgraph-isolation-productization-v2\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  hostile-review-v2:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    concurrency:
+      group: cmpct-v030-pg-isolation-productization-v2-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen S6 v2 instrument
+        run: |
+          python -m py_compile benchmarks/v030_r25_prefixgraph_isolation_productization_worker.py
+          python -m py_compile benchmarks/v030_r25_prefixgraph_isolation_productization_v2_oracle.py
+      - name: Run mtime-stable Builder versus threaded-control hostile review
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r25_prefixgraph_isolation_productization_v2_oracle \
+            --work-root "$RUNNER_TEMP/v030-prefixgraph-isolation-productization-v2" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-isolation-productization-v2.json"
+      - name: Ratchet superseding frozen S6 identity, budgets and terminal decision
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-isolation-productization-v2.json').read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-isolation-productization-v2'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['target']==['resemblance_hostile_v1','01_shifted_versions']
+          assert d['fixed_mtime_ns']==1767225600000000000
+          assert d['r24_preflight']=={'bytes':29883488,'sha256':'a3192a1462e37282e5128e50c3b20a039ca26821d5ceb2508958d6e3918bbc22'}
+          assert d['arm_counts']=={'control':2,'candidate':2}
+          assert d['experiment_valid'] is True and d['worker_failures']==[]
+          assert all(d['deterministic'].values())
+          c=d['contract']
+          assert c['fixture_intervention']=='atime+mtime-only'
+          assert c['whole_process_tree_rss_decisive'] is True
+          assert c['parent_ru_maxrss_diagnostic_only'] is True
+          assert c['minimum_rss_reduction']==0.20
+          assert c['maximum_wall_ratio']==1.10
+          assert c['maximum_size_penalty_bytes']==8192
+          assert c['maximum_size_penalty_ratio']==0.005
+          assert c['r24_exact_bytes']==29883488
+          assert c['r24_exact_sha256']=='a3192a1462e37282e5128e50c3b20a039ca26821d5ceb2508958d6e3918bbc22'
+          assert c['prefixgraph_selected_required'] is True
+          assert c['exactly_one_level15_child_required'] is True
+          assert c['child_dead_before_g04_required'] is True
+          assert c['hostile_helper_fail_closed_required'] is True
+          assert c['release_thresholds_changed'] is False
+          assert d['release_credit'] is False
+          for row in d['rows']:
+              assert row['r24_product_bytes']==29883488
+              assert row['r24_custody_bytes']==29883488
+              assert row['r24_custody_sha256']=='a3192a1462e37282e5128e50c3b20a039ca26821d5ceb2508958d6e3918bbc22'
+          x=d['derived']
+          rss=float(x['candidate_tree_peak_reduction_fraction_vs_control'])
+          wall=float(x['candidate_wall_ratio_vs_control'])
+          byte_ok=bool(x['byte_budget_ok'])
+          assert x['hostile_fail_closed'] is True
+          decision=d['decision']
+          assert decision in {
+              'PREFIXGRAPH_ISOLATION_BUILDER_SUPPORTED',
+              'PREFIXGRAPH_ISOLATION_EXPORTED_DEBT_REMAINS',
+              'PREFIXGRAPH_ISOLATION_PRODUCTIZATION_DID_NOT_TRANSFER',
+          }
+          if decision=='PREFIXGRAPH_ISOLATION_BUILDER_SUPPORTED':
+              assert rss>=0.20 and wall<=1.10 and byte_ok
+          elif decision=='PREFIXGRAPH_ISOLATION_EXPORTED_DEBT_REMAINS':
+              assert rss>=0.20 and (wall>1.10 or not byte_ok)
+          else:
+              assert rss<0.20
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-isolation-productization-v2.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Record exact candidate fingerprint
+        if: always()
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-prefixgraph-isolation-productization-v2-candidate.txt
+      - name: Upload exact S6 v2 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-isolation-productization-v2-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-prefixgraph-isolation-productization-v2.json
+            benchmark-artifacts/v030-prefixgraph-isolation-productization-v2-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Superseding S6 only: the causally supported mtime normalization stabilizes the fixture. All original
+# memory/runtime/size/correctness/process/integrity decision bands remain unchanged. Zero release credit.
+# 2026-09-03 custody admission: execute the unchanged mtime-stable S6 v2 after preserving the invalid v1 robust-RSS receipt; no frozen mechanism, corpus, sampler, threshold or terminal rule changed.

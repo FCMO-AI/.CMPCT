@@ -1,0 +1,143 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 logs inverse-edge sidecar-pack oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_logs_inverse_edge_sidecar_pack_oracle.py'
+      - 'benchmarks/v030_logs_inverse_edge_sidecar_pack_entrypoint.py'
+      - 'benchmarks/v030_logs_inverse_edge_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - '.github/workflows/v030-logs-inverse-edge-sidecar-pack-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-inverse-edge-sidecar-pack-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_logs_inverse_edge(_sidecar_pack)?_oracle\.py|benchmarks/v030_logs_inverse_edge_sidecar_pack_entrypoint\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|\.github/workflows/v030-logs-inverse-edge-sidecar-pack-oracle\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  logs-inverse-edge-sidecar-pack:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact source head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and competitor dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile targeted oracle
+        run: |
+          python -m py_compile \
+            benchmarks/v030_logs_inverse_edge_oracle.py \
+            benchmarks/v030_logs_inverse_edge_sidecar_pack_oracle.py \
+            benchmarks/v030_logs_inverse_edge_sidecar_pack_entrypoint.py
+      - name: Run exact-tree bounded sidecar-pack sweep
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_inverse_edge_sidecar_pack_entrypoint.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-sidecar-pack-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-sidecar-pack.json"
+      - name: Enforce release-floor, timing, restoration and conservative locality evidence
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-sidecar-pack.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-inverse-edge-sidecar-pack-oracle-v1'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['accepted_v029_bytes']==3550609
+          assert d['locality_accounting'].startswith('derived reads charge')
+          # PR workflow SHA is a synthetic merge ref; exact evidence belongs to the actual branch head.
+          assert os.environ['EVIDENCE_HEAD'] == __import__('subprocess').check_output(['git','rev-parse','HEAD'], text=True).strip()
+          e=d['edge_detection']
+          assert e['decoded_sidecars']==5
+          assert e['inverse_edges']==3
+          s=d['summary']
+          assert s['all_tree_verified'] is True
+          assert s['all_locality_green'] is True
+          assert len(d['candidates'])==5
+          for c in d['candidates']:
+              assert c['tree_verified'] is True
+              assert c['locality_green'] is True
+              assert c['max_member_read_amplification'] <= 8.0
+              assert c['max_decode_unit_bytes'] <= 8*1024*1024
+              assert abs(c['create_s']-(c['source_plan_s']+c['candidate_encode_s'])) < 1e-9
+              strict=all(c[k] for k in ('beats_zip_size','beats_zstd19_size','beats_zip_create','beats_zstd19_create'))
+              expected=strict and c['no_regression_vs_v029'] and c['locality_green'] and c['tree_verified']
+              assert c['viable'] is expected
+          if s['release_floor_four_way_win']:
+              b=s['best']
+              assert b is not None and b['viable'] is True
+              assert b['archive_bytes'] <= d['accepted_v029_bytes']
+              assert b['archive_bytes'] < d['zip']['archive_bytes']
+              assert b['archive_bytes'] < d['tar_zstd19']['archive_bytes']
+              assert b['create_s'] < d['zip']['create_s']
+              assert b['create_s'] < d['tar_zstd19']['create_s']
+          PY
+      - name: Upload targeted evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-sidecar-pack-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-logs-sidecar-pack.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research only. A strict win immediately advances the bounded canonical grammar/admission prerequisite; it still
+# receives no release credit until recovery and Python/native/Android parity plus exact 15-workload authority pass.

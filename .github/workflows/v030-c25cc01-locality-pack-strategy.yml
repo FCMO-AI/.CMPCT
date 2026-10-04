@@ -1,0 +1,79 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 C25CC01 locality pack strategy oracle
+
+# Exact evidence compared four deterministic <=8x micro-pack binning strategies and
+# found only a 24-byte best-vs-ascending spread. The optimistic semantic co-location
+# floor still needs 28,097 additional bytes of physical shrink to beat Zstd-19.
+# Reordering the same payload family is therefore the wrong scale of intervention.
+# Preserve this campaign for manual replay; new automatic work must change payload coding.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: v030-c25cc01-pack-strategy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py
+      - name: Compare exact locality-safe layouts
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-pack-strategy-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-pack-strategy.json"
+      - name: Evidence-boundary check
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-pack-strategy.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-locality-pack-strategy-oracle-v1'
+          assert d['contract']['release_credit'] is False
+          assert d['contract']['production_change'] is False
+          assert d['contract']['locality_ceiling']==8
+          assert len(d['strategies'])==4
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['passed'] is True
+          PY
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-locality-pack-strategy.yml
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-c25cc01-pack-strategy-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-c25cc01-pack-strategy.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only historical strategy evidence. No release credit or threshold changes.

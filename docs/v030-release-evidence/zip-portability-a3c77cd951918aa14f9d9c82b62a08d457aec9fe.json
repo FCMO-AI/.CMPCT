@@ -1,0 +1,15 @@
+{
+  "schema": "cmpct-v030-zip-portability-evidence-v1",
+  "candidate_sha": "a3c77cd951918aa14f9d9c82b62a08d457aec9fe",
+  "candidate_fingerprint": "55060f25cc26786a444d362499e845277e7b7e42b75b86cbb35a2966209c3c4b",
+  "workflow": "v030-zip-portability.yml",
+  "run_id": 33767025814,
+  "run_attempt": 1,
+  "facts": {
+    "stock_zip_extract_tree_equal": true,
+    "r24_fallback_export": true,
+    "g04_export": true,
+    "prefixgraph_export": true,
+    "atomic_publication": true
+  }
+}

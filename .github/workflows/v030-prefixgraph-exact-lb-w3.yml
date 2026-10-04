@@ -1,0 +1,134 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 PrefixGraph exact lower-bound w3
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_prefixgraph_exact_lb_w3_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - '.github/workflows/v030-prefixgraph-exact-lb-w3.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_prefixgraph_exact_lb_w3_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - '.github/workflows/v030-prefixgraph-exact-lb-w3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-prefixgraph-exact-lb-w3-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_prefixgraph_exact_lb_w3_oracle\.py|benchmarks/v030_release_performance\.py|experiments/entropygraph_v030_prefixgraph(_parallel)?\.py|\.github/workflows/v030-prefixgraph-exact-lb-w3\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  exact-lb-ab:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Compile exact terminal oracle
+        run: python -m py_compile benchmarks/v030_prefixgraph_exact_lb_w3_oracle.py
+      - name: Run fresh-process Shifted A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_prefixgraph_exact_lb_w3_oracle \
+            --work-root "$RUNNER_TEMP/v030-prefixgraph-exact-lb-w3" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-exact-lb-w3.json"
+      - name: Enforce exact terminal boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-exact-lb-w3.json').read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-exact-lb-w3-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['target']==['resemblance_hostile_v1','01_shifted_versions']
+          assert d['exact_archive_identity'] is True
+          c=d['contract']
+          assert c['candidate_workers']==3
+          assert c['terminal_law']=='strict complete-artifact lower bound > current complete incumbent bytes'
+          assert c['unseen_payload_lower_bound_bytes']==0 and c['metadata_lower_bound_bytes']==0
+          assert c['equal_size_terminal_allowed'] is False
+          assert c['anchor_nomination_changed'] is False
+          assert c['winning_candidate_serializer_changed'] is False
+          assert c['tie_law_changed'] is False and c['reader_changed'] is False and c['grammar_changed'] is False
+          assert c['release_credit'] is False and d['release_credit'] is False
+          if d['promotion_signal']:
+              s=d['summary']
+              assert s['rss_ratio'] <= c['maximum_rss_ratio']
+              assert s['wall_ratio'] <= c['maximum_wall_ratio']
+              assert min(s['terminal_anchor_counts']) > 0
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-exact-lb-w3.yml
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-exact-lb-w3-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-prefixgraph-exact-lb-w3.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only exact terminal A/B. Strict lower-bound cancellation may remove construction of only candidates
+# already proven unable to beat the incumbent. A positive signal still earns zero release credit.

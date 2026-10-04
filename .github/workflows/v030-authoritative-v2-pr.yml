@@ -1,0 +1,346 @@
+# ci-lane: release
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 authoritative v2
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/cmpct/**'
+      - 'experiments/entropygraph_v030_*.py'
+      - 'tests/test_v030_*.py'
+      - 'benchmarks/v030_*.py'
+      - '.github/workflows/v030-authoritative-v2-pr.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-authority-v2-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_release: ${{ steps.scope.outputs.run_release }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify release-fingerprint impact
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_release=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          # Release evidence is bound to docs/V030_RELEASE_LOCK.json's exact candidate fingerprint. Any newest-commit
+          # mutation of that fingerprint invalidates prior generalization/runtime receipts even when the change is
+          # docs, public-surface, native, platform, or workflow-only. Derive admission from the same manifest instead
+          # of maintaining a narrower second hand-written release surface that can silently drift.
+          python - <<'PY'
+          import fnmatch
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = json.loads(Path('docs/V030_RELEASE_LOCK.json').read_text(encoding='utf-8'))
+          globs = manifest['fingerprint_globs']
+          changed = [p.strip() for p in Path('/tmp/latest-head-files.txt').read_text().splitlines() if p.strip()]
+          impacted = [p for p in changed if any(fnmatch.fnmatchcase(p, pattern) for pattern in globs)]
+          output = Path(os.environ['GITHUB_OUTPUT'])
+          with output.open('a', encoding='utf-8') as fh:
+              fh.write(f"run_release={'true' if impacted else 'false'}\n")
+          if impacted:
+              print('Release-fingerprint paths changed; exact-candidate authority required:')
+              for path in impacted:
+                  print(f'  - {path}')
+          else:
+              print('Newest exact commit does not alter any release-fingerprint path; substantive authority may be skipped.')
+          PY
+
+  authority-fast:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
+    name: authority-fast
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    concurrency:
+      group: cmpct-v030-authority-v2-fast-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Compile final authority surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_admission.py \
+            experiments/entropygraph_v030_release_reader.py \
+            experiments/entropygraph_v030_release_reader_policy.py \
+            experiments/entropygraph_v030_member_reader.py \
+            experiments/entropygraph_v030_shared_portfolio.py \
+            experiments/entropygraph_v030_release_candidate.py \
+            experiments/entropygraph_v030_authoritative.py \
+            experiments/entropygraph_v030_release_product.py \
+            benchmarks/v030_release_generalization_v2.py \
+            benchmarks/v030_perf_worker_v2.py \
+            benchmarks/v030_release_performance_v2.py \
+            benchmarks/v030_release_performance_tree_rss.py
+      - name: Run final authority correctness and safety tests
+        run: |
+          python -m pytest -q \
+            tests/test_v030_geometry_overlay_g04.py \
+            tests/test_v030_g04_publish.py \
+            tests/test_v030_shared_portfolio.py \
+            tests/test_v030_prefixgraph.py \
+            tests/test_v030_release_admission.py \
+            tests/test_v030_release_reader.py \
+            tests/test_v030_release_reader_policy.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_release_fuzz.py \
+            tests/test_v030_release_candidate.py \
+            tests/test_v030_release_generalization_contract.py \
+            tests/test_v030_r25_candidate_phase_rss_worker.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-authoritative-v2-pr.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+  authority-generalization:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
+    name: authority-generalization
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    concurrency:
+      group: cmpct-v030-authority-v2-generalization-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Pin immutable compression contract
+        run: python -m pytest -q tests/test_v030_release_generalization_contract.py tests/test_v030_release_admission.py
+      - name: Run authoritative-v2 15-workload generalization
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_generalization_v2.py \
+            --work-root benchmark-artifacts/generalization-v2-work \
+            --output benchmark-artifacts/generalization-v2.json
+      - name: Enforce frozen authority-v2 contract and release identity
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools import check_v030_release_lock as release_lock
+          path=Path('benchmark-artifacts/generalization-v2.json')
+          assert path.is_file(), 'authority-v2 generalization did not publish evidence'
+          data=json.loads(path.read_text())
+          expected_fingerprint, _ = release_lock.fingerprint(release_lock.load_manifest())
+          c=data['contract']; t=data['totals']; g=data['gate']
+          assert data['candidate_fingerprint']==expected_fingerprint
+          assert data['engine']=='experiments/entropygraph_v030_authoritative.py'
+          assert data['release_facade']=='cmpct-v030-authoritative-v2'
+          assert c['expected_v029_aggregate_bytes']==137499525
+          assert c['minimum_release_saving_bytes']==687783
+          assert c['inherited_absolute_revision_floor_bytes']==687783
+          assert c['minimum_improved_rows']==3
+          assert c['maximum_member_read_amplification']==8.0
+          assert t['workloads']==15
+          assert t['workloads_regressed']==0
+          assert t['workloads_improved']>=3
+          assert t['saving_vs_v029_bytes']>=687783
+          assert t['max_selected_member_read_amplification']<=8.0
+          assert g['passed'] is True
+          PY
+      - name: Upload authority-v2 compression evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-authority-v2-generalization-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/generalization-v2.json
+          if-no-files-found: error
+          retention-days: 90
+
+  authority-runtime:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
+    name: authority-runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 390
+    concurrency:
+      group: cmpct-v030-authority-v2-runtime-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install runtime dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run authority-v2 prerequisites
+        run: |
+          python -m pytest -q \
+            tests/test_v030_shared_portfolio.py \
+            tests/test_v030_release_admission.py \
+            tests/test_v030_release_reader.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_release_candidate.py
+      - name: Run fresh-process promoted-product runtime gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_performance_v2.py \
+            --work-root benchmark-artifacts/runtime-v2-work \
+            --output benchmark-artifacts/runtime-v2.json
+      - name: Enforce frozen runtime policy and release identity on promoted product
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools import check_v030_release_lock as release_lock
+          path=Path('benchmark-artifacts/runtime-v2.json')
+          assert path.is_file(), 'authority-v2 runtime did not publish evidence'
+          data=json.loads(path.read_text())
+          expected_fingerprint, _ = release_lock.fingerprint(release_lock.load_manifest())
+          c=data['contract']; t=data['totals']; g=data['gate']
+          assert data['candidate_fingerprint']==expected_fingerprint
+          assert data['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert data['release_facade']=='cmpct-v030-release-product-v1'
+          assert c['maximum_median_create_ratio']==1.10
+          assert c['maximum_workload_create_ratio']==1.25
+          assert c['maximum_median_extract_ratio']==1.10
+          assert c['maximum_workload_extract_ratio']==1.25
+          assert c['maximum_peak_rss_ratio']==1.25
+          assert t['median_create_ratio']<=1.10
+          assert t['max_workload_create_ratio']<=1.25
+          assert t['median_extract_ratio']<=1.10
+          assert t['max_workload_extract_ratio']<=1.25
+          assert t['max_peak_rss_ratio']<=1.25
+          assert g['passed'] is True
+          PY
+      - name: Run whole-process-tree RSS companion authority
+        if: always()
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_performance_tree_rss.py \
+            --work-root benchmark-artifacts/runtime-tree-rss-work \
+            --output benchmark-artifacts/runtime-tree-rss.json
+      - name: Enforce whole-tree RSS custody without weakening frozen runtime policy
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools import check_v030_release_lock as release_lock
+          path=Path('benchmark-artifacts/runtime-tree-rss.json')
+          assert path.is_file(), 'whole-tree RSS authority did not publish evidence'
+          data=json.loads(path.read_text())
+          expected_fingerprint, _ = release_lock.fingerprint(release_lock.load_manifest())
+          assert data['schema']=='cmpct-v030-release-performance-tree-rss-v1'
+          assert data['candidate_fingerprint']==expected_fingerprint
+          assert data['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert data['release_facade']=='cmpct-v030-release-product-v1'
+          assert data['rss_accounting']=='whole-process-tree-vmrss-10ms-with-parent-rumaxrss-floor'
+          c=data['contract']; tc=data['tree_rss_contract']; t=data['totals']
+          assert c['maximum_median_create_ratio']==1.10
+          assert c['maximum_workload_create_ratio']==1.25
+          assert c['maximum_median_extract_ratio']==1.10
+          assert c['maximum_workload_extract_ratio']==1.25
+          assert c['maximum_peak_rss_ratio']==1.25
+          assert tc['child_memory_gifted'] is False
+          assert tc['timing_boundary_changed'] is False
+          assert tc['peak_rss_threshold_changed'] is False
+          assert tc['release_credit'] is False
+          assert len(data['tree_rss_receipts'])==18
+          for row in data['tree_rss_receipts']:
+              assert row['tree_rss_samples'] >= 1
+              assert row['decisive_peak_rss_kib'] >= row['parent_peak_rss_kib']
+              assert row['decisive_peak_rss_kib'] >= row['sampled_tree_peak_rss_kib']
+          # These assertions intentionally remain the unchanged release ceilings. A red receipt is preserved by
+          # the upload step below and keeps the release locked; whole-tree accounting can never manufacture green.
+          assert t['median_create_ratio']<=1.10
+          assert t['max_workload_create_ratio']<=1.25
+          assert t['median_extract_ratio']<=1.10
+          assert t['max_workload_extract_ratio']<=1.25
+          assert t['max_peak_rss_ratio']<=1.25
+          assert data['gate']['passed'] is True
+          PY
+      - name: Upload authority-v2 runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-authority-v2-runtime-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/runtime-v2.json
+            benchmark-artifacts/runtime-tree-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# `ffmpeg` and the package audio extra are frozen-corpus/runtime dependencies, not codec shortcuts for CMPCT. The
+# neutral-hostile media row and inherited r24 WAV-FLAC candidate cannot be exercised without them. Historical v2
+# generalization remains mechanism-causality evidence; runtime is bound to the promoted product and uses the same
+# frozen 1.10/1.25/RSS thresholds. Because the promoted product may now spawn a bounded PrefixGraph helper, the
+# release job also charges the worker's complete live process tree; parent-only ru_maxrss remains a diagnostic floor
+# and cannot hide exported child memory. Classifier routing is PR/ref-cancellable while each result-bearing exact-SHA
+# job is preserved separately, preventing long-lived-PR classifier backlog without weakening evidence custody.

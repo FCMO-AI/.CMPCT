@@ -1,0 +1,76 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 cached guard pread referee
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_cached_guard_pread_referee.py'
+      - '.github/workflows/v030-r4-cached-guard-pread.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-cached-guard-pread-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  cached-guard-pread:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install zstandard
+      - run: python -m py_compile benchmarks/v030_r4_cached_guard_pread_referee.py
+      - name: Run cached source hostile review
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_cached_guard_pread_referee.py --output benchmark-artifacts/v030-r4-cached-guard-pread.json
+      - name: Assert receipt integrity, not timing verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-cached-guard-pread.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['contract']['physical_ranges_must_be_identical']
+          assert d['contract']['same_48bit_guard']
+          print(json.dumps({'input':d['input'],'failures':d['failures'],'summary':d['summary'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - name: Persist scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' >/tmp/receipt.md
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-cached-guard-pread.json'));s=d['summary']
+          print('### v0.30 cached guarded-pread lookup — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- physical identity: `{s['physical_identity_probes']}/{d['input']['probes']}`; failures `{d['failures']}`")
+          print(f"- repeated timing: improved probes `{s['timing_improved_probes']}/{d['input']['probes']}`; median cached/linear `{s['median_cached_vs_slow_wall_ratio']:.3f}x`; mean `{s['mean_cached_vs_slow_wall_ratio']:.3f}x`")
+          print('- exact same physical ranges/calls and 48-bit format guard; only in-memory lookup changed; timing remains diagnostic.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-cached-guard-pread.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-cached-guard-pread-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-cached-guard-pread.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity; JSON owns scientific verdict.

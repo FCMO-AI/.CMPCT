@@ -1,0 +1,138 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 PrefixGraph CCtx causal ratchet
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_prefixgraph_cctx_causal_ratchet.py'
+      - 'benchmarks/v030_prefixgraph_cctx_memory_oracle.py'
+      - 'benchmarks/v030_prefixgraph_worker_count_rss_worker.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - '.github/workflows/v030-prefixgraph-cctx-causal-ratchet.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_prefixgraph_cctx_causal_ratchet.py'
+      - 'benchmarks/v030_prefixgraph_cctx_memory_oracle.py'
+      - 'benchmarks/v030_prefixgraph_worker_count_rss_worker.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - '.github/workflows/v030-prefixgraph-cctx-causal-ratchet.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-prefixgraph-cctx-causal-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_prefixgraph_cctx_(causal_ratchet|memory_oracle)\.py|benchmarks/v030_prefixgraph_worker_count_rss_worker\.py|benchmarks/v030_release_performance\.py|experiments/entropygraph_v030_prefixgraph(_parallel)?\.py|\.github/workflows/v030-prefixgraph-cctx-causal-ratchet\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  causal-attribution:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile attribution ratchet
+        run: python -m py_compile benchmarks/v030_prefixgraph_cctx_causal_ratchet.py benchmarks/v030_prefixgraph_cctx_memory_oracle.py
+      - name: Run exact fresh-process causal attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_prefixgraph_cctx_causal_ratchet \
+            --work-root "$RUNNER_TEMP/v030-prefixgraph-cctx-causal" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-cctx-causal.json"
+      - name: Ratchet zero-product-change claim boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=json.loads(Path('benchmark-artifacts/v030-prefixgraph-cctx-causal.json').read_text())
+          assert e['schema']=='cmpct-v030-prefixgraph-cctx-causal-ratchet-v1'
+          assert e['source_commit']==os.environ['EVIDENCE_HEAD']
+          c=e['contract']; g=e['gate']
+          assert c['production_change'] is False and c['candidate_set_changed'] is False
+          assert c['compressor_parameters_changed'] is False and c['archive_identity_required'] is True
+          assert c['release_credit'] is False and e['release_credit'] is False
+          assert g['exact_shipping_identity'] is True and g['passed'] is True
+          if g['strong_causal_signal']:
+              assert g['base_causal_signal'] is True
+              assert g['four_cctx_share_of_w4_incremental_rss'] >= c['minimum_four_cctx_share_of_w4_incremental_rss']
+          PY
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-prefixgraph-cctx-causal-candidate.txt
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-cctx-causal-ratchet.yml
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-cctx-causal-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-prefixgraph-cctx-causal.json
+            benchmark-artifacts/v030-prefixgraph-cctx-causal-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only causal attribution: pass/fail selects the next architecture experiment only.

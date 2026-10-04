@@ -1,0 +1,80 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 bulk bit window referee
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_bulk_bit_window_referee.py'
+      - '.github/workflows/v030-r4-bulk-bit-window.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-bulk-bit-window-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  bulk-bit-window:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install zstandard
+      - run: python -m py_compile benchmarks/v030_r4_bulk_bit_window_referee.py
+      - name: Run bulk-bit bounded-window referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_bulk_bit_window_referee.py --output benchmark-artifacts/v030-r4-bulk-bit-window.json
+      - name: Assert receipt integrity, not timing verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-bulk-bit-window.json'))
+          assert d['schema']=='cmpct-v030-r4-bulk-bit-window-referee-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['contract']['physical_ranges_and_calls_identical']
+          assert d['contract']['same_bounded_windows']
+          assert d['contract']['same_48bit_guard']
+          assert d['contract']['no_archive_sized_buffer']
+          print(json.dumps({'input':d['input'],'failures':d['failures'],'summary':d['summary'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - name: Persist scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' >/tmp/receipt.md
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-bulk-bit-window.json'));s=d['summary'];h=d['hypothesis']
+          print('### v0.30 bulk bit extraction on bounded windows — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- physical identity/bounded: `{s['physical_identity_probes']}/{d['input']['probes']}` / `{s['bounded_window_probes']}/{d['input']['probes']}`; failures `{d['failures']}`")
+          print(f"- repeated timing: improved `{s['timing_improved_probes']}/{d['input']['probes']}`; median bulk/window `{s['median_bulk_vs_window_wall_ratio']:.3f}x`; mean `{s['mean_bulk_vs_window_wall_ratio']:.3f}x`")
+          print(f"- max live compressed window `{s['max_live_window_bytes']} B`; semantic `{h['bulk_bit_read_preserves_physical_semantics']}`; runtime `{h['bulk_bit_read_reduces_runtime_debt']}`")
+          print('- same pread geometry, 48-bit guard and bounded windows; only Python bit extraction changes. Research only, no release credit.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-bulk-bit-window.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-bulk-bit-window-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-bulk-bit-window.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity; JSON owns the scientific verdict.

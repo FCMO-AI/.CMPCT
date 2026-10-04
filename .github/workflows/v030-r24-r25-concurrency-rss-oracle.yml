@@ -1,0 +1,87 @@
+# ci-lane: research-oracle
+name: CMPCT v0.30 r24+r25 concurrency RSS oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'experiments/v030_r24_r25_concurrency_rss_oracle.py'
+      - '.github/workflows/v030-r24-r25-concurrency-rss-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  concurrency-rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    concurrency:
+      group: cmpct-v030-r24-r25-concurrency-rss-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and codec dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile experiments/v030_r24_r25_concurrency_rss_oracle.py
+      - name: Run interleaved concurrent-versus-serial attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_r24_r25_concurrency_rss_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/concurrency-rss-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/concurrency-rss.json" \
+            --repetitions 3
+      - name: Validate evidence contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/concurrency-rss.json')
+          assert p.is_file(), 'oracle did not publish evidence'
+          d=json.loads(p.read_text())
+          assert d['engine']=='v030-r24-r25-concurrency-rss-oracle-v2'
+          assert d['evidence_class']=='research-oracle'
+          assert d['product_release_credit'] is False
+          if d.get('status') == 'PASS':
+              c=d['contract']
+              assert c['suite']=='resemblance_hostile_v1'
+              assert c['workload']=='01_shifted_versions'
+              assert c['inner_candidate_schedulers_preserved'] is True
+              assert c['only_scheduling_changed'] is True
+              assert c['product_grammar_changed'] is False
+              assert c['selector_changed'] is False
+              assert c['release_thresholds_changed'] is False
+              assert c['repetitions_per_mode']==3
+              assert len(d['samples']['concurrent'])==3
+              assert len(d['samples']['serial'])==3
+              assert d['comparison']['byte_identical_outputs'] is True
+          else:
+              raise AssertionError(f"oracle status is {d.get('status')}: {d.get('error')}")
+          PY
+      - name: Upload oracle evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-r25-concurrency-rss-${{ github.sha }}
+          path: benchmark-artifacts/concurrency-rss.json
+          if-no-files-found: error
+          retention-days: 90

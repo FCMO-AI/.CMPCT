@@ -1,0 +1,96 @@
+{
+  "schema": "cmpct-v030-canonical-runtime-negative-evidence-v1",
+  "status": "FAILED_RELEASE_RUNTIME_GATE",
+  "claim_boundary": "Durable negative evidence from canonical-runtime job 100086984016; diagnostic only, zero release credit.",
+  "source_commit": "e75f3d3e2d7a774836c35c0dd50cc130a07a02c6",
+  "candidate_fingerprint": "ef0d3f4bc0a9ffc99810c8d6fab01f7e33ad4b1462233ebf94fa83aa7227434f",
+  "workflow_run_id": 33578285446,
+  "workflow_job_id": 100086984016,
+  "source_artifact_sha256": "0e87b7668d8fe12c469e9bc72e267472d74d71929967da312796a3c06cedf518",
+  "source_artifact_file": "canonical-runtime.json",
+  "contract": {
+    "maximum_median_create_ratio": 1.1,
+    "maximum_workload_create_ratio": 1.25,
+    "maximum_median_extract_ratio": 1.1,
+    "maximum_workload_extract_ratio": 1.25,
+    "maximum_peak_rss_ratio": 1.25,
+    "timing_semantics": "fresh-process same-run paired accepted-v0.29 vs canonical-v0.30 product",
+    "identity_rule": "historical and canonical-product tree hashes are independently verified; they are not numerically conflated"
+  },
+  "totals": {
+    "median_create_ratio": 1.2701372842703862,
+    "max_workload_create_ratio": 1.4851271925809761,
+    "median_extract_ratio": 1.4553660767940007,
+    "max_workload_extract_ratio": 2.626760758639848,
+    "max_peak_rss_ratio": 3.3928279804028305
+  },
+  "gate": {
+    "exact_target_count": true,
+    "stable_historical_baseline_identity": true,
+    "stable_product_identity": true,
+    "median_create_ratio": false,
+    "per_workload_create_ratio": false,
+    "median_extract_ratio": false,
+    "per_workload_extract_ratio": false,
+    "peak_rss_ratio": false,
+    "passed": false
+  },
+  "rows": [
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "historical_tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "product_tree_sha256": "a42fb1e70517025f0ad0bf2e76ea01963e0e6c14a7308e4243c5fbc9ce7b7d16",
+      "accepted_v029_bytes": 1723056,
+      "v030_bytes": 1700603,
+      "selected": "prefixgraph",
+      "median_create_ratio": 1.2701372842703862,
+      "median_extract_ratio": 0.9389561137578386,
+      "max_pack_rss_ratio": 3.3928279804028305,
+      "repetitions": [
+        {"rep": 0, "order": ["v029", "v030"], "v029_pack_s": 30.548270117000015, "v030_pack_s": 40.454555287000005, "v029_pack_rss_kib": 117568, "v030_pack_rss_kib": 398888, "v029_extract_s": 0.059653819999994084, "v030_extract_s": 0.05586737300001232, "r24_create_s": 0.30232417500002384, "embedded_v029_floor_s": 37.565944996999974, "prefixgraph_create_s": 15.436219710999978},
+        {"rep": 1, "order": ["v030", "v029"], "v029_pack_s": 30.435334356999988, "v030_pack_s": 37.00910947400001, "v029_pack_rss_kib": 117568, "v030_pack_rss_kib": 396304, "v029_extract_s": 0.05853771300003241, "v030_extract_s": 0.05510734999995104, "r24_create_s": 0.3255905439999709, "embedded_v029_floor_s": 34.46767507500003, "prefixgraph_create_s": 9.90650689799998}
+      ],
+      "causal_interpretation": "PrefixGraph wins bytes, but the product tournament is bounded below by rebuilding the inherited v0.29/Mosaic floor. Further ordinary overlap cannot remove that floor. A safe speed fix needs a sound futility/lower-bound proof or cheaper equivalent inherited-floor authority, not threshold relaxation."
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "05_logs_and_telemetry",
+      "historical_tree_sha256": "7356b866d7b99bfce2dd1fc6ef86d61d09c9d8a38a2ff3fec7d9a92e46020931",
+      "product_tree_sha256": "7a59ee3f33d707b36b2c4fcc0fa1e0b7848e55cb9bebac30198019540986791f",
+      "accepted_v029_bytes": 3550609,
+      "v030_bytes": 3550340,
+      "selected": "logs-inverse",
+      "median_create_ratio": 0.00904402439916422,
+      "median_extract_ratio": 1.4553660767940007,
+      "max_pack_rss_ratio": 1.4442025040827435,
+      "repetitions": [
+        {"rep": 0, "order": ["v029", "v030"], "v029_pack_s": 38.97642362600004, "v030_pack_s": 0.3611213789999965, "v029_pack_rss_kib": 117568, "v030_pack_rss_kib": 167476, "v029_extract_s": 0.02498443399997541, "v030_extract_s": 0.0374415640000052, "r24_create_s": 0.21075623799993082, "logs_candidate_pair_create_s": 0.320265887000005},
+        {"rep": 1, "order": ["v030", "v029"], "v029_pack_s": 39.09990131999996, "v030_pack_s": 0.3449755079999477, "v029_pack_rss_kib": 117568, "v030_pack_rss_kib": 169792, "v029_extract_s": 0.026782276999971932, "v030_extract_s": 0.0378194569999728, "r24_create_s": 0.21077949199999924, "logs_candidate_pair_create_s": 0.3032790900000464}
+      ],
+      "causal_interpretation": "logs-inverse is an extreme creation-time win but fails extraction and pack-RSS gates. Preserve the representation and attack exported decode/memory cost."
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "09_ml_artifacts",
+      "historical_tree_sha256": "efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d",
+      "product_tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc",
+      "accepted_v029_bytes": 13836439,
+      "v030_bytes": 13674821,
+      "selected": "g04-overlay",
+      "median_create_ratio": 1.4851271925809761,
+      "median_extract_ratio": 2.626760758639848,
+      "max_pack_rss_ratio": 1.6912425149700598,
+      "repetitions": [
+        {"rep": 0, "order": ["v029", "v030"], "v029_pack_s": 17.705549539000003, "v030_pack_s": 25.67908843600003, "v029_pack_rss_kib": 117568, "v030_pack_rss_kib": 198836, "v029_extract_s": 0.06407023500003106, "v030_extract_s": 0.15671098400002847, "r24_create_s": 0.21716622700000698, "embedded_v029_floor_s": 17.699394979999965},
+        {"rep": 1, "order": ["v030", "v029"], "v029_pack_s": 17.250348377000023, "v030_pack_s": 26.219031487999928, "v029_pack_rss_kib": 117568, "v030_pack_rss_kib": 198144, "v029_extract_s": 0.060432321999985384, "v030_extract_s": 0.16966817200001838, "r24_create_s": 0.22808254700003206, "embedded_v029_floor_s": 18.35972555499998}
+      ],
+      "causal_interpretation": "G04 wins 161843 bytes versus the current-tree v0.29 research floor but fails create/extract/RSS. Extraction is the dominant red. Use the existing G0-G4 operation-record-cache A/B before inventing another mechanism."
+    }
+  ],
+  "next_actions": {
+    "shifted": "Run the existing candidate-overlap/candidate-phase RSS oracle and pursue a sound inherited-floor futility/lower-bound proof only if causal evidence supports it.",
+    "logs": "Profile/falsify the existing fused logs-inverse extraction path; do not tune away the size win.",
+    "ml": "Run the existing G0-G4 operation-record-cache A/B against this regime; preserve a negative result if cache reuse is insufficient."
+  }
+}

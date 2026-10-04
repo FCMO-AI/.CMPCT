@@ -1,0 +1,113 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 Office three-family metadata grouping
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_three_family_group_locality_referee.py'
+      - 'benchmarks/v030_r4_office_slack_derived_group_locality_referee.py'
+      - 'benchmarks/v030_r4_office_group_charge_locality_referee.py'
+      - 'benchmarks/v030_r4_office_gated_seed_superframe_economic_referee.py'
+      - 'benchmarks/v030_r4_office_gated_page_seed_referee.py'
+      - 'benchmarks/v030_r4_office_sparse_superframe_economic_referee.py'
+      - 'benchmarks/v030_r4_office_same_input_sparse_budget_referee.py'
+      - 'benchmarks/v030_r4_office_page_seed_cold_reader.py'
+      - 'benchmarks/v030_r4_frozen_v029_product_worker.py'
+      - '.github/workflows/v030-r4-office-three-family-group-locality.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+  V029_SHA: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+
+concurrency:
+  group: cmpct-v030-r4-office-three-family-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env: {EVENT_NAME: '${{ github.event_name }}'}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo run_deep=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_r4_office_three_family_group_locality_referee\.py|benchmarks/v030_r4_office_slack_derived_group_locality_referee\.py|benchmarks/v030_r4_office_group_charge_locality_referee\.py|benchmarks/v030_r4_office_gated_seed_superframe_economic_referee\.py|benchmarks/v030_r4_office_gated_page_seed_referee\.py|benchmarks/v030_r4_office_sparse_superframe_economic_referee\.py|benchmarks/v030_r4_office_same_input_sparse_budget_referee\.py|benchmarks/v030_r4_office_page_seed_cold_reader\.py|benchmarks/v030_r4_frozen_v029_product_worker\.py|\.github/workflows/v030-r4-office-three-family-group-locality\.yml)$' /tmp/files; then echo run_deep=true >> "$GITHUB_OUTPUT"; else echo run_deep=false >> "$GITHUB_OUTPUT"; fi
+
+  three-family-group-locality:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - name: Prepare frozen v0.29 checkout
+        run: |
+          set -euo pipefail
+          git cat-file -e "$V029_SHA^{commit}"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$V029_SHA"
+          test "$(git -C "$RUNNER_TEMP/cmpct-v029" rev-parse HEAD)" = "$V029_SHA"
+      - run: python -m py_compile benchmarks/v030_r4_office_three_family_group_locality_referee.py
+      - name: Run three-family group locality referee
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_three_family_group_locality_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/three-family-group-work" \
+            --v029-checkout "$RUNNER_TEMP/cmpct-v029" \
+            --worker "$GITHUB_WORKSPACE/benchmarks/v030_r4_frozen_v029_product_worker.py" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-three-family-group-locality.json"
+      - name: Assert evidence integrity, not scientific verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-three-family-group-locality.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['frozen_v029']['source_sealed'] and d['frozen_v029']['reconstruction_exact']
+          assert d['contract']['fixed_page_bytes']==4096 and d['contract']['fixed_limit_bytes']==32768
+          assert d['contract']['whole_touched_groups_charged']
+          assert d['derived_geometry']['derived_group_body_limit_bytes']==644
+          assert d['derived_geometry']['family_count']==3
+          assert not d['derived_geometry']['parameter_sweep']
+          print(json.dumps({'hypothesis':d['hypothesis'],'derived_geometry':d['derived_geometry'],'grouped_storage':d['grouped_storage'],'whole_group_locality':{k:v for k,v in d['whole_group_locality'].items() if k!='rows'}},sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-three-family-group-locality.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-three-family-group-locality-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-three-family-group-locality.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green means receipt integrity. The JSON owns the scientific verdict.

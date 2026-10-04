@@ -1,0 +1,16 @@
+{
+  "schema":"cmpct-v030-logs-pack-hash-product-evidence-v1",
+  "release_credit":false,
+  "source_sha":"9019e3d27c4f87044cd18fecf10c74b3eed41e76",
+  "run_id":35442028885,
+  "artifact_id":10583509624,
+  "artifact_digest":"sha256:30b1a87df206fc2891ca4f15e1ced55299b20a88bfd234a94bacca0951be5497",
+  "wall_improvement_pct":[13.919382966027264,13.232137556908096,11.670705170821854,13.457435810133505],
+  "cpu_improvement_pct":[13.917731392846711,13.231504626798113,11.669164995045785,13.453930640802708],
+  "median_wall_improvement_pct":13.344786683520802,
+  "median_cpu_improvement_pct":13.342717633800412,
+  "required_relative_improvement_for_logs_1_25":7.620580506979552,
+  "tree_sha256":"7a59ee3f33d707b36b2c4fcc0fa1e0b7848e55cb9bebac30198019540986791f",
+  "hostile":{"covered_packs":7,"pack_count":7,"post_crc_member_sha_rejected":true,"transaction_published":false,"strict_reader_distinct":true,"result":"PASS"},
+  "claim_boundary":"Same-source fused extraction with strict LOGS.Archive control versus scoped pack-SHA ownership product. Exact output tree in every arm. Authoritative runtime gate remains unpaid."
+}

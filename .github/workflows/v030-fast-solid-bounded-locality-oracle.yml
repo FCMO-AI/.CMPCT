@@ -1,0 +1,92 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 bounded-locality inline-solid oracle
+
+# Admission-only ratchet: the frozen scientific grammar lives in the v2 preregistration and instrument.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - benchmarks/v030_fast_solid_bounded_locality_oracle.py
+      - docs/v030-rnd/R25_FAST_SOLID_BOUNDED_LOCALITY_V2_PREREG.md
+      - .github/workflows/v030-fast-solid-bounded-locality-oracle.yml
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: v030-fast-solid-bounded-locality-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  bounded-locality-transfer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen instrument
+        run: python -m py_compile benchmarks/v030_fast_solid_bounded_locality_oracle.py
+      - name: Run bounded-locality transfer oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_fast_solid_bounded_locality_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-bounded-inline-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-bounded-inline.json"
+      - name: Independently enforce frozen evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-bounded-inline.json')
+          if not p.is_file(): raise SystemExit('bounded-locality evidence missing')
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-fast-solid-bounded-locality-oracle-v2'
+          assert d['claim_boundary']=='research-only R4 product-survival oracle; no release credit'
+          assert d['summary']['tested_rows']==6
+          rows=d['rows']
+          assert len(rows)==6
+          for r in rows:
+              c=r['candidate']; g=r['gates']
+              assert g['tree_verified'] is True
+              assert g['member_and_unit_integrity_verified'] is True
+              assert g['locality_le_8x'] is (float(c['max_decoded_context_amplification']) <= 8.0)
+              assert g['decode_unit_le_8mib'] is (int(c['max_unit_raw_bytes']) <= 8*1024*1024)
+              assert g['beats_zip_size'] is (int(c['archive_bytes']) < int(r['zip']['archive_bytes']))
+              assert g['beats_zstd19_size'] is (int(c['archive_bytes']) < int(r['tar_zstd19']['archive_bytes']))
+              assert g['beats_zip_create'] is (float(c['create_s']) < float(r['zip']['create_s']))
+              assert g['beats_zstd19_create'] is (float(c['create_s']) < float(r['tar_zstd19']['create_s']))
+              assert g['supported'] is all(v for k,v in g.items() if k!='supported')
+              expected=f"FAST_SOLID_BOUNDED_LOCALITY_ROW_{'SUPPORTED' if g['supported'] else 'NOT_SUPPORTED'}:{r['label']}"
+              assert r['decision']==expected
+          PY
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: Upload bounded-locality evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-bounded-inline-${{ github.sha }}
+          path: benchmark-artifacts/v030-bounded-inline.json
+          if-no-files-found: warn
+          retention-days: 90

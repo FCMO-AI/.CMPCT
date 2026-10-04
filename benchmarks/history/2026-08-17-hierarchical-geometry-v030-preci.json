@@ -1,0 +1,104 @@
+{
+  "schema": "cmpct-v030-hierarchical-geometry-preci-v1",
+  "date": "2026-08-17",
+  "status": "PRE_CI_DETACHED_PAYLOAD_EVIDENCE",
+  "claim_boundary": "Exact deterministic-generator Zstd-19 payload evidence only. These are not complete CMPCT archive sizes and do not authorize v0.30, canonical-format changes, site claims, or merge to main.",
+  "research_branch": "agent/lattice-v030-breakthrough",
+  "pr": 45,
+  "project_release_floor": "0.29.0",
+  "canonical_format_revision": 24,
+  "mechanism": {
+    "name": "Hierarchical Geometry plus Prefix Planes",
+    "implementation": "experiments/entropygraph_v030_hierarchical_geometry.py",
+    "plain_magic": "HGT2",
+    "prefix_magic": "HGP2",
+    "semantic_parser_used": false,
+    "extension_or_mime_admission_used": false,
+    "selection": "content-derived candidate nomination followed by bounded compressor screening and exact Zstd-19 finalist pricing"
+  },
+  "environment": {
+    "zstd_version": "1.5.7",
+    "logical_node_ceiling_bytes": 524288,
+    "note": "Local exploratory reproduction in the research session. Independent GitHub workflow evidence is a separate required layer."
+  },
+  "logs": {
+    "full_repaired_workload_tree_sha256_expected": "7356b866d7b99bfce2dd1fc6ef86d61d09c9d8a38a2ff3fec7d9a92e46020931",
+    "raw_log_concat_sha256": "4efd4d815bd672ad4af0184f47300f52815b0e9f96cdc542ae18a713ac637175",
+    "raw_files": 6,
+    "balanced_nodes": 30,
+    "direct_zstd19_bytes": 2533213,
+    "hierarchical_bytes": 1836378,
+    "hierarchical_saving_bytes": 696835,
+    "hierarchical_smaller_pct": 27.50795136453192,
+    "prefix_plane_bytes": 1810136,
+    "prefix_plane_saving_bytes": 723077,
+    "prefix_plane_smaller_pct": 28.54386899167184,
+    "prefix_plane_extra_saving_vs_plain_hierarchy_bytes": 26242,
+    "local_probe_all_nodes_improved": true,
+    "frozen_ci_minimum_total_saving_bytes": 655360,
+    "frozen_ci_minimum_each_selected_chunk_saving_bytes": 16384
+  },
+  "analytics_text_streams": {
+    "events_csv": {
+      "sha256": "cc4563fbedc4eeda2547a2bf8d0f0cad0d5f3ecc99af2c17b4eb72fa30d13d4a",
+      "direct_zstd19_bytes": 868156,
+      "hierarchical_bytes": 223547,
+      "hierarchical_saving_bytes": 644609,
+      "hierarchical_smaller_pct": 74.25036514174872,
+      "prefix_plane_bytes": 150145,
+      "prefix_plane_saving_bytes": 718011,
+      "prefix_plane_smaller_pct": 82.70529720464985,
+      "prefix_plane_extra_saving_vs_plain_hierarchy_bytes": 73402
+    },
+    "events_jsonl": {
+      "sha256": "60d216d826ce65f4de7e652ed44a5ea9babad75611b47dd7bc3407d9be791ec2",
+      "direct_zstd19_bytes": 1046102,
+      "hierarchical_bytes": 207696,
+      "hierarchical_saving_bytes": 838406,
+      "hierarchical_smaller_pct": 80.14572192768965,
+      "prefix_plane_bytes": 155278,
+      "prefix_plane_saving_bytes": 890824,
+      "prefix_plane_smaller_pct": 85.15651437431532,
+      "prefix_plane_extra_saving_vs_plain_hierarchy_bytes": 52418
+    },
+    "qualification": "Exact public generator text streams only; the SQLite/NPY/NPZ members of the analytics workload were not included in these detached stream totals."
+  },
+  "ml_text_streams": {
+    "tokenizer_json": {
+      "sha256": "b3edcea04b7e9b9346ac309662449a806de437ed35a125a42948a14146ac9c41",
+      "logical_bytes": 2810845,
+      "balanced_node_direct_zstd19_bytes": 212673,
+      "hierarchical_bytes": 97146,
+      "prefix_plane_bytes": 13582,
+      "prefix_plane_saving_bytes": 199091,
+      "prefix_plane_smaller_pct": 93.61366981234102,
+      "qualification": "Balanced-node accounting; not directly interchangeable with the earlier whole-file flat-Geometry 2,782-byte spotlight."
+    },
+    "training_log": {
+      "sha256": "e1e2daa89012e46ef3d4001932498a09d42adbdf1e22d42935314cfff69cadb9",
+      "logical_bytes": 1578889,
+      "balanced_node_direct_zstd19_bytes": 180772,
+      "hierarchical_bytes": 104055,
+      "prefix_plane_bytes": 69120,
+      "prefix_plane_saving_bytes": 111652,
+      "prefix_plane_smaller_pct": 61.76398999845109
+    }
+  },
+  "resource_limits": {
+    "max_primary_candidates": 4,
+    "max_secondary_candidates_per_primary": 6,
+    "max_rows": 65536,
+    "max_fields_per_row": 256,
+    "max_field_descriptors": 131072,
+    "max_cell_scans": 4194304,
+    "max_exact_finalists": 3,
+    "screen_level": 6,
+    "exact_level": 19
+  },
+  "negative_evidence": [
+    "Independent per-column Zstd frames were worse than one bounded transposed stream on the sampled log nodes.",
+    "Current measurements do not include complete archive framing, metadata duplication, integrity descriptors, extraction timing, memory, native reader work or portability.",
+    "The committed compiler still has bounded multi-candidate creation CPU debt; later rehabilitation must preserve winning bytes while reducing search cost."
+  ],
+  "next_gate": ".github/workflows/v030-hierarchical-geometry.yml"
+}

@@ -1,0 +1,82 @@
+name: CMPCT v0.30 content memory attribution
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_r24_micropack_content_memory_attribution.py
+      - benchmarks/v030_r24_micropack_content_economic_admission.py
+      - benchmarks/v030_r24_micropack_same_grammar_attribution.py
+      - benchmarks/v030_compact_pack_control_attribution.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-micropack-content-memory-attribution.yml
+
+permissions:
+  contents: read
+
+jobs:
+  memory-attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact-head dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile referee
+        run: python -m py_compile benchmarks/v030_r24_micropack_content_memory_attribution.py
+      - name: Execute phase memory attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r24_micropack_content_memory_attribution \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-content-memory-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-content-memory.json"
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-content-memory.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-content-memory-attribution-v1'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert d['rss_credit'] is False
+          assert d['source_commit']=='${{ github.sha }}'
+          assert d['verdict']=='CONTENT_MEMORY_ATTRIBUTION_COMPLETE'
+          dev=d['sources']['origin_developer']; tiny=d['sources']['origin_tiny_files']
+          def phase(row,p): return row['phase_delta_kib_content_minus_independent'].get(p,0)
+          outs={
+              'dp':str(dev['peak_delta_kib']),
+              'db':str(dev['post_build_delta_kib']),
+              'dm':str(phase(dev,'post_micropack')),
+              'tp':str(tiny['peak_delta_kib']),
+              'tb':str(tiny['post_build_delta_kib']),
+              'tm':str(phase(tiny,'post_micropack')),
+              'da':str(dev['arms']['content_economic']['auditions']),
+              'ta':str(tiny['arms']['content_economic']['auditions']),
+              'dr':str(dev['arms']['content_economic']['rejected_groups']),
+              'tr':str(tiny['arms']['content_economic']['rejected_groups']),
+          }
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+              for k,v in outs.items(): fh.write(f'{k}={v}\n')
+          print(json.dumps({'verdict':d['verdict'],'developer':dev,'tiny':tiny},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-memattr-dpeak${{ steps.receipt.outputs.dp }}-dmicro${{ steps.receipt.outputs.dm }}-dbuild${{ steps.receipt.outputs.db }}-tpeak${{ steps.receipt.outputs.tp }}-tmicro${{ steps.receipt.outputs.tm }}-tbuild${{ steps.receipt.outputs.tb }}-aud${{ steps.receipt.outputs.da }}-${{ steps.receipt.outputs.ta }}-rej${{ steps.receipt.outputs.dr }}-${{ steps.receipt.outputs.tr }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-content-memory.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only attribution. No RSS improvement claim is granted by this workflow.

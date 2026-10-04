@@ -1,0 +1,54 @@
+{
+  "schema": "cmpct-v030-generalization-preoverlay-attribution-v1",
+  "evidence_class": "research_oracle",
+  "product_release_credit": false,
+  "head_sha": "5d54d02e9f229ca29e4045aeaaeb7b3af92a61c2",
+  "workflow_run_id": 34842475587,
+  "job_id": 103970396924,
+  "artifact_id": 10347105033,
+  "artifact_zip_sha256": "bf8b58c80b1cac80a66c87d40c4a4f3c0631358cdfedd4af9e44c63a788f668c",
+  "status": "PASS",
+  "scope": "six frozen generalization-loss rows only",
+  "totals": {
+    "accepted_v029_bytes": 23462408,
+    "staged_v029_base_bytes": 23495935,
+    "pre_overlay_graph_bytes": 33428319,
+    "raw_g04_overlay_bytes": 33175585,
+    "staging_exported_cost_vs_original_v029_bytes": 33527,
+    "pre_overlay_graph_delta_vs_staged_base_bytes": 9932384,
+    "overlay_improvement_vs_prefallback_graph_bytes": 252734,
+    "raw_overlay_delta_vs_staged_base_bytes": 9679650,
+    "strict_inner_win_bridge_bytes": 9679656,
+    "transform_payload_saving_bytes": 256592,
+    "hierarchical_incremental_saving_bytes": 33999
+  },
+  "derived": {
+    "pre_overlay_share_of_raw_debt": 1.026108795,
+    "overlay_repair_fraction_of_pre_overlay_debt": 0.025445455,
+    "raw_debt_remaining_fraction_after_overlay": 0.974554545
+  },
+  "row_highlights": {
+    "office": {
+      "pre_overlay_graph_delta_vs_staged_base_bytes": 5678560,
+      "overlay_improvement_vs_prefallback_graph_bytes": -121,
+      "raw_overlay_delta_vs_staged_base_bytes": 5678681
+    },
+    "analytics": {
+      "pre_overlay_graph_delta_vs_staged_base_bytes": 3584763,
+      "overlay_improvement_vs_prefallback_graph_bytes": 241003,
+      "raw_overlay_delta_vs_staged_base_bytes": 3343760
+    }
+  },
+  "interpretation": [
+    "The dominant six-row size debt exists before the G04 overlay: the pre-overlay graph is 9,932,384 bytes above the staged v0.29 base.",
+    "G04 repairs only 252,734 bytes of that pre-overlay debt in aggregate, leaving 9,679,650 bytes of raw overlay debt.",
+    "Office and Analytics dominate the pre-overlay loss. Office receives no meaningful G04 repair and Analytics receives 241,003 bytes of repair but remains 3,343,760 bytes above its staged v0.29 base.",
+    "Therefore G04 overlay tuning is not the causal owner of the generalization density gap and should not be treated as the main size-recovery lane.",
+    "The prior fallback-cliff attribution that observed only tens of KiB after product fallback selection must not be interpreted as raw G04 representation debt; product fallback had already masked the losing candidate."
+  ],
+  "constraints_unchanged": {
+    "product_dispatch": true,
+    "release_thresholds": true,
+    "frozen_source_identity": true
+  }
+}

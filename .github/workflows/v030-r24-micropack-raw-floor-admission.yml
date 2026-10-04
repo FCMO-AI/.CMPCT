@@ -1,0 +1,84 @@
+name: CMPCT v0.30 raw-floor micropack admission
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_r24_micropack_raw_floor_admission_referee.py
+      - benchmarks/v030_r24_micropack_content_economic_admission.py
+      - benchmarks/v030_r24_micropack_content_selective_read_referee.py
+      - benchmarks/v030_r24_micropack_current15_transfer.py
+      - benchmarks/v030_current15_stable_corpus.py
+      - benchmarks/neutral_hostile_corpus_v1.py
+      - benchmarks/resemblance_hostile_corpus_v1.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-micropack-raw-floor-admission.yml
+
+permissions:
+  contents: read
+
+jobs:
+  raw-floor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Compile referee
+        run: python -m py_compile benchmarks/v030_r24_micropack_raw_floor_admission_referee.py
+      - name: Execute raw-floor referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r24_micropack_raw_floor_admission_referee \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-raw-floor-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-raw-floor.json"
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-raw-floor.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-raw-floor-admission-v1'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert d['genesis_rescore'] is False
+          assert d['path_signal_used'] is False
+          assert len(d['targets'])==5
+          assert d['verdict'] in {'RAW_FLOOR_ADMISSION_EARNS_CURRENT15_TRANSFER','RETIRE_RAW_FLOOR_ADMISSION'}
+          def slug(key): return re.sub(r'[^A-Za-z0-9_-]+','-',key.split('/',1)[-1])[:16]
+          debt='+'.join(slug(x) for x in d['raw_floor_timing_debt'][:3]) or 'none'
+          loss='+'.join(slug(x) for x in d['losses_vs_extension'][:3]) or 'none'
+          rejects=sum(int(r['variants']['raw_floor']['audit'].get('raw_floor_rejections',0)) for r in d['rows'].values())
+          outs={
+              'v':'earned' if d['verdict'].startswith('RAW_FLOOR_ADMISSION_EARNS') else 'retire',
+              'debt':debt,'loss':loss,'inv':str(len(d['invariant_failures'])),
+              'rej':str(rejects),'fp':d['corpus_fingerprint'][:10],
+          }
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+              for k,v in outs.items(): fh.write(f'{k}={v}\n')
+          print(json.dumps({'verdict':d['verdict'],'current_known_debt_reproduced':d['current_known_debt_reproduced'],'raw_floor_timing_debt':d['raw_floor_timing_debt'],'losses_vs_extension':d['losses_vs_extension'],'invariant_failures':d['invariant_failures'],'rows':{k:{'di':v['raw_floor_delta_vs_independent_bytes'],'de':v['raw_floor_delta_vs_extension_bytes'],'dc':v['raw_floor_delta_vs_current_bytes'],'current_debt':v['current_timing_debt'],'raw_debt':v['raw_floor_timing_debt'],'audit':v['variants']['raw_floor']['audit']} for k,v in d['rows'].items()}},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-rawfloor-${{ steps.receipt.outputs.v || 'nosummary' }}-debt${{ steps.receipt.outputs.debt }}-loss${{ steps.receipt.outputs.loss }}-inv${{ steps.receipt.outputs.inv }}-rej${{ steps.receipt.outputs.rej }}-fp${{ steps.receipt.outputs.fp }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-raw-floor.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only causal gate. No canonical builder or release score changes.

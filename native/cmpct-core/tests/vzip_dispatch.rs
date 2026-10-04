@@ -1,12 +1,12 @@
 #[allow(dead_code)]
 #[path = "../src/vzip.rs"]
 mod vzip;
-#[path = "../src/vzip_dispatch.rs"]
-mod vzip_dispatch;
+#[path = "../src/vzip_projection.rs"]
+mod vzip_projection;
 
 use sha2::{Digest, Sha256};
 use vzip::{StoredPayload, VirtualZipRecipe};
-use vzip_dispatch::{execute_range, VirtualZipDispatchError};
+use vzip_projection::{execute_range, VirtualZipDispatchError};
 
 fn fixture() -> (VirtualZipRecipe, Vec<Vec<u8>>, Vec<u8>) {
     let skeleton = b"HEADTAIL".to_vec();
@@ -103,3 +103,6 @@ fn blob_reader_failure_is_propagated_without_touching_later_segments() {
     assert_eq!(calls, 1);
     assert_eq!(error, VirtualZipDispatchError::Blob("corrupt touched blob"));
 }
+
+// Footnote: this integration test includes the exact production projection source. Archive-wide verification
+// remains compiled through the library crate, where its private `Archive`/`Storage` types actually exist.

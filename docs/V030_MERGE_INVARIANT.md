@@ -1,0 +1,1 @@
+Integration may merge unpromoted research code into the convergence branch for composition/testing, but no such merge changes public release authority. Only the final integrated release evidence can promote v0.30 to main.

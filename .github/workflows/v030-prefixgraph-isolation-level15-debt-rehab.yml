@@ -1,0 +1,174 @@
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 PrefixGraph isolation level-15 debt rehabilitation
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'docs/v030-rnd/R25_PREFIXGRAPH_ISOLATION_LEVEL15_DEBT_REHAB_PREREG.md'
+      - 'benchmarks/v030_r25_prefixgraph_isolation_level15_debt_worker.py'
+      - 'benchmarks/v030_r25_prefixgraph_isolation_level15_debt_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - '.github/workflows/v030-prefixgraph-isolation-level15-debt-rehab.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/v030-rnd/R25_PREFIXGRAPH_ISOLATION_LEVEL15_DEBT_REHAB_PREREG.md'
+      - 'benchmarks/v030_r25_prefixgraph_isolation_level15_debt_worker.py'
+      - 'benchmarks/v030_r25_prefixgraph_isolation_level15_debt_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - '.github/workflows/v030-prefixgraph-isolation-level15-debt-rehab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-pg-isolation-l15-debt-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(docs/v030-rnd/R25_PREFIXGRAPH_ISOLATION_LEVEL15_DEBT_REHAB_PREREG\.md|benchmarks/v030_r25_prefixgraph_isolation_level15_debt_worker\.py|benchmarks/v030_r25_prefixgraph_isolation_level15_debt_oracle\.py|benchmarks/v030_release_performance\.py|experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_profile_isolation\.py|\.github/workflows/v030-prefixgraph-isolation-level15-debt-rehab\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  debt-rehab:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    concurrency:
+      group: cmpct-v030-pg-isolation-l15-debt-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen rehabilitation instrument
+        run: |
+          python -m py_compile benchmarks/v030_r25_prefixgraph_isolation_level15_debt_worker.py
+          python -m py_compile benchmarks/v030_r25_prefixgraph_isolation_level15_debt_oracle.py
+      - name: Run complete-product isolation debt rehabilitation A/B/C
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r25_prefixgraph_isolation_level15_debt_oracle \
+            --work-root "$RUNNER_TEMP/v030-prefixgraph-isolation-level15-debt" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-isolation-level15-debt.json"
+      - name: Ratchet frozen identity, budgets and terminal decision
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-isolation-level15-debt.json').read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-isolation-level15-debt-rehab-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['target']==['resemblance_hostile_v1','01_shifted_versions']
+          assert d['arm_counts']=={'shipping-l19':2,'isolated-l19':2,'isolated-l15':2}
+          assert d['experiment_valid'] is True and d['worker_failures']==[]
+          assert all(d['deterministic'].values())
+          c=d['contract']
+          assert c['whole_process_tree_rss_decisive'] is True
+          assert c['parent_ru_maxrss_diagnostic_only'] is True
+          assert c['minimum_candidate_rss_reduction']==0.20
+          assert c['maximum_candidate_wall_ratio_vs_shipping']==1.10
+          assert c['maximum_candidate_wall_ratio_vs_isolated_l19']==0.95
+          assert c['maximum_size_penalty_bytes']==8192 and c['maximum_size_penalty_ratio']==0.005
+          assert c['production_source_changed'] is False and c['release_thresholds_changed'] is False
+          assert d['release_credit'] is False
+          decision=d['decision']
+          assert decision in {
+            'ISOLATION_LEVEL15_DEBT_REHAB_SUPPORTED',
+            'ISOLATION_MEMORY_WIN_CREATE_DEBT_REMAINS',
+            'ISOLATION_LEVEL15_REHAB_INSUFFICIENT',
+            'ISOLATION_MEMORY_WIN_NOT_PRESERVED',
+          }
+          x=d['derived']
+          rss=float(x['candidate_tree_peak_reduction_fraction_vs_shipping'])
+          wship=float(x['candidate_wall_ratio_vs_shipping'])
+          wiso=float(x['candidate_wall_ratio_vs_isolated_l19'])
+          byte_ok=bool(x['byte_budget_ok'])
+          if decision=='ISOLATION_LEVEL15_DEBT_REHAB_SUPPORTED':
+              assert rss>=0.20 and wship<=1.10 and wiso<=0.95 and byte_ok
+          elif decision=='ISOLATION_MEMORY_WIN_CREATE_DEBT_REMAINS':
+              assert rss>=0.20 and wship>1.10
+          elif decision=='ISOLATION_LEVEL15_REHAB_INSUFFICIENT':
+              assert rss>=0.20 and wship<=1.10 and (wiso>0.95 or not byte_ok)
+          else:
+              assert rss<0.20
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-isolation-level15-debt-rehab.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Record exact candidate fingerprint
+        if: always()
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-prefixgraph-isolation-level15-debt-candidate.txt
+      - name: Upload exact diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-isolation-level15-debt-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-prefixgraph-isolation-level15-debt.json
+            benchmark-artifacts/v030-prefixgraph-isolation-level15-debt-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# R3 diagnostic rehabilitation only. Level 15 is not reopened as an RSS family: it is tested solely as payment
+# for the already-evidenced PrefixGraph process-isolation create debt. No positive result grants release credit.

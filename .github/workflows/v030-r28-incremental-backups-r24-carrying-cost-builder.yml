@@ -1,0 +1,138 @@
+name: CMPCT v0.30 R28 Incremental Backups r24 carrying-cost Builder
+# ci-lane: forge-diagnostic
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+# Diagnostic only. This workflow cannot grant release credit or authorize a product-policy edit.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'benchmarks/v030_r28_incremental_backups_r24_carrying_cost_builder.py'
+      - 'docs/v030-rnd/R28_INCREMENTAL_BACKUPS_R24_CARRYING_COST_BUILDER_PREREG.md'
+      - '.github/workflows/v030-r28-incremental-backups-r24-carrying-cost-builder.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-r28-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Classify exact latest-head R28 impact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r28_incremental_backups_r24_carrying_cost_builder\.py|docs/v030-rnd/R28_INCREMENTAL_BACKUPS_R24_CARRYING_COST_BUILDER_PREREG\.md)$'; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  r28-builder:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    concurrency:
+      group: cmpct-v030-r28-backups-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 256
+
+      - name: Bind unchanged product substrate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a HEAD
+          git diff --name-only b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a..HEAD > /tmp/r28-diff.txt
+          cat /tmp/r28-diff.txt
+          if grep -Ev '^(\.github/workflows/v030-canonical-product-gap-diagnostic\.yml|\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r27-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r28-incremental-backups-r24-carrying-cost-builder\.yml|benchmarks/v030_r26_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r27_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r28_incremental_backups_r24_carrying_cost_builder\.py|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_RESULT\.md|docs/v030-rnd/R27_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R28_INCREMENTAL_BACKUPS_R24_CARRYING_COST_BUILDER_PREREG\.md)$' /tmp/r28-diff.txt | grep -q .; then
+            echo 'Product/corpus/policy substrate drifted after b0e7aeab; R28 is invalid and requires a superseding freeze.' >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen diagnostic dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile frozen R28 instrument
+        run: python -m py_compile benchmarks/v030_r28_incremental_backups_r24_carrying_cost_builder.py
+
+      - name: Run frozen R28 one-factor carrying-cost Builder
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r28_incremental_backups_r24_carrying_cost_builder.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r28-backups-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r28-backups.json"
+
+      - name: Enforce diagnostic completeness only
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/r28-backups.json')
+          assert p.is_file(), 'R28 result was not published'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-r28-incremental-backups-r24-carrying-cost-builder-v1'
+          assert d['authority_product_substrate_head']=='b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a'
+          assert isinstance(d['release_fingerprint_at_execution'], str) and len(d['release_fingerprint_at_execution'])==64
+          assert set(d['arms'])=={
+              'genuine-r24','release-r24','mature-deflate-threshold',
+              'mature-pack-target','mature-pack-max-file','no-medium-bin-pack'
+          }
+          assert all(row['strong_verify_ok'] for row in d['arms'].values())
+          assert len({row['tree_sha256'] for row in d['arms'].values()})==1
+          assert d['observed_release_minus_genuine_bytes']==52024
+          assert d['decision'] in {
+              'SINGLE_OWNER','MULTIPLE_SINGLE_OWNERS','PARTIAL_OWNER',
+              'NO_ONE_FACTOR_EXPLANATION','LOCALITY_DEBT','SUBSTRATE_OR_CORRECTNESS_FAILURE'
+          }
+          PY
+
+      - name: Upload immutable R28 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r28-incremental-backups-r24-carrying-cost-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r28-backups.json
+          if-no-files-found: error
+          retention-days: 90
