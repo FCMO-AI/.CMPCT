@@ -1,0 +1,102 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Shifted combined RSS frontier
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_shifted_streaming_prefix_workers_oracle.py'
+      - 'benchmarks/v030_r24_streaming_finalize_rss_oracle.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - '.github/workflows/v030-shifted-streaming-prefix-workers.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-shifted-combined-rss-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  combined-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic Shifted dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact oracle and owners
+        run: |
+          python -m py_compile \
+            benchmarks/v030_shifted_streaming_prefix_workers_oracle.py \
+            benchmarks/v030_r24_streaming_finalize_rss_oracle.py \
+            experiments/entropygraph_v030_prefixgraph_parallel.py
+      - name: Measure combined exact-byte RSS frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shifted_streaming_prefix_workers_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-combined-rss-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-combined-rss.json"
+      - name: Enforce identity and frozen decision boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-shifted-combined-rss.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-combined-rss.json').read_text())
+          assert d['schema']=='cmpct-v030-shifted-streaming-prefix-workers-v2'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
+          assert d['exact_archive_identity_all_arms'] is True
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert set(d['summary'])=={'shipping','streaming-w4','streaming-w3','streaming-w2','streaming-w1'}
+          c=d['contract']
+          assert float(c['promotion_full_rss_max_ratio'])==0.75
+          assert float(c['maximum_full_wall_regression_ratio'])==1.05
+          assert c['shipping_arm_unchanged'] is True
+          for key in ('archive_bytes_changed','candidate_set_changed','selector_changed','tie_law_changed','grammar_changed','integrity_changed','locality_limit_changed','recovery_changed','rss_threshold_changed'):
+              assert c[key] is False
+          if d['promotion_signal']:
+              arm=d['promotion_arm']; row=d['summary'][arm]
+              assert float(row['rss_ratio_vs_shipping'])<=0.75
+              assert float(row['wall_ratio_vs_shipping'])<=1.05
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-shifted-streaming-prefix-workers.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact combined receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-combined-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-combined-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only composition of two byte-neutral ownership cuts. A positive signal is not release credit.

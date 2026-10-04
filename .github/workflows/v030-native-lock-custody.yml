@@ -1,0 +1,136 @@
+name: CMPCT v0.30 native lock custody
+# ci-lane: release
+# ci-cancel-policy: latest-head
+# ci-pr-scope: exact-head
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'native/cmpct-portable/Cargo.toml'
+      - 'native/cmpct-portable/Cargo.lock'
+      - 'native/cmpct-core/Cargo.toml'
+      - 'native/cmpct-core/Cargo.lock'
+      - 'native/cmpct-zipfactor-v3-ffi/Cargo.toml'
+      - '.github/workflows/v030-native-lock-custody.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cmpct-v030-native-lock-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+  BOOTSTRAP_LOCK_SHA256: 3a4babc7a43ef0aadca37ac0a49695b185419dd8aa2cbebcb5653202ed6a71a2
+
+jobs:
+  native-lock-custody:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - name: Bind exact candidate and capture pre-build fingerprint
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-clean-fingerprint.json"
+          cat "$RUNNER_TEMP/cmpct-v030-clean-fingerprint.json"
+      - name: Bootstrap the exact preregistered portable native lock once
+        id: bootstrap
+        working-directory: native/cmpct-portable
+        run: |
+          set -euo pipefail
+          if git ls-files --error-unmatch Cargo.lock >/dev/null 2>&1; then
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cargo generate-lockfile
+          test -s Cargo.lock
+          actual="$(sha256sum Cargo.lock | awk '{print $1}')"
+          test "$actual" = "$BOOTSTRAP_LOCK_SHA256"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+          echo "$actual  native/cmpct-portable/Cargo.lock" | tee "$RUNNER_TEMP/cmpct-v030-native-lock.sha256"
+      - name: Commit exact portable bootstrap lock to the authoritative branch
+        if: steps.bootstrap.outputs.created == 'true'
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git add native/cmpct-portable/Cargo.lock
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "custody(v030): pin native dependency resolution"
+          git push origin HEAD:agent/v030-authoritative-integration
+      - name: Verify both committed native locks are exact and non-mutating
+        if: steps.bootstrap.outputs.created != 'true'
+        run: |
+          set -euo pipefail
+          : > "$RUNNER_TEMP/cmpct-v030-native-lock.sha256"
+          for manifest in native/cmpct-portable/Cargo.toml native/cmpct-core/Cargo.toml; do
+            lock="$(dirname "$manifest")/Cargo.lock"
+            git ls-files --error-unmatch "$lock" >/dev/null
+            before="$(sha256sum "$lock" | awk '{print $1}')"
+            cargo metadata --locked --format-version 1 --manifest-path "$manifest" >/dev/null
+            after="$(sha256sum "$lock" | awk '{print $1}')"
+            test "$before" = "$after"
+            git diff --exit-code -- "$lock"
+            git diff --cached --exit-code -- "$lock"
+            echo "$after  $lock" | tee -a "$RUNNER_TEMP/cmpct-v030-native-lock.sha256"
+          done
+      - name: Record custody evidence
+        if: steps.bootstrap.outputs.created != 'true'
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          locks = {
+              'portable': pathlib.Path('native/cmpct-portable/Cargo.lock'),
+              'core': pathlib.Path('native/cmpct-core/Cargo.lock'),
+          }
+          clean = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'cmpct-v030-clean-fingerprint.json').read_text())
+          evidence = {
+              'schema': 'cmpct-v030-native-lock-custody-v2',
+              'candidate_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'clean_candidate_fingerprint': clean['candidate_fingerprint'],
+              'locks': {
+                  name: {
+                      'path': lock.as_posix(),
+                      'sha256': hashlib.sha256(lock.read_bytes()).hexdigest(),
+                      'bytes': lock.stat().st_size,
+                      'tracked_at_checkout': True,
+                      'cargo_metadata_locked': True,
+                      'unchanged_after_resolution': True,
+                  }
+                  for name, lock in locks.items()
+              },
+          }
+          out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'cmpct-v030-native-lock-custody.json'
+          out.write_text(json.dumps(evidence, indent=2) + '\n')
+          print(json.dumps(evidence, indent=2))
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-native-lock-custody.yml
+      - uses: actions/upload-artifact@v6
+        if: steps.bootstrap.outputs.created != 'true'
+        with:
+          name: cmpct-v030-native-lock-custody-${{ env.EVIDENCE_HEAD }}
+          path: |
+            native/cmpct-portable/Cargo.lock
+            native/cmpct-core/Cargo.lock
+            ${{ runner.temp }}/cmpct-v030-native-lock-custody.json
+            ${{ runner.temp }}/cmpct-v030-native-lock.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+# Footnote: the portable one-time bootstrap is fail-closed to the exact lock SHA independently generated and downloaded
+# from run 33893992906 before this guard was installed. Once Cargo.lock is tracked, this workflow never rewrites either
+# native dependency graph: Cargo's --locked resolver must accept both committed locks and both must remain byte-identical.
+# Any future native manifest/lock update is therefore an explicit repository change whose new clean fingerprint forces
+# release-critical receipts to regenerate rather than inheriting authority from ambient registry resolution.

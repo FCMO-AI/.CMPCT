@@ -1,0 +1,79 @@
+# ci-lane: research-oracle
+name: CMPCT v0.30 r24 pack geometry oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'experiments/v030_r24_pack_geometry_oracle.py'
+      - '.github/workflows/v030-r24-pack-geometry-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  r24-pack-geometry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    concurrency:
+      group: cmpct-v030-r24-pack-geometry-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and codec dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile experiments/v030_r24_pack_geometry_oracle.py
+      - name: Run exact 15-workload r24 pack-geometry attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_r24_pack_geometry_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r24-pack-geometry-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r24-pack-geometry.json"
+      - name: Validate evidence contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/r24-pack-geometry.json')
+          assert p.is_file(), 'oracle did not publish evidence'
+          d=json.loads(p.read_text())
+          assert d['engine']=='v030-r24-pack-geometry-oracle-v1'
+          assert d['evidence_class']=='research-oracle'
+          assert d['product_release_credit'] is False
+          assert d['contract']['workloads']==15
+          assert d['contract']['accepted_v029_aggregate_bytes']==137499525
+          assert d['contract']['maximum_selected_member_read_amplification']==8.0
+          assert d['contract']['baseline_and_release_thresholds_unchanged'] is True
+          assert len(d['rows'])==15
+          expected={'shipping','default-pack-target','default-pack-max-file','no-medium-bin-pack'}
+          assert set(d['totals'])==expected
+          assert all(set(row['variants'])==expected for row in d['rows'])
+          PY
+      - name: Upload oracle evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-pack-geometry-${{ github.sha }}
+          path: benchmark-artifacts/r24-pack-geometry.json
+          if-no-files-found: error
+          retention-days: 90

@@ -1,0 +1,87 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 compact locator checkpoint lookup
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_compact_locator_checkpoint_lookup.py'
+      - '.github/workflows/v030-r4-compact-locator-checkpoint-lookup.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-compact-locator-checkpoint-lookup-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  checkpoint-lookup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install exact research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - run: python -m py_compile benchmarks/v030_r4_compact_locator_checkpoint_lookup.py
+      - name: Run lookup-scaling falsifier
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_compact_locator_checkpoint_lookup.py \
+            --output benchmark-artifacts/v030-r4-compact-locator-checkpoint-lookup.json
+      - name: Assert receipt integrity, not verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-compact-locator-checkpoint-lookup.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['correctness']['all_lookup_results_exact']
+          assert d['contract']['representation_bytes_unchanged']
+          assert d['contract']['locator_auth_and_8x_laws_unchanged']
+          assert d['contract']['fixed_checkpoint_stride_no_sweep']
+          print(json.dumps({'input':d['input'],'baseline':d['baseline_streaming_rescan'],'candidate':d['checkpoint_candidate'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - name: Persist concise scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' > /tmp/receipt.md
+          import json, os
+          d=json.load(open('benchmark-artifacts/v030-r4-compact-locator-checkpoint-lookup.json'))
+          b=d['baseline_streaming_rescan']; c=d['checkpoint_candidate']
+          print('### v0.30 compact locator checkpoint lookup — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- hypothesis: **{'SUPPORTED' if d['hypothesis']['packed_checkpoints_remove_rescan_debt_with_bounded_state'] else 'FALSE'}**")
+          print(f"- LOC1 bytes / records / warm queries: `{d['input']['raw_locator_bytes']}` / `{d['input']['records']}` / `{len(d['input']['queries'])}`")
+          print(f"- checkpoint stride/state: `{d['input']['checkpoint_stride_records']}` records / `{c['packed_checkpoint_bytes']} B` (ceiling `{c['checkpoint_limit_bytes']} B`)")
+          print(f"- baseline warm queries: CPU `{b['warm_queries_cpu_s']:.6f} s`, wall `{b['warm_queries_wall_s']:.6f} s`")
+          print(f"- checkpoint warm queries: CPU `{c['warm_queries_cpu_s']:.6f} s`, wall `{c['warm_queries_wall_s']:.6f} s`, speedup `{c['warm_query_speedup_x']:.2f}x`")
+          print(f"- baseline build+late lookup wall: `{b['build_plus_late_query_wall_s']:.6f} s`; checkpoint: `{c['build_plus_late_query_wall_s']:.6f} s` (`{c['build_plus_late_query_ratio']:.3f}x`)")
+          print(f"- exact lookups: `{d['correctness']['all_lookup_results_exact']}`")
+          print('- contract: archive bytes/auth/locality unchanged; transient bounded reader state only; diagnostic, no release credit.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-compact-locator-checkpoint-lookup.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-compact-locator-checkpoint-lookup-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-compact-locator-checkpoint-lookup.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means the falsifier ran and receipt is intact; JSON owns scientific verdict.

@@ -1,0 +1,383 @@
+name: CMPCT v0.30 final release authority
+# ci-lane: release
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/cmpct/**'
+      - 'experiments/entropygraph_v029_release.py'
+      - 'experiments/entropygraph_v030_release.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'experiments/entropygraph_v030_verified_restore.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_r24_dead_dictionary.py'
+      - 'experiments/entropygraph_v030_r24_media_terminal.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'experiments/entropygraph_v030_release_lock_strict.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_release_admission.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'experiments/entropygraph_v030_release_reader_policy.py'
+      - 'experiments/entropygraph_v030_shared_portfolio.py'
+      - 'benchmarks/v030_release_ablation_product.py'
+      - 'benchmarks/v030_release_ablation_canonical.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_release_performance_product.py'
+      - 'benchmarks/v030_release_selective_read_canonical.py'
+      - 'benchmarks/v030_release_selective_read_product.py'
+      - 'benchmarks/v030_perf_worker_canonical.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_external_competitors_canonical.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'docs/FORMAT.md'
+      - 'docs/V030_RELEASE_LOCK.json'
+      - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_v030_profile_isolation.py'
+      - 'tests/test_v030_r25_manifest_admission.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - 'tests/test_v030_release_ablation_contract.py'
+      - 'tests/test_v030_release_selective_read_contract.py'
+      - 'tests/test_v030_release_generalization_contract.py'
+      - 'tests/test_v030_release_lock.py'
+      - 'tests/test_v030_release_lock_strict.py'
+      - 'tests/test_v030_final_release_custody.py'
+      - 'tools/check_v030_release_lock.py'
+      - 'tools/check_public_surface.py'
+      - 'tools/check_ci_topology.py'
+      - 'pyproject.toml'
+      - '.github/workflows/v030-final-release-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-final-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_release: ${{ steps.scope.outputs.run_release }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify final-release impact
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_release=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          # This is the transitive evidence-critical closure of the final authority, not merely its top-level
+          # entry points. Changes to corpus identity, historical floors, canonical dependencies, core r24 I/O,
+          # release-lock law, contract tests, or evidence tooling must not inherit an older green receipt.
+          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v029_release\.py|experiments/entropygraph_v030_(release|release_product|release_product_base|verified_restore|release_product_logs_candidate|r24_dead_dictionary|r24_media_terminal|r24_compact_control_profile|release_lock_strict|canonical_final|canonical_final_impl|profile_isolation|geometry_overlay_g04|prefixgraph|prefixgraph_parallel|release_reader|product_fs|r25_manifest_admission|fs_implicit_v4|release_admission|release_candidate|release_reader_policy|shared_portfolio)\.py|benchmarks/(v030_release_ablation_(product|canonical)|v030_release_generalization|v030_release_performance|v030_release_performance_product|v030_release_selective_read_(canonical|product)|v030_perf_worker_canonical|v030_external_competitors|v030_external_competitors_canonical|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|docs/(FORMAT\.md|V030_RELEASE_LOCK\.json)|tests/test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4|release_ablation_contract|release_selective_read_contract|release_generalization_contract|release_lock|release_lock_strict|final_release_custody)\.py|tools/(check_v030_release_lock|check_public_surface|check_ci_topology)\.py|pyproject\.toml|\.github/workflows/v030-final-release-authority\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_release=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_release=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect final-release authority.'
+          fi
+
+  contracts:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    concurrency:
+      group: cmpct-v030-final-contracts-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile the promoted product/evidence surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_profile_isolation.py \
+            experiments/entropygraph_v030_release_reader.py \
+            experiments/entropygraph_v030_release_reader_policy.py \
+            experiments/entropygraph_v030_canonical_final.py \
+            experiments/entropygraph_v030_canonical_final_impl.py \
+            experiments/entropygraph_v030_r25_manifest_admission.py \
+            experiments/entropygraph_v030_fs_implicit_v4.py \
+            experiments/entropygraph_v030_release_product_base.py \
+            experiments/entropygraph_v030_verified_restore.py \
+            experiments/entropygraph_v030_release_product_logs_candidate.py \
+            experiments/entropygraph_v030_r24_dead_dictionary.py \
+            experiments/entropygraph_v030_r24_media_terminal.py \
+            experiments/entropygraph_v030_r24_compact_control_profile.py \
+            experiments/entropygraph_v030_release_product.py \
+            experiments/entropygraph_v030_release_lock_strict.py \
+            tools/check_v030_release_lock.py \
+            benchmarks/v030_perf_worker_canonical.py \
+            benchmarks/v030_release_ablation_product.py \
+            benchmarks/v030_release_performance.py \
+            benchmarks/v030_release_performance_product.py \
+            benchmarks/v030_release_selective_read_canonical.py \
+            benchmarks/v030_release_selective_read_product.py \
+            benchmarks/v030_external_competitors.py \
+            benchmarks/v030_external_competitors_canonical.py
+      - name: Run product boundary and benchmark-contract tests
+        run: |
+          python -m pytest -q \
+            tests/test_v030_profile_isolation.py \
+            tests/test_v030_canonical_final.py \
+            tests/test_v030_r25_manifest_admission.py \
+            tests/test_v030_fs_implicit_v4.py \
+            tests/test_v030_release_ablation_contract.py \
+            tests/test_v030_release_selective_read_contract.py \
+            tests/test_v030_release_generalization_contract.py \
+            tests/test_v030_release_lock.py \
+            tests/test_v030_release_lock_strict.py \
+            tests/test_v030_final_release_custody.py
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-final-release-authority.yml
+
+  compression-and-product-parity:
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 420
+    concurrency:
+      group: cmpct-v030-final-compression-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run historical causality and genuine r24-vs-r25 product parity
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_ablation_product.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-ablation-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-ablation.json"
+      - name: Enforce immutable compression and product floors
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('benchmark-artifacts/final-ablation.json')
+          assert path.is_file(), 'final ablation did not publish evidence'
+          a=json.loads(path.read_text())
+          assert a['schema']=='cmpct-v030-release-ablation-canonical-v3'
+          assert a['product_engine']=='experiments/entropygraph_v030_release_product.py'
+          assert a['release_facade']=='cmpct-v030-release-product-v1'
+          h=a['historical_causality']; p=a['canonical_product_parity']
+          assert h['accepted_v029_bytes']==137499525
+          assert h['workloads_regressed']==0
+          assert h['workloads_improved']>=3
+          assert h['saving_vs_v029_bytes']>=687783
+          assert h['max_selected_member_read_amplification']<=8.0
+          assert p['product_regressions']==[]
+          assert len(h['rows'])==15
+          assert len(p['rows'])==15
+          PY
+      - name: Upload release compression evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-final-compression-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/final-ablation.json
+          if-no-files-found: error
+          retention-days: 90
+
+  runtime-and-selective-read:
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 480
+    concurrency:
+      group: cmpct-v030-final-runtime-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install runtime dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run paired release-product runtime gate
+        continue-on-error: true
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_performance_product.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-runtime-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-runtime.json"
+      - name: Run operation-derived selective-read gate
+        if: always()
+        run: |
+          python benchmarks/v030_release_selective_read_product.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-selective-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-selective.json"
+      - name: Enforce runtime/locality policy
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rpath=Path('benchmark-artifacts/final-runtime.json')
+          spath=Path('benchmark-artifacts/final-selective.json')
+          assert rpath.is_file(), 'final runtime did not publish evidence'
+          assert spath.is_file(), 'final selective-read did not publish evidence'
+          r=json.loads(rpath.read_text())
+          s=json.loads(spath.read_text())
+          assert r['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert r['release_facade']=='cmpct-v030-release-product-v1'
+          assert r['totals']['median_create_ratio']<=1.10
+          assert r['totals']['max_workload_create_ratio']<=1.25
+          assert r['totals']['median_extract_ratio']<=1.10
+          assert r['totals']['max_workload_extract_ratio']<=1.25
+          assert r['totals']['max_peak_rss_ratio']<=1.25
+          assert r['gate']['passed'] is True
+          assert s['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert s['release_facade']=='cmpct-v030-release-product-v1'
+          assert s['gate']['passed'] is True
+          assert s['totals']['max_member_read_amplification']<=8.0
+          PY
+      - name: Upload release runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-final-runtime-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/final-runtime.json
+            benchmark-artifacts/final-selective.json
+          if-no-files-found: error
+          retention-days: 90
+
+  external-frontier:
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 540
+    concurrency:
+      group: cmpct-v030-final-external-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install CMPCT and external compressors from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd p7zip-full zpaq gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run symmetric exact-tree external frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_external_competitors_canonical.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-external-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-external.json"
+      - name: Enforce competitor extraction/size contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('benchmark-artifacts/final-external.json')
+          assert path.is_file(), 'final external frontier did not publish evidence'
+          d=json.loads(path.read_text())
+          assert d['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert d['release_facade']=='cmpct-v030-release-product-v1'
+          assert d['gate']['passed'] is True
+          PY
+      - name: Upload external frontier evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-final-external-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/final-external.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Footnote: the classifier is intentionally cancellable by PR/ref while each expensive evidence job uses its own
+# exact-SHA non-cancelling job group. A newer commit can discard obsolete routing work without killing a useful
+# already-started compression/runtime/external receipt. This removes the long-lived-PR classifier backlog created by
+# workflow-level exact-SHA concurrency while preserving exact-source scientific custody. Historical mechanism
+# causality and canonical product parity remain different byte/tree domains; the repair-v6 substrate owns the
+# accepted 137,499,525 B baseline while the inherited 687,783 B revision hurdle remains unchanged. The isolated
+# wrapper, preserved implementation, profile graph, verified staging restorer and bounded streaming reader are all
+# release-critical dependencies. Classifier-only green still grants no substantive release credit.

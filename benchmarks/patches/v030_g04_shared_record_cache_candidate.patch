@@ -1,0 +1,134 @@
+diff --git a/native/cmpct-portable/src/g04.rs b/native/cmpct-portable/src/g04.rs
+index 78b9a9a..0000000 100644
+--- a/native/cmpct-portable/src/g04.rs
++++ b/native/cmpct-portable/src/g04.rs
+@@
+-use std::fs::File;
++use std::fs::{self, File};
+ use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+-use std::path::Path;
++use std::path::{Path, PathBuf};
+@@
+     pub(crate) fn stream_member<W: Write>(
+         &self,
+         index: usize,
+         mut output: W,
+     ) -> Result<MemberReadStats, PortableError> {
++        let mut context = DecodeContext::new(self);
++        self.stream_member_with_context(index, &mut output, &mut context)
++    }
++
++    fn stream_member_with_context<W: Write>(
++        &self,
++        index: usize,
++        mut output: W,
++        context: &mut DecodeContext<'_>,
++    ) -> Result<MemberReadStats, PortableError> {
+         let (_, file) = self.file_at(index)?;
+-        let mut context = DecodeContext::new(self);
+         let (expected_size, expected_sha) = match file {
+             GFile::Preflate { size, sha, .. } | GFile::Nodes { size, sha, .. } => (*size, *sha),
+         };
+@@
+         Ok(MemberReadStats {
+             logical_bytes: expected_size,
+             decoded_context_bytes,
+             amplification,
+             profile: self.identity.profile_name(),
+         })
+     }
++
++    pub(crate) fn extract_members_shared(
++        &self,
++        targets: &[(usize, PathBuf)],
++    ) -> Result<(), PortableError> {
++        let mut context = DecodeContext::new(self);
++        for (index, target) in targets {
++            context.reset_member_scope();
++            if let Some(parent) = target.parent() {
++                fs::create_dir_all(parent)?;
++            }
++            let mut file = File::create(target)?;
++            self.stream_member_with_context(*index, &mut file, &mut context)?;
++            file.flush()?;
++        }
++        Ok(())
++    }
+@@
+     pub(crate) fn verify(&self) -> Result<(), PortableError> {
+         let mut tree = Sha256::new();
++        let mut context = DecodeContext::new(self);
+         for (index, entry) in self.entries.iter().enumerate() {
++            context.reset_member_scope();
+             tree_hasher_prefix(&mut tree, &entry.path, entry.size);
+             let mut sink = DigestWriter(&mut tree);
+-            self.stream_member(index, &mut sink)?;
++            self.stream_member_with_context(index, &mut sink, &mut context)?;
+         }
+@@
+ impl<'a> DecodeContext<'a> {
+@@
+     fn decoded_context_bytes(&self) -> Result<u64, PortableError> {
+@@
+     }
++
++    fn reset_member_scope(&mut self) {
++        // Keep the bounded physical-record cache across a sequential full-archive operation, but never let
++        // cache hits disappear from member-local locality accounting.  Node materializations are cleared at
++        // each boundary so every logical member re-walks its dependency graph and therefore charges every
++        // physical record it depends on, even when the decoded record bytes are reused.
++        self.node_cache.clear();
++        self.node_cache_bytes = 0;
++        self.touched_records.clear();
++    }
+ 
+     fn record(&mut self, record_id: usize) -> Result<Arc<Vec<u8>>, PortableError> {
+         if let Some(value) = self.record_cache.get(&record_id) {
++            self.touched_records
++                .entry(record_id)
++                .or_insert(value.len() as u64);
+             return Ok(Arc::clone(value));
+         }
+diff --git a/native/cmpct-portable/src/canonical.rs b/native/cmpct-portable/src/canonical.rs
+index 5ec15c2..0000000 100644
+--- a/native/cmpct-portable/src/canonical.rs
++++ b/native/cmpct-portable/src/canonical.rs
+@@
+     pub(crate) fn extract_into(&self, root: &Path) -> Result<(), PortableError> {
+-        for (index, entry) in self.manifest.entries().iter().enumerate() {
+-            if !matches!(&entry.kind, FsKind::File { .. }) {
+-                continue;
+-            }
+-            let target = root.join(safe_relpath(&entry.path)?);
+-            if let Some(parent) = target.parent() {
+-                fs::create_dir_all(parent)?;
+-            }
+-            let mut file = File::create(&target)?;
+-            self.stream_member(index, &mut file)?;
+-            file.flush()?;
++        if let ContentArchive::G04(archive) = &self.content {
++            let mut targets = Vec::new();
++            for entry in self.manifest.entries() {
++                if !matches!(&entry.kind, FsKind::File { .. }) {
++                    continue;
++                }
++                let content_index = self.content_index(&entry.path)?;
++                targets.push((content_index, root.join(safe_relpath(&entry.path)?)));
++            }
++            archive.extract_members_shared(&targets)?;
++        } else {
++            for (index, entry) in self.manifest.entries().iter().enumerate() {
++                if !matches!(&entry.kind, FsKind::File { .. }) {
++                    continue;
++                }
++                let target = root.join(safe_relpath(&entry.path)?);
++                if let Some(parent) = target.parent() {
++                    fs::create_dir_all(parent)?;
++                }
++                let mut file = File::create(&target)?;
++                self.stream_member(index, &mut file)?;
++                file.flush()?;
++            }
+         }
+ 
+         for entry in self.manifest.entries() {

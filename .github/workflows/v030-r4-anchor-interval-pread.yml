@@ -1,0 +1,80 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 anchor interval pread referee
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_anchor_interval_pread_referee.py'
+      - '.github/workflows/v030-r4-anchor-interval-pread.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-anchor-interval-pread-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  anchor-interval-pread:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install zstandard
+      - run: python -m py_compile benchmarks/v030_r4_anchor_interval_pread_referee.py
+      - name: Run anchor-interval physical reader referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_anchor_interval_pread_referee.py --output benchmark-artifacts/v030-r4-anchor-interval-pread.json
+      - name: Assert receipt integrity, not verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-anchor-interval-pread.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['contract']['no_new_persisted_metadata']
+          assert d['contract']['coldreader_unchanged']
+          assert d['contract']['same_anchor_block_metadata']
+          print(json.dumps({'input':d['input'],'failures':d['failures'],'summary':d['summary'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - name: Persist scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' >/tmp/receipt.md
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-anchor-interval-pread.json'));s=d['summary']
+          print('### v0.30 anchor-interval direct pread — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- hypothesis: **{'SUPPORTED' if d['hypothesis']['existing_anchors_support_lazy_bulk_pread_without_new_metadata'] else 'FALSE'}**; failures `{d['failures']}`")
+          print(f"- raw/compressed/anchors/probes: `{d['input']['raw_bytes']}` / `{d['input']['compressed_bytes']}` / `{d['input']['anchors']}` / `{d['input']['probes']}`")
+          print(f"- pread calls: 8-byte `{s['pread8_calls']}` -> anchor intervals `{s['bulk_calls']}` ({s['bulk_call_reduction_pct']:.2f}% reduction); max/request `{s['max_pread8_calls']}` -> `{s['max_bulk_calls']}`")
+          print(f"- wall diagnostic: anchor/8-byte `{s['bulk_vs_pread8_wall_ratio']:.3f}x`; anchor/resident `{s['bulk_vs_resident_wall_ratio']:.3f}x`; max anchor bytes `{s['max_bulk_bytes']}`; fallbacks `{s['max_bulk_fallbacks']}`")
+          print('- existing anchor/Huffman metadata only; no new persisted metadata; timing is diagnostic and grants no Office/release credit.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-anchor-interval-pread.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-anchor-interval-pread-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-anchor-interval-pread.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity; JSON owns scientific verdict.

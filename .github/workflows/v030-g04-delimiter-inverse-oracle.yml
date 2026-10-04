@@ -1,0 +1,73 @@
+name: CMPCT v0.30 G04 delimiter inverse oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - experiments/v030_g04_delimiter_inverse_oracle.py
+      - .github/workflows/v030-g04-delimiter-inverse-oracle.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  delimiter-inverse-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile experiments/v030_g04_delimiter_inverse_oracle.py
+      - name: Run exact delimiter inverse oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_g04_delimiter_inverse_oracle.py \
+            --work-root "$RUNNER_TEMP/v030-g04-delimiter-oracle" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/g04-delimiter-oracle.json"
+      - name: Validate evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/g04-delimiter-oracle.json').read_text())
+          assert d['engine']=='v030-g04-delimiter-inverse-oracle-v1'
+          assert d['status']=='PASS', d.get('error')
+          assert d['product_release_credit'] is False
+          c=d['contract']; q=d['comparison']
+          assert c['candidate_bytes_equal_current'] is True
+          assert c['candidate_crc_sha_match_archive'] is True
+          assert c['same_exact_encoded_bytes'] is True
+          assert c['product_code_changed'] is False
+          assert c['release_thresholds_changed'] is False
+          assert len(q['current_samples_s'])==15 and len(q['candidate_samples_s'])==15
+          assert q['speedup_x'] > 0
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-delimiter-oracle-${{ github.sha }}
+          path: benchmark-artifacts/g04-delimiter-oracle.json
+          if-no-files-found: error
+          retention-days: 90

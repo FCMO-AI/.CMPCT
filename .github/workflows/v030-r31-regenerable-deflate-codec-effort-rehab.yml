@@ -1,0 +1,175 @@
+name: CMPCT v0.30 R31 regenerable-Deflate codec-effort rehabilitation
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+# Diagnostic only. A positive result authorizes only the superseding global rehabilitation Builder.
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_r31_regenerable_deflate_codec_effort_rehab.py'
+      - 'docs/v030-rnd/R31_REGENERABLE_DEFLATE_CODEC_EFFORT_REHABILITATION_PREREG.md'
+      - '.github/workflows/v030-r31-regenerable-deflate-codec-effort-rehab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r31-top-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-r31-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Classify exact latest-head commit
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r31_regenerable_deflate_codec_effort_rehab\.py|docs/v030-rnd/R31_REGENERABLE_DEFLATE_CODEC_EFFORT_REHABILITATION_PREREG\.md|\.github/workflows/v030-r31-regenerable-deflate-codec-effort-rehab\.yml)$'; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  r31-builder:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    concurrency:
+      group: cmpct-v030-r31-regenerable-deflate-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 64
+
+      - name: Bind frozen product and corpus substrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a HEAD
+          for path in \
+            src/cmpct/builder.py \
+            src/cmpct/codec.py \
+            experiments/entropygraph_v030_release_product.py \
+            benchmarks/neutral_hostile_corpus_v1.py \
+            benchmarks/neutral_hostile_determinism_repair_v1.py \
+            benchmarks/v030_release_ablation_canonical.py \
+            benchmarks/v030_perf_worker_canonical.py; do
+            base_blob="$(git rev-parse "b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a:$path")"
+            head_blob="$(git rev-parse "HEAD:$path")"
+            if [ "$base_blob" != "$head_blob" ]; then
+              echo "Frozen R31 substrate drift: $path $base_blob -> $head_blob" >&2
+              exit 1
+            fi
+          done
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen diagnostic dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile frozen R31 instrument
+        run: python -m py_compile benchmarks/v030_r31_regenerable_deflate_codec_effort_rehab.py
+
+      - name: Run frozen R31 rehabilitation Builder
+        env:
+          CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r31_regenerable_deflate_codec_effort_rehab.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r31-regenerable-deflate-codec-effort-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r31-regenerable-deflate-codec-effort.json"
+
+      - name: Enforce frozen R31 completeness and decision law
+        env:
+          CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          p = Path('benchmark-artifacts/r31-regenerable-deflate-codec-effort.json')
+          assert p.is_file(), 'R31 result was not published'
+          d = json.loads(p.read_text())
+          assert d['schema'] == 'cmpct-v030-r31-regenerable-deflate-codec-effort-rehab-v1'
+          assert d['evidence_head'] == os.environ['CMPCT_EVIDENCE_HEAD']
+          assert d['authority_product_substrate_head'] == 'b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a'
+          assert d['repetitions'] == 3
+          assert d['locality_ceiling'] == 8.0
+          assert d['mature_deflate_reuse_min'] == 65536
+          assert d['specialized_raw_max'] == 65536
+          assert set(d['targets']) == {'full-backups', 'nested-only'}
+          assert d['generator_observed_tree_sha256'] == d['generator_expected_tree_sha256']
+          expected_arms = {'release-all-exact', 'full-search', 'single-zstd12', 'single-zstd9'}
+          for target in d['targets'].values():
+              assert set(target['arms']) == expected_arms
+              for arm in target['arms'].values():
+                  assert len(arm['repetitions']) == 3
+                  assert arm['median']['strong_verify_ok']
+                  for row in arm['repetitions']:
+                      assert row['strong_verify_ok']
+                      assert row['virtual_members']
+                      assert all(m['decoded_context_bytes'] is not None for m in row['virtual_members'])
+          assert d['decision'] in {
+              'PROMOTE_SINGLE12_TO_GLOBAL_REHAB_BUILDER',
+              'BYTE_IDENTITY_WIN_RUNTIME_DEBT_REMAINS',
+              'PARTIAL_BYTE_RETENTION_RUNTIME_WIN',
+              'SINGLE9_ONLY_TRADEOFF',
+              'NO_REHABILITATION',
+              'SUBSTRATE_OR_CORRECTNESS_FAILURE',
+          }
+          if d['decision'] == 'PROMOTE_SINGLE12_TO_GLOBAL_REHAB_BUILDER':
+              i = d['decision_inputs']
+              assert i['specialized_executes_both_targets']
+              assert i['single12_byte_identity_with_full_search_both_targets']
+              assert i['single12_locality_within_8x_both_targets']
+              assert i['single12_rss_within_10pct_release_both_targets']
+              assert i['single12_no_material_runtime_regression_vs_release_both_targets']
+          PY
+
+      - name: Upload immutable R31 evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r31-regenerable-deflate-codec-effort-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r31-regenerable-deflate-codec-effort.json
+          if-no-files-found: error
+          retention-days: 90

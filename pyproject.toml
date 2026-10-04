@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68", "setuptools-rust>=1.12"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ version = "0.29.0"
 description = "Compact archive format prototype with adaptive codecs, deduplication, streaming access, and recovery metadata"
 authors = [{ name = "FCMO AI" }]
 requires-python = ">=3.10"
-dependencies = ["zstandard>=0.22", "msgpack>=1.0"]
+dependencies = ["msgpack>=1.0"]
 
 # Footnote: stewardship is expressed through standard package metadata and durable project URLs rather
 # than promotional text inside runtime code. This keeps provenance discoverable without turning imports,
@@ -20,7 +20,18 @@ Repository = "https://github.com/FCMO-AI/.CMPCT"
 
 [project.optional-dependencies]
 audio = ["numpy>=1.26", "soundfile>=0.12"]
-test = ["pytest>=8"]
+# The regression suite imports research engines that still use python-zstandard as an independent
+# comparator. Keep it test-only: the installed shipping product must not depend on it.
+test = [
+  "pytest>=8",
+  "numpy>=1.26",
+  "zstandard>=0.22",
+  "pillow>=12.3.0",
+  "reportlab>=5.0.0",
+  "python-docx>=1.2.0",
+  "openpyxl>=3.1.5",
+  "python-pptx>=1.0.2",
+]
 
 [project.scripts]
 cmpct = "cmpct.cli:main"
@@ -30,6 +41,20 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Build the existing cdylib into the Python package without introducing a second Rust/Python binding
+# architecture. Python owns the thin ctypes adapter; Rust owns Zstd and the existing C ABI. `--locked`
+# makes the package build consume the same committed dependency graph as native release evidence.
+[[tool.setuptools-rust.ext-modules]]
+target = "cmpct.cmpct_core"
+path = "native/cmpct-core/Cargo.toml"
+binding = "NoBinding"
+# setuptools-rust intentionally defaults editable/in-place extensions to Cargo's dev profile. This
+# core is a shipping performance primitive and editable installs are used by the canonical ABBA gate;
+# forcing the extension itself to release semantics keeps editable and wheel execution comparable.
+# An explicit Cargo/profile override remains available for developers who actually want a debug core.
+debug = false
+cargo-manifest-args = ["--locked"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

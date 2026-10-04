@@ -1,0 +1,343 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Logs restore attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'docs/v030-rnd/R25_LOGS_RESTORE_INNER_ATTRIBUTION_PREREG.md'
+      - 'benchmarks/v030_logs_restore_inner_attribution.py'
+      - 'docs/v030-rnd/R25_LOGS_PACK_MATERIALIZATION_COMPONENT_ATTRIBUTION_PREREG.md'
+      - 'benchmarks/v030_logs_pack_materialization_component_attribution.py'
+      - 'docs/v030-rnd/R25_LOGS_ZSTD_SESSION_REUSE_AB_PREREG.md'
+      - 'benchmarks/v030_logs_zstd_session_reuse_ab.py'
+      - 'docs/v030-rnd/R25_LOGS_FULL_PACK_MEMBER_HASH_REUSE_AB_PREREG.md'
+      - 'benchmarks/v030_logs_full_pack_member_hash_reuse_ab.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_logs_fused_extract.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_release_product_logs_runtime.py'
+      - '.github/workflows/v030-logs-restore-inner-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+# Exact-SHA receipt groups preserve already-running science. Later branch movement cannot cancel an older receipt.
+concurrency:
+  group: cmpct-v030-logs-restore-attribution-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  restore-inner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen instrument
+        run: python -m py_compile benchmarks/v030_logs_restore_inner_attribution.py
+      - name: Run exact restore inner attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_restore_inner_attribution \
+            --work-root "$RUNNER_TEMP/v030-logs-restore-inner" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-restore-inner.json"
+      - name: Ratchet frozen contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-restore-inner.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-restore-inner-attribution-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['selected']=='logs-inverse'
+          assert d['rounds']==11 and len(d['control_s'])==11 and len(d['instrumented_rows'])==11
+          assert d['experiment_valid'] is True and d['call_counts_stable'] is True
+          assert float(d['instrumentation_wall_ratio']) <= 1.10
+          assert d['material_absolute_floor_s']==0.002
+          assert d['material_share_floor']==0.05
+          assert d['maximum_instrumentation_wall_ratio']==1.10
+          assert d['release_credit'] is False and d['production_source_changed'] is False
+          allowed={
+              'PACK_MATERIALIZATION_HEADROOM',
+              'INVERSE_DECODE_HEADROOM',
+              'PACK_MATERIALIZATION_HEADROOM+INVERSE_DECODE_HEADROOM',
+              'TRACKED_RESTORE_SUBBOUNDARIES_INSUFFICIENT',
+          }
+          assert d['decision'] in allowed
+          Path('benchmark-artifacts/v030-logs-restore-inner-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-restore-inner-attribution.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-restore-inner-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-restore-inner.json
+            benchmark-artifacts/v030-logs-restore-inner-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+  pack-components:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen component instrument
+        run: python -m py_compile benchmarks/v030_logs_pack_materialization_component_attribution.py
+      - name: Run exact pack-materialization component attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_pack_materialization_component_attribution \
+            --work-root "$RUNNER_TEMP/v030-logs-pack-components" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-pack-components.json"
+      - name: Ratchet frozen component contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-pack-components.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-pack-materialization-component-attribution-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['selected']=='logs-inverse'
+          assert d['rounds']==11
+          assert d['experiment_valid'] is True and d['call_counts_stable'] is True
+          assert d['instrumentation_wall_ratio']<=1.10
+          assert d['material_absolute_floor_s']==0.002
+          assert d['material_share_floor']==0.05
+          assert d['release_credit'] is False and d['production_source_changed'] is False
+          assert d['authentication_work_disabled'] is False
+          assert d['strong_verify']['ok'] is True
+          allowed={
+              'TRACKED_PACK_COMPONENTS_INSUFFICIENT',
+              'PACK_IO_HEADROOM','PACK_ZSTD_HEADROOM','PACK_CRC32_HEADROOM','PACK_SHA256_HEADROOM',
+          }
+          parts=d['decision'].split('+')
+          assert parts and all(part in allowed for part in parts)
+          if d['decision']!='TRACKED_PACK_COMPONENTS_INSUFFICIENT':
+              key_for={
+                  'PACK_IO_HEADROOM':'io_seek_read_s',
+                  'PACK_ZSTD_HEADROOM':'zstd_materialization_s',
+                  'PACK_CRC32_HEADROOM':'crc32_s',
+                  'PACK_SHA256_HEADROOM':'sha256_s',
+              }
+              for part in parts:
+                  assert d['pack_component_material'][key_for[part]] is True
+          Path('benchmark-artifacts/v030-logs-pack-components-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-restore-inner-attribution.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact component evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-pack-components-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-pack-components.json
+            benchmark-artifacts/v030-logs-pack-components-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+  zstd-session-reuse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen Zstd reuse instrument
+        run: python -m py_compile benchmarks/v030_logs_zstd_session_reuse_ab.py
+      - name: Run exact session-reuse A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_zstd_session_reuse_ab \
+            --work-root "$RUNNER_TEMP/v030-logs-zstd-session-reuse" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-zstd-session-reuse.json"
+      - name: Ratchet frozen reuse contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-zstd-session-reuse.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-zstd-session-reuse-ab-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['selected']=='logs-inverse'
+          assert d['rounds']==21
+          assert d['experiment_valid'] is True and d['candidate_lifecycle_ok'] is True
+          assert d['support_reduction_floor']==0.04
+          assert d['retire_reduction_ceiling']==0.01
+          assert d['release_credit'] is False and d['production_source_changed'] is False
+          assert d['crc32_preserved'] is True and d['sha256_preserved'] is True
+          assert d['cold_selective_semantics_changed'] is False
+          assert d['strong_verify']['ok'] is True
+          decision=d['decision']
+          assert decision in {
+              'LOGS_ZSTD_SESSION_REUSE_SUPPORTED',
+              'LOGS_ZSTD_SESSION_REUSE_RETIRED',
+              'LOGS_ZSTD_SESSION_REUSE_AMBIGUOUS',
+          }
+          reduction=float(d['candidate_total_reduction_fraction'])
+          ratio=float(d['candidate_wall_ratio'])
+          if decision=='LOGS_ZSTD_SESSION_REUSE_SUPPORTED':
+              assert reduction>=0.04 and ratio<=0.96
+          elif decision=='LOGS_ZSTD_SESSION_REUSE_RETIRED':
+              assert reduction<0.01
+          else:
+              assert 0.01<=reduction<0.04
+          Path('benchmark-artifacts/v030-logs-zstd-session-reuse-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-restore-inner-attribution.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact reuse evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-zstd-session-reuse-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-zstd-session-reuse.json
+            benchmark-artifacts/v030-logs-zstd-session-reuse-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+  full-pack-member-hash-reuse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen proof-reuse instrument
+        run: python -m py_compile benchmarks/v030_logs_full_pack_member_hash_reuse_ab.py
+      - name: Run exact complete-extraction proof-reuse A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_full_pack_member_hash_reuse_ab \
+            --work-root "$RUNNER_TEMP/v030-logs-full-pack-member-hash-reuse" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-full-pack-member-hash-reuse.json"
+      - name: Ratchet frozen proof-reuse contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-full-pack-member-hash-reuse.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-full-pack-member-hash-reuse-ab-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['selected']=='logs-inverse'
+          assert d['rounds']==21
+          assert d['experiment_valid'] is True
+          assert d['candidate_lifecycle_ok'] is True
+          assert d['hostile_expected_sha_separation_ok'] is True
+          assert d['candidate_proof_reuse_counts'] and d['candidate_proof_reuse_counts'][0] >= 1
+          assert d['candidate_pack_call_counts']==[7]
+          assert d['support_reduction_floor']==0.04
+          assert d['retire_reduction_ceiling']==0.01
+          assert d['release_credit'] is False and d['production_source_changed'] is False
+          assert d['pack_crc32_preserved'] is True and d['pack_sha256_preserved'] is True
+          assert d['derived_member_sha256_preserved'] is True
+          assert d['partial_pack_member_sha256_preserved'] is True
+          assert d['cold_selective_semantics_changed'] is False
+          assert d['strong_verify']['ok'] is True
+          decision=d['decision']
+          assert decision in {
+              'LOGS_FULL_PACK_MEMBER_HASH_REUSE_SUPPORTED',
+              'LOGS_FULL_PACK_MEMBER_HASH_REUSE_RETIRED',
+              'LOGS_FULL_PACK_MEMBER_HASH_REUSE_AMBIGUOUS',
+          }
+          reduction=float(d['candidate_total_reduction_fraction'])
+          ratio=float(d['candidate_wall_ratio'])
+          if decision=='LOGS_FULL_PACK_MEMBER_HASH_REUSE_SUPPORTED':
+              assert reduction>=0.04 and ratio<=0.96
+          elif decision=='LOGS_FULL_PACK_MEMBER_HASH_REUSE_RETIRED':
+              assert reduction<0.01
+          else:
+              assert 0.01<=reduction<0.04
+          Path('benchmark-artifacts/v030-logs-full-pack-member-hash-reuse-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-restore-inner-attribution.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact proof-reuse evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-full-pack-member-hash-reuse-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-full-pack-member-hash-reuse.json
+            benchmark-artifacts/v030-logs-full-pack-member-hash-reuse-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Attribution and R1 rehabilitation only. No tracked cost is borrowable; pack decompression, CRC32, SHA-256,
+# logical identity, recovery and locality remain mandatory, and none of these jobs grants release credit.
+# The proof-reuse arm only reuses an already-established pack SHA fact when exact byte identity and digest-declaration
+# equality prove that a second whole-member SHA pass establishes no additional fact.

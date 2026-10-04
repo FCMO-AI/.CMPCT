@@ -1,0 +1,59 @@
+{
+  "schema": "cmpct-v030-research-evidence-v1",
+  "recorded_date": "2026-09-14",
+  "status": "PASS",
+  "evidence_class": "research-oracle-instrumented",
+  "product_release_credit": false,
+  "claim": "On neutral_hostile_v1/09_ml_artifacts, physical record cache misses dominate promoted G04 verification record() time; one zstd+delimiter record is the dominant individual owner.",
+  "source": {
+    "repository": "FCMO-AI/.CMPCT",
+    "branch": "agent/v030-authoritative-integration",
+    "experiment_head_sha": "120302ae0f59e62a2a9af7600879f065c490de43",
+    "workflow_run_id": 34833167236,
+    "workflow_job_id": 103940946987,
+    "artifact_id": 10343147007,
+    "artifact_name": "v030-g04-record-decode-120302ae0f59e62a2a9af7600879f065c490de43",
+    "artifact_sha256": "ece928a1a880df7e968374ae840efb97f8673af86229dd9ec4cea16b33383466",
+    "engine": "v030-g04-record-decode-attribution-v1"
+  },
+  "contract": {
+    "suite": "neutral_hostile_v1",
+    "workload": "09_ml_artifacts",
+    "historical_substrate_tree_sha256": "efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d",
+    "semantic_user_tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc",
+    "content_graph_tree_sha256": "0f53413760cba2930f25f13a70b86804e30c0d054058d44c314fdc04bcd98c55",
+    "accepted_v029_bytes": 13836439,
+    "v030_archive_bytes": 13674817,
+    "v030_selected": "g04-overlay",
+    "repetitions": 3,
+    "fresh_process_per_sample": true,
+    "same_archive_all_samples": true,
+    "classification_after_measured_interval": true,
+    "instrumentation_only": true,
+    "product_code_changed": false,
+    "release_thresholds_changed": false
+  },
+  "measurements": {
+    "median_policy_verify_wall_s": 0.24356014199999265,
+    "median_record_hit_wall_s": 0.00009011599999553255,
+    "median_record_miss_wall_s": 0.20313028699999336,
+    "record_hit_fraction_of_policy": 0.0003699948573504086,
+    "record_miss_fraction_of_policy": 0.8340046336481421,
+    "record_miss_fraction_of_record_time": 0.9995565602731555,
+    "record_hit_calls": 96,
+    "record_miss_calls": 19,
+    "physical_record_reads": 19,
+    "by_codec_transform": {
+      "raw+none": {"records": 3, "usize": 2884523, "csize": 2884523, "median_miss_wall_s": 0.004685677000011879},
+      "zstd+none": {"records": 7, "usize": 6570109, "csize": 5036747, "median_miss_wall_s": 0.017607080999994196},
+      "zstd+lane": {"records": 8, "usize": 7669613, "csize": 5737488, "median_miss_wall_s": 0.03084316399997533},
+      "zstd+delimiter": {"records": 1, "usize": 1048585, "csize": 1368, "median_miss_wall_s": 0.14985566699999708}
+    }
+  },
+  "decision": {
+    "result": "SINGLE_DELIMITER_INVERSE_RECORD_DOMINATES",
+    "reason": "Cache hits are effectively free: 96 hits consume about 0.09 ms total median, while 19 physical misses consume 203.13 ms and 83.40% of full policy verification. A single zstd+delimiter record consumes about 149.86 ms, roughly 73.8% of physical-miss wall time and 61.5% of total policy verification, despite its compressed payload being only 1,368 bytes. This strongly localizes the next optimization target to delimiter decode/inverse work rather than Zstd generally, record caching, node graph reconstruction, metadata opening, or the canonical verification wrapper.",
+    "next_question": "Can delimiter_inverse be expressed with exact block/strided slice reconstruction that preserves all bounds and bytes while replacing the current Python per-cell nested loop, and does that recover the measured runtime without changing archive bytes?"
+  },
+  "scope": "One-workload instrumented research attribution only. The owner localization is strong on this exact substrate but is not itself product performance or release evidence."
+}

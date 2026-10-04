@@ -1,0 +1,153 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Shifted cluster-owned pack
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_shifted_cluster_owned_pack_oracle.py'
+      - '.github/workflows/v030-shifted-cluster-owned-pack.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_shifted_cluster_owned_pack_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - '.github/workflows/v030-shifted-cluster-owned-pack.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Preserve the exact R4 receipt while it waits for scarce deep-runner capacity. GitHub may
+# replace a pending run even with cancel-in-progress=false when multiple heads share one
+# concurrency key; keying by evidence SHA makes that scheduling loss impossible.
+concurrency:
+  group: cmpct-v030-shifted-cluster-owned-pack-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_shifted_cluster_owned_pack_oracle\.py|benchmarks/v030_(external_competitors|release_performance)\.py|experiments/entropygraph_v030_(prefixgraph|canonical_final_impl)\.py|\.github/workflows/v030-shifted-cluster-owned-pack\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  cluster-oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Static ratchet
+        run: |
+          python -m py_compile benchmarks/v030_shifted_cluster_owned_pack_oracle.py
+          python tools/check_ci_topology.py .github/workflows/v030-shifted-cluster-owned-pack.yml
+          python tools/check_public_surface.py
+      - name: Run exact Shifted cluster-owned pack oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_shifted_cluster_owned_pack_oracle \
+            --work-root "$RUNNER_TEMP/v030-shifted-cluster-owned-pack" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-cluster-owned-pack.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-shifted-cluster-owned-pack.json')
+          d=json.loads(p.read_text())
+          d['source_commit']=os.environ['EVIDENCE_HEAD']
+          p.write_text(json.dumps(d, indent=2)+'\n')
+          PY
+      - name: Enforce evidence boundary and complete search-cost accounting
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-cluster-owned-pack.json').read_text())
+          assert d['schema']=='cmpct-v030-shifted-cluster-owned-pack-oracle-v2'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['files'] > 2 and d['cluster_count'] >= 1
+          assert d['source_bytes'] > 0
+          assert d['evaluated_merges'] > 0 and d['admissible_pair_visits'] >= d['evaluated_merges']
+          assert d['unique_compression_calls'] >= d['initial_singleton_compression_calls'] == d['files']
+          assert d['trial_raw_bytes'] >= d['source_bytes']
+          assert d['trial_compressed_bytes'] > 0
+          assert d['search_work_amplification_vs_source'] >= 1.0
+          assert d['zstd19_compression_seconds'] > 0.0 and d['merge_search_elapsed_s'] > 0.0
+          assert d['within_decode_unit'] is True and d['max_cluster_raw_bytes'] <= 8*1024*1024
+          assert d['within_locality_amplification'] is True and d['max_decoded_context_amplification'] <= 8.0
+          assert d['tree_sha256'] == d['verified_tree_sha256']
+          assert d['cluster_pack_bytes'] > 0 and len(d['cluster_pack_sha256'])==64
+          assert d['zip_bytes'] > 0 and d['zstd19_bytes'] > 0
+          assert d['release_credit'] is False and d['product_create_time_claim'] is False
+          a=d['domination_audit']
+          assert a['diagnosis']=='D4' and a['radicality']=='R4'
+          assert set(['S2','S3','S4']).issubset(a['active_saturation'])
+          assert a['research_priority_score'] >= 80
+          assert a['measured_gap_change_bytes']==d['saving_vs_shipping_prefixgraph_bytes']
+          assert a['terminal_decision'] in {'PROMOTE_NEXT_PREREQUISITE','ITERATE_SAME_FAMILY','ESCALATE_RADICALITY'}
+          if d['strict_size_win_vs_zip_and_zstd19']:
+              assert a['terminal_decision']=='PROMOTE_NEXT_PREREQUISITE'
+          PY
+      - name: Upload exact structural evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-cluster-owned-pack-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-cluster-owned-pack.json
+          if-no-files-found: error
+          retention-days: 90
+
+# R4 structural research only. This tests non-contiguous, content-derived joint physical ownership after exact
+# lexical-contiguous partitioning was retired. Every level-19 trial is priced, the receipt is bound to its exact
+# source head, and locality/decode-unit/tree laws stay mandatory. A win still requires bounded generic admission
+# and full product/native/Android/release authority before receiving any release credit.

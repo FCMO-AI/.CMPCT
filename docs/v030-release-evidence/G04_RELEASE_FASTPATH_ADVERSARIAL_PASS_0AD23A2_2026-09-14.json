@@ -1,0 +1,31 @@
+{
+  "schema": "cmpct-v030-g04-release-fastpath-promotion-check-v1",
+  "recorded_date": "2026-09-14",
+  "status": "PASS",
+  "evidence_class": "adversarial-promotion-check",
+  "product_release_credit": false,
+  "source": {
+    "repository": "FCMO-AI/.CMPCT",
+    "branch": "agent/v030-authoritative-integration",
+    "candidate_sha": "0ad23a2a489d2b298b9f8f84a0aec130887f7632",
+    "workflow_run_id": 34837815495,
+    "artifact_id": 10344698734,
+    "artifact_name": "v030-g04-release-fastpath-check-0ad23a2a489d2b298b9f8f84a0aec130887f7632",
+    "artifact_sha256": "ea9535a326637de989ba5db5dbf77d2a097bc5093482fe4627f88d396a2eec02"
+  },
+  "seed": 3224433754,
+  "facts": {
+    "release_frontdoor_installs_fastpath": true,
+    "historical_oracle_remains_distinct": true,
+    "exact_cases": 3070,
+    "exact_logical_bytes_checked": 5060985,
+    "max_segments_checked": 45000,
+    "malformed_refusals_checked": 4,
+    "delimiters_checked": [0, 1, 44, 127, 255]
+  },
+  "decision": {
+    "result": "PROMOTION_SEMANTICS_SURVIVE_DIFFERENTLY_ROOTED_CHECK",
+    "reason": "The release front door actually installed the dependency-free one-buffer inverse, the preserved historical inverse remained distinct, and 3,070 deterministic/adversarial exact cases covering 5,060,985 logical bytes, delimiter edge values, ragged/empty shapes and up to 45,000 segments reconstructed identically. Four malformed cases were refused as expected.",
+    "scope": "This establishes release-path semantic equivalence on the tested transform envelope. It does not substitute for complete-product runtime/RSS, reader/recovery/fuzz, native/platform, generalization or strict release authority."
+  }
+}

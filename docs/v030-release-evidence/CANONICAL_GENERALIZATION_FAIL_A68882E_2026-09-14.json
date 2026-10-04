@@ -1,0 +1,77 @@
+{
+  "schema": "cmpct-v030-canonical-generalization-failure-evidence-v1",
+  "source": {
+    "github_run_id": 34809617987,
+    "github_job_id": 103869360894,
+    "artifact_id": 10334956762,
+    "artifact_zip_sha256": "6ea4941f662b4810cbf251de8abb621b5673a529ba666909a31b731d9c933896",
+    "candidate_head": "a68882eeb4fbb668c39a77075366d879a5a8c16e"
+  },
+  "candidate_fingerprint": "c56b5102d2e1482351b76a15b197fb3267ded166906757003a92e13fdf517022",
+  "contract": {
+    "expected_v029_aggregate_bytes": 137499525,
+    "minimum_release_saving_bytes": 687783,
+    "minimum_release_saving_pct": 0.5,
+    "inherited_absolute_revision_floor_bytes": 687783,
+    "minimum_improved_rows": 3,
+    "maximum_member_read_amplification": 8.0,
+    "regression_tolerance_bytes": 0,
+    "baseline": "accepted v0.29 exact row artifacts on 10 historical + 5 independently accepted repair-v6 identities",
+    "non_additivity": "complete artifacts compete; independent Geometry/PrefixGraph savings are never summed"
+  },
+  "totals": {
+    "workloads": 15,
+    "accepted_v029_bytes": 137499525,
+    "candidate_bytes": 150053559,
+    "saving_vs_v029_bytes": -12554034,
+    "saving_vs_v029_pct": -9.130238086277025,
+    "workloads_improved": 9,
+    "workloads_regressed": 6,
+    "baseline_tree_drift_rows": 0,
+    "product_tree_drift_rows": 0,
+    "baseline_v029_byte_drift_rows": 0,
+    "g04_overlay_rows": 1,
+    "prefixgraph_rows": 2,
+    "hierarchical_selected_records": 2,
+    "hierarchical_incremental_saving_bytes": 33999,
+    "max_selected_member_read_amplification": 7.99616863949432,
+    "release_candidate_create_s": 241.5792143549999
+  },
+  "gate": {
+    "exact_workload_count": true,
+    "exact_v029_aggregate": true,
+    "no_tree_drift": true,
+    "product_tree_verified": true,
+    "no_v029_byte_drift": true,
+    "no_size_regressions": false,
+    "minimum_improved_rows": true,
+    "revision_sized_aggregate_saving": false,
+    "locality": true,
+    "zero_copy_publication": true,
+    "passed": false
+  },
+  "rows": [
+    ["neutral_hostile_v1","01_developer_repository",744337,870448,-126111,"r24-fallback",750552,"v029-fallback"],
+    ["neutral_hostile_v1","02_office_workspace",5954026,15445458,-9491432,"r24-fallback",5954336,"v029-fallback"],
+    ["neutral_hostile_v1","03_media_library",28719497,27448647,1270850,"canonical-r24:canonical-r24",27448647,"not-attempted"],
+    ["neutral_hostile_v1","04_analytics_and_database",6135172,10392494,-4257322,"r24-fallback",6135340,"v029-fallback"],
+    ["neutral_hostile_v1","05_logs_and_telemetry",3550609,3550343,266,"logs-inverse",3550343,"not-attempted"],
+    ["neutral_hostile_v1","06_incremental_backups",8223844,8087997,135847,"r24-fallback",8237813,"v029-fallback"],
+    ["neutral_hostile_v1","07_incompressible_and_encrypted_like",10193958,10218061,-24103,"r24-fallback",10197924,"v029-fallback"],
+    ["neutral_hostile_v1","08_many_tiny_files",420318,721734,-301416,"r24-fallback",443044,"v029-fallback"],
+    ["neutral_hostile_v1","09_ml_artifacts",13836439,13674817,161622,"g04-overlay",13674817,"geometry-overlay-g04"],
+    ["neutral_hostile_v1","10_large_mixed_binary",12593372,12590166,3206,"r24-fallback",12590166,"not-attempted"],
+    ["resemblance_hostile_v1","01_shifted_versions",1723056,1700667,22389,"prefixgraph",1723385,"v029-fallback"],
+    ["resemblance_hostile_v1","02_false_neighbors",34698771,34648982,49789,"r24-fallback",34648982,"not-attempted"],
+    ["resemblance_hostile_v1","03_boundary_churn",79876,76032,3844,"prefixgraph",80174,"v029-fallback"],
+    ["resemblance_hostile_v1","04_deflate_family",14597,17760,-3163,"r24-fallback",14832,"v029-fallback"],
+    ["resemblance_hostile_v1","05_incompressible",10611653,10609953,1700,"r24-fallback",10609953,"not-attempted"]
+  ],
+  "row_columns": ["suite","name","accepted_v029_bytes","candidate_bytes","saving_vs_v029_bytes","selected","g04_bytes","g04_selected"],
+  "interpretation": {
+    "product_evidence": "FAIL",
+    "dominant_measured_debt": "Six regressions remain; aggregate candidate is 12,554,034 bytes larger than accepted v0.29 despite nine improved workloads.",
+    "fallback_boundary_clue": "On developer, office, analytics, many-tiny and deflate-family, the selected r24-fallback candidate is materially larger than the accepted v0.29 baseline while the G04-stage candidate is much closer to that baseline. This localizes a major portion of debt to the canonical fallback/product boundary rather than to absence of competitive intermediate encodings.",
+    "anti_goodhart": "No threshold, workload, baseline, comparator, or semantic contract was changed. This record preserves failed exact-head evidence."
+  }
+}

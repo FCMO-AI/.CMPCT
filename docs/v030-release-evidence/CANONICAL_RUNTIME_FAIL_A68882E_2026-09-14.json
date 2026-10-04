@@ -1,0 +1,94 @@
+{
+  "schema": "cmpct-v030-canonical-runtime-failure-evidence-v1",
+  "source": {
+    "github_run_id": 34809617987,
+    "github_job_id": 103869360772,
+    "artifact_id": 10334717026,
+    "artifact_zip_sha256": "70e2d18b884cb5b6080fe4601590977be86f6de2bd7c49766333257f72c0be7b",
+    "candidate_head": "a68882eeb4fbb668c39a77075366d879a5a8c16e"
+  },
+  "candidate_fingerprint": "c56b5102d2e1482351b76a15b197fb3267ded166906757003a92e13fdf517022",
+  "contract": {
+    "maximum_median_create_ratio": 1.10,
+    "maximum_workload_create_ratio": 1.25,
+    "maximum_median_extract_ratio": 1.10,
+    "maximum_workload_extract_ratio": 1.25,
+    "maximum_peak_rss_ratio": 1.25,
+    "timing_semantics": "fresh-process same-run paired accepted-v0.29 vs canonical-v0.30 product",
+    "identity_rule": "historical and canonical-product tree hashes are independently verified; they are not numerically conflated"
+  },
+  "totals": {
+    "median_create_ratio": 1.0894655300042748,
+    "max_workload_create_ratio": 1.414448946028236,
+    "median_extract_ratio": 1.4313009703142017,
+    "max_workload_extract_ratio": 2.5106459691266023,
+    "max_peak_rss_ratio": 2.0956397612250193
+  },
+  "gate": {
+    "exact_target_count": true,
+    "stable_historical_baseline_identity": true,
+    "stable_product_identity": true,
+    "median_create_ratio": true,
+    "per_workload_create_ratio": false,
+    "median_extract_ratio": false,
+    "per_workload_extract_ratio": false,
+    "peak_rss_ratio": false,
+    "passed": false
+  },
+  "rows": [
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "accepted_v029_bytes": 1723056,
+      "v030_bytes": 1700664,
+      "median_create_ratio": 1.0894655300042748,
+      "median_verify_ratio": 0.5851990748687041,
+      "median_extract_ratio": 0.9279161765922013,
+      "max_pack_rss_ratio": 2.0956397612250193,
+      "max_extract_rss_ratio": 1.0,
+      "v029_pack_peak_rss_kib": [123296, 123296],
+      "v030_pack_peak_rss_kib": [252712, 258384]
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "05_logs_and_telemetry",
+      "accepted_v029_bytes": 3550609,
+      "v030_bytes": 3550340,
+      "median_create_ratio": 0.008648449757244884,
+      "median_verify_ratio": 0.8633564810373231,
+      "median_extract_ratio": 1.4313009703142017,
+      "max_pack_rss_ratio": 1.3762976901116013,
+      "max_extract_rss_ratio": 1.0,
+      "v029_extract_wall_s": [0.034160181000004286, 0.033982922000006965],
+      "v030_extract_wall_s": [0.048871637999980067, 0.04866153799997619]
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "09_ml_artifacts",
+      "accepted_v029_bytes": 13836439,
+      "v030_bytes": 13674827,
+      "median_create_ratio": 1.414448946028236,
+      "median_verify_ratio": 2.0606304433049525,
+      "median_extract_ratio": 2.5106459691266023,
+      "max_pack_rss_ratio": 1.7158058655593045,
+      "max_extract_rss_ratio": 1.0,
+      "v029_pack_wall_s": [20.965748270999995, 21.291697843999998],
+      "v030_pack_wall_s": [29.96103900999998, 29.805202889999975],
+      "v029_extract_wall_s": [0.07849497500001235, 0.07882547200000545],
+      "v030_extract_wall_s": [0.19693156800002498, 0.19804497400002674],
+      "v029_pack_peak_rss_kib": [123296, 123296],
+      "v030_pack_peak_rss_kib": [211552, 207340]
+    }
+  ],
+  "interpretation": {
+    "product_evidence": "FAIL",
+    "dominant_measured_debt": [
+      "09_ml_artifacts create ratio exceeds 1.25",
+      "09_ml_artifacts extract ratio exceeds 1.25",
+      "05_logs_and_telemetry extract ratio exceeds 1.25",
+      "all measured v0.30 pack RSS ratios exceed 1.25, worst on 01_shifted_versions"
+    ],
+    "non_failure": "median create ratio passes the frozen 1.10 limit",
+    "anti_goodhart": "No threshold, comparator, timing boundary, workload, or semantic contract was changed. This record preserves the failed exact-head evidence as observed."
+  }
+}

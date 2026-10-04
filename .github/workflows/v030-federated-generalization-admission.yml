@@ -1,0 +1,171 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
+name: CMPCT v0.30 federated all-15 admission
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_federated_candidate.py'
+      - 'experiments/entropygraph_v030_federated_public.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'benchmarks/v030_federated_generalization_admission.py'
+      - 'benchmarks/v030_federated_generalization_admission_v3.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - '.github/workflows/v030-federated-generalization-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-federated-all15-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v025\.py|experiments/entropygraph_v030_(federated_candidate|federated_public|product_fs)\.py|benchmarks/v030_federated_generalization_admission(_v3)?\.py|benchmarks/v030_(external_competitors|release_generalization)\.py|benchmarks/(neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|\.github/workflows/v030-federated-generalization-admission\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect federated all-15 admission.'
+          fi
+
+  all-15-admission:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    concurrency:
+      group: cmpct-v030-federated-all15-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "exact_head=$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and comparator dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile federated admission surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_federated_candidate.py \
+            experiments/entropygraph_v030_federated_public.py \
+            benchmarks/v030_federated_generalization_admission.py \
+            benchmarks/v030_federated_generalization_admission_v3.py
+      - name: Run all-15 structural and measured admission proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_federated_generalization_admission_v3.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-generalization-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-generalization.json"
+      - name: Independently enforce experiment-validity and promotion boundary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-eg01-generalization.json')
+          assert p.exists(), 'federated all-15 evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-federated-eg01-generalization-admission-v3'
+          assert d['predecessor_schema']=='cmpct-v030-federated-eg01-generalization-admission-v2'
+          assert len(d['rows'])==15
+          gate=d['gate']
+          interpretation=d['evidence_interpretation']
+          assert gate['exact_workload_count'] is True
+          assert gate['at_least_two_measured_admissions'] is True
+          assert gate['dedicated_candidate_identity'] is True
+          assert gate['all_15_candidate_attempts_completed'] is True
+          assert gate['all_locality_rejections_fail_closed'] is True
+          assert gate['experiment_valid'] is True
+          assert gate['passed'] is True
+          assert interpretation['experiment_valid'] is True
+          assert interpretation['release_credit'] is False
+          assert d['summary']['candidate_error_rows']==[]
+          rejected=[row for row in d['rows'] if row.get('candidate_rejected')]
+          assert all(row['admitted'] is False for row in rejected)
+          assert all(row['candidate_rejected']=='locality/decode-bound' for row in rejected)
+          admitted=[row for row in d['rows'] if row['admitted']]
+          assert len(admitted)>=2
+          assert all(row['admission']['within_release_locality_bounds'] is True for row in admitted)
+          assert all(row['admission']['max_member_read_amplification']<=8.0 for row in admitted)
+          assert all(row['admission']['max_decode_unit_bytes']<=8*1024*1024 for row in admitted)
+          if gate['promotion_earned']:
+              assert gate['all_admitted_strictly_safe'] is True
+              assert interpretation['negative_evidence_is_valid'] is False
+              assert interpretation['failed_admissions']==[]
+              assert all(row['external']['strict']['passed'] for row in admitted)
+          else:
+              assert gate['all_admitted_strictly_safe'] is False
+              assert interpretation['negative_evidence_is_valid'] is True
+              assert interpretation['failed_admissions']
+              assert any(not row['external']['strict']['passed'] for row in admitted)
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-federated-generalization-admission.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload all-15 admission evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-federated-all15-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-eg01-generalization.json
+          if-no-files-found: error
+          retention-days: 90
+
+# This lane distinguishes a technically valid falsification from an invalid experiment. Every candidate attempt
+# must complete; locality/decode violations are fail-closed non-admissions; every admitted row is still measured
+# against the unchanged accepted-v0.29/ZIP/Zstd size and ZIP/Zstd creation contract. A measured rejection remains
+# durable negative selector evidence and cannot authorize selector/native/Android/release promotion. Ordinary
+# release authority remains the only release decision surface. Classifier routing is PR/ref-cancellable while the
+# exact result-bearing all-15 receipt is preserved once admitted, so unrelated long-PR commits cannot recreate a
+# multi-hour backlog without sacrificing exact-source custody.

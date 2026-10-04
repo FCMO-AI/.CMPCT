@@ -1,0 +1,96 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 Office compact locator v5
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_compact_monotone_directory_v5.py'
+      - '.github/workflows/v030-r4-office-compact-monotone-directory-v5.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+  V029_SHA: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+
+concurrency:
+  group: cmpct-v030-r4-office-compact-locator-v5-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  exact-head-v5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - name: Prepare frozen v0.29 checkout
+        run: |
+          set -euo pipefail
+          git cat-file -e "$V029_SHA^{commit}"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$V029_SHA"
+          test "$(git -C "$RUNNER_TEMP/cmpct-v029" rev-parse HEAD)" = "$V029_SHA"
+      - run: python -m py_compile benchmarks/v030_r4_office_compact_monotone_directory_referee.py benchmarks/v030_r4_office_compact_monotone_directory_v2.py benchmarks/v030_r4_office_compact_monotone_directory_v3.py benchmarks/v030_r4_office_compact_monotone_directory_v4.py benchmarks/v030_r4_office_compact_monotone_directory_v5.py
+      - name: Run v5 exact referee
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_compact_monotone_directory_v5.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/compact-monotone-v5-work" \
+            --v029-checkout "$RUNNER_TEMP/cmpct-v029" \
+            --worker "$GITHUB_WORKSPACE/benchmarks/v030_r4_frozen_v029_product_worker.py" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-compact-monotone-directory-v5.json"
+      - name: Assert receipt integrity, not scientific verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-compact-monotone-directory-v5.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['frozen_v029']['source_sealed'] and d['frozen_v029']['reconstruction_exact']
+          assert d['contract']['fixed_limit_bytes']==32768
+          assert d['contract']['v4_non_authoritative_after_compressed_bound_hostile_review']
+          r=d['resource_bounds']
+          assert r['max_locator_raw_bytes']==1048576
+          assert r['max_locator_compressed_body_bytes']==1048909
+          assert r['compressed_and_raw_bounds_are_distinct']
+          assert r['streaming_parser'] and not r['retained_record_table']
+          h=d['hostile_controls']
+          required=(
+            'primary_locator_corruption_rejected','tail_locator_recovery_under_same_root',
+            'group_body_corruption_detected','corrupted_footer_root_rejects_primary',
+            'corrupted_footer_root_rejects_tail','over_limit_locator_expansion_rejected_before_unbounded_output',
+            'concatenated_trailing_locator_stream_rejected','near_ceiling_locator_uses_constant_retained_parser_state',
+            'noncanonical_uvarint_rejected','duplicate_or_nonmonotone_stream_id_rejected',
+            'raw_bounded_incompressible_frame_body_above_raw_ceiling_accepted',
+            'compressed_body_above_compress_bound_rejected_from_header')
+          for key in required: assert h[key], key
+          print(json.dumps({'compact_locator':d['compact_locator'],'selective_read':d['selective_read'],'resource_bounds':r,'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-compact-monotone-directory-v5.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-compact-monotone-directory-v5-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-compact-monotone-directory-v5.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green means receipt integrity. The JSON owns the scientific verdict.

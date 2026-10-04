@@ -1,5 +1,6 @@
 name: CMPCT curated localization contract
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 
 on:
   pull_request:
@@ -26,16 +27,53 @@ permissions:
   contents: read
 
 concurrency:
-  group: site-i18n-${{ github.ref }}
+  group: site-i18n-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
+  latest-head-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.scope.outputs.should_run }}
+    steps:
+      - name: Check out exact candidate history
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Classify only the newest exact candidate commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(site/|README\.md$|docs/readme/|docs/SITE_I18N\.md$|benchmarks/history/|SURFACE_REVISION$|\.github/workflows/site-i18n-contract\.yml$)' /tmp/latest-head-files.txt; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   curated-locales:
+    needs: latest-head-scope
+    if: needs.latest-head-scope.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Check out repository
+      - name: Check out exact candidate repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind localization evidence to exact candidate head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -69,8 +107,19 @@ jobs:
           # family as the base public-proof workflow so locale failures are comparable to ordinary viewport proof.
           # Ubuntu runner images do not guarantee CJK glyph coverage; install Noto CJK so Japanese, Korean and
           # both Chinese scripts are rendered as actual language rather than tofu boxes during visual proof.
-          sudo apt-get update
-          sudo apt-get install -y fonts-noto-cjk
+          # Hosted runners also inject unrelated third-party apt feeds. A transient packages.microsoft.com 403
+          # must not block an Ubuntu-native font dependency, so update/install against the runner's canonical
+          # Ubuntu source only and then prove the expected font family is actually present.
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            update
+          sudo apt-get \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            install -y fonts-noto-cjk
+          fc-list | grep -qi 'Noto Sans CJK'
           npm install --no-save --no-package-lock playwright@1.55.0
           npx playwright install chromium
 
@@ -79,17 +128,22 @@ jobs:
           python -m http.server 4173 --directory _site >/tmp/cmpct-i18n-site.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
-          node site/tests/i18n-viewport.mjs http://127.0.0.1:4173/ locale-artifacts
+          node site/tests/i18n-viewport.mjs http://127.0.0.1:4173/ i18n-viewport-artifacts
 
-      - name: Preserve locale render evidence
+      - name: Preserve localized render evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: cmpct-locale-matrix-${{ github.sha }}
-          path: locale-artifacts/
+          name: cmpct-i18n-matrix-${{ env.EVIDENCE_HEAD }}
+          path: i18n-viewport-artifacts/
           if-no-files-found: warn
           retention-days: 7
 
-# Footnote: direct feature-branch pushes are validated because a PR can temporarily lose its synthetic merge
-# ref while main advances. This workflow validates source only and deliberately does not deploy GitHub Pages;
-# CMPCT keeps main as canonical source authority and gh-pages as explicitly promoted generated serving output.
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/site-i18n-contract.yml
+
+# Footnote: curated localization is part of the fingerprinted public release surface. PR proof therefore executes
+# the exact candidate head, never GitHub's synthetic merge commit, so its render/catalogue receipt can be joined to
+# the same v0.30 source fingerprint as the public-proof, version, native and final release authorities. The cheap
+# scope job additionally prevents an old site change in a long-lived integration PR from replaying Chromium work on
+# every unrelated head commit; only the newest exact commit can admit the expensive proof.

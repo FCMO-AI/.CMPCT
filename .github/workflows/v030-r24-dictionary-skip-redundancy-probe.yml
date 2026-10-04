@@ -1,0 +1,133 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 r24 dictionary skip redundancy probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_dictionary_skip_redundancy_probe_oracle.py'
+      - 'benchmarks/v030_r24_dictionary_skip_correlated_adversarial_v3.py'
+      - 'benchmarks/v030_r24_dictionary_skip_adversarial_v2.py'
+      - 'benchmarks/v030_r24_dictionary_skip_admission_oracle.py'
+      - 'benchmarks/v030_r24_dictionary_training_cost_oracle.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'src/cmpct/builder.py'
+      - '.github/workflows/v030-r24-dictionary-skip-redundancy-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-dictionary-skip-redundancy-probe-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r24_dictionary_(skip_redundancy_probe_oracle|skip_correlated_adversarial_v3|skip_adversarial_v2|skip_admission_oracle|training_cost_oracle)\.py|experiments/entropygraph_v030_release_product\.py|src/cmpct/builder\.py|\.github/workflows/v030-r24-dictionary-skip-redundancy-probe\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  redundancy-probe:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile research surface
+        run: python -m py_compile benchmarks/v030_r24_dictionary_skip_redundancy_probe_oracle.py
+      - name: Run four-case exact discrimination A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_dictionary_skip_redundancy_probe_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dictionary-redundancy-probe-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dictionary-redundancy-probe.json"
+      - name: Enforce research-only fail-closed boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-dictionary-redundancy-probe.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-dictionary-skip-redundancy-probe-v1'
+          c=d['contract']; s=d['summary']
+          assert c['production_change'] is False and c['release_credit'] is False
+          assert c['sample_order_affects_feature'] is False
+          assert c['probe_time_charged_inside_saved_time'] is True
+          assert c['probe_bytes_per_sample_cap']==32768
+          assert c['maximum_agreement_for_skip']==0.25
+          assert set(c['forbidden_policy_inputs'])=={'workload_name','benchmark_name','path','filename','content_hash','archive_hash'}
+          assert s['target_surface_complete'] is True
+          assert s['all_admissions_safe_useful'] is True
+          assert d['promotion_signal'] is False and d['release_credit'] is False
+          if d['next_boundary_signal']:
+              assert s['independent_entropy_admitted']==2
+              assert s['correlated_counterexamples_rejected']==2
+              independent=[r for r in d['rows'] if 'large_entropy_text' in r['label']]
+              correlated=[r for r in d['rows'] if 'large_shared_prefix' in r['label']]
+              assert all(r['exact_archive_and_tree'] and r['adjusted_saved_s']>=0.005 for r in independent)
+              assert all((not r['admitted']) and (not r['exact_archive_and_tree']) for r in correlated)
+          PY
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/v030-r24-dictionary-redundancy-probe-candidate.txt
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-dictionary-skip-redundancy-probe.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-dictionary-redundancy-probe-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-r24-dictionary-redundancy-probe.json
+            benchmark-artifacts/v030-r24-dictionary-redundancy-probe-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only architectural discriminator. A positive four-case signal earns only a larger frozen+adversarial
+# generalization campaign. It cannot enable dictionary skip, change bytes, or receive release credit by itself.

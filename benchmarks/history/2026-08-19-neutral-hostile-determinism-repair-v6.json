@@ -1,0 +1,119 @@
+{
+  "schema": "cmpct-neutral-hostile-v1-determinism-repair-v6-accepted-v1",
+  "date": "2026-08-20",
+  "claim_boundary": "accepted compiler-independent benchmark-substrate identity; historical v0.28 and repair-v5 evidence remain immutable",
+  "accepted": true,
+  "source_commits": {
+    "runner_a": "da1e52fd1c79bad392286132407298db2f25fd4e",
+    "runner_b": "9132625d3f4d1812226a369ea1059270bbf5052b",
+    "repair_v6_inputs_unchanged_between_runs": true
+  },
+  "workflow_runs": {
+    "runner_a": 32311553001,
+    "runner_b": 32316335185
+  },
+  "artifacts": {
+    "runner_a": {
+      "id": 9386712714,
+      "digest": "sha256:49fe2752879bf663323b7fe8cf47253b606ec81529d209986d66a801a1c54b62",
+      "manifest_sha256": "52409e0c59d458762092f69867780ad2a6d0f8991b30dee37584d3151399b86e"
+    },
+    "runner_b": {
+      "id": 9388289596,
+      "digest": "sha256:3456d146336435803676b564afeb5da8e82ec4605dd74c7c0eb0e8ca01ce07d2",
+      "manifest_sha256": "b16ae9af857eff42cd9e57fc826992c4efe0b94d5dadcd49d1d0be3738edde50"
+    }
+  },
+  "producer_policy": {
+    "ffmpeg_cpuflags": "0",
+    "ffmpeg_cpucount": 1,
+    "ffmpeg_bitexact": true,
+    "encoder_threads": 1,
+    "filter_threads": 1,
+    "x264_params": "cpu-independent=1:asm=0:threads=1:lookahead-threads=1:sliced-threads=0:sync-lookahead=0",
+    "developer_elf": "compiler-independent deterministic ELF64 x86-64 executable, fixed 112776-byte envelope"
+  },
+  "cross_run": {
+    "independent_runner_match": true,
+    "per_file_manifest_match": true,
+    "second_build_manifest_match": true,
+    "exact_v028_measurement_match": true,
+    "requirements_match": true,
+    "producer_policy_match": true,
+    "identity_payload_sha256": "4904a524919f97d7664d6ddc277af0bc7b1eaae00008f6690c6c75df16089a1f",
+    "non_identity_differences": [
+      "source_environment.python: 3.11.15 vs 3.11.16"
+    ],
+    "differences": []
+  },
+  "rows": [
+    {
+      "name": "01_developer_repository",
+      "files": 1266,
+      "logical_bytes": 2624373,
+      "tree_sha256": "d1706c497de75764b6bd0f49c5d8bdde251694eea40fc683dcbbfed5027c2f49",
+      "v028_candidate_bytes": 744337,
+      "v028_graph_bytes": 1214940,
+      "v028_inherited_bytes": 744337,
+      "v028_selected": "entropygraph-v025-fallback",
+      "predecessor_identity": "historical-v0.28",
+      "candidate_byte_delta_vs_predecessor": -2290
+    },
+    {
+      "name": "02_office_workspace",
+      "files": 20,
+      "logical_bytes": 16063798,
+      "tree_sha256": "aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57",
+      "v028_candidate_bytes": 5954026,
+      "v028_graph_bytes": 15307199,
+      "v028_inherited_bytes": 5954026,
+      "v028_selected": "entropygraph-v025-fallback",
+      "predecessor_identity": "repair-v5",
+      "candidate_byte_delta_vs_predecessor": 0
+    },
+    {
+      "name": "03_media_library",
+      "files": 28,
+      "logical_bytes": 28841872,
+      "tree_sha256": "d821e6c6760279820b9c3a5c14ffccc4f6fc7ac4f6e7a59ff3e81c90a26290ca",
+      "v028_candidate_bytes": 28719497,
+      "v028_graph_bytes": 28753431,
+      "v028_inherited_bytes": 28719497,
+      "v028_selected": "entropygraph-v025-fallback",
+      "predecessor_identity": "repair-v5",
+      "candidate_byte_delta_vs_predecessor": 0
+    },
+    {
+      "name": "05_logs_and_telemetry",
+      "files": 11,
+      "logical_bytes": 16994250,
+      "tree_sha256": "7356b866d7b99bfce2dd1fc6ef86d61d09c9d8a38a2ff3fec7d9a92e46020931",
+      "v028_candidate_bytes": 3550609,
+      "v028_graph_bytes": 4733205,
+      "v028_inherited_bytes": 3550609,
+      "v028_selected": "entropygraph-v025-fallback",
+      "predecessor_identity": "repair-v5",
+      "candidate_byte_delta_vs_predecessor": 0
+    },
+    {
+      "name": "06_incremental_backups",
+      "files": 769,
+      "logical_bytes": 14006619,
+      "tree_sha256": "a823728d98e5882542645e3ab0f777894479cfb3de4dedcec14341fedbb11a05",
+      "v028_candidate_bytes": 8223844,
+      "v028_graph_bytes": 10073420,
+      "v028_inherited_bytes": 8223844,
+      "v028_selected": "entropygraph-v025-fallback",
+      "predecessor_identity": "repair-v5",
+      "candidate_byte_delta_vs_predecessor": 0
+    }
+  ],
+  "decision": {
+    "identity": "neutral-hostile-repair-v6",
+    "historical_record_rewritten": false,
+    "repair_v5_rewritten": false,
+    "absolute_v030_saving_hurdle_bytes": 687783,
+    "hurdle_lowered": false,
+    "next_required_action": "regenerate accepted-v0.29 and v0.30 generalization evidence with every candidate and baseline consuming this accepted source identity"
+  }
+}

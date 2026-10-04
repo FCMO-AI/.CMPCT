@@ -1,0 +1,9 @@
+{
+  "schema": "cmpct-v030-single-executor-v1",
+  "status": "ACTIVE",
+  "branch": "agent/v030-authoritative-integration",
+  "executor": "gpt-5.6-sol-v030-convergence-20260818",
+  "execution_scope": ["T00", "T01", "T02", "T03", "T04"],
+  "authoritative_since_commit": "77025ef399c6a4de06d6f0076c562430a9c9d5d1",
+  "notes": "One executor owns all remaining v0.30 implementation, evidence, reconciliation, release-lock, publication, and post-release verification. CI and automation are evidence infrastructure only."
+}

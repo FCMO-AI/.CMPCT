@@ -1,0 +1,96 @@
+# ci-lane: deep
+name: CMPCT v0.30 PrefixGraph oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-prefixgraph-oracle
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-prefixgraph-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prefixgraph-oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install research dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Run PrefixGraph independent tests
+        run: pytest -q tests/test_v030_prefixgraph.py
+
+      - name: Run exact historical two-workload oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/prefixgraph_v030_oracle.py \
+            --work-root benchmark-artifacts/prefixgraph-v030-work \
+            --output benchmark-artifacts/prefixgraph-v030-oracle.json \
+            2>&1 | tee benchmark-artifacts/prefixgraph-v030.stdout.txt
+
+      - name: Enforce frozen causal contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/prefixgraph-v030-oracle.json').read_text())
+          rows=data['rows']; totals=data['totals']; contract=data['contract']
+          assert data['schema']=='cmpct-v030-prefixgraph-oracle-v1'
+          assert len(rows)==totals['workloads']==2
+          assert contract['tree_and_v029_bytes_must_match_history'] is True
+          assert contract['regression_tolerance_bytes']==0
+          assert totals['workloads_regressed']==0
+          assert all(r['candidate_bytes'] <= r['v029_bytes'] for r in rows)
+          assert all(r['saving_vs_v029_bytes'] >= contract['minimum_each_workload_saving_bytes'] for r in rows)
+          assert totals['saving_vs_v029_bytes'] >= contract['minimum_aggregate_saving_bytes']
+          assert totals['max_dependency_depth'] <= contract['max_dependency_depth'] == 1
+          assert all(r['prefix_records'] > 0 for r in rows)
+          assert totals['mechanism_gate'] is True
+          print(json.dumps(totals, indent=2))
+          PY
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Upload PrefixGraph evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v030-prefixgraph-${{ github.sha }}
+          path: |
+            benchmark-artifacts/prefixgraph-v030-oracle.json
+            benchmark-artifacts/prefixgraph-v030.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: this branch executes only the narrow causal oracle. A green result is not a release; composition
+# with Geometry and the ordinary repository-wide release matrix remain mandatory before any version bump.

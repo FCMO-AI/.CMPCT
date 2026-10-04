@@ -1,0 +1,62 @@
+{
+  "schema": "cmpct-v030-research-evidence-v1",
+  "recorded_date": "2026-09-14",
+  "status": "PASS",
+  "evidence_class": "research-oracle",
+  "product_release_credit": false,
+  "claim": "On neutral_hostile_v1/09_ml_artifacts, promoted G04 policy verification time is almost entirely graph streaming rather than session-open/preflight, and the reader decodes each physical record exactly once rather than thrashing its bounded cache.",
+  "source": {
+    "repository": "FCMO-AI/.CMPCT",
+    "branch": "agent/v030-authoritative-integration",
+    "experiment_head_sha": "f3eebb0084ec38a0e1696d3043aeaa361aca98c8",
+    "workflow_run_id": 34832543180,
+    "workflow_job_id": 103938966853,
+    "artifact_id": 10343345293,
+    "artifact_name": "v030-g04-streamer-work-f3eebb0084ec38a0e1696d3043aeaa361aca98c8",
+    "artifact_sha256": "1d5d5d267cc19b7574bcbd15c8073fc484566b10574d7916829e642c9d41d039",
+    "engine": "v030-g04-streamer-work-attribution-v1"
+  },
+  "contract": {
+    "suite": "neutral_hostile_v1",
+    "workload": "09_ml_artifacts",
+    "historical_substrate_tree_sha256": "efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d",
+    "semantic_user_tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc",
+    "content_graph_tree_sha256": "e536e94ea8e3736d680d53d6f4813c83212ccc6ec0a052688a87e97faf4344c4",
+    "accepted_v029_bytes": 13836439,
+    "v030_archive_bytes": 13674823,
+    "v030_selected": "g04-overlay",
+    "record_count": 19,
+    "node_count": 115,
+    "file_count": 5,
+    "repetitions_per_operation": 5,
+    "fresh_process_per_sample": true,
+    "same_archive_all_operations": true,
+    "product_code_changed": false,
+    "release_thresholds_changed": false
+  },
+  "measurements": {
+    "session_open_median_wall_s": 0.000707653000006303,
+    "policy_verify_median_wall_s": 0.2608132409999939,
+    "session_open_fraction_of_policy_verify": 0.002713255651028544,
+    "stream_after_open_fraction_of_policy_verify": 0.9972867443489715,
+    "policy_verify_minus_open_s": 0.2601055879999876,
+    "median_physical_record_reads": 19,
+    "unique_physical_record_count": 19,
+    "physical_record_read_multiplicity": 1.0,
+    "max_physical_record_bytes": 1048576,
+    "max_logical_node_bytes": 524288
+  },
+  "decision": {
+    "hypothesis_metadata": "Session open, authenticated metadata and preflight validation are a material owner of G04 verify wall time.",
+    "verdict_metadata": "FALSIFIED_AS_DOMINANT_OWNER",
+    "hypothesis_cache": "Bounded record-cache churn causes repeated physical record decoding and materially owns the G04 verify regression.",
+    "verdict_cache": "FALSIFIED_ON_THIS_SUBSTRATE",
+    "reason": "Session open is only 0.27% of policy-verify median wall time. Full verification performs exactly 19 physical record reads for 19 unique records, multiplicity 1.00x. 99.73% of wall time remains after session open and is not explained by repeated physical-record reads.",
+    "retire": [
+      "Do not enlarge the record cache merely to chase this ML verification regression; no physical-record reread exists on the measured archive.",
+      "Do not optimize metadata/session opening as the primary runtime lane; addressable median headroom is below one millisecond here."
+    ],
+    "next_question": "Attribute the one-pass stream work among physical codec decode/inverse transforms, node reconstruction (delta/mosaic/direct), and integrity/tree hashing. Optimize only the measured owner while preserving exact integrity and locality semantics."
+  },
+  "scope": "One-workload research attribution only. It does not establish cache behavior for every G04 archive and grants no release credit."
+}

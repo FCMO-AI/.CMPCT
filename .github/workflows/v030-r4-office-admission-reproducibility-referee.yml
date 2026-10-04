@@ -1,0 +1,119 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 Office admission reproducibility referee
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_admission_reproducibility_referee.py'
+      - '.github/workflows/v030-r4-office-admission-reproducibility-referee.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-office-admission-repro-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env: {EVENT_NAME: '${{ github.event_name }}'}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo run_deep=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_r4_office_admission_reproducibility_referee\.py|\.github/workflows/v030-r4-office-admission-reproducibility-referee\.yml)$' /tmp/files; then echo run_deep=true >> "$GITHUB_OUTPUT"; else echo run_deep=false >> "$GITHUB_OUTPUT"; fi
+
+  admission-reproducibility-referee:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - run: python -m py_compile benchmarks/v030_r4_office_admission_reproducibility_referee.py
+      - name: Run two fresh-process admission builds
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_admission_reproducibility_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/repro-a-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/repro-a.json"
+          python benchmarks/v030_r4_office_admission_reproducibility_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/repro-b-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/repro-b.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          a=json.load(open('benchmark-artifacts/repro-a.json'))
+          b=json.load(open('benchmark-artifacts/repro-b.json'))
+          assert a['source_commit']==os.environ['EVIDENCE_HEAD']==b['source_commit']
+          assert a['hypothesis']['exact_tree'] and b['hypothesis']['exact_tree']
+          assert a['hypothesis']['all_eight_derived_views_preserved'] and b['hypothesis']['all_eight_derived_views_preserved']
+          same_sizes=a['component_bytes']==b['component_bytes']
+          same_hashes=a['component_sha256']==b['component_sha256']
+          same_total=a['stored_bytes']==b['stored_bytes']
+          out={
+            'schema':'cmpct-v030-r4-office-admission-reproducibility-hosted-v1',
+            'source_commit':os.environ['EVIDENCE_HEAD'],
+            'fresh_process_same_total':same_total,
+            'fresh_process_same_component_sizes':same_sizes,
+            'fresh_process_byte_identical_components':same_hashes,
+            'run_a':a,
+            'run_b':b,
+            'classification':(
+              'fresh-process-nondeterminism' if not (same_total and same_sizes and same_hashes)
+              else ('stable-receipt-drift' if not a['hypothesis']['matches_frozen_total'] else 'frozen-total-reproduced')
+            ),
+            'contract':{'diagnostic_only':True,'release_credit':False,'zero_byte_determinism_tolerance':True},
+          }
+          Path('benchmark-artifacts/v030-r4-office-admission-reproducibility.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print(json.dumps({k:out[k] for k in ['fresh_process_same_total','fresh_process_same_component_sizes','fresh_process_byte_identical_components','classification']},sort_keys=True))
+          if not (same_total and same_sizes and same_hashes):
+              raise SystemExit('fresh-process admission candidate is nondeterministic')
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-admission-reproducibility-referee.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-admission-reproducibility-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/repro-a.json
+            benchmark-artifacts/repro-b.json
+            benchmark-artifacts/v030-r4-office-admission-reproducibility.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green means deterministic attribution completed. It grants no locality or release credit.

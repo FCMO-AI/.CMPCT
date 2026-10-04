@@ -164,12 +164,17 @@ public final class CmpctAndroidSmokeTest {
         try (FileOutputStream out = new FileOutputStream(bad)) {
             out.write("PK-not-a-cmpct-archive".getBytes(StandardCharsets.UTF_8));
         }
+        int before = ArchiveRegistry.all(target).size();
         try {
             ArchiveRegistry.importArchive(target, Uri.fromFile(bad));
-            fail("bad magic must be rejected before native parsing");
+            fail("noncanonical bytes must be rejected by portable native authority");
         } catch (java.io.IOException expected) {
-            assertTrue(expected.getMessage().contains("CMPCT24"));
+            // ArchiveRegistry deliberately delegates format identity to cmpct-portable now. The exact native
+            // diagnostic is not API; the security contract is rejection before publication/registry mutation.
+            assertNotNull(expected.getMessage());
+            assertFalse(expected.getMessage().isEmpty());
         }
+        assertEquals("rejected bytes must not publish a DocumentsProvider root", before, ArchiveRegistry.all(target).size());
     }
 
     private static boolean resolvesToCmpct(PackageManager pm, Intent intent) {

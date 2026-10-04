@@ -1,0 +1,148 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 full G0-G4 overlay oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'benchmarks/geometry_overlay_v030_ml_oracle_v3.py'
+      - 'benchmarks/geometry_v030_generalization_bench.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_geometry.py'
+      - 'experiments/entropygraph_v030_hierarchical_geometry.py'
+      - 'experiments/entropygraph_v030_geometry_overlay.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_strict.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'tests/test_v030_geometry.py'
+      - 'tests/test_v030_hierarchical_geometry.py'
+      - 'tests/test_v030_geometry_overlay.py'
+      - 'tests/test_v030_geometry_overlay_prefallback.py'
+      - 'tests/test_v030_geometry_overlay_g04.py'
+      - '.github/workflows/v030-g04-overlay-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-g04-overlay-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  g04-overlay-ml:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out exact authoritative candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind checkout to exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install exact public-ML dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Run full Geometry composition and inherited transform tests
+        run: |
+          python -m pytest -q \
+            tests/test_v030_geometry.py \
+            tests/test_v030_hierarchical_geometry.py \
+            tests/test_v030_geometry_overlay.py \
+            tests/test_v030_geometry_overlay_prefallback.py \
+            tests/test_v030_geometry_overlay_g04.py
+
+      - name: Compile full G0-G4 integration modules
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_geometry.py \
+            experiments/entropygraph_v030_hierarchical_geometry.py \
+            experiments/entropygraph_v030_geometry_overlay.py \
+            experiments/entropygraph_v030_geometry_overlay_strict.py \
+            experiments/entropygraph_v030_geometry_overlay_g04.py \
+            benchmarks/geometry_overlay_v030_ml_oracle_v3.py
+
+      - name: Run exact historical full G0-G4 ML composition oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/geometry_overlay_v030_ml_oracle_v3.py \
+            --work-root benchmark-artifacts/geometry-overlay-v030-v3-work \
+            --output benchmark-artifacts/geometry-overlay-v030-ml-v3.json \
+            2>&1 | tee benchmark-artifacts/geometry-overlay-v030-v3.stdout.txt
+
+      - name: Enforce frozen V3 evidence and fail-closed promotion contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/geometry-overlay-v030-ml-v3.json').read_text())
+          result=data['result']; gate=data['gate']; contract=data['contract']
+          assert data['schema']=='cmpct-v030-geometry-overlay-ml-oracle-v3'
+          assert result['logical_tree_sha256']==contract['tree_sha256']
+          assert result['v029_bytes']==contract['accepted_v029_bytes']==13836439
+          assert result['candidate_bytes'] <= result['v029_bytes']
+          assert result['overlay_source_format'] in ('placement-v4','residual-pack-v5')
+          assert result['integration_order']=='attempt5-graph -> G0-G4-geometry-overlay -> accepted-v029-tournament'
+          assert result['selected']=='geometry-overlay-g04'
+          assert result['transformed_records'] > 0
+          assert result['hierarchical_audition_attempts'] > 0
+          assert result['hierarchical_screened_candidates'] >= 0
+          assert result['hierarchical_exact_finalists'] >= 0
+          assert result['hierarchical_exact_finalists'] <= result['hierarchical_screened_candidates']
+          assert result['max_selected_member_read_amplification'] <= contract['maximum_selected_member_read_amplification'] <= 8.0
+          assert result['selection_materialization']=='same-filesystem-atomic-move'
+          assert result['selection_extra_payload_write_bytes']==0
+          assert gate['hierarchical_search_exercised'] is True
+          assert gate['experiment_valid'] is True
+          assert gate['passed'] is True
+          assert gate['promotion_signal'] is gate['composition_breakthrough']
+          if gate['promotion_signal']:
+              assert result['saving_vs_v029_bytes'] >= contract['minimum_composition_saving_bytes'] >= 262144
+          else:
+              assert result['saving_vs_v029_bytes'] < contract['minimum_composition_saving_bytes']
+              print('VALID NEGATIVE EVIDENCE: full G0-G4 overlay remains below frozen promotion hurdle')
+          print(json.dumps({'result': result, 'gate': gate}, indent=2))
+          PY
+
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-overlay-oracle.yml
+
+      - name: Upload full G0-G4 overlay evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v030-g04-overlay-v3-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/geometry-overlay-v030-ml-v3.json
+            benchmark-artifacts/geometry-overlay-v030-v3.stdout.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Historical composition research only. Relevant semantic changes re-run it; unrelated integration commits do not.
+# Exact receipts are preserved rather than canceled. A measured miss remains valid negative evidence and grants no
+# promotion credit until the original >=256 KiB and <=8x constraints are met.

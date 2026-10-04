@@ -1,0 +1,128 @@
+# ci-lane: deep
+name: CMPCT v0.30 EG08 full-frontier effort policy
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v4.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v5.py'
+      - 'tests/test_v030_eg08_policy_full_frontier.py'
+      - 'experiments/entropygraph_v030_federated_*'
+      - '.github/workflows/v030-eg08-policy-full-frontier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-eg08-full-frontier-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  full-frontier-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install deterministic corpus and competitor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile search and execution surfaces
+        run: |
+          python -m py_compile \
+            benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_distill_v4.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_distill_v5.py
+
+      - name: Prove deeper generic search is exact over the bounded rule family
+        run: python -m pytest -q tests/test_v030_eg08_policy_full_frontier.py
+
+      - name: Run full-depth branch-and-bound office policy evidence
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from benchmarks import v030_federated_compact_framing_v8_policy_distill_v5 as B
+          out=Path('benchmark-artifacts/v030-eg08-policy-v5.json')
+          data=B.run(Path('benchmark-artifacts/v030-eg08-policy-v5-work'))
+          out.write_text(json.dumps(data, indent=2)+'\n')
+          print(json.dumps({
+              'selected_policy':data.get('selected_policy'),
+              'search_upgrade':data.get('search_upgrade'),
+              'measured_candidate':data.get('measured_candidate'),
+              'strict':data.get('strict'),
+          }, indent=2))
+          PY
+
+      - name: Independently preserve valid result and fail-closed promotion decision
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/v030-eg08-policy-v5.json').read_text())
+          upgrade=data['search_upgrade']; measured=data['measured_candidate']; strict=data['strict']
+          assert data['schema']=='cmpct-v030-eg08-policy-distillation-v5'
+          assert upgrade['predecessor']=='first-feasible-rule-depth'
+          assert upgrade['candidate']=='full-depth-branch-and-bound'
+          assert upgrade['max_rules']==4
+          assert strict['beats_accepted_v029_size'] is True
+          assert strict['beats_zip_size'] is True
+          assert strict['beats_zstd19_size'] is True
+          assert strict['within_release_locality_bounds'] is True
+          assert strict['content_identity_not_policy_input'] is True
+          assert strict['exact_size_projection'] is True
+          assert strict['exact_serial_parallel_archive_identity'] is True
+          assert strict['same_selected_level_vector'] is True
+          assert strict['rule_count_within_bound'] is True
+          assert measured['archive_bytes'] < data['accepted_v029_bytes']
+          assert measured['selected_high_effort_packs']==upgrade['selected_high_effort_packs']
+          assert upgrade['strictly_reduces_high_effort_pack_count'] is (
+              upgrade['selected_high_effort_packs'] < upgrade['predecessor_selected_high_effort_packs']
+          )
+          promotion_signal = upgrade['strictly_reduces_high_effort_pack_count'] and strict['passed']
+          if not upgrade['strictly_reduces_high_effort_pack_count']:
+              assert upgrade['selected_high_effort_packs'] >= upgrade['predecessor_selected_high_effort_packs']
+              assert promotion_signal is False
+          if promotion_signal:
+              assert strict['verified_create_beats_zip'] is True
+              assert strict['verified_create_beats_zstd19'] is True
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-eg08-policy-full-frontier.yml
+
+      - name: Upload full-frontier evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-full-frontier-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-eg08-policy-v5.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This four-hour-cap research lane records whether deeper bounded, content-identity-free search reduces office
+# effort. It now runs only when its branch-push dependency slice changes; valid negative evidence earns no release
+# credit, and final exact-candidate external/native/Android authority remains unchanged.

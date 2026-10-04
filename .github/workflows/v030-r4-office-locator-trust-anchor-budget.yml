@@ -1,0 +1,61 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Office locator trust-anchor budget
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_locator_trust_anchor_budget_referee.py'
+      - '.github/workflows/v030-r4-office-locator-trust-anchor-budget.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-office-locator-trust-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  trust-anchor-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11'}
+      - run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_locator_trust_anchor_budget_referee.py \
+            --output benchmark-artifacts/v030-r4-office-locator-trust-anchor-budget.json
+      - name: Assert receipt integrity, not scientific verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-locator-trust-anchor-budget.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['authority']['run_id']==34709794379
+          assert d['authority']['charged_cold_read_bytes']==32746
+          assert d['authority']['fixed_limit_bytes']==32768
+          assert d['authority']['existing_slack_bytes']==22
+          assert d['trust_anchor']['sha256_bytes']==32
+          assert d['trust_anchor']['stateless_cold_read_with_external_root_bytes']==32778
+          assert d['trust_anchor']['over_limit_bytes']==10
+          print(json.dumps(d,sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-locator-trust-anchor-budget.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-locator-trust-anchor-budget-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-locator-trust-anchor-budget.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green means receipt integrity; the JSON may correctly falsify the hypothesis.

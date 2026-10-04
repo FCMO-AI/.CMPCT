@@ -1,0 +1,206 @@
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 r25 manifest canonical integration
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'src/cmpct/**'
+      - 'benchmarks/v030_r25_manifest_canonical_integration_oracle.py'
+      - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_canonical_manifest_candidate.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'docs/FORMAT.md'
+      - 'tests/test_v030_r25_manifest_admission.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_rnd_domination_contract.py'
+      - '.github/workflows/v030-r25-manifest-canonical-integration.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/**'
+      - 'benchmarks/v030_r25_manifest_canonical_integration_oracle.py'
+      - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_canonical_manifest_candidate.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'docs/FORMAT.md'
+      - 'tests/test_v030_r25_manifest_admission.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_rnd_domination_contract.py'
+      - '.github/workflows/v030-r25-manifest-canonical-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-r25-manifest-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          # This list is intentionally the transitive evidence-critical closure of the oracle, not only the
+          # files edited by the original landing patch. A corpus/baseline/candidate dependency change must not
+          # inherit an older green receipt merely because the top-level oracle source stayed untouched.
+          if grep -Eq '^(src/cmpct/.*|benchmarks/(v030_r25_manifest_(canonical_integration|derived_identity)_oracle|v030_release_generalization|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|canonical_manifest_candidate|r25_manifest_admission|fs_implicit_v4|product_fs|release_candidate)\.py|docs/FORMAT\.md|tests/test_(v030_r25_manifest_admission|v030_fs_implicit_v4|v030_canonical_final|rnd_domination_contract)\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  canonical-integration:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    concurrency:
+      group: cmpct-v030-r25-manifest-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact landed candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Prove canonical source contains the landed admission seam
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          source=Path('experiments/entropygraph_v030_canonical_final_impl.py').read_text(encoding='utf-8')
+          assert 'entropygraph_v030_r25_manifest_admission as MANIFEST_ADMISSION' in source
+          assert 'MANIFEST_ADMISSION.prepare_profile_tree(' in source
+          assert 'MANIFEST_ADMISSION.decode_from_content_identities(' in source
+          fmt=Path('docs/FORMAT.md').read_text(encoding='utf-8')
+          assert '### 15.1 Admitted compact filesystem control (implicit-v4)' in fmt
+          PY
+          python -m py_compile \
+            experiments/entropygraph_v030_canonical_final.py \
+            experiments/entropygraph_v030_canonical_final_impl.py \
+            experiments/entropygraph_v030_profile_isolation.py \
+            experiments/entropygraph_v030_r25_manifest_admission.py \
+            experiments/entropygraph_v030_canonical_manifest_candidate.py \
+            benchmarks/v030_r25_manifest_canonical_integration_oracle.py
+      - name: Preserve canonical, hostile-control, product-floor and Forge contracts
+        run: |
+          python -m pytest -q \
+            tests/test_v030_r25_manifest_admission.py \
+            tests/test_v030_fs_implicit_v4.py \
+            tests/test_v030_canonical_final.py \
+            tests/test_rnd_domination_contract.py
+      - name: Re-run exact complete-r25 explicit-v1 versus landed implicit-v4 A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r25_manifest_canonical_integration_oracle.py \
+            --work-root "$RUNNER_TEMP/v030-r25-manifest-canonical" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r25-manifest-canonical.json"
+      - name: Enforce landed D5 authority without release credit
+        run: |
+          test -f benchmark-artifacts/v030-r25-manifest-canonical.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r25-manifest-canonical.json').read_text())
+          assert d['schema']=='cmpct-v030-r25-manifest-canonical-integration-oracle-v3'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['format_revision']==25 and d['baseline_format_revision']==25
+          assert d['canonical_candidate_set']=='canonical-r25-only-g04-prefixgraph-v1'
+          assert d['format_profile']==d['baseline_format_profile']
+          assert d['selected_manifest_encoding']=='implicit-v4'
+          assert d['control_saving_bytes'] >= 64*1024
+          assert d['baseline_archive_bytes'] > d['candidate_archive_bytes']
+          assert d['complete_artifact_saving_bytes']==d['baseline_archive_bytes']-d['candidate_archive_bytes']
+          assert d['complete_artifact_saving_bytes'] >= d['minimum_useful_archive_saving_bytes'] >= 16*1024
+          assert d['complete_artifact_promotion_signal'] is True
+          assert len(d['baseline_archive_sha256'])==64 and len(d['candidate_archive_sha256'])==64
+          assert d['baseline_archive_sha256'] != d['candidate_archive_sha256']
+          assert d['baseline_strong_verify_ok'] is True and d['baseline_strong_verify_tree_exact'] is True
+          assert d['graph_control_identity_exact'] is True
+          assert d['filesystem_v1_semantics_exact'] is True
+          assert d['source_tree_sha256']==d['validated_tree_sha256']
+          assert d['strong_verify_ok'] is True and d['strong_verify_tree_exact'] is True
+          assert d['within_locality_8x'] is True and d['control_read_amplification'] <= 8.0
+          assert d['release_credit'] is False
+          assert d['domination_audit']['diagnosis']=='D5'
+          assert d['domination_audit']['terminal_decision']=='PROMOTE_NEXT_PREREQUISITE'
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r25-manifest-canonical-integration.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact landed-seam evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r25-manifest-canonical-integration-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r25-manifest-canonical.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Read-only S6 authority after the canonical Python seam landed. Recovery/native/Android/all-15 authority remain
+# separate mandatory prerequisites and no result from this lane alone can grant release credit. Classifier routing is
+# cancellable by PR/ref while the 90-minute exact receipt is kept in a distinct exact-SHA non-cancelling job group;
+# this preserves useful result-bearing work without accumulating one queued classifier per long-lived-PR commit.

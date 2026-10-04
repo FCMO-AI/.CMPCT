@@ -1,0 +1,95 @@
+name: CMPCT v0.30 G04 physical record decode attribution
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - experiments/v030_g04_record_decode_attribution.py
+      - .github/workflows/v030-g04-record-decode-attribution.yml
+      - experiments/entropygraph_v030_release_product.py
+      - experiments/entropygraph_v030_release_product_base.py
+      - experiments/entropygraph_v030_canonical_final.py
+      - experiments/entropygraph_v030_canonical_final_impl.py
+      - experiments/entropygraph_v030_release_reader_policy.py
+      - experiments/entropygraph_v030_release_reader.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  record-decode-attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and codec dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile attribution oracle
+        run: python -m py_compile experiments/v030_g04_record_decode_attribution.py
+      - name: Run G04 physical record decode attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_g04_record_decode_attribution.py \
+            --work-root "$RUNNER_TEMP/v030-g04-record-decode" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/g04-record-decode.json"
+      - name: Validate evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('benchmark-artifacts/g04-record-decode.json')
+          assert p.is_file(), 'oracle did not publish evidence'
+          d = json.loads(p.read_text())
+          assert d['engine'] == 'v030-g04-record-decode-attribution-v1'
+          assert d['status'] == 'PASS', d.get('error')
+          assert d['evidence_class'] == 'research-oracle-instrumented'
+          assert d['product_release_credit'] is False
+          c = d['contract']
+          assert c['suite'] == 'neutral_hostile_v1'
+          assert c['workload'] == '09_ml_artifacts'
+          assert c['v030_selected'] == 'g04-overlay'
+          assert c['fresh_process_per_sample'] is True
+          assert c['same_archive_all_samples'] is True
+          assert c['classification_after_measured_interval'] is True
+          assert c['instrumentation_only'] is True
+          assert c['product_code_changed'] is False
+          assert c['release_thresholds_changed'] is False
+          assert len(d['samples']) == 3
+          cmp = d['comparison']
+          assert cmp['physical_record_reads'] == cmp['record_count']
+          assert cmp['median_record_miss_calls'] == cmp['physical_record_reads']
+          assert cmp['median_record_hit_calls'] >= 0
+          assert cmp['median_record_miss_wall_s'] >= 0
+          assert cmp['median_record_hit_wall_s'] >= 0
+          assert cmp['by_codec']
+          assert cmp['by_transform']
+          assert cmp['by_codec_transform']
+          PY
+      - name: Upload physical-record evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-record-decode-${{ github.sha }}
+          path: benchmark-artifacts/g04-record-decode.json
+          if-no-files-found: error
+          retention-days: 90

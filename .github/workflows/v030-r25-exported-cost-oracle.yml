@@ -1,0 +1,78 @@
+# ci-lane: research-oracle
+name: CMPCT v0.30 r25 exported cost oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'experiments/v030_r25_exported_cost_oracle.py'
+      - '.github/workflows/v030-r25-exported-cost-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  r25-exported-cost:
+    runs-on: ubuntu-latest
+    timeout-minutes: 420
+    concurrency:
+      group: cmpct-v030-r25-exported-cost-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and codec dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile experiments/v030_r25_exported_cost_oracle.py
+      - name: Run exact 15-workload r25 exported-cost attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_r25_exported_cost_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r25-exported-cost-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r25-exported-cost.json"
+      - name: Validate evidence contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/r25-exported-cost.json')
+          assert p.is_file(), 'oracle did not publish evidence'
+          d=json.loads(p.read_text())
+          assert d['engine']=='v030-r25-exported-cost-oracle-v1'
+          assert d['evidence_class']=='research-oracle'
+          assert d['product_release_credit'] is False
+          assert d['contract']['workloads']==15
+          assert d['contract']['accepted_v029_aggregate_bytes']==137499525
+          assert d['contract']['release_thresholds_unchanged'] is True
+          assert d['contract']['product_selector_unchanged'] is True
+          assert d['contract']['product_grammar_unchanged'] is True
+          assert len(d['rows'])==15
+          assert d['totals']['accepted_v029_bytes']==137499525
+          PY
+      - name: Upload oracle evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r25-exported-cost-${{ github.sha }}
+          path: benchmark-artifacts/r25-exported-cost.json
+          if-no-files-found: error
+          retention-days: 90

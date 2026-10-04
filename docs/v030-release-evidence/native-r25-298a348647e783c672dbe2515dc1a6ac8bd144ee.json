@@ -1,0 +1,21 @@
+{
+  "schema": "cmpct-v030-native-authority-evidence-v1",
+  "candidate_sha": "298a348647e783c672dbe2515dc1a6ac8bd144ee",
+  "candidate_fingerprint": "8abe67c6c9a93e72eeed61dba13cfc990c21652c43749dfa36d213b658c8358e",
+  "workflow": "v030-native-authority.yml",
+  "run_id": 33769742355,
+  "run_attempt": 1,
+  "facts": {
+    "g04_native_parity": true,
+    "prefixgraph_native_parity": true,
+    "logs_inverse_native_parity": true,
+    "logs_inverse_recovery_green": true,
+    "logs_inverse_filesystem_semantics_green": true,
+    "builder_independent_goldens": true,
+    "native_recovery_green": true,
+    "implicit_v4_native_parity": true,
+    "implicit_v4_recovery_green": true,
+    "r24_fallback_native_verify_green": true,
+    "shared_core_used": true
+  }
+}

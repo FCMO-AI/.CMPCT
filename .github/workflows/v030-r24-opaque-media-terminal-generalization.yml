@@ -1,0 +1,142 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 r24 opaque-media terminal generalization
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_opaque_media_terminal_oracle.py'
+      - 'benchmarks/v030_r24_opaque_media_terminal_generalization.py'
+      - 'benchmarks/v030_r24_opaque_media_terminal_generalization_v2.py'
+      - 'experiments/entropygraph_v030_r24_media_terminal.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'tests/test_v030_r24_media_terminal_shipping.py'
+      - 'tests/test_v030_media_precollected_semantics.py'
+      - '.github/workflows/v030-r24-opaque-media-terminal-generalization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-opaque-media-gen-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r24_opaque_media_terminal_(oracle|generalization|generalization_v2)\.py|experiments/entropygraph_v030_(r24_media_terminal|release_product)\.py|tests/test_v030_(r24_media_terminal_shipping|media_precollected_semantics)\.py|\.github/workflows/v030-r24-opaque-media-terminal-generalization\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect this oracle; skipping expensive replay.'
+          fi
+
+  opaque-media-generalization:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile promotion and adversarial proofs
+        run: |
+          python -m py_compile experiments/entropygraph_v030_r24_media_terminal.py
+          python -m py_compile experiments/entropygraph_v030_release_product.py
+          python -m py_compile benchmarks/v030_r24_opaque_media_terminal_generalization.py
+          python -m py_compile benchmarks/v030_r24_opaque_media_terminal_generalization_v2.py
+          python -m py_compile tests/test_v030_media_precollected_semantics.py
+      - name: Bind promoted shipping selector and precollected semantics
+        run: |
+          python -m pytest -q \
+            tests/test_v030_r24_media_terminal_shipping.py \
+            tests/test_v030_media_precollected_semantics.py
+      - name: Preserve v1 counterexample evidence
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_opaque_media_terminal_generalization.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-generalization-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-generalization.json"
+      - name: Run entropy-refined unseen admission
+        run: |
+          python benchmarks/v030_r24_opaque_media_terminal_generalization_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-generalization-v2-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-generalization-v2.json"
+      - name: Enforce promotion evidence
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          v1=json.loads(Path('benchmark-artifacts/v030-opaque-media-generalization.json').read_text())
+          assert v1['schema']=='cmpct-v030-r24-opaque-media-terminal-generalization-v1'
+          assert v1['summary']['cases'] == 7
+          assert 'compressible-media-impostor' in v1['summary']['counterexamples']
+          v2=json.loads(Path('benchmark-artifacts/v030-opaque-media-generalization-v2.json').read_text())
+          assert v2['schema']=='cmpct-v030-r24-opaque-media-terminal-generalization-v2-entropy'
+          assert v2['summary']['cases'] == 7
+          assert v2['summary']['promotion_signal'] is True
+          assert v2['summary']['counterexamples'] == []
+          assert all(v2['summary']['expected_rejections'].values())
+          assert all(v2['summary']['expected_admissions'].values())
+          for row in v2['rows']:
+              if row['eligible']:
+                  assert row['gate']['passed'] is True
+                  assert row['complete_create_s'] >= row['predicate_s']
+          Path('benchmark-artifacts/v030-r24-opaque-media-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-opaque-media-terminal-generalization.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-opaque-media-generalization-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-opaque-media-generalization.json
+            benchmark-artifacts/v030-opaque-media-generalization-v2.json
+            benchmark-artifacts/v030-r24-opaque-media-candidate.txt
+          if-no-files-found: error
+          retention-days: 90

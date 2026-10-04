@@ -1,0 +1,91 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Office exact subfile anchor A/B
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_office_subfile_anchor_abba.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - '.github/workflows/v030-office-subfile-anchor-abba.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-office-subfile-anchor-abba-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  abba:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact search oracle
+        run: python -m py_compile benchmarks/v030_office_subfile_anchor_abba.py
+      - name: Run rotated exact-position A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_office_subfile_anchor_abba \
+            --work-root "$RUNNER_TEMP/v030-office-subfile-anchor" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-office-subfile-anchor.json"
+      - name: Ratchet exact-search evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-office-subfile-anchor.json').read_text())
+          assert d['schema']=='cmpct-v030-office-subfile-anchor-abba-v1'
+          c=d['contract']
+          assert c['rounds']==41 and c['anchor_bytes']==32
+          assert c['minimum_absolute_saving_s']==0.003
+          assert c['minimum_relative_saving']==0.20
+          assert c['exact_first_match_positions_required'] is True
+          assert c['adversarial_identity_required'] is True
+          assert c['workload_identity_used_by_candidate'] is False
+          assert d['eligible_pair_count'] > 0
+          assert d['identity']['frozen_pair_positions_exact'] is True
+          assert d['identity']['adversarial_positions_exact'] is True
+          assert d['experiment_valid'] is True
+          expected=(d['delta']['saving_s'] >= c['minimum_absolute_saving_s'] and d['delta']['saving_ratio'] >= c['minimum_relative_saving'])
+          assert d['promotion_signal'] is expected
+          assert d['release_credit'] is False
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-office-subfile-anchor-abba.yml
+      - name: Upload exact-head research evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-office-subfile-anchor-abba-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-office-subfile-anchor.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only exact-search evidence. Product integration still requires full graph/archive byte identity and
+# frozen/unseen generalization; no workload-specific splice disable is authorized by this lane.

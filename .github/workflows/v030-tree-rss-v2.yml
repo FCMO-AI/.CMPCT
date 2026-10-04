@@ -1,0 +1,146 @@
+# ci-lane: release
+name: CMPCT v0.30 whole-tree RSS v2
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - "benchmarks/v030_tree_rss_external_v2.py"
+      - "docs/v030-rnd/R25_PROMOTED_RUNTIME_TREE_RSS_V1_RESULT.md"
+      - "docs/v030-rnd/R25_PROMOTED_RUNTIME_TREE_RSS_V2_PREREG.md"
+      - ".github/workflows/v030-tree-rss-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-tree-rss-v2-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  external-tree-rss-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install exact corpus and benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile frozen v2 measurement surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_product.py \
+            experiments/entropygraph_v030_prefixgraph_process_executor.py \
+            benchmarks/v030_perf_worker.py \
+            benchmarks/v030_perf_worker_canonical.py \
+            benchmarks/v030_release_performance.py \
+            benchmarks/v030_release_performance_product.py \
+            benchmarks/v030_tree_rss_external_v2.py
+
+      - name: Prove caller-relative PrefixGraph child path transport
+        run: python -m pytest -q tests/test_v030_prefixgraph_process_executor_paths.py
+
+      - name: Run frozen external whole-process-tree RSS v2
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/v030_tree_rss_external_v2.py \
+            --work-root benchmark-artifacts/v030-tree-rss-external-v2-work \
+            --output benchmark-artifacts/v030-tree-rss-external-v2.json \
+            2>&1 | tee benchmark-artifacts/v030-tree-rss-external-v2.stdout.txt
+
+      - name: Independently enforce frozen v2 memory custody
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path("benchmark-artifacts/v030-tree-rss-external-v2.json")
+          assert p.is_file(), "v2 whole-tree RSS evidence missing"
+          data = json.loads(p.read_text())
+          assert data["schema"] == "cmpct-v030-release-performance-tree-rss-v2"
+          assert data["engine"] == "experiments/entropygraph_v030_release_product.py"
+          assert data["release_facade"] == "cmpct-v030-release-product-v1"
+          assert data["worker"] == "benchmarks/v030_perf_worker_canonical.py"
+          assert data["rss_accounting"] == "external-parent-whole-process-tree-vmrss-10ms-with-worker-rumaxrss-floor"
+          tree = data["tree_rss_contract"]
+          assert tree["child_memory_gifted"] is False
+          assert tree["timing_decision_credit"] is False
+          assert tree["release_credit"] is False
+          assert tree["peak_rss_threshold_changed"] is False
+          assert data["contract"]["maximum_peak_rss_ratio"] == 1.25
+
+          receipts = data["tree_rss_receipts"]
+          assert len(receipts) == 36
+          for receipt in receipts:
+              assert receipt["decisive_peak_rss_kib"] >= receipt["worker_peak_rss_kib"]
+              assert receipt["decisive_peak_rss_kib"] >= receipt["sampled_tree_peak_rss_kib"]
+              assert receipt["tree_rss_samples"] >= 1
+              assert receipt["tree_sampler_errors"] == []
+
+          gate = data["memory_gate"]
+          assert gate["exact_target_count"] is True
+          assert gate["stable_historical_baseline_identity"] is True
+          assert gate["stable_product_identity"] is True
+          assert gate["all_tree_receipts_present"] is True
+          assert gate["sampler_error_free"] is True
+          assert data["terminal_decision"] in {
+              "WHOLE_TREE_RSS_PRODUCT_MATRIX_SUPPORTED",
+              "WHOLE_TREE_RSS_PRODUCT_DEBT_REMAINS",
+          }
+          if data["terminal_decision"] == "WHOLE_TREE_RSS_PRODUCT_MATRIX_SUPPORTED":
+              assert gate["peak_rss_ratio"] is True
+              assert gate["passed"] is True
+          else:
+              assert gate["peak_rss_ratio"] is False
+              assert gate["passed"] is False
+          print(json.dumps({
+              "candidate_fingerprint": data["candidate_fingerprint"],
+              "totals": data["totals"],
+              "memory_gate": gate,
+              "terminal_decision": data["terminal_decision"],
+              "descriptive_timing": data["descriptive_timing"],
+          }, indent=2))
+          PY
+
+      - name: Upload frozen v2 whole-tree RSS evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v030-tree-rss-v2-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-tree-rss-external-v2.json
+            benchmark-artifacts/v030-tree-rss-external-v2.stdout.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# v1 remains immutable after result-bearing execution. This superseding lane moves only the
+# observer out of the measured worker so memory can be decided without sharing the worker GIL.
+# Timing is descriptive here and remains owned by the independent promoted-product runtime job.

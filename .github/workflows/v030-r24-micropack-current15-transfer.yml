@@ -1,0 +1,138 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 current15 micropack transfer
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r24_micropack_current15_transfer.py'
+      - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - 'benchmarks/v030_r25_membership_complete_artifact_referee.py'
+      - 'docs/V030_R24_MICROPACK_CURRENT15_TRANSFER_2026-09-12.md'
+      - '.github/workflows/v030-r24-micropack-current15-transfer.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_micropack_current15_transfer.py'
+      - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - 'benchmarks/v030_r25_membership_complete_artifact_referee.py'
+      - 'docs/V030_R24_MICROPACK_CURRENT15_TRANSFER_2026-09-12.md'
+      - '.github/workflows/v030-r24-micropack-current15-transfer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v030-current15-micropack-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_r24_micropack_current15_transfer\.py|benchmarks/v030_r24_micropack_same_grammar_attribution\.py|benchmarks/v030_r24_locality_derived_micropack_referee\.py|benchmarks/v030_r25_membership_complete_artifact_referee\.py|docs/V030_R24_MICROPACK_CURRENT15_TRANSFER_2026-09-12\.md|\.github/workflows/v030-r24-micropack-current15-transfer\.yml)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  current15-transfer:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_r24_micropack_current15_transfer.py benchmarks/v030_r24_micropack_same_grammar_attribution.py benchmarks/v030_r24_locality_derived_micropack_referee.py benchmarks/v030_r25_membership_complete_artifact_referee.py
+      - name: Execute current-fingerprint transfer referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_micropack_current15_transfer.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-current15-micropack-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-current15-micropack.json"
+      - name: Enforce receipt integrity, not scientific victory
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-current15-micropack.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-micropack-current15-transfer-v2'
+          assert d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert len(d['identities']) == 15
+          assert len(d['corpus_fingerprint']) == 64
+          assert d['completed_workloads'] + len(d['execution_errors']) == 15
+          assert d['experiment_valid'] is (len(d['execution_errors']) == 0)
+          assert d['verdict'] in {
+              'CURRENT15_MICROPACK_GENERALIZES',
+              'CURRENT15_MICROPACK_NEEDS_ECONOMIC_ADMISSION',
+              'RETIRE_CURRENT15_MICROPACK_TRANSFER',
+              'CURRENT15_MICROPACK_EXECUTION_BLOCKED',
+          }
+          PY
+      - name: Expose decisive current15 summary
+        id: receipt
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-current15-micropack.json').read_text())
+          a=d['aggregate']
+          short={
+              'CURRENT15_MICROPACK_GENERALIZES':'generalizes',
+              'CURRENT15_MICROPACK_NEEDS_ECONOMIC_ADMISSION':'needs-admission',
+              'RETIRE_CURRENT15_MICROPACK_TRANSFER':'retire',
+              'CURRENT15_MICROPACK_EXECUTION_BLOCKED':'blocked',
+          }[d['verdict']]
+          print(f"artifact_name=v030-current15-{short}-done{d['completed_workloads']}-delta{a['delta_bytes']}-wins{a['grouped_wins']}-fails{a['economic_failures']}-exec{a['execution_failures']}-{d['corpus_fingerprint'][:12]}")
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r24-micropack-current15-transfer.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ${{ steps.receipt.outputs.artifact_name || 'v030-current15-no-summary' }}-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-current15-micropack.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only. Current-fingerprint evidence is never a frozen Genesis rescore.
+# Keep shared physical/membership helpers in the exact-head trigger surface: a repair
+# to the mechanism must invalidate and rerun this transfer rather than leaving stale evidence.

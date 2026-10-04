@@ -1,0 +1,180 @@
+# T02 — Authoritative evidence / performance / competitor matrix
+
+- **Owner:** v0.30 sole executor
+- **Priority:** P0
+- **State:** CLAIMED
+- **Branch:** `agent/v030-authoritative-integration`
+- **Dependencies:** final authority must run on the exact reconciled product candidate after T01/T03 behavior is final.
+
+## Objective
+
+Turn v0.30 from promising mechanism evidence into exact release evidence without lowering any threshold, mixing independent savings, or treating pre-product/pre-fingerprint runs as release authority.
+
+## Selective-read measurement contract
+
+Earlier review found two measurement defects that must remain fixed:
+
+1. locality may not be derived from a missing flattened build statistic with a `0.0x` default;
+2. genuine r24 fallback supports the canonical public `read_member` operation and therefore must be measured rather than called “not applicable.”
+
+Required invariant:
+
+- derive normative locality from the **actual member operation's returned stats** and cross-check archive/build declarations when present;
+- missing locality/accounting data on an r25 member read is a hard evidence failure;
+- measure the canonical product member API for both r24 and r25;
+- choose the largest regular user-visible member, excluding internal manifests and alias-only entries;
+- preserve exact member SHA/length, fresh-process timing, raw RSS, and <=8x decoded-context accounting;
+- keep contract tests proving omitted locality cannot default to a passing value and r24 fallback reaches a true member-read operation.
+
+Footnote: a build-time declaration is corroboration, not a substitute for observing the operation the release claim is about.
+
+## Ablation / benchmark semantics contract
+
+Earlier review found a historical-vs-product semantic mismatch in the causal ablation harness. The repaired design must remain separated into two ledgers:
+
+1. **Frozen research-frontier causality:** preserve the accepted repair-v6 15-workload source trees and exact accepted-v0.29 identity `137,499,525 B`; run v0.29 / Geometry / PrefixGraph / combined under those historical content-tree semantics so the immutable threshold remains comparable. The superseded pre-repair aggregate `137,501,815 B` remains historical provenance only and is not an accepted current baseline.
+2. **Canonical product parity:** compare genuine canonical v0.29/r24 product bytes against canonical v0.30 product bytes on the same original filesystem trees, including r25 filesystem-manifest semantics and genuine r24 fallback.
+
+A manifest-charged causal ablation is allowed only if every variant uses the same prepared tree and identical metadata charge. It must be labeled as a new causal substrate and may not claim reproduction of the historical baseline unless it actually does.
+
+Combined exact-minimum assertions may compare only complete artifacts with equivalent semantics. Independent research savings must never be added together as if they were a product result.
+
+Preserve the frozen >=687,783 B, >=3 improved, zero-regression, and <=8x gates on their accepted substrate. Add stricter product parity rather than moving those goalposts.
+
+Footnote: r25 is allowed to pay a genuine new filesystem framing cost. Benchmark honesty requires charging it; historical v0.29 bytes may not be retroactively redefined to make that cost disappear.
+
+## CI-topology contract
+
+The v0.30 workflow set must satisfy current repository topology policy:
+
+- mechanism/oracle experiments are `deep`;
+- final compression/runtime/native/external evidence is `release`;
+- `fast` is reserved for genuinely ordinary PR feedback;
+- deep/release PR-triggered workflows use meaningful path scope or a cleaner branch/dispatch trigger;
+- concurrency cancellation and every numeric threshold remain unchanged;
+- run `python tools/check_ci_topology.py` over the complete active v0.30 workflow set before final handoff.
+
+An earlier repair classified the coordinator-listed workflow set and fixed the first missing-lane failures. Final evidence must use the current exact branch state; old topology greens are not enough if workflows changed afterward.
+
+## Scope
+
+- repaired exact 15-workload generalization suite;
+- v0.29 / Geometry-only / PrefixGraph-only / combined complete-artifact ablations;
+- canonical r24-vs-r25 product parity;
+- shared-build rehabilitation and duplicate-work accounting;
+- controlled create/extract/selective-read/peak-RSS measurements;
+- external competitor matrix: ZIP/Deflate, 7z/LZMA2, solid tar+Zstd-19, ZPAQ m5 where available;
+- exact-tree extraction verification for every credited competitor;
+- CI routing/evidence artifact harvesting for the current exact candidate;
+- durable accepted records under `benchmarks/history/` only after gates are genuinely satisfied.
+
+## Frozen gates
+
+Do not weaken:
+
+- accepted v0.29 aggregate identity;
+- >=687,783 B aggregate saving;
+- >=3 improved rows;
+- 0 byte-regressed rows;
+- <=8x selected per-member decoded-context amplification;
+- shared-build >=20% and >=5 s rehabilitation hurdle where defined;
+- runtime ratios/noise policy already frozen by release gate;
+- symmetric benchmark semantics and exact-tree verification.
+
+## Preferred implementation area
+
+Prefer `benchmarks/v030_*`, v0.30 benchmark tests, release/deep workflows, and durable evidence records after acceptance. Because one executor owns the release, implementation bugs exposed by benchmark evidence may be fixed directly in the owning product/native code; the benchmark threshold or workload semantics must not be changed to hide the defect.
+
+## Completion evidence
+
+1. Current candidate reproduces every frozen input tree and exact historical v0.29 bytes.
+2. Complete candidate aggregate passes frozen compression/locality gates.
+3. Genuine canonical product r25 never exceeds genuine r24 on the same original filesystem tree; exact ties retain r24.
+4. Controlled repeated runtime/RSS gate passes or preserves explicit regression debt with exact failing rows.
+5. External competitor matrix verifies extraction semantics before crediting archive size and preserves every fair loss.
+6. CI artifacts/runs are tied to the exact reconciled candidate fingerprint/SHA; queued/cancelled/superseded runs are not counted.
+7. Accepted results are committed durably with raw measurements/provenance sufficient to regenerate public claims.
+8. Historical causality and canonical product parity remain visibly separate; neither silently substitutes for the other.
+9. Selective-read locality comes from observed member operations, with no missing-field default that can pass a normative gate.
+10. Current v0.30 workflow topology checker is green without weakened thresholds.
+
+## Failure behavior
+
+If a gate fails, preserve the machine result and keep T02 `CLAIMED` while fixing the underlying release defect, or document explicit breakthrough regression debt when repository policy permits rehabilitation. Never tune the workload, timing boundary, threshold, or comparator to turn red into green.
+
+## Prior implementation checkpoint retained as provenance
+
+Earlier work repaired the three review blockers above:
+
+- `benchmarks/v030_perf_worker_canonical.py` instruments the actual canonical public `read_member` call in the same fresh process and reports observed decode context for Geometry, PrefixGraph, and genuine r24 fallback;
+- `benchmarks/v030_release_selective_read_canonical.py` measures selected canonical product profiles, chooses the largest regular user-visible member, excludes internal r25 manifest/alias kinds, verifies exact SHA/length, preserves wall/RSS measurements, and enforces the unchanged <=8x law;
+- `benchmarks/v030_release_ablation_canonical.py` emits separate `historical_causality` and `canonical_product_parity` ledgers with substrate identities and rejects cross-substrate exact-min arithmetic;
+- the v0.30 workflows were classified for CI topology and the topology checker was added to the evidence path.
+
+Earlier lineage included commit `2ff883ea41f2c70fb3cd7151de5be7639f4069b5` and integration ancestor `f6a273bbb1e49e21096a1cc875eff35a8e3c1110`. Those SHAs are mechanism provenance only. Final product parity, selective-read, runtime, competitor, and topology authority must be rerun on the exact frozen authoritative candidate.
+
+## Superseded exact-fingerprint gap ledger — 2026-09-03
+
+The prior release-critical fingerprint `8abe67c6c9a93e72eeed61dba13cfc990c21652c43749dfa36d213b658c8358e` remains historical provenance only. The authoritative generalization workflow itself later required a release-critical Custody correction, so receipts from this older fingerprint may not authorize the current candidate.
+
+## Current exact-fingerprint release gap ledger — 2026-09-04
+
+The authoritative generalization custody repair at commit `2b67c94c5277699fdfa42b2e09651fa640b0552c` changed a fingerprinted workflow without changing any benchmark, threshold, corpus, locality rule, timing envelope or product-selection law. The current release-critical fingerprint is now:
+
+`c119dbae83a8eae6d09dbf48e764a4bc9679452cef4381cb031dc3444ecfbc69`
+
+The coordination/evidence/receipt commits that followed are intentionally outside fingerprint scope; they do not mutate candidate bytes or this fingerprint.
+
+Current-fingerprint T01 evidence has been regenerated rather than rebound from history:
+
+- native authority run `33871978882`, exact source `631216979c01627a8a3bc2bc598327c4f065e6ca`, emitted `c119dbae...fbc69` and passed canonical Python/Rust boundaries, builder-independent goldens, native/implicit-v4 recovery, r24 fallback strong verification, Logs native parity/semantics and shared-core use;
+- ZIP portability run `33871978857`, the same exact source and fingerprint, passed stock ZIP tree parity, r24 fallback export, G04 export, PrefixGraph export and atomic publication;
+- both strict JSON artifacts are now persisted under `docs/v030-release-evidence/` and the `native-r25` / `zip-portability` receipts bind their exact evidence hashes to `c119dbae...fbc69`.
+
+Those wins do **not** close T02 and do not make T01 DONE; Android/physical-platform evidence is still separate.
+
+The required T02 closure set remains exactly:
+
+- `compression-generalization`: accepted-v0.29 `137,499,525 B`, saving >=`687,783 B`, >=3 improved, 0 regressions, <=8x selected-member amplification, exact tree and v0.29-row identity;
+- `shared-build-rehab`: byte-identical, >=20% and >=5 s wall improvement, one attempt-5 graph build;
+- `runtime-memory-selective`: median create/extract <=1.10x, max workload create/extract <=1.25x, peak RSS <=1.25x, selective read actually measured;
+- `external-competitors`: exact-tree/symmetric-semantics/hostile-frontier/fair-loss facts plus strict no-tie wins over ZIP and Zstd-19 in size and create on every required workload;
+- `ci-topology`: all v0.30 workflows classified, topology checker green, thresholds unchanged.
+
+On the T01 coordination-only source delta, the push-side authoritative-generalization run `33871978793` passed only its impact classifier and deliberately skipped the result-bearing `release-generalization` job. Runtime/RSS run `33871978831` likewise skipped both result-bearing jobs, and hostile mutation run `33871978866` skipped `release-fuzz`. These classifier greens are not receipts. Obtain deliberate result-bearing current-fingerprint runs through existing dispatch/control surfaces; do not change release-critical source or thresholds merely to wake CI.
+
+Move T02 to `DONE` only after every release-lock evidence obligation above is durably closed on `c119dbae...fbc69`.
+
+## Exact-head authority-v2 checkpoint — 2026-09-14
+
+PR #56 head `ea7f62c40b5d14331bf27d0caf11dd2cd9e9a21c` produced a fresh `CMPCT v0.30 authoritative v2` run (`34919975890`). The exact-head classifier and fast correctness/safety lane passed. The 15-workload `authority-generalization` job also completed green under the unchanged frozen contract. This is direct new evidence that the current candidate still satisfies the compression/generalization side of authority-v2 after the latest fingerprinted workflow change.
+
+The same exact-head run remains **red overall** because `authority-runtime` failed. Its prerequisites passed, but the promoted-product runtime gate failed; the unchanged-policy enforcement failed; the whole-process-tree RSS companion ran and also failed its unchanged-policy enforcement. The runtime artifact was still uploaded as `v030-authority-v2-runtime-ea7f62c40b5d14331bf27d0caf11dd2cd9e9a21c` (artifact `10377997083`, digest `sha256:944681087bdd9b0a83cd6e39d61ed2d93cb834fe2257d5836c66ac178658f321`) so the red evidence is preserved rather than narrated away. The green generalization artifact is `10377889404`, digest `sha256:8d967da29d81ca96ea3e0442c7c54c8194ad8ba249f089e9dd9d07bbf7dd6b52`.
+
+No runtime ratio is inferred from job status alone. The next highest-value T02 action is to inspect the preserved runtime JSON, identify the exact failing create/extract/RSS rows and selected profiles, then attack the measured owner without changing the 1.10 / 1.25 ceilings, workload semantics, timing boundary, or RSS custody. Until that artifact-level diagnosis is complete and a repaired exact-head run is green, `runtime-memory-selective` remains open and v0.30 remains release/merge locked.
+
+## Artifact-level runtime diagnosis — 2026-09-15
+
+The preserved authority-v2 runtime artifact `10377997083` has now been inspected directly rather than inferred from CI status. It contains both the original process-local RSS record (`runtime-v2.json`) and the whole-process-tree RSS companion (`runtime-tree-rss.json`). The companion changes the causal picture materially:
+
+- **Shifted:** create `1.0585x`, extract `0.9101x`, pack RSS `0.9538x`; runtime/RSS are within the frozen per-row limits.
+- **Logs:** create `0.00854x`, extract `1.3342x`, pack RSS `0.6295x`; the real release debt is extraction latency, not creation or whole-tree memory.
+- **ML artifacts:** create `1.4162x`, extract `2.0339x`, pack RSS `0.7297x`; this row independently violates both create and extract limits while whole-tree memory is comfortably below the cap.
+- Whole-tree maximum RSS is `1.0x`, so the earlier process-local `2.1099x` RSS red is a measurement-boundary artifact rather than evidence of a product memory regression. The tree-RSS companion correctly passes the unchanged `1.25x` memory law.
+- Aggregate timing still fails honestly: median create `1.0585x` passes, but max create `1.4162x` fails; median extract `1.3342x` and max extract `2.0339x` both fail. No size regression occurred on these three rows.
+
+This narrows the next product work to two concrete owners: the ML canonical build/extract path first because it violates two independent runtime dimensions, then Logs extraction. Do **not** spend effort optimizing Shifted or memory merely because the older wrapper made RSS look red. The next decisive experiment should retain the exact current candidate and separately attribute ML pack and extract time by selected representation/phase, with an r24 exact-fallback control, so the fix targets duplicated/redundant work rather than tuning a threshold or abandoning the byte gain.
+
+## Exact-head runtime checkpoint — 2026-09-16
+
+PR #56 head `841001d56560fd9ab3437411146ecd71fa6632ec` produced authoritative-v2 run `35120236724` on the exact source. The generalization job remained green and the runtime prerequisites remained green, so the candidate still preserves the compression-side authority while the performance debt is isolated rather than hidden.
+
+The promoted-product runtime gate remains red under the unchanged release ceilings. The exact measured totals were: median create `1.236662x`, maximum workload create `1.465388x`, median extract `1.360355x`, maximum workload extract `1.421556x`, and process-local peak RSS `2.088606x`. The whole-process-tree companion independently measured median create `1.124377x`, maximum workload create `1.376937x`, median extract `1.359862x`, maximum workload extract `1.450878x`, and maximum peak RSS `1.0x`. Thus whole-tree memory is again exonerated, while both create and extract remain genuine release blockers. No size regression was observed in either runtime ledger.
+
+This head also contains the corrected ML shipping-route diagnostic assertion (`benchmarks/v030_g04_ml_shipping_extract_profile.py`): the canonical product reports `g04-overlay` directly as the selected shipping route, rather than an outer `r25` label. That correction is diagnostic only and earns no release credit. The next highest-leverage action remains to obtain and inspect the exact-head ML shipping-vs-r24 profile/counterfactual receipt, then remove the measured duplicated/redundant work in the shipping G04 path while preserving its bytes and exact semantics. Do not spend effort on RSS or weaken the 1.10/1.25 timing ceilings.
+
+## Delimiter-inverse falsification — 2026-09-16
+
+A same-archive causal attempt to replace the shipping G04 delimiter inverse with the reviewed guarded-banded inverse has now been decisively rejected and durably preserved. Workflow run `35034826327` / artifact `10422747226` produced nine control and nine candidate extraction samples on identical product bytes: control median `0.16170011799999884 s`, candidate median `0.2428096749999895 s`, candidate/control `1.5016048102079385x`. The candidate was therefore about **50.16% slower**, failing the inherited +15% promotion signal by a wide margin. The exact raw receipt is preserved under `docs/v030-coordination/evidence/raw/` with its original JSON SHA-256 and Actions artifact digest.
+
+This kills the simple “swap delimiter inverse implementation” route for the current mechanism: do not reopen it without changed causal evidence. It does not weaken the broader ML runtime diagnosis. The next decisive lane remains the exact shipping-front-door vs r24 extraction profile, followed by a control that isolates duplicated product-front-door/reconstruction work rather than changing the delimiter transform itself. Any fix must preserve exact archive bytes/semantics or re-enter the full compression authority if bytes change.

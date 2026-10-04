@@ -1,0 +1,158 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 logs native dispatch
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
+      - 'benchmarks/v030_logs_inverse_edge_oracle.py'
+      - 'tests/test_v030_logs_inverse_native_safe.py'
+      - 'native/cmpct-portable/Cargo.toml'
+      - 'native/cmpct-portable/src/lib.rs'
+      - 'native/cmpct-portable/src/logs.rs'
+      - 'native/cmpct-portable/src/logs_public.rs'
+      - 'native/cmpct-portable/src/logs_preparity_tests.rs'
+      - 'native/cmpct-portable/src/logs_semantic_tests.rs'
+      - 'native/cmpct-portable/src/identity.rs'
+      - '.github/workflows/v030-logs-native-preparity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# This lane owns three normative native-r25 receipt facts. Exact-SHA concurrency preserves a queued/running proof
+# instead of allowing a later integration commit to evict evidence before it can be harvested.
+concurrency:
+  group: cmpct-v030-logs-native-dispatch-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v030_logs_inverse_profile[^/]*\.py|benchmarks/v030_logs_inverse_edge_oracle\.py|tests/test_v030_logs_inverse_native_safe\.py|native/cmpct-portable/Cargo\.toml|native/cmpct-portable/src/(lib|logs|logs_public|logs_preparity_tests|logs_semantic_tests|identity)\.rs|\.github/workflows/v030-logs-native-preparity\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect native logs dispatch parity.'
+          fi
+
+  logs-native-dispatch:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install deterministic Python dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Prove canonical writer emits only native-supported inverse codecs
+        run: python -m pytest -q tests/test_v030_logs_inverse_native_safe.py
+
+      - name: Rust formatting, production dispatch, filesystem and recovery tests
+        working-directory: native/cmpct-portable
+        run: |
+          cargo fmt --check
+          cargo test --lib logs -- --nocapture
+
+      - name: Independently ratchet production dispatch identity
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          library=Path('native/cmpct-portable/src/lib.rs').read_text()
+          assert 'LOGS_INVERSE_MAGIC' in library
+          assert 'LogsInverse {' in library
+          assert 'Profile::LogsInverse' in library
+          assert 'LogsPublicView::new' in library
+          assert 'mod logs;' in library
+          assert 'mod logs_public;' in library
+          PY
+
+      - name: Emit fingerprint-bound native Logs receipt evidence
+        run: |
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
+          python - <<'PY'
+          import json, os, pathlib, subprocess
+          temp=pathlib.Path(os.environ['RUNNER_TEMP'])
+          fingerprint=json.loads((temp/'cmpct-v030-fingerprint.json').read_text())['candidate_fingerprint']
+          evidence={
+              'schema':'cmpct-v030-logs-native-evidence-v1',
+              'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+              'candidate_fingerprint':fingerprint,
+              'workflow':'v030-logs-native-preparity.yml',
+              'run_id':int(os.environ['GITHUB_RUN_ID']),
+              'run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'facts':{
+                  'logs_inverse_native_parity':True,
+                  'logs_inverse_recovery_green':True,
+                  'logs_inverse_filesystem_semantics_green':True,
+              },
+          }
+          out=temp/'cmpct-v030-logs-native-evidence.json'
+          out.write_text(json.dumps(evidence, indent=2)+'\n')
+          print(json.dumps(evidence, indent=2))
+          PY
+
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-native-preparity.yml
+
+      - name: Upload exact native-dispatch receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-native-dispatch-${{ env.EVIDENCE_HEAD }}
+          path: ${{ runner.temp }}/cmpct-v030-logs-native-evidence.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Native Logs is a production portable-dispatch profile, not a shadow parser. This lane exercises the real
+# PortableArchive path and the same C-ABI surface consumed by Android/JNI while retaining exact SHA-256, <=8x
+# member-read amplification, <=8 MiB decode context, filesystem semantics, primary/tail recovery, gzip+zstd inverse
+# codecs and fail-closed corruption behavior. The structured artifact claims only the three native-r25 facts directly
+# established here; generic G04/PrefixGraph/shared-core facts remain owned by v030-native-authority.

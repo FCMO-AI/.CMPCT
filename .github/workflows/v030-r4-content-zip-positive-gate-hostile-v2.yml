@@ -1,0 +1,96 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 tiny-positive ZIP hostile
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_content_zip_positive_gate_hostile_v2.py'
+      - 'benchmarks/v030_r4_content_zip_correlation_gate_v2.py'
+      - 'experiments/v030_r4_content_zip_builder.py'
+      - '.github/workflows/v030-r4-content-zip-positive-gate-hostile-v2.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_content_zip_positive_gate_hostile_v2.py'
+      - 'benchmarks/v030_r4_content_zip_correlation_gate_v2.py'
+      - 'experiments/v030_r4_content_zip_builder.py'
+      - '.github/workflows/v030-r4-content-zip-positive-gate-hostile-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-tiny-positive-zip-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_content_zip_(positive_gate_hostile_v2|correlation_gate_v2)\.py|experiments/v030_r4_content_zip_builder\.py|\.github/workflows/v030-r4-content-zip-positive-gate-hostile-v2\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  hostile:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e .
+      - run: python -m py_compile benchmarks/v030_r4_content_zip_positive_gate_hostile_v2.py benchmarks/v030_r4_content_zip_correlation_gate_v2.py
+      - name: Run tiny-positive economic hostile
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_content_zip_positive_gate_hostile_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-positive-gate-hostile-v2-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-positive-gate-hostile-v2.json"
+      - name: Enforce receipt contract only
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-positive-gate-hostile-v2.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-content-zip-positive-gate-hostile-v2'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['contract']['diagnostic_only'] and not d['contract']['release_credit']
+          assert d['contract']['green_ci_is_not_scientific_success']
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-content-zip-positive-gate-hostile-v2.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-tiny-positive-zip-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-positive-gate-hostile-v2.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Red hypothesis is a valid causal result; green means receipt integrity only.
