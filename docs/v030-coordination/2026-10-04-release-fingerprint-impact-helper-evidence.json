@@ -1,0 +1,39 @@
+{
+  "schema": "cmpct-v030-release-fingerprint-impact-helper-evidence-v1",
+  "recorded_at": "2026-10-04",
+  "owner_branch": "agent/phased3-release-fingerprint-custody-hardened",
+  "helper": {
+    "path": "tools/release_fingerprint_impact.py",
+    "blob_sha": "4a54fc2d7cf5862b0f2be2928ff3a6c6c5fec89d",
+    "commit_sha": "284c21fe7df7ed297fddbf6c56394a75ddb44246"
+  },
+  "question": "Can final-release custody mechanically detect accumulated base->head changes on the exact release-lock fingerprint surface without duplicating a workflow regex?",
+  "evidence": {
+    "synthetic_git_cases": 8,
+    "result": "8/8 pass",
+    "cases": [
+      "fingerprinted product change remains visible after irrelevant follow-up",
+      "v030 workflow edit detected",
+      "nonfingerprinted docs-only change ignored",
+      "fingerprinted deletion detected",
+      "release-lock manifest edit detected",
+      "new fingerprinted source detected",
+      "rename out of fingerprint surface detected",
+      "rename into fingerprint surface detected"
+    ],
+    "local_helper_sha256": "b1f2eb0f3d71738ef8725146db91d6db0daa5303d43b621367159341324e8968"
+  },
+  "current_exact_head_falsifier": {
+    "authority_head": "cd2886bda7580a56e1efab8132b0b9477c52bd55",
+    "final_release_run": 37216753479,
+    "observation": "latest-head classifier green; substantive release jobs skipped while accumulated main->authority candidate includes paths matching strict .github/workflows/v030-*.yml fingerprint glob"
+  },
+  "decision": "ADVANCE_DUAL_SCOPE_CUSTODY. Use accumulated manifest-derived fingerprint impact for cheap custody routing while retaining newest-commit scope for expensive product evidence. The strict release-lock checker remains final fingerprint/receipt authority.",
+  "kill_or_narrow": [
+    "helper misses any add/edit/delete/rename crossing the release fingerprint surface",
+    "integration requires cumulative heavy product reruns rather than separate cheap custody",
+    "CI topology cannot preserve exact-source receipt semantics under the split"
+  ],
+  "claim_boundary": "Evidence-enablement/custody routing only. No product, release, benchmark, or promotion credit.",
+  "release_credit": false
+}
