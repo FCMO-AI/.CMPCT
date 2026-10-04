@@ -7,63 +7,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'src/cmpct/**'
-      - 'experiments/entropygraph_v029_release.py'
-      - 'experiments/entropygraph_v030_release.py'
-      - 'experiments/entropygraph_v030_release_product.py'
-      - 'experiments/entropygraph_v030_release_product_base.py'
-      - 'experiments/entropygraph_v030_verified_restore.py'
-      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
-      - 'experiments/entropygraph_v030_r24_dead_dictionary.py'
-      - 'experiments/entropygraph_v030_r24_media_terminal.py'
-      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
-      - 'experiments/entropygraph_v030_release_lock_strict.py'
-      - 'experiments/entropygraph_v030_canonical_final.py'
-      - 'experiments/entropygraph_v030_canonical_final_impl.py'
-      - 'experiments/entropygraph_v030_profile_isolation.py'
-      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
-      - 'experiments/entropygraph_v030_prefixgraph.py'
-      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
-      - 'experiments/entropygraph_v030_release_reader.py'
-      - 'experiments/entropygraph_v030_product_fs.py'
-      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
-      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
-      - 'experiments/entropygraph_v030_release_admission.py'
-      - 'experiments/entropygraph_v030_release_candidate.py'
-      - 'experiments/entropygraph_v030_release_reader_policy.py'
-      - 'experiments/entropygraph_v030_shared_portfolio.py'
-      - 'benchmarks/v030_release_ablation_product.py'
-      - 'benchmarks/v030_release_ablation_canonical.py'
-      - 'benchmarks/v030_release_generalization.py'
-      - 'benchmarks/v030_release_performance.py'
-      - 'benchmarks/v030_release_performance_product.py'
-      - 'benchmarks/v030_release_selective_read_canonical.py'
-      - 'benchmarks/v030_release_selective_read_product.py'
-      - 'benchmarks/v030_perf_worker_canonical.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - 'benchmarks/v030_external_competitors_canonical.py'
-      - 'benchmarks/mosaic_v029_generalization_bench.py'
-      - 'benchmarks/neutral_hostile_corpus_v1.py'
-      - 'benchmarks/resemblance_hostile_corpus_v1.py'
-      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
-      - 'docs/FORMAT.md'
-      - 'docs/V030_RELEASE_LOCK.json'
-      - 'tests/test_v030_canonical_final.py'
-      - 'tests/test_v030_profile_isolation.py'
-      - 'tests/test_v030_r25_manifest_admission.py'
-      - 'tests/test_v030_fs_implicit_v4.py'
-      - 'tests/test_v030_release_ablation_contract.py'
-      - 'tests/test_v030_release_selective_read_contract.py'
-      - 'tests/test_v030_release_generalization_contract.py'
-      - 'tests/test_v030_release_lock.py'
-      - 'tests/test_v030_release_lock_strict.py'
-      - 'tests/test_v030_final_release_custody.py'
-      - 'tools/check_v030_release_lock.py'
-      - 'tools/check_public_surface.py'
-      - 'tools/check_ci_topology.py'
-      - 'pyproject.toml'
-      - '.github/workflows/v030-final-release-authority.yml'
   workflow_dispatch:
 
 permissions:
@@ -82,33 +25,91 @@ jobs:
       cancel-in-progress: true
     outputs:
       run_release: ${{ steps.scope.outputs.run_release }}
+      run_custody: ${{ steps.scope.outputs.run_custody }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Bind exact head and classify final-release impact
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo 'run_release=true' >> "$GITHUB_OUTPUT"
+            echo 'run_custody=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          # Candidate-identity custody is accumulated over the effective PR candidate and derives its
+          # path surface mechanically from the strict release-lock manifest. This deliberately differs
+          # from the newest-commit product classifier below: a cleanup commit may be product-neutral
+          # while the candidate still differs from base on release-fingerprinted bytes.
+          python - <<'PY' > /tmp/release-custody-paths.txt
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          manifest = json.loads(Path("docs/V030_RELEASE_LOCK.json").read_text(encoding="utf-8"))
+          patterns = manifest["fingerprint_globs"]
+          if not isinstance(patterns, list) or not patterns:
+              raise SystemExit("release lock has no fingerprint surface")
+          pathspecs = []
+          for pattern in patterns:
+              if not isinstance(pattern, str) or not pattern:
+                  raise SystemExit("invalid release fingerprint glob")
+              pathspecs.append(f":(glob){pattern}")
+          proc = subprocess.run(
+              ["git", "diff", "--name-only", "-z", os.environ["PR_BASE"], "HEAD", "--", *pathspecs],
+              check=True,
+              capture_output=True,
+          )
+          for rel in sorted({row for row in proc.stdout.decode("utf-8").split("\0") if row}):
+              print(rel)
+          PY
+          cat /tmp/release-custody-paths.txt
+          if [ -s /tmp/release-custody-paths.txt ]; then
+            echo 'run_custody=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_custody=false' >> "$GITHUB_OUTPUT"
+          fi
+
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          # This is the transitive evidence-critical closure of the final authority, not merely its top-level
-          # entry points. Changes to corpus identity, historical floors, canonical dependencies, core r24 I/O,
-          # release-lock law, contract tests, or evidence tooling must not inherit an older green receipt.
+          # Expensive product evidence remains newest-exact-commit scoped. Candidate custody above is
+          # accumulated separately, so an irrelevant follow-up cannot hide an earlier fingerprint change.
           if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v029_release\.py|experiments/entropygraph_v030_(release|release_product|release_product_base|verified_restore|release_product_logs_candidate|r24_dead_dictionary|r24_media_terminal|r24_compact_control_profile|release_lock_strict|canonical_final|canonical_final_impl|profile_isolation|geometry_overlay_g04|prefixgraph|prefixgraph_parallel|release_reader|product_fs|r25_manifest_admission|fs_implicit_v4|release_admission|release_candidate|release_reader_policy|shared_portfolio)\.py|benchmarks/(v030_release_ablation_(product|canonical)|v030_release_generalization|v030_release_performance|v030_release_performance_product|v030_release_selective_read_(canonical|product)|v030_perf_worker_canonical|v030_external_competitors|v030_external_competitors_canonical|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|docs/(FORMAT\.md|V030_RELEASE_LOCK\.json)|tests/test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4|release_ablation_contract|release_selective_read_contract|release_generalization_contract|release_lock|release_lock_strict|final_release_custody)\.py|tools/(check_v030_release_lock|check_public_surface|check_ci_topology)\.py|pyproject\.toml|\.github/workflows/v030-final-release-authority\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_release=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_release=false' >> "$GITHUB_OUTPUT"
-            echo 'Accumulated PR paths matched, but newest exact commit cannot affect final-release authority.'
+            echo 'Newest exact commit is product-evidence neutral; accumulated custody is classified independently.'
           fi
+
+  release-custody:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_custody == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: cmpct-v030-final-custody-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Expose strict release custody for accumulated candidate identity
+        run: python tools/check_v030_release_lock.py --json
 
   contracts:
     needs: latest-head-impact
