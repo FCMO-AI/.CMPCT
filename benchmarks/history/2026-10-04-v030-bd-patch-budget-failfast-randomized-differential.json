@@ -1,0 +1,32 @@
+{
+  "schema": "cmpct-v030-bd-patch-budget-failfast-randomized-differential-v1",
+  "recorded_at": "2026-10-04",
+  "authority": "cd2886bda7580a56e1efab8132b0b9477c52bd55",
+  "owner_branch": "agent/phased1-bd-patch-budget-failfast",
+  "base_evidence_commit": "c190bb75d40609304201b729dc83b222677fd3c6",
+  "question": "Does incremental enforcement of the monotone bounded-drift shared patch cap preserve accepted precompression state and rejection semantics beyond the frozen resemblance fixtures?",
+  "method": {
+    "seed": "0xf411fa57",
+    "trials": 800,
+    "family": "random mixed exact/insert/replace/delete/unrelated byte members",
+    "member_count_range": "2..21",
+    "member_size_range_bytes": "256..4095 base plus bounded mutations",
+    "artificial_patch_caps_bytes": [64,128,256,512,1024,2048,4096,8192,16384,32768],
+    "historical_arm": "construct every canonical edit program, concatenate all patch bytes, then apply the cap",
+    "candidate_arm": "construct canonical edit programs in the same order and reject immediately when the next program would cross the cap"
+  },
+  "result": {
+    "mismatches": 0,
+    "accepted_trials": 273,
+    "rejected_trials": 527,
+    "rejected_trials_with_saved_program_calls": 494,
+    "median_program_calls_saved_on_reject": 8,
+    "max_program_calls_saved_on_reject": 19,
+    "accepted_state_compared": "base bytes + concatenated patch bytes + ordered logical-size/offset/program-length/SHA table",
+    "rejection_compared": "accept-vs-reject verdict under identical cap"
+  },
+  "decision": "GENERIC_DIFFERENTIAL_SURVIVES. Together with the monotonicity derivation and exact resemblance transfer, this supports implementing the fail-fast cap check without changing accepted representation bytes.",
+  "claim_boundary": "Randomized lower-rung differential only. Artificial caps are used to exercise the invariant densely; no hosted timing, canonical product, format, merge or release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
