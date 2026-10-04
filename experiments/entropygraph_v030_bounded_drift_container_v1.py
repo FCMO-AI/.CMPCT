@@ -77,17 +77,20 @@ def encode_container(members: list[bytes]) -> bytes:
     # caller ordering and names cannot affect physical bytes.
     ordered = sorted(members, key=lambda data: (hashlib.sha256(data).digest(), data))
     base = BD.select_base(ordered)
-    programs = [BD.encode_program(base, member) for member in ordered]
 
     patch = bytearray()
     entries: list[MemberEntry] = []
-    for program in programs:
+    for member in ordered:
+        program = BD.encode_program(base, member)
+        # The shared patch budget is a hard representation invariant. Patch length is monotone,
+        # so once the next canonical program would exceed the cap, no later program can make
+        # this container valid again. Reject here instead of paying for provably useless work.
+        if len(patch) + len(program.raw) > MAX_CONTEXT_BYTES:
+            raise ValueError("bounded-drift shared edit context exceeds decode-unit limit")
         offset = len(patch)
         patch.extend(program.raw)
         entries.append(MemberEntry(program.logical_size, offset, len(program.raw), program.sha256))
     patch_raw = bytes(patch)
-    if len(patch_raw) > MAX_CONTEXT_BYTES:
-        raise ValueError("bounded-drift shared edit context exceeds decode-unit limit")
 
     base_stored = _compress(base)
     patch_stored = _compress(patch_raw)
