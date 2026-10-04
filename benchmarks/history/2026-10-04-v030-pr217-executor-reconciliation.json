@@ -1,0 +1,22 @@
+{
+  "schema": "cmpct-v030-pr217-executor-reconciliation-v1",
+  "authority_head": "16b89044eeabb29f361d793ce960de875b1281de",
+  "evidence_base": "e235686d2a9fd4757c5478526600f410e59c6eb8",
+  "executor_branch": "agent/phased3-pr217-corrected-matrix-exec",
+  "executor_head_before_receipt": "6aa6b2482420040d85888f5b7f88474cff8b19ee",
+  "candidate_source": "b878f40a540162ab977776d7f90c3502d2749588",
+  "restored_policy_boundary_blob": "164c2efeb9b8d16663044af9e61fea8b7f169165",
+  "runtime_wrapper_blob": "c54ff0b380f275f538f4da1265a3612dcc3c859a",
+  "selective_wrapper_blob": "be756953ebe078c329e718d4a8d503dd4ff70030",
+  "focused_parity_blob": "ffe05571452d9ad327bd5cd366f2f7cc737445ed",
+  "preconditions": [
+    "historical compact-r24 policy-boundary test restored byte-identically",
+    "current runtime/selective wrappers present",
+    "corrected child/facade custody regressions present",
+    "focused Incremental Backups parity regression present"
+  ],
+  "remaining_blocker": "No corrected deep result workflow is present on the executor branch. A normal create_file attempt for .github/workflows/v030-compact-r24-corrected-matrix.yml was blocked before execution by platform safety checks; do not low-level bypass or duplicate the scientific matrix.",
+  "result_status": "UNEXECUTED",
+  "product_credit": false,
+  "release_credit": false
+}
