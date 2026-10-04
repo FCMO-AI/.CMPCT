@@ -1,0 +1,37 @@
+{
+  "schema": "cmpct-v030-bd-coordered-generic-fs-hostile-materialization-v1",
+  "recorded_at": "2026-10-04",
+  "authority": "cd2886bda7580a56e1efab8132b0b9477c52bd55",
+  "owner_branch": "agent/phased3-bd-pg-selected-row-hosted",
+  "question": "Does sequential coordered regular-member ownership remain exact when the filesystem grammar contains duplicate regular content, a hardlink alias, a symlink, and a directory?",
+  "construction": {
+    "entries": 6,
+    "regular_members": 3,
+    "cases": [
+      "two distinct regular inodes with byte-identical content",
+      "hardlink alias to first deterministic regular owner",
+      "relative symlink",
+      "directory metadata",
+      "distinct regular mode metadata"
+    ],
+    "member_order": "same stable (sha256(content), content) order as CMPNXBD2 over deterministic regular_sources input",
+    "nonregular_ownership": "nonregular manifest rows consume no BDC slot"
+  },
+  "result": {
+    "complete_materialized_bytes": 652,
+    "semantic_and_metadata_equal": true,
+    "hardlink_relation_preserved": true,
+    "duplicate_content_remains_distinct_inode": true,
+    "symlink_target_preserved": "d/b.bin",
+    "corruption_rejected": true
+  },
+  "decision": "GENERIC_BINDING_SURVIVES. Duplicate content does not make sequential coordered ownership ambiguous because Python's stable content sort preserves the deterministic regular_sources order for equal keys; hardlinks/nonregular rows consume no member slot and restore exactly in this hostile.",
+  "remaining_debt": [
+    "execute the same representation using repository Python zstandard rather than the independent system-Zstd reproducer",
+    "run same-source Shifted+Boundary bytes/create/locality in a durable hosted court",
+    "native/recovery/canonical grammar remain unearned"
+  ],
+  "claim_boundary": "Independent generic-filesystem hostile reproduction only. No product or release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
