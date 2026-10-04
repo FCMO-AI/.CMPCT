@@ -1,0 +1,22 @@
+{
+  "schema": "cmpct-v030-release-fingerprint-impact-integration-bonk-v1",
+  "recorded_at": "2026-10-04",
+  "owner_branch": "agent/phased3-release-fingerprint-custody-hardened",
+  "observation": {
+    "release_lock_blob": "cb66609746f1f056a6f41173831f7faf58182939",
+    "helper_path": "tools/release_fingerprint_impact.py",
+    "helper_blob": "4a54fc2d7cf5862b0f2be2928ff3a6c6c5fec89d",
+    "helper_is_in_fingerprint_surface": false,
+    "checker_path": "tools/check_v030_release_lock.py",
+    "checker_is_in_fingerprint_surface": true
+  },
+  "bonk": [
+    "Do not integrate final-release authority by importing the standalone helper while that helper is outside V030_RELEASE_LOCK fingerprint_globs.",
+    "Otherwise a later helper-only change could alter custody routing without changing the candidate fingerprint that receipts bind.",
+    "Prefer subsuming the accumulated base->head path-impact function into fingerprinted tools/check_v030_release_lock.py; adding a new helper path to V030_RELEASE_LOCK is a valid but higher-carrying-cost alternative."
+  ],
+  "attempted_repair": "A minimal update to subsume the function into tools/check_v030_release_lock.py was attempted once and blocked before execution by platform safety checks.",
+  "decision": "NARROW_HELPER_TO_EVIDENCE_SEED. The standalone helper proves the mechanism but is not itself safe as the final workflow dependency until fingerprint custody includes its semantics. Next writable integration should put the function in the already-fingerprinted release-lock checker, then wire dual-scope workflow custody to that checker.",
+  "claim_boundary": "CI/evidence-custody design only; no release/product credit.",
+  "release_credit": false
+}
