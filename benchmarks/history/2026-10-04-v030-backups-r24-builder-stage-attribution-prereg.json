@@ -1,0 +1,53 @@
+{
+  "schema": "cmpct-v030-backups-r24-builder-stage-attribution-prereg-v1",
+  "authority_head": "16b89044eeabb29f361d793ce960de875b1281de",
+  "product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+  "question": "On the exact accepted Incremental Backups source, which non-overlapping promoted-r24 construction stages own the 231.835710 ms child-create deficit versus ZIP, and is any one current stage large enough that eliminating/reusing it could close the deficit?",
+  "baseline": {
+    "label": "neutral_hostile_v1/06_incremental_backups",
+    "tree_sha256": "a823728d98e5882542645e3ab0f777894479cfb3de4dedcec14341fedbb11a05",
+    "logical_bytes": 14006619,
+    "current_cmpct_bytes": 8081603,
+    "current_complete_cmpct_create_s": 26.724440145,
+    "current_r24_create_s": 0.5801893840000503,
+    "zip_deflate9_bytes": 11157382,
+    "zip_deflate9_create_s": 0.34835367400000905,
+    "zstd19_bytes": 8384906,
+    "zstd19_create_s": 1.7454984260000332,
+    "r24_minus_zip_gap_s": 0.23183571000004122,
+    "source": "exact-current external artifact 11185290175 / current fingerprint 6f298e1636ba42176b250f607be82159dd58b37626c1c8624d7d6ce4c75a6f8f"
+  },
+  "current_pipeline": [
+    "release-only _regular_user_shape prewalk",
+    "Builder.scan including deferred nested-container recipe work",
+    "Builder._build_micro_packs",
+    "Builder._prepare_deflate_reuse",
+    "Builder._train_dictionary",
+    "ordered_worker_pull over _encode_candidate",
+    "remaining Builder serialization/materialization",
+    "release dead-dictionary post-pass",
+    "remaining promoted-wrapper overhead"
+  ],
+  "instrument": {
+    "repetitions_per_side": 7,
+    "source": "exact repaired neutral-hostile generation + accepted-tree guard + external normalization",
+    "build": "experiments.entropygraph_v030_release_product._locality_bounded_r24_build",
+    "pairing": "alternate instrumented/control order",
+    "timing": "wrap only named current functions; use ordered_worker_pull wall as encoding critical-path wall rather than summing concurrent per-candidate CPU",
+    "residuals": "derive Builder residual and promoted-wrapper residual only from non-overlapping direct stage walls",
+    "identity_gate": "all instrumented/control outputs must have identical archive bytes/SHA-256 and release policy facts"
+  },
+  "existing_controls": [
+    "The historical source-shape prewalk attribution/gifted-control family remains separately unexecuted and cannot be treated as a result.",
+    "Run109 exact nested-ZIP micro shows first-member Deflate-level reuse can eliminate 74.61% of exact recompressions locally, but its ~88.8 ms local CPU signal is insufficient by itself to explain the 231.8 ms hosted r24-vs-ZIP wall gap.",
+    "Historical R40/R41 Builder scheduling evidence is retained as a different scheduler family; do not attribute its small gains to stage elimination."
+  ],
+  "prediction": "Nested-container scan/recipe work is expected to be material because the accepted Backup tree contains snapshot_2.zip with 192 Deflated members, but the experiment is deliberately stage-agnostic and may instead localize compression, scan metadata, serialization, or wrapper overhead.",
+  "decision_law": {
+    "owner_large_enough": "If one measured stage median is at least the full current 231.835710 ms ZIP gap, it can own the next exact elimination/reuse hypothesis, subject to a separate A/B proving that wall is actually removable.",
+    "mixed_debt": "If no single stage explains the full gap, do not threshold-garden a small stage. Search a composition only when causal coexistence is established, otherwise reopen representation/execution architecture.",
+    "instrumentation_invalid": "If instrumented/control physical archive identity or release policy facts differ, or timing wrappers materially perturb total wall without a stable correction, the attribution is invalid."
+  },
+  "promotion_boundary": "Research attribution only. Stage wall is not eliminable wall. No product/release credit without exact same-input candidate A/B, complete semantics, external controls and unchanged gates.",
+  "release_credit": false
+}
