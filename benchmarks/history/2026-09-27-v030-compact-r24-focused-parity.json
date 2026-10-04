@@ -1,0 +1,58 @@
+{
+  "schema": "cmpct-v030-compact-r24-focused-parity-v1",
+  "source_sha": "9d9418b7152373421e5f47d5d38970bfc76e2b1c",
+  "branch": "agent/v030-r24-compact-source-replication",
+  "claim_boundary": "focused accepted Incremental Backups complete-r24 same-run byte non-regression under corrected nested-child custody; no full-matrix, runtime, portability, external-frontier, merge or release credit",
+  "question": "Does the correctly bound compact-r24 nested child produce a complete revision-24 archive no larger than genuine r24 on the original deterministic Incremental Backups blocker?",
+  "accepted_source": {
+    "workload": "neutral_hostile_v1/06_incremental_backups",
+    "content_tree_sha256": "a823728d98e5882542645e3ab0f777894479cfb3de4dedcec14341fedbb11a05",
+    "files": 769,
+    "logical_bytes": 14006619
+  },
+  "execution": {
+    "workflow_run": 36377793220,
+    "job": 108787085414,
+    "workflow": "CMPCT tests",
+    "pytest": "789 passed in 370.85s",
+    "artifact": {
+      "id": 10951498702,
+      "name": "pytest-9d9418b7152373421e5f47d5d38970bfc76e2b1c",
+      "digest": "sha256:b9a13c3ba94c7e20bd50920feee3d7349efbf094e4c7f4080c66051eba49b143"
+    },
+    "test": "tests/test_v030_compact_r24_incremental_backups_parity.py",
+    "canonical_worker": "experiments.entropygraph_v030_r24_process_prebuild",
+    "candidate_worker": "experiments.entropygraph_v030_r24_compact_candidate_prebuild",
+    "isolation": "genuine and candidate arms run in separate fresh parent interpreters; each R24PrebuildProcess launches the actual nested byte-owning child",
+    "verification": "both archives strong-verify as revision 24 and reconstruct the same current user-tree identity"
+  },
+  "candidate_policy": {
+    "candidate": "v030-compact-r24-release-policy-v1",
+    "deflate_reuse_min_bytes": 65536,
+    "build_reported_deflate_reuse_min_bytes": 65536,
+    "micro_pack_max_file_release_bytes": 262144,
+    "builder_text_ext_is_release_view": true,
+    "medium_binary_packing": false,
+    "hints_equal_original": true,
+    "medium_terminal_disabled": true
+  },
+  "result": {
+    "candidate_bytes_lte_same_run_genuine_bytes": true,
+    "exact_candidate_bytes": null,
+    "exact_genuine_bytes": null,
+    "note": "passing pytest does not persist the two archive byte values; do not infer an absolute historical count"
+  },
+  "decision": "Focused disproof is green. Restore/use the historical fresh-process candidate launcher and run exactly one unchanged 15-row compression/product-parity matrix. Any deterministic product-row byte loss retires compact-r24 without threshold/workload/comparator gardening.",
+  "next_gate": {
+    "harness": "benchmarks/v030_release_ablation_product.py",
+    "launcher": "tools/run_v030_compact_candidate.py",
+    "accepted_v029_bytes": 137499525,
+    "historical_workloads_regressed": 0,
+    "historical_workloads_improved_min": 3,
+    "historical_saving_vs_v029_bytes_min": 687783,
+    "max_selected_member_read_amplification_max": 8,
+    "product_regressions": [],
+    "historical_rows": 15,
+    "product_rows": 15
+  }
+}
