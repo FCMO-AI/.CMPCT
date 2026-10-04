@@ -1,0 +1,80 @@
+{
+  "schema": "cmpct-v030-bd-patch-budget-failfast-oracle-v1",
+  "recorded_at": "2026-10-04",
+  "authority": "cd2886bda7580a56e1efab8132b0b9477c52bd55",
+  "owner_branch": "agent/phased1-bd-patch-budget-failfast",
+  "base_head": "3860d6fd491cc25cbc2ffca839cc5f29a7080eb5",
+  "source_blobs": {
+    "bounded_drift_container": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "bounded_drift_primitive_pr215": "0f3975c49186b2173b182ad8e7d8f938b9b2439a",
+    "resemblance_generator": "335169bd6eb336b6d444cfbd34c291101262c3a9"
+  },
+  "question": "Can the bounded-drift container stop constructing edit programs immediately when the canonical shared patch context first exceeds the frozen 8 MiB limit, without changing any accepted container byte or rejection semantics?",
+  "mechanism": "Replace the eager programs=[encode_program(...)] list with the same canonical content-order loop, append each program in order, and raise the existing 'bounded-drift shared edit context exceeds decode-unit limit' error immediately when len(patch)+len(program.raw) would exceed MAX_CONTEXT_BYTES. Accepted rows execute every same program in the same order and serialize the same entries/patch bytes; rejected rows can stop after the first irreversible context overflow.",
+  "exactness_argument": [
+    "MAX_CONTEXT_BYTES is a hard decoded-context representation limit; patch length is monotone under canonical program concatenation.",
+    "Once cumulative patch bytes plus the just-built next canonical program exceed MAX_CONTEXT_BYTES, no remaining member can reduce the patch; the historical implementation must reject the same candidate after constructing all programs.",
+    "For every accepted candidate, no early condition fires, so program order, program bytes, offsets, entry metadata, compressed contexts and final physical bytes remain unchanged.",
+    "The error class and rejection message remain unchanged for shared-context overflow."
+  ],
+  "exact_resemblance_transfer_with_pr215_primitive": {
+    "01_shifted_versions": {
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "files": 18,
+      "patch_bytes": 22770,
+      "accepted_under_context_cap": true,
+      "programs_avoided": 0
+    },
+    "02_false_neighbors": {
+      "tree_sha256": "3427fd306a10a7c293d4303323d64948ee74d4065353bf99310cfed34dc73d0e",
+      "files": 600,
+      "patch_bytes": 35252412,
+      "first_overflow_program_index_zero_based": 143,
+      "historical_programs": 600,
+      "failfast_programs": 144,
+      "programs_avoided": 456,
+      "program_fraction_avoided": 0.76,
+      "measured_edit_wall_s_full": 1.8872313840000743,
+      "measured_edit_wall_s_through_overflow": 0.4576903229999516,
+      "measured_edit_wall_fraction_avoided": 0.7574805469640634
+    },
+    "03_boundary_churn": {
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+      "files": 12,
+      "patch_bytes": 1439,
+      "accepted_under_context_cap": true,
+      "programs_avoided": 0
+    },
+    "04_deflate_family": {
+      "tree_sha256": "527a9e356e923e5bcc26566a8f677a7f7277af1577493e09c2bdca1b6d17154a",
+      "files": 14,
+      "patch_bytes": 113822,
+      "accepted_under_context_cap": true,
+      "programs_avoided": 0
+    },
+    "05_incompressible": {
+      "tree_sha256": "1efe49fb1adb16ef911f64f44d41629db599dbeef264d72fd8f26e40515130e4",
+      "files": 80,
+      "patch_bytes": 10677598,
+      "first_overflow_program_index_zero_based": 63,
+      "historical_programs": 80,
+      "failfast_programs": 64,
+      "programs_avoided": 16,
+      "program_fraction_avoided": 0.2,
+      "measured_edit_wall_s_full": 0.5412499219999063,
+      "measured_edit_wall_s_through_overflow": 0.43131738599970504,
+      "measured_edit_wall_fraction_avoided": 0.20310864081791088
+    }
+  },
+  "decision": "ADVANCE_EXACT_FAILFAST_IMPLEMENTATION. This is a zero-byte accepted-path execution improvement with material losing-family work elimination on exact hostile sources. It is not the Shifted/Boundary create-frontier mechanism, but it lowers bounded-drift carrying cost and prevents rejected shared-context candidates from paying provably useless remaining edit construction.",
+  "kill_or_narrow": [
+    "any accepted candidate physical-byte drift",
+    "any rejected candidate changes error class/reason or becomes accepted",
+    "differential regression against the historical encoder fails",
+    "exact-head tests reveal resource/corruption behavior drift"
+  ],
+  "next": "Land the minimal incremental patch-budget check plus a differential historical-reference regression and an early-overflow call-count test. Keep this causally separate from the hosted Shifted+Boundary semantic court and from PR #215 primitive promotion.",
+  "claim_boundary": "Research execution-economics evidence only. Local timings are not hosted product timing; no product, external-frontier, merge, version or release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
