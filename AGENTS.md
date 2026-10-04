@@ -118,9 +118,11 @@ miracle away; preserve it and attack the exported cost as the next engineering m
 - Update `docs/CURRENT_STATE.md` whenever a material milestone changes the canonical implementation, performance policy or research frontier.
 - Update `docs/HISTORY.md` when format lineage, a durable architectural decision, or a superseded design checkpoint needs historical explanation.
 - **Do not consume a numeric project version for presentation/process work.** Website polish, documentation cleanup, repository presentation, workflow ergonomics and similar non-format work use the root `SURFACE_REVISION` track (`x.x.a`, `x.x.b`, …).
-- A numeric CMPCT core release is reserved for a **material improvement to CMPCT itself**: archive/engine capability, compression or speed, reliability, recovery, portability/interoperability, or another product-level behavior that materially advances the format. Cosmetic, handoff-only, research-note-only or repository-niceness changes do not qualify.
-- After the historical v0.27.1 checkpoint, normal numeric core advancement moves the `MAJOR.MINOR` line and uses `PATCH=0` for packaging compatibility. Do not create patch-number churn for small work.
-- Every numeric core release must add `docs/releases/vX.Y.0.md`, run the release performance gate, and commit a fresh public benchmark record for that release under `benchmarks/history/` before merge.
+- A numeric CMPCT core release is a **rolling pre-1.0 product checkpoint**: it should contain a coherent material improvement to CMPCT itself, but it is not reserved for one predeclared benchmark milestone. Cosmetic, handoff-only, research-note-only or repository-niceness changes still do not qualify.
+- After the historical v0.27.1 checkpoint, normal numeric core advancement moves the `MAJOR.MINOR` line and uses `PATCH=0` for packaging compatibility. Pre-1.0 versions should be published as coherent material checkpoints rather than held open until they satisfy a version-specific domination quota.
+- No 0.x release is gated on winning all benchmark workloads. The strict **15/15 size+create domination target versus ordinary ZIP/Deflate-9 and solid Zstd-19 belongs to CMPCT 1.0**.
+- Every numeric core release must add `docs/releases/vX.Y.0.md` and commit a fresh public benchmark/disclosure record under `benchmarks/history/` before merge.
+- `docs/PRE1_RELEASE_POLICY.md` is the normative rolling-release policy. Safety, exactness, integrity, recovery and truthful evidence remain non-negotiable even when benchmark dominance is not a release gate.
 - A coherent surface milestone advances `SURFACE_REVISION` once, not once per commit. Multiple commits that collectively form the same presentation milestone may share the same surface revision.
 - A base-vs-candidate core-release comparison must use the exact same corpus tree and benchmark semantics. Never regenerate separate random corpora and call their archive-size difference a regression or improvement.
 - Deterministic CMPCT archive-size regression on the release parity corpus has **zero-byte tolerance at promotion**. If a release candidate emits larger archives for the same input, it is not promotable yet; do not loosen the gate. A dramatic research breakthrough with such debt may be preserved and rehabilitated under `docs/BREAKTHROUGH_REHABILITATION.md` instead of being reflexively discarded.
@@ -216,10 +218,10 @@ policy, performance, reliability or interoperability that preserves reader gramm
 on-disk format-revision bump is necessarily a core release and must update `docs/FORMAT.md`, conformance
 vectors, `docs/CURRENT_STATE.md`, and the durable history/benchmark material appropriate to the change.
 
-The numeric version is a **claim of product progress**, not a commit counter. Do not bump it to reward
-activity. If work improves only the public surface, use `x.x.a`. If work is useful engineering but not yet
-a material core milestone, it may land without inventing a release number and should remain clearly
-represented in code/tests/research history until it earns promotion.
+The numeric version is a **claim of a coherent product checkpoint**, not a commit counter and not a hostage
+to one predeclared benchmark target. Before 1.0, release the line when it contains material product progress
+and its evidence/losses can be stated honestly. Do not keep a minor version open merely to force a 15/15
+benchmark story. If work improves only the public surface, use `x.x.a`.
 
 Footnote: `tools/check_version_discipline.py` enforces the separation. It rejects numeric bumps without
 archive/engine participation, requires benchmark/release evidence for a core release, validates the
