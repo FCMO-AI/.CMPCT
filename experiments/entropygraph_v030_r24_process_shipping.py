@@ -17,8 +17,9 @@ from experiments.entropygraph_v030_r24_process_prebuild import R24PrebuildProces
 class R24ProcessPrebuildRegistry:
     """One-shot registry preserving the mature prebuild key/publication contract."""
 
-    def __init__(self, *, timeout_s: float | None = None):
+    def __init__(self, *, timeout_s: float | None = None, worker_module: str | None = None):
         self.timeout_s = None if timeout_s is None else float(timeout_s)
+        self.worker_module = worker_module
         if self.timeout_s is not None and self.timeout_s <= 0:
             raise ValueError("r24 process registry timeout must be positive")
         self._lock = threading.Lock()
@@ -35,7 +36,10 @@ class R24ProcessPrebuildRegistry:
         with self._lock:
             if key in self._pending:
                 raise RuntimeError("duplicate canonical r24 prebuild key")
-            proc = R24PrebuildProcess(Path(root), prebuilt, timeout_s=self.timeout_s)
+            kwargs = {"timeout_s": self.timeout_s}
+            if self.worker_module is not None:
+                kwargs["worker_module"] = self.worker_module
+            proc = R24PrebuildProcess(Path(root), prebuilt, **kwargs)
             proc.start()
             self._pending[key] = (proc, prebuilt)
 
@@ -85,7 +89,7 @@ class R24ProcessPrebuildRegistry:
                 prebuilt.unlink(missing_ok=True)
 
 
-def install_into_release_base(base_impl, *, timeout_s: float | None = None) -> R24ProcessPrebuildRegistry:
+def install_into_release_base(base_impl, *, timeout_s: float | None = None, worker_module: str | None = None) -> R24ProcessPrebuildRegistry:
     """Replace the mature thread owner at its existing canonical-final seam.
 
     The preserved pre-profile function is used deliberately: calling the already-patched
@@ -104,7 +108,7 @@ def install_into_release_base(base_impl, *, timeout_s: float | None = None) -> R
     ownership gained nothing. Candidate implementations, admission, publication, and bytes
     remain unchanged; only their lifetime overlap is removed.
     """
-    registry = R24ProcessPrebuildRegistry(timeout_s=timeout_s)
+    registry = R24ProcessPrebuildRegistry(timeout_s=timeout_s, worker_module=worker_module)
     original_prepare = base_impl._ORIGINAL_PREPARE_PROFILE_TREE
 
     def prepare(root: Path, staging_root: Path) -> dict:
