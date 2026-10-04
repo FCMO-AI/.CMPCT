@@ -63,7 +63,11 @@ def _decode(codec: str, raw: bytes, *, max_output: int = MAX_DECODE_UNIT) -> byt
     return out
 
 
-def _scan_and_edges(stage: Path) -> tuple[list[dict], dict[int, tuple[int, str]], dict]:
+def _scan_and_edges(
+    stage: Path,
+    *,
+    allowed_inverse_codecs: set[str] | frozenset[str] | None = None,
+) -> tuple[list[dict], dict[int, tuple[int, str]], dict]:
     rows = []
     for path in sorted(item for item in stage.rglob("*") if item.is_file()):
         raw = path.read_bytes()
@@ -83,9 +87,33 @@ def _scan_and_edges(stage: Path) -> tuple[list[dict], dict[int, tuple[int, str]]
     candidates: dict[int, list[tuple[int, int, str]]] = {}
     decoded_sidecars = 0
     decoded_bytes = 0
+    skipped_sidecars = 0
+    skipped_sidecar_stored_bytes = 0
+
+    # Product callers may already know which inverse codecs every required reader can decode.
+    # Preserve historical choose-min-then-filter semantics: a disallowed codec may be skipped
+    # before decode only when its known rank is strictly worse than every allowed codec rank.
+    # Better-ranked disallowed codecs remain observable because they can mask a worse-ranked
+    # allowed candidate. Empty or unknown allowed sets conservatively disable pruning.
+    allowed = None if allowed_inverse_codecs is None else frozenset(allowed_inverse_codecs)
+    rank_safe_skips: frozenset[str] = frozenset()
+    if allowed:
+        allowed_ranks = [CODEC_RANK.get(codec) for codec in allowed]
+        if all(rank is not None for rank in allowed_ranks):
+            worst_allowed_rank = max(int(rank) for rank in allowed_ranks)
+            rank_safe_skips = frozenset(
+                codec
+                for codec, rank in CODEC_RANK.items()
+                if codec not in allowed and int(rank) > worst_allowed_rank
+            )
+
     for source_index, row in enumerate(rows):
         codec = SIDE_CAR_CODECS.get(row["suffix"])
         if codec is None:
+            continue
+        if codec in rank_safe_skips:
+            skipped_sidecars += 1
+            skipped_sidecar_stored_bytes += int(row["size"])
             continue
         plain = _decode(codec, row["raw"])
         decoded_sidecars += 1
@@ -103,6 +131,9 @@ def _scan_and_edges(stage: Path) -> tuple[list[dict], dict[int, tuple[int, str]]
     return rows, edges, {
         "decoded_sidecars": decoded_sidecars,
         "decoded_sidecar_plain_bytes": decoded_bytes,
+        "rank_safe_skipped_codecs": sorted(rank_safe_skips),
+        "rank_safe_skipped_sidecars": skipped_sidecars,
+        "rank_safe_skipped_sidecar_stored_bytes": skipped_sidecar_stored_bytes,
         "inverse_edges": len(edges),
         "inverse_edge_targets": [rows[index]["rel"] for index in sorted(edges)],
         "inverse_edge_sources": [rows[edges[index][0]]["rel"] for index in sorted(edges)],
