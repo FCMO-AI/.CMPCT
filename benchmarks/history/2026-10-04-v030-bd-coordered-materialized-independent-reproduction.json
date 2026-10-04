@@ -1,0 +1,73 @@
+{
+  "schema": "cmpct-v030-bd-coordered-materialized-independent-reproduction-v1",
+  "recorded_at": "2026-10-04",
+  "authority": "cd2886bda7580a56e1efab8132b0b9477c52bd55",
+  "owner_branch": "agent/phased3-bd-pg-selected-row-hosted",
+  "source_blobs": {
+    "bounded_drift_container": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "bounded_drift_primitive": "d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+    "filesystem_manifest": "72404386775be4576365cc687784f4e4f752d9de",
+    "resemblance_generator": "335169bd6eb336b6d444cfbd34c291101262c3a9"
+  },
+  "method": {
+    "note": "Independent local materialization of the coordered semantic-sibling idea using the exact current generators and BDC framing algorithm, system Zstd 1.5.7 with checksum, a fixed 96-byte wrapper matching the existing semantic sibling's header+trailer width, and the same deterministic BDC content order.",
+    "coordered_manifest": "regular rows follow exact (sha256(content), content) BDC order, retain path/kind/mode/mtime/uid/gid/xattrs and logical size, and omit duplicate per-file digest; member identity is recovered from the authenticated BDC entry digest.",
+    "verification": [
+      "exact frozen path+content tree identity",
+      "sequential regular-row/member binding",
+      "physical mode/mtime/uid/gid/xattr restoration equality on both decisive regular-only corpora",
+      "wrapper and BDC corruption rejection",
+      "complete decoded-context locality charged as manifest + shared BDC base + shared patch + selected member"
+    ]
+  },
+  "rows": {
+    "shifted": {
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "files": 18,
+      "bdc_bytes": 1687646,
+      "coordered_manifest_raw_bytes": 901,
+      "coordered_manifest_zstd12_bytes": 303,
+      "complete_materialized_bytes": 1688045,
+      "external_zstd19_bytes": 1694674,
+      "delta_vs_zstd19_bytes": -6629,
+      "strict_canonical_target_max_bytes": 1694673,
+      "margin_below_strict_target_bytes": 6628,
+      "max_member_read_amplification": 2.0128086451240166,
+      "max_decode_unit_bytes": 1862620,
+      "exact_tree_reconstructed": true,
+      "physical_metadata_equal": true,
+      "corruption_rejected": true
+    },
+    "boundary": {
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+      "files": 12,
+      "bdc_bytes": 72554,
+      "coordered_manifest_raw_bytes": 587,
+      "coordered_manifest_zstd12_bytes": 235,
+      "complete_materialized_bytes": 72885,
+      "external_zstd19_bytes": 73097,
+      "delta_vs_zstd19_bytes": -212,
+      "strict_canonical_target_max_bytes": 73096,
+      "margin_below_strict_target_bytes": 211,
+      "max_member_read_amplification": 2.002495037019157,
+      "max_decode_unit_bytes": 812012,
+      "exact_tree_reconstructed": true,
+      "physical_metadata_equal": true,
+      "corruption_rejected": true
+    }
+  },
+  "relation_to_prior_projection": {
+    "prior_receipt": "benchmarks/history/2026-10-04-v030-bd-coordered-manifest-ownership-oracle.json@94ccc83f2baa75dee9ce2ec24e67978a8628b428",
+    "observation": "Materialization preserves the qualitative result on both decisive rows and leaves Boundary with only 211 B of complete-byte slack versus Zstd-19."
+  },
+  "decision": "ADVANCE_MATERIALIZED_COORDERED_COURT. The coordered representation survives an independent complete-byte/materialized lower-rung reproduction on both decisive rows. The next decision must execute a repository-hosted same-run implementation using the actual Python zstandard dependency and full generic filesystem grammar; Boundary's 211 B slack makes any omitted framing/semantic cost decisive.",
+  "kill_or_narrow": [
+    "repo-hosted Python-zstandard materialization is >= 73097 B on Boundary",
+    "hardlink/duplicate-content/nonregular generic filesystem binding is not deterministic",
+    "exact extraction or corruption rejection fails",
+    "complete locality/decode-unit/create/native/recovery cost makes the representation non-Pareto"
+  ],
+  "claim_boundary": "Independent research reproduction only. The local wrapper is noncanonical and not a shipping r25 grammar. No product, release, external-frontier, native, recovery, or promotion credit.",
+  "product_credit": false,
+  "release_credit": false
+}
