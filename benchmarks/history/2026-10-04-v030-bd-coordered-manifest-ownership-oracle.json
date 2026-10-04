@@ -1,0 +1,87 @@
+{
+  "authority": "cd2886bda7580a56e1efab8132b0b9477c52bd55",
+  "claim_boundary": "Local exact-source representation oracle only; no same-run BDC sibling, create, locality, reader/native/recovery, product, release or external-frontier credit.",
+  "decision": "ADVANCE_COORDER_ORACLE. Making regular-row order equal the deterministic CMPNXBD2 member order removes both the duplicate per-file SHA and the explicit member index. On exact accepted sources this further improves the conservative complete-semantic projection to 72,896 B on Boundary (201 B below Zstd-19) and 1,688,056 B on Shifted (6,618 B below Zstd-19). This remains lower-rung representation evidence only.",
+  "generic_fs_hostile": {
+    "content_order": [
+      0,
+      2,
+      1
+    ],
+    "entries_order": [
+      "d/a.bin",
+      "z.bin",
+      "d/b.bin",
+      "d",
+      "hard",
+      "link"
+    ],
+    "nonregular_count": 3,
+    "regular_consumed": 3,
+    "regular_exact_binding": true
+  },
+  "kill_or_narrow": [
+    "same-run complete coordered semantic sibling fails exact filesystem reconstruction or corruption rejection",
+    "Boundary complete stored bytes are >= strongest-current Zstd-19",
+    "regular-row implicit ordering cannot be made deterministic for hardlinks/duplicate content under the actual FS grammar",
+    "complete create/locality/decode-unit/native/recovery cost makes the representation non-Pareto"
+  ],
+  "prior_index_owned_result": {
+    "boundary_delta_vs_zstd19_bytes": -178,
+    "boundary_projected_bytes": 72919,
+    "shifted_delta_vs_zstd19_bytes": -6606,
+    "shifted_projected_bytes": 1688068
+  },
+  "question": "Can manifest row order itself own the path->BDC-member mapping, eliminating both duplicate SHA and explicit member index?",
+  "recorded_at": "2026-10-04",
+  "release_credit": false,
+  "representation": "regular manifest rows are emitted in exact CMPNXBD2 member order and store [logical_size] only; nonregular rows remain deterministic metadata and consume no member slot",
+  "research_owner": "agent/phased3-bd-pg-selected-row-hosted@8097b34ec738af81039d2cde0fc5f3aa24e80820",
+  "rows": {
+    "boundary": {
+      "coordered_delta_vs_zstd19_bytes": -201,
+      "coordered_projection_bytes": 72896,
+      "coordered_raw_bytes": 557,
+      "coordered_saving_bytes": 380,
+      "coordered_vs_indexed_saving_bytes": 14,
+      "coordered_zstd12_bytes": 247,
+      "current_raw_bytes": 956,
+      "current_zstd12_bytes": 627,
+      "external_zstd19_bytes": 73097,
+      "files": 12,
+      "indexed_projection_bytes": 72910,
+      "indexed_raw_bytes": 569,
+      "indexed_saving_bytes": 366,
+      "indexed_zstd12_bytes": 261,
+      "metadata_cases": 128,
+      "metadata_median_coordered_saving_bytes": 380,
+      "metadata_median_coordered_vs_index_bytes": 15,
+      "metadata_min_coordered_saving_bytes": 372,
+      "metadata_min_coordered_vs_index_bytes": 7,
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d"
+    },
+    "shifted": {
+      "coordered_delta_vs_zstd19_bytes": -6618,
+      "coordered_projection_bytes": 1688056,
+      "coordered_raw_bytes": 847,
+      "coordered_saving_bytes": 594,
+      "coordered_vs_indexed_saving_bytes": 7,
+      "coordered_zstd12_bytes": 316,
+      "current_raw_bytes": 1450,
+      "current_zstd12_bytes": 910,
+      "external_zstd19_bytes": 1694674,
+      "files": 18,
+      "indexed_projection_bytes": 1688063,
+      "indexed_raw_bytes": 865,
+      "indexed_saving_bytes": 587,
+      "indexed_zstd12_bytes": 323,
+      "metadata_cases": 128,
+      "metadata_median_coordered_saving_bytes": 601,
+      "metadata_median_coordered_vs_index_bytes": 11,
+      "metadata_min_coordered_saving_bytes": 588,
+      "metadata_min_coordered_vs_index_bytes": 0,
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd"
+    }
+  },
+  "schema": "cmpct-v030-bd-coordered-manifest-ownership-oracle-v1"
+}
