@@ -43,6 +43,55 @@ class Builder:
             else:slot[1]+=1
         return h
 
+    def _make_vzip_recipe_transactional(self,path:Path):
+        """Build one VZIP recipe without leaking speculative candidate mutations.
+
+        make_vzip_recipe may reject a later member after earlier callbacks observed
+        content. Stage only the changed dimensions per content hash and merge them into
+        the live Builder after the complete recipe succeeds. Existing raw/Deflate byte
+        objects stay owned by their live Candidate, so duplicate speculative members
+        carry metadata rather than recipe-sized byte copies.
+        """
+        staged={}
+        def stage(raw:bytes,hint='',deflate_stream:bytes|None=None):
+            h=sha(raw);live=self.cands.get(h);row=staged.get(h)
+            if row is None:
+                # [raw-for-new-hash | None, hint-field, Deflate-map | None].
+                # Keep one hint scalar until another distinct hint actually needs a set.
+                row=[None if live is not None else raw,None,None];staged[h]=row
+            if hint:
+                hints=row[1]
+                if hints is None:row[1]=hint
+                elif isinstance(hints,str):
+                    if hints!=hint:row[1]={hints,hint}
+                else:hints.add(hint)
+            if deflate_stream is not None:
+                sh=sha(deflate_stream)
+                if row[2] is None:row[2]={}
+                slot=row[2].get(sh)
+                if slot is None:
+                    prior=live.deflates.get(sh) if live is not None else None
+                    row[2][sh]=[prior[0] if prior is not None else deflate_stream,1]
+                else:slot[1]+=1
+            return h
+        recipe=make_vzip_recipe(path,stage)
+        if recipe is None:return None
+        for h,(raw,hints,deflates) in staged.items():
+            live=self.cands.get(h)
+            if live is None:
+                hs=set() if hints is None else ({hints} if isinstance(hints,str) else hints)
+                self.cands[h]=Candidate(raw,hs,{} if deflates is None else deflates)
+                continue
+            if hints is not None:
+                if isinstance(hints,str):live.hints.add(hints)
+                else:live.hints.update(hints)
+            if deflates:
+                for sh,(stream,count) in deflates.items():
+                    slot=live.deflates.get(sh)
+                    if slot is None:live.deflates[sh]=[stream,count]
+                    else:slot[1]+=count
+        return recipe
+
     def _capture_fs_meta(self,path:str,rel:str,st):
         """Capture ownership and xattrs without bloating every file row.
 
@@ -129,7 +178,7 @@ class Builder:
                 self.files.append([rel,K_FILE,mode,st.st_mtime_ns,ln,rh,[S_PACK,ph,off,ln]])
         else:
             for p,rel,st,mode in deferred:
-                recipe=make_vzip_recipe(p,self.add_content)
+                recipe=self._make_vzip_recipe_transactional(p)
                 if recipe is None:
                     raw=p.read_bytes();ref=self.add_content(raw,p.suffix.lower());storage=[S_BLOB,ref]
                 else:
