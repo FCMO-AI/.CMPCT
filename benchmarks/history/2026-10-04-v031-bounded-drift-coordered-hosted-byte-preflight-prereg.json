@@ -1,0 +1,26 @@
+{
+  "schema": "cmpct-v031-bounded-drift-coordered-hosted-byte-preflight-prereg-v1",
+  "recorded_at": "2026-10-04",
+  "authority_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "owner_branch": "agent/v031-bounded-drift-coordered-court",
+  "parent_prereg": "benchmarks/history/2026-10-04-v031-bounded-drift-coordered-court-prereg.json",
+  "problem": "The full hosted coordered court is temporarily blocked because its generic filesystem hostile is outside the valid safe-symlink domain. The decisive Shifted/Boundary byte+semantic rows themselves remain executable without changing the frozen representation.",
+  "question": "On the current hosted Python-zstandard/Zstd-19 environment, do the frozen decisive Shifted and Boundary rows remain strictly smaller than same-run solid Zstd-19 while preserving exact canonical filesystem-v1 recapture and locality bounds?",
+  "method": "Import the landed benchmark and execute only its frozen _row() function for the two TARGETS. Do not call _generic_fs_hostile and do not alter candidate/comparator bytes, normalization, timing boundary or locality accounting.",
+  "prediction": {
+    "shifted": "strict size win by multiple KiB",
+    "boundary": "strict size win with narrow positive margin"
+  },
+  "kill_or_narrow": [
+    "Either decisive row archive bytes >= same-run solid Zstd-19 bytes.",
+    "Either decisive row fails exact physical filesystem semantics.",
+    "Corruption is accepted.",
+    "Selected-member amplification >8x or max decode unit >8 MiB.",
+    "Same-run Zstd-19 bytes do not reproduce the historical current-fingerprint control."
+  ],
+  "credit_boundary": "Lower-rung hosted preflight. A red may kill/narrow the representation before fixing the generic hostile. A green does NOT advance the productization rung and does NOT substitute for the preregistered generic filesystem hostile.",
+  "next_if_green": "Correct the invalid-domain hostile without weakening safe-symlink law, then execute the full frozen court exactly once.",
+  "next_if_red": "Narrow/retire at the observed row; do not spend the next activation on the hostile fixture.",
+  "product_credit": false,
+  "release_credit": false
+}
