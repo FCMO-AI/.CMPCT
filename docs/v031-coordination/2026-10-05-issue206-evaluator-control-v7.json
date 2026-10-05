@@ -1,0 +1,39 @@
+{
+  "schema": "cmpct-v031-issue206-evaluator-control-v7",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-issue206-transactional-vzip",
+    "observed_owner_head": "5f64121a431ae7cce59bb66fb8795e1e0acc3fb1",
+    "product_landing_commit": "b00f9a2bc59142dc526a0ee1eba335e1d28d83c4",
+    "builder_blob": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b"
+  },
+  "current_truth": {
+    "product_source_landed": true,
+    "focused_repository_test_present": false,
+    "owner_head_actions_runs": 0,
+    "owner_head_statuses": 0,
+    "open_owner_pr": false
+  },
+  "evaluator_control": {
+    "selected": "same-source parent seam plus equal shadow of the exact canonical r24 -m worker module",
+    "canonical_child_class_changed": false,
+    "canonical_child_command_changed": false,
+    "direct_difference": "one environment bit reconstructs the pre-fix Builder callback seam in parent and fresh r24 child",
+    "real_source_root_rule": "shadow control must explicitly preserve the exact real repository root on child PYTHONPATH, independent of cwd or accidental inherited PYTHONPATH",
+    "source_custody_receipt": [
+      "builder_file",
+      "codec_file",
+      "product_file",
+      "shadow_file"
+    ],
+    "bootstrap_neutrality": "candidate shadow must be archive/tree identical to exact canonical candidate and must not materially distort wall under the inherited >5% AND >3ms rule"
+  },
+  "falsified_controls": [
+    "parent-only Builder monkeypatch for full product: fresh r24 child escapes it",
+    "PYTHONPATH sitecustomize injection: host runtime can pre-own the sitecustomize singleton"
+  ],
+  "next_decisive_action": "On an exact package/native runtime, execute child-control custody and candidate bootstrap-neutrality gates first; only then run focused tests plus same-source r24/full-product policy-poison A/B.",
+  "product_credit": false,
+  "release_credit": false
+}
