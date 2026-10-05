@@ -1,0 +1,53 @@
+{
+  "schema": "cmpct-v031-issue206-sparse-overlay-control-v1",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "branch": "agent/v031-issue206-transactional-vzip",
+    "parent_head": "a7ec55d52c4c94e7fc340e0664bc1f1f34510de3",
+    "builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+  },
+  "question": "Can the isolated per-hash transaction keep failure atomicity while carrying materially less metadata than Candidate-shaped staging?",
+  "mechanism": "Sparse per-hash overlay with lazy hint and Deflate fields. Existing hashes retain no staged raw bytes; one hint stays scalar until a second distinct hint requires a set; Deflate maps are allocated only when observed.",
+  "memory_microcourt": {
+    "20000_unique_existing_hint": {
+      "candidate_overlay_peak_bytes": 8109960,
+      "sparse_overlay_peak_bytes": 2189960,
+      "ratio": 0.270033391
+    },
+    "20000_duplicate_existing_hint": {
+      "candidate_overlay_peak_bytes": 648,
+      "sparse_overlay_peak_bytes": 568,
+      "ratio": 0.87654321
+    },
+    "5000_unique_existing_deflate": {
+      "candidate_overlay_peak_bytes": 3512592,
+      "sparse_overlay_peak_bytes": 2352592,
+      "ratio": 0.6697595394
+    }
+  },
+  "semantic_court": {
+    "initial_state_classes": 3,
+    "action_alphabet": 6,
+    "max_sequence_length": 4,
+    "successful_sequences_checked": 4665,
+    "aborted_sequences_checked": 4665,
+    "result": "PASS",
+    "new_raw_and_Deflate_first-object_identity_preserved": true,
+    "existing_raw_and_Deflate_object_identity_reused": true
+  },
+  "cpu_microcourt": {
+    "1024_unique_hint_sparse_over_candidate": 0.513667835,
+    "1024_duplicate_hint_sparse_over_candidate": 1.794367401,
+    "1024_unique_deflate_sparse_over_candidate": 0.864437335,
+    "20000_unique_hint_sparse_over_candidate": 0.412248868,
+    "interpretation": "Duplicate-only callback bookkeeping is slower but sub-millisecond; unique-heavy paths are materially faster in this Python court. Complete product wall remains unmeasured."
+  },
+  "decision": "ADVANCE_SPARSE_OVERLAY_AS_THE_STRONGER PRODUCT IMPLEMENTATION SHAPE. It preserves the isolated transaction invariant and exhaustive add_content semantics while materially reducing unique-hash metadata. Candidate-shaped staging becomes the simpler reference control. Raw event logging remains rejected because event-count memory explodes on duplicate-heavy callbacks; rollback journaling remains a fallback only if same-source product RSS rejects isolated staging.",
+  "productization_status": {
+    "product_source_changed": false,
+    "next": "Land the sparse Builder overlay plus focused success/failure/order/object-identity tests when the ordinary source-write surface is available, then measure same-source archive/tree/wall/process-RSS before promotion."
+  },
+  "product_credit": false,
+  "release_credit": false
+}
