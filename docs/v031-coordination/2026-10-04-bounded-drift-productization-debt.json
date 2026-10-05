@@ -1,0 +1,48 @@
+{
+  "schema": "cmpct-v031-bounded-drift-productization-debt-map-v1",
+  "current_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "doctrine": "Current-main Fundamental Research Doctrine explicitly treats the bounded-drift strict-win mechanism as a Forge asset that should continue through productization.",
+  "main_surfaces": {
+    "primitive": "experiments/entropygraph_v030_bounded_drift_v1.py@d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+    "container": "experiments/entropygraph_v030_bounded_drift_container_v1.py@ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "admission": "experiments/entropygraph_v030_bounded_drift_admission.py@9462797f0df4534358622a0f21b55313321a214d",
+    "recovery": "experiments/entropygraph_v030_bounded_drift_recovery_v1.py@7896e3ce2f5b11f0ae034d48fa4c037cc05944c6"
+  },
+  "strongest_evidence": {
+    "hosted_shifted": "1,687,692 B / 0.360600381 s versus solid Zstd-19 1,694,672 B / 0.762426491 s; exact tree; ~2.0123x locality",
+    "coordered_shifted": "1,688,045 B; -6,629 B vs Zstd-19; full filesystem semantics in independent reproduction",
+    "coordered_boundary": "72,885 B; -212 B vs Zstd-19; only 211 B strict slack",
+    "generic_hostile": "duplicate regular content, hardlink alias, symlink and directory restore exactly; corruption rejected"
+  },
+  "debt": [
+    {
+      "gate": "current-main hosted coordered semantic court",
+      "status": "UNEXECUTED",
+      "decision": "first"
+    },
+    {
+      "gate": "recovery integration",
+      "status": "IMPLEMENTATION SEED EXISTS / FOCUSED TEST OWNERSHIP NOT FOUND",
+      "observation": "Default-branch code search for encode_recovery_container, parse_recovery_container and CMPNXBR3 found only the recovery implementation.",
+      "risk": "Boundary's 211 B inherited margin makes duplicated recovery metadata/carrying cost potentially decisive."
+    },
+    {
+      "gate": "prospective construction/admission economics",
+      "status": "UNPAID",
+      "observation": "Current admission API consumes already-priced candidate/fallback observations and explicitly does not authorize hidden candidate-construction work."
+    },
+    {
+      "gate": "canonical/native/portability",
+      "status": "UNPAID",
+      "observation": "Current bounded-drift formats remain CMPNX research grammars."
+    }
+  ],
+  "priority": [
+    "Execute the current-main coordered semantic court before canonical-grammar work.",
+    "If green, price recovery metadata and prospective admission immediately.",
+    "Do not micro-optimize the BDC core before complete-product ownership is measured.",
+    "Preserve retired-family reopening predicates."
+  ],
+  "product_credit": false,
+  "release_credit": false
+}
