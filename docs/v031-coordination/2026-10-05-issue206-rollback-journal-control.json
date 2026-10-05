@@ -1,0 +1,39 @@
+{
+  "schema": "cmpct-v031-issue206-rollback-journal-control-v1",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "branch": "agent/v031-issue206-transactional-vzip",
+    "parent_head": "812d44e89fbc78577d00e78afe5e229b554bedd1",
+    "builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+  },
+  "semantic_court": {
+    "successful_sequences_checked": 4665,
+    "aborted_sequences_checked": 4665,
+    "result": "PASS"
+  },
+  "memory_control": {
+    "20000_unique_existing_hint": {
+      "journal_peak_bytes": 5001293,
+      "sparse_overlay_peak_bytes": 2189960,
+      "journal_over_sparse": 2.283737146
+    },
+    "20000_duplicate_existing_hint": {
+      "journal_peak_bytes": 1276,
+      "sparse_overlay_peak_bytes": 568,
+      "journal_over_sparse": 2.246478873
+    },
+    "5000_unique_existing_deflate": {
+      "journal_peak_bytes": 3043168,
+      "sparse_overlay_peak_bytes": 2352592,
+      "journal_over_sparse": 1.293538361
+    }
+  },
+  "decision": "RETIRE_ROLLBACK_JOURNAL_AS_THE DEFAULT/FALLBACK ON CURRENT EVIDENCE. It is semantically viable but loses the sparse isolated overlay on all measured carrying-cost shapes while adding inverse-bookkeeping complexity and temporary live mutation. Reopen only if a real product measurement exposes a sparse-overlay cost not represented by these controls.",
+  "productization_status": {
+    "selected_shape": "sparse isolated per-hash overlay",
+    "product_source_changed": false,
+    "next": "Land the sparse Builder overlay plus focused tests when ordinary source mutation is available, then run same-source archive/tree/wall/process-RSS controls."
+  },
+  "product_credit": false,
+  "release_credit": false
+}
