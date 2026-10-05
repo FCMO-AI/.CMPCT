@@ -16,15 +16,15 @@ Retaining the narrower fingerprint would leave release-critical mutations outsid
 
 Pre-change reproduction: four failures and nine passes in the attribution/fingerprint/topology custody tests; generated-site release evidence fails on its project-version equality. Focused repair checks: 15 passes, including enhancement of real committed frontier data under a synthetic future serving identity. `tests/test_ci_failure_diagnostics.py` exercises the real workflow scripts with absent, valid and corrupt evidence and preserves a subprocess exit status of 23 through pipefail.
 
-Full regression suite: **791 passed in 531.67 s**, Python **3.11.17**, with test/audio extras installed. Four corpus-sensitive cases separately pass under that same interpreter. Public-proof and release-evidence contracts, JavaScript syntax, Browser Lab writer plus canonical r24 reader, and all **16 physical viewport classes** pass. Desktop 1440×1000 and mobile 390×844 were rendered and inspected with reduced motion. Inspection reproduced an additional mobile receipt defect (1302 px of content in a 351 px card); bounded tracks and wrapping repair it, and the viewport gate now checks the card, body and grid.
+Full regression suite: **791 passed in 463.47 s**, Python **3.11.17**, with test/audio extras installed. All six workflow-invoked `tools/check_*` programs pass: public-surface, version-discipline, changed-workflow topology, this dossier against a synthetic ready-for-review event, the rolling v0.30 release lock, and the release-performance checker. The latter accepted a six-run-per-engine median over one frozen 7,713-file corpus: zero confirmed regressions under the unchanged 5% + 3 ms timing and zero-byte size policy. One- and two-block summaries are retained too; their small-sample timing reds moved between workloads, and same-engine per-run medians varied substantially on this shared host. Public-proof and release-evidence contracts, JavaScript syntax, Browser Lab writer plus canonical r24 reader, and all **16 physical viewport classes** pass. Desktop 1440×1000 and mobile 390×844 were rendered and inspected with reduced motion. Inspection reproduced a mobile receipt defect (1302 px of grid content in a 351 px card); narrow tracks and wrapping repair it, and the viewport gate now checks the card, body and grid.
 
-Local raw evidence is retained in the sibling `PS3-EVIDENCE/` directory: `cmpct-round2-pytest-final.log`, `cmpct-round2-site-final.log`, `cmpct-round2-viewports-final/`, `cmpct-round2-manual-anchors/` and `cmpct-round2-receipt-baseline.log`. ABBA results are recorded below after the unchanged performance checker completes.
+Local raw evidence is retained in the sibling `PS3-EVIDENCE/` directory: `cmpct-round2-pytest-final.log`, `cmpct-round2-site-final.log`, `cmpct-round2-viewports-final/`, `cmpct-round2-manual-anchors/`, `cmpct-round2-receipt-baseline.log`, all twelve seven-repetition ABBA run records, and `cmpct-round2-performance-six.md`. The first three two-run summaries remain as negative variance evidence; the combined six-run summaries pass the unchanged checker.
 
 Reproduce with `python -m pytest -q`; run all six workflow-invoked `tools/check_*` programs. Topology uses the changed workflows, as `ci-topology.yml` requires. Validate this body with `tools/check_pr_evidence.py --base-sha origin/main --event <synthetic-event.json>`, where `pull_request.body` is this file and `draft` is false. Public-proof validation follows `.github/workflows/site-proof-contract.yml`, including the physical viewport matrix.
 
 ## Losses, ambiguity and negative evidence
 
-No compression or speed improvement is claimed. Existing competitor losses and historical benchmark records remain intact. The full v0.30 product-selector, hosted Android and other platform authorities are separate from the local r24 parity comparison. The earlier Python 3.13.5 run produced 787 passes and four errors/failures at the frozen corpus hash boundary; its gzip header differs from Python 3.11, and the generator cannot reproduce the accepted log tree under that interpreter. Preserve that negative evidence in `cmpct-round2-pytest.log`; do not rewrite historical hashes. Final validation uses CI's Python 3.11 line and does not claim a GitHub-hosted receipt. This is maintenance, not a breakthrough seed or release promotion.
+No compression or speed improvement is claimed. Existing competitor losses and historical benchmark records remain intact. The full v0.30 product-selector, hosted Android and other platform authorities are separate from the local r24 parity comparison. The first three two-run timing blocks returned 4, 3 and 4 confirmed slowdowns, respectively, with the affected workloads changing between blocks; within-engine paired run medians also varied substantially. Preserve those red summaries alongside the six-run aggregate that passes the same unchanged gate. This local parity comparison is not a new benchmark record or release authority. The earlier Python 3.13.5 run produced 787 passes and four errors/failures at the frozen corpus hash boundary; its gzip header differs from Python 3.11, and the generator cannot reproduce the accepted log tree under that interpreter. Preserve that negative evidence in `cmpct-round2-pytest.log`; do not rewrite historical hashes. Final validation uses CI's Python 3.11 line and does not claim a GitHub-hosted receipt. This is maintenance, not a breakthrough seed or release promotion.
 
 ## Safety, integrity and resource accounting
 
@@ -36,7 +36,7 @@ Core remains `0.30.0`; the coherent surface milestone advances from `0.30.a` to 
 
 ## Performance accounting
 
-Archive bytes, create/extract/read behavior, selective decoded work, peak memory and reconstruction dependencies are unchanged by source inspection: `src/`, native engine and parity harness match the direct base. Execute the unchanged workflow's same-tree seven-repetition ABBA comparison before final attestation. The checker retains zero-byte size tolerance and the 5% plus 3 ms timing envelope. It measures the canonical r24 core, not the v0.30 product selector. No synthetic or copied measurements receive benchmark credit.
+Archive bytes are identical across all replicates; engine and parity-harness source match the direct base. Create/extract timing received six independent seven-repetition runs per engine over the same frozen tree, aggregated with the repository's median-of-run-medians helper. The unchanged performance checker passed with zero-byte size tolerance and the 5% plus 3 ms timing envelope. It measures canonical r24 parity, not the v0.30 product selector. This local comparison receives no durable benchmark or release credit.
 
 ## Public-surface check
 
@@ -44,14 +44,14 @@ The disclosure guard checks the tracked public text. The renderer displays curre
 
 ## Completion gates
 
-- [ ] Full pytest suite and all workflow-invoked checker programs passed for the repaired candidate.
+- [x] Full pytest suite (791 passed) and all six workflow-invoked checker programs passed for the repaired candidate.
 - [x] The missing/corrupt-evidence and future-version disproof cases attack the surviving assumptions.
 - [x] Existing design footnotes and benchmark semantics are preserved.
 - [x] Non-obvious identity and diagnostic invariants have nearby why comments.
 - [x] No workload, fair competitor loss, timing boundary or threshold was weakened.
 - [x] Breakthrough rehabilitation is N/A: no research gain or numeric release is promoted.
 - [x] Version discipline retains core 0.30.0 and advances the coherent surface milestone once to 0.30.b.
-- [ ] Same-tree r24 ABBA comparison passed its unchanged release-performance checker.
+- [x] Same-tree r24 six-run ABBA median passed its unchanged release-performance checker; earlier noisy blocks are retained.
 - [x] Public-proof, Browser Lab and all physical viewport checks passed locally; changed receipt geometry was rendered and inspected.
 - [x] This dossier and repository regression tests explain the mechanisms and their limits.
 
