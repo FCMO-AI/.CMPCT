@@ -1,5 +1,5 @@
 {
-  "schema": "cmpct-v031-issue194-source-stat-falsifier-v2",
+  "schema": "cmpct-v031-issue194-source-stat-falsifier-v3",
   "recorded_at": "2026-10-04",
   "authority": {
     "base": "agent/v031-development@0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
@@ -88,8 +88,34 @@
   },
   "decision": "NARROW_CHEAP_PREFILTER_FAMILY. File count/size, byte histogram or entropy, and unordered chunk/content-feature bags cannot safely bound attainable compressed bytes: exact shared facts can coexist with orders-of-magnitude different outcomes. Issue #194 should reject empirical thresholds on those facts. Reopen prospective pruning only with order-aware, grammar-aware forced state that is mathematically unavoidable under every continuation, or move to exact execution sharing that avoids recomputing losing speculative work.",
   "mandatory_hostile_preserved": "ML remains the product hostile: a +116 B pre-overlay gap can become a 161,843 B winner, so any safe bound must fail open there.",
-  "next_discriminator": "Do not create another source-stat prefilter family. Fresh current-main audit confirms per-call weak-index construction still exists. Reconcile the already-preregistered ownership-only historical-dict reuse onto v0.31 only if a current integrated A/B can preserve exact candidate/final identity and show material child/product-wall improvement on Shifted plus Boundary/False-Neighbors controls.",
+  "next_discriminator": "Do not create another source-stat prefilter family. Current main still rebuilds the historical weak index inside every delta_encode call; repeated lower-rung parity/timing plus prior Shifted/Boundary/False-Neighbors evidence justify one fresh v0.31 integrated ownership-only grouped-dict A/B if it can be reconciled onto current source without changing candidate discovery, delta bytes, assignments, locality, or final archive identity.",
   "claim_boundary": "Repeated lower-rung adversarial falsifier and current-source ownership reconciliation only. No product mutation or release credit.",
   "product_credit": false,
-  "release_credit": false
+  "release_credit": false,
+  "current_source_ownership_microcourt": {
+    "evidence_class": "local lower-rung source-faithful microcourt; not hosted/product timing",
+    "current_main_resemblance_blob": "8c73f33cb8bb2983ac949edbd6fd30e6570b8cc0",
+    "mechanism": "Preserve historical weak-key -> ordered-offset dict and change only index lifetime from per-edge rebuild to once-per-immutable-base reuse.",
+    "parity": {
+      "randomized_cases": 300,
+      "mismatches": 0,
+      "pressure": "sizes through 32 KiB with insertion/deletion/substitution and repeated-anchor pressure"
+    },
+    "high_fanout_control": {
+      "base_bytes": 524288,
+      "targets": 24,
+      "baseline_rebuild_per_edge_median_s": 1.727288459,
+      "grouped_dict_reuse_median_s": 1.0247768,
+      "grouped_over_baseline_ratio": 0.593286428
+    },
+    "false_neighbor_miss_control": {
+      "base_bytes": 262144,
+      "unrelated_targets": 8,
+      "paired_repetitions": 6,
+      "baseline_rebuild_per_edge_median_s": 1.0843468675,
+      "grouped_dict_reuse_median_s": 0.900191968,
+      "grouped_over_baseline_ratio": 0.8301697501
+    },
+    "interpretation": "The exact current historical-dict lookup semantics support ownership-only reuse without the packed-lookup regression seen on the old validation branch. This is not integrated child/product evidence; the already-preregistered Shifted/Boundary/False-Neighbors A/B remains the promotion rung."
+  }
 }
