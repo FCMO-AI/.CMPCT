@@ -1,0 +1,36 @@
+{
+  "schema": "cmpct-v031-issue194-evaluator-custody-v1",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-issue194-source-stat-falsifier",
+    "owner_head_before_write": "db58bac885b08885d4df5ca965ff837e9acee68f",
+    "benchmark_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+    "frozen_prereg_blob": "450f4df182a526ce57291f0a47a70752dd10d68c",
+    "performance_gate_blob": "2267ccf95bb5cf574f3ced4912821d91ab27d5b6"
+  },
+  "finding": "The landed grouped-dict integrated A/B is diagnostic-only until its evaluator is hardened to the frozen preregistration.",
+  "decisive_gaps": [
+    "Current passed_child uses min(structured)<=0.90, so one Shifted/Boundary child win can mask a held-out structured regression; the prereg requires no meaningful held-out wall regression.",
+    "Incompressible is measured but not part of passed_child even though it is a frozen zero-edge control.",
+    "Child exactness checks archive SHA only; the prereg also requires strong tree identity plus candidate-count, accepted-edge, central-base assignment and pack-plan/locality equivalence.",
+    "Child peak_rss_kib is self ru_maxrss rather than sampled process-tree RSS.",
+    "Complete-product wall/RSS are recorded when --product is used but do not control final pass/fail or process exit.",
+    "Product RSS sampling continues while strong verification/archive materialization still run in the measured child, conflating proof memory with create RSS."
+  ],
+  "hardening_contract": {
+    "child_exactness": [
+      "complete archive SHA/bytes exact",
+      "strong verified tree exact",
+      "semantic trace exact for candidate discovery, accepted measured-edge facts, central-base assignment and pack-plan/locality facts"
+    ],
+    "structured_positive": "At least one preregistered exposed structured row must show >=10% same-run child wall reduction.",
+    "held_out_wall": "Boundary, False Neighbors and Incompressible must not show a confirmed child slowdown under the existing >5% AND >3ms timing rule.",
+    "rss": "Use sampled whole live process-tree RSS in a build-only pass; keep proof/verification outside the RSS claim.",
+    "product": "When --product is requested, final archive/tree identity and complete-product wall non-regression must participate in the decision; a child-only green cannot earn product credit."
+  },
+  "next_decisive_action": "Harden the evaluator without changing the grouped historical-dict mechanism, workloads, comparators or frozen decision thresholds; then run the frozen paired A/B.",
+  "claim_boundary": "Evaluator-custody correction only. No benchmark result, product mutation or release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
