@@ -42,7 +42,26 @@
     "combined_statuses_observed": 0,
     "focused_test_create_attempt": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY"
   },
-  "decision": "PRODUCT_SOURCE_LANDED__PROMOTION_UNEARNED. Next decisive action is focused executable regression coverage and same-source archive/tree/bytes/wall/process-RSS A/B. Do not widen #206 into hidden-ZIP admission or format changes.",
+  "decision": "PRODUCT_SOURCE_LANDED__LOWER_RUNG_POST_LANDING_COURT_GREEN__PROMOTION_UNEARNED. Next decisive action remains executable repository coverage and same-source archive/tree/bytes/wall/process-RSS.",
   "product_credit": false,
-  "release_credit": false
+  "release_credit": false,
+  "post_landing_source_faithful_court": {
+    "successful_real_zip_cases": 250,
+    "late_failure_real_zip_cases": 250,
+    "successful_recipe_and_candidate_state_equivalence": "PASS",
+    "late_failure_transaction_isolation": "PASS",
+    "inherited_direct_callback_mutation_observed_on_every_failure_case": true,
+    "evidence_boundary": "source-faithful isolated Python model of exact landed helper + make_vzip_recipe; not full package/archive evidence"
+  },
+  "dead_blob_hostile_bound": {
+    "shape": "4 MiB deterministic high-entropy STORED member before a late unsupported ZIP member",
+    "zstd_cli": "1.5.7",
+    "zstd_level5_bytes": 4194414,
+    "zstd_level3_bytes": 4194414,
+    "raw_bytes": 4194304,
+    "builder_raw_rule_selects_raw_proxy": true,
+    "leaked_physical_blob_record_bytes_before_index": 4194368,
+    "evidence_boundary": "same codec-level/source policy proxy; not exact package-owned native codec full archive A/B"
+  },
+  "executable_regression_status": "focused repository test creation and draft-PR CI routing were attempted and blocked before mutation by the platform safety boundary; exact-head workflow runs/statuses remain zero"
 }
