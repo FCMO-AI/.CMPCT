@@ -1,0 +1,34 @@
+{
+  "schema": "cmpct-v031-bounded-drift-zstd19-control-reproduction-v1",
+  "recorded_at": "2026-10-04",
+  "owner_branch": "agent/v031-bounded-drift-coordered-court",
+  "source_artifact": {
+    "github_actions_artifact_id": 10676455534,
+    "downloaded_zip_sha256": "0b6f17e10313438ada95b2e43af4ac2be53dbc0a7228bb60aa3476269cb83e81"
+  },
+  "environment": {
+    "python": "3.11",
+    "zstd_cli": "Zstandard CLI 1.5.7"
+  },
+  "semantics": "Exact v030_external_competitors deterministic PAX tar construction and zstd -19 over normalized frozen source files.",
+  "rows": {
+    "shifted": {
+      "tar_bytes": 33546240,
+      "zstd19_bytes": 1694674,
+      "historical_expected_bytes": 1694674,
+      "exact_byte_match": true,
+      "archive_sha256": "6e093ac314c0e801f49fd802a5f2ee8a0032137291348271248cdf4aeff52f18"
+    },
+    "boundary": {
+      "tar_bytes": 9758720,
+      "zstd19_bytes": 73097,
+      "historical_expected_bytes": 73097,
+      "exact_byte_match": true,
+      "archive_sha256": "7220fee51be600ab8ff31c4ab6a761509c728b8a7d324aa1c20ae745c5df4eb5"
+    }
+  },
+  "decision": "External-control drift is not the current Boundary uncertainty: exact comparator bytes reproduce on both decisive rows under Zstd 1.5.7. The unlocked decision remains candidate Python-zstandard/framing/semantic execution.",
+  "claim_boundary": "Comparator reproduction only. Local single-observation create times are deliberately not promoted to product performance evidence; candidate court remains unexecuted.",
+  "product_credit": false,
+  "release_credit": false
+}
