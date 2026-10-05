@@ -1,15 +1,16 @@
 {
-  "schema": "cmpct-v031-issue206-execution-custody-v1",
+  "schema": "cmpct-v031-issue206-execution-custody-v2",
   "recorded_at": "2026-10-05",
   "authority": {
     "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
     "owner_branch": "agent/v031-issue206-transactional-vzip",
-    "owner_head": "7b12cebf9dc590df04332cfec98909745fd0a3b7",
+    "observed_owner_head_before_this_record": "8dcb18f637479fa6f181859c260c70ba068e1b08",
     "product_landing_commit": "b00f9a2bc59142dc526a0ee1eba335e1d28d83c4",
     "builder_blob": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b"
   },
   "current_truth": {
     "product_source_landed": true,
+    "product_source_unchanged_since_landing": true,
     "focused_repository_test_present": false,
     "open_pull_request": false,
     "github_actions_runs_for_owner_branch": 0,
@@ -21,17 +22,31 @@
     "canonical_callsite": "explicit <8 ZIP/WHL deferred path",
     "live_state_rule": "stage sparse per-content-hash candidate deltas and merge only after complete recipe success",
     "failure_rule": "None or recipe-time exception leaves live Builder candidate state untouched",
-    "downstream_risk_repaired": "abandoned recipe callbacks can otherwise leak hints/exact-Deflate observations into reachable candidates and alter later dictionary/Deflate policy"
+    "downstream_risk_repaired": "abandoned recipe callbacks can otherwise leak hints/exact-Deflate observations into reachable candidates and alter later dictionary/Deflate policy",
+    "candidate_order_risk": "successful commit preserves first-observation candidate insertion order; final physical materialization sorts hashes, while dictionary training consumes insertion order",
+    "real_builder_stats_key_for_physical_candidate_count": "unique_blobs"
+  },
+  "strongest_unlanded_adversarial_witness": {
+    "shape": "16 already-reachable distinct .seed owners replayed as STORED .txt members before one unsupported BZIP2 tail",
+    "why": "direct pre-fix callbacks can add .txt hints to all 16 live owners before fallback, crossing the real dictionary trainer sample-count threshold; reachability sweeping cannot undo that live policy-state mutation",
+    "measurement_rule": "capture hint/dictionary-policy equality in a separate untimed proof pass so proof instrumentation cannot bias product wall/CPU"
   },
   "execution_attempts": {
     "focused_test_create": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
     "draft_pr_create": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
     "hosted_result": "UNEXECUTED"
   },
-  "decision": "PRODUCT_SOURCE_LANDED__EXECUTABLE_REPOSITORY_COVERAGE_AND_SAME_SOURCE_PRODUCT_COURT_REMAIN_THE_NEXT_DECISIVE_ACTION. Do not claim promotion/product credit from lower-rung oracles. When a legitimate route appears, land focused tests first, then run exact archive/tree/bytes/create-wall/process-RSS against the direct v0.31 base.",
+  "product_court_measurement_corrections": [
+    "Use stats['unique_blobs']; Builder.build has no physical_blobs result key.",
+    "Measure whole-process-tree RSS externally rather than worker-self ru_maxrss because dictionary training can spawn zstd.",
+    "Record self+child block-I/O counters and preserve any material temporary-I/O discrepancy.",
+    "Keep semantic policy-poison proof outside the timed A/B.",
+    "Successful VZIP must remain complete-archive byte-identical to the direct control; failure cases may only improve bytes."
+  ],
+  "decision": "PRODUCT_SOURCE_LANDED__EXECUTABLE_REPOSITORY_COVERAGE_AND_SAME_SOURCE_PRODUCT_COURT_REMAIN_THE_NEXT_DECISIVE_ACTION. Do not claim promotion/product credit from lower-rung oracles. When a legitimate route appears, land focused tests first, then run exact archive/tree/bytes/create-wall/process-tree-RSS/I-O against the direct v0.31 control.",
   "promotion_gates": [
     "successful VZIP archive/tree deterministic parity versus direct base",
-    "late-failure hostile proves no abandoned candidate/policy state reaches physical archive",
+    "late-failure hostile proves no abandoned candidate or reachable policy state reaches physical archive",
     "zero deterministic byte regression on same-input release-parity semantics",
     "no confirmed create slowdown outside >5% and >3 ms same-runner envelope",
     "process-tree RSS and material temporary I/O measured",
