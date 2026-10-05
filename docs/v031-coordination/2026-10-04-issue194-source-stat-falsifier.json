@@ -1,0 +1,66 @@
+{
+  "schema": "cmpct-v031-issue194-source-stat-falsifier-v1",
+  "recorded_at": "2026-10-04",
+  "authority": {
+    "base": "agent/v031-development@0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-issue194-source-stat-falsifier",
+    "issue": 194
+  },
+  "question": "Can cheap unordered source statistics safely own a prospective publishability gate for speculative r25 search?",
+  "environment": {
+    "zstd_cli": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***",
+    "level": 19
+  },
+  "courts": [
+    {
+      "id": "same-zero-order-statistics",
+      "logical_bytes": 4194304,
+      "shared_facts": [
+        "single file",
+        "identical logical byte count",
+        "identical exact per-byte histogram",
+        "identical zero-order Shannon entropy"
+      ],
+      "structured": {
+        "construction": "bytes 0..255 repeated deterministically",
+        "sha256": "2b07811057df887086f06a67edc6ebf911de8b6741156e7a2eb1416a4b8b1b2e",
+        "zstd19_bytes": 626
+      },
+      "shuffled": {
+        "construction": "deterministic permutation of the exact same byte multiset",
+        "sha256": "87a62cf88aee152b7f9f293e5f403dea18e1ac6b3aeab780518e9049a425d4b1",
+        "zstd19_bytes": 4194413
+      },
+      "size_ratio_shuffled_over_structured": 6700.340255591054
+    },
+    {
+      "id": "same-unordered-chunk-multiset",
+      "logical_bytes": 33554432,
+      "chunk_bytes": 65536,
+      "unique_chunks": 256,
+      "copies_per_chunk": 2,
+      "shared_facts": [
+        "single file",
+        "identical logical byte count",
+        "identical exact multiset of 512 fixed-size 64 KiB chunks",
+        "therefore identical byte histogram and identical unordered chunk hashes"
+      ],
+      "adjacent_duplicates": {
+        "construction": "B0,B0,B1,B1,...,B255,B255",
+        "sha256": "c95096d72ce4cd2d208c7bae5a518cc6a2ece9a15616dc306e57a4a0587698fa",
+        "zstd19_bytes": 16786657
+      },
+      "distant_duplicates": {
+        "construction": "B0,B1,...,B255,B0,B1,...,B255; duplicate distance about 16 MiB",
+        "sha256": "bb2c4472cea57265bd080e9564bf44b720135f98ae15e126897a7ccd28ae80c8",
+        "zstd19_bytes": 33555214
+      },
+      "size_ratio_distant_over_adjacent": 1.9989499977302752
+    }
+  ],
+  "decision": "NARROW_CHEAP_PREFILTER_FAMILY. File count/size, byte histogram or entropy, and unordered chunk/content-feature bags cannot safely bound attainable compressed bytes: exact shared facts can coexist with orders-of-magnitude different outcomes. Issue #194 should reject empirical thresholds on those facts. Reopen prospective pruning only with order-aware, grammar-aware forced state that is mathematically unavoidable under every continuation, or move to execution architecture that avoids fully materializing losing speculative candidates.",
+  "mandatory_hostile_preserved": "ML remains the product hostile: a +116 B pre-overlay gap can become a 161,843 B winner, so any safe bound must fail open there.",
+  "claim_boundary": "Lower-rung adversarial falsifier only. It does not prove every prospective gate impossible and earns no product/release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
