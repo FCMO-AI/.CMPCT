@@ -1,0 +1,21 @@
+{
+  "schema": "cmpct-v031-v030-release-supersession-v1",
+  "observed_at": "2026-10-04",
+  "canonical_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "current_release_lock": {
+    "blob": "988a7b05ad4e0833fac0453de74133b38f890f87",
+    "publication_mode": "rolling-pre1-checkpoint",
+    "required_task_states": [],
+    "required_receipts": [],
+    "dominance_required_for_release": false,
+    "dominance_target_version": "1.0.0"
+  },
+  "release_gates": {
+    "blob": "f834ff619333899f75383d4fb42adb63fe92cad1",
+    "status": "ROLLING CHECKPOINT CONTRACT",
+    "rule": "Unresolved v0.30 size/performance debt rolls forward into v0.31 rather than keeping v0.30 permanently open."
+  },
+  "decision": "Previous scheduled prose that treats T00-T04, 13 receipts, or strict 15/15 as current v0.30 release blockers is superseded by canonical main. Preserve those artifacts only as historical evidence when causally useful; do not allocate v0.31 work to reopening a released checkpoint.",
+  "product_credit": false,
+  "release_credit": false
+}
