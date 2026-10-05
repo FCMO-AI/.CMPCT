@@ -1,0 +1,28 @@
+{
+  "schema": "cmpct-v031-infrastructure-supersession-v1",
+  "canonical_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "current_release_lock": {
+    "blob": "988a7b05ad4e0833fac0453de74133b38f890f87",
+    "publication_mode": "rolling-pre1-checkpoint",
+    "required_task_states": [],
+    "required_receipts": [],
+    "dominance_required_for_release": false
+  },
+  "current_release_gates": {
+    "blob": "f834ff619333899f75383d4fb42adb63fe92cad1",
+    "status": "ROLLING CHECKPOINT CONTRACT",
+    "strict_15_of_15": "CMPCT 1.0 target",
+    "v030_debt": "rolls forward into v0.31"
+  },
+  "issue130": {
+    "classification": "historical/reusable custody debt; not a current v0.31 publication blocker",
+    "decision": "Do not allocate v0.31 frontier budget to finishing the old v0.30 final-release route unless a future pre1 release authority actually reuses it. Preserve its dual-scope identity/execution lesson."
+  },
+  "issue128": {
+    "classification": "still-relevant CI architecture debt",
+    "decision": "Avoid adding v0.31 pull_request classifier tax where owner-branch push/manual/scheduled exact receipts suffice. Historical workflow retirement remains useful but is not a prerequisite for the bounded-drift court."
+  },
+  "superseded_prior_ordering": "Earlier phased2 work ordered issue128 retirement behind issue130 because v030 workflow edits changed a live release fingerprint. Canonical main has now published v0.30 with no required receipts/tasks, so that ordering is no longer current project law.",
+  "product_credit": false,
+  "release_credit": false
+}
