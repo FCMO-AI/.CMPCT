@@ -1,0 +1,47 @@
+{
+  "schema": "cmpct-v031-issue194-evaluator-custody-v3",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-issue194-source-stat-falsifier",
+    "landed_benchmark_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+    "frozen_prereg_blob": "450f4df182a526ce57291f0a47a70752dd10d68c",
+    "prior_custody_blob": "48370ce32fd412ef54f48d6e4ea88e4ae7020815"
+  },
+  "decisive_reconciliation": {
+    "landed_v1_status": "DIAGNOSTIC_ONLY__NOT_PROMOTION_GRADE",
+    "reasons": [
+      "min(Shifted+Boundary)<=0.90 can let one Shifted win mask a Boundary regression",
+      "Incompressible is measured but absent from the v1 child pass expression",
+      "child exactness lacks strong tree plus candidate/accepted-edge/assignment/pack-plan equality",
+      "child memory is worker-self ru_maxrss rather than sampled live process-tree RSS",
+      "complete-product wall/RSS do not control v1 final pass/fail",
+      "v1 product RSS includes post-build verification/materialization lifetime"
+    ],
+    "false_green_witness": "A synthetic gate state with Shifted=0.85x, Boundary=1.50x/1.40x, Incompressible=2.00x/1.80x, product=2.00x still satisfies the landed v1 child expression while violating the frozen prereg."
+  },
+  "continuation_evaluator": {
+    "status": "LOCAL_CONTINUATION_READY__SOURCE_CREATE_BLOCKED",
+    "sha256": "08276d4b36f10d67858007ee9e42a31850ce23683d700b3b8cb07faac21533df",
+    "required_properties": [
+      "four alternating baseline/candidate timing pairs",
+      "whole live process-tree RSS sampled only during build",
+      "hashing/strong verification outside sampled build lifetime",
+      "separate untimed semantic proof for candidate rows, accepted measured edges, central-base assignment, pack-plan/locality",
+      "Shifted is the exposed positive row; Boundary, False Neighbors and Incompressible fail closed on confirmed >5% AND >3ms slowdown",
+      "when product mode runs, complete-product archive/tree/wall evidence participates in final pass/fail",
+      "proof-only product worker marker must cross shared-portfolio multiprocessing spawn before product evidence is accepted"
+    ],
+    "self_falsifications_repaired": [
+      "pack cache could overwrite semantic observer; install mechanism ownership before entering semantic trace",
+      "semantic trace inside timed/RSS worker contaminated measurement; moved to separate untimed pass",
+      "fresh product subprocess initially referenced the previous evaluator module; rebound to selected evaluator",
+      "pack-plan observer now binds the exact effective pack owner instead of re-deriving module identity",
+      "full semantic traces are compared exactly then compacted to digest/count receipt"
+    ]
+  },
+  "current_action": "Do not dispatch landed v1 as promotion evidence. Land the hardened evaluator only when the ordinary source-write surface changes, then execute the frozen paired child plus complete-product court once.",
+  "claim_boundary": "Evaluator/proof custody only. No benchmark result, product mutation or release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
