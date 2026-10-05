@@ -1,0 +1,52 @@
+{
+  "schema": "cmpct-v031-bounded-drift-coordered-court-prereg-v1",
+  "created_at": "2026-10-04",
+  "development_line": {
+    "base_release": "v0.30.0",
+    "base_release_sha": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "direction_branch": "agent/v031-development",
+    "direction_blob": "5e19eed73b2955209fe092f36672f6923111a0c7"
+  },
+  "owner_branch": "agent/v031-bounded-drift-coordered-court",
+  "question": "On the current v0.31 substrate, does coordering filesystem-manifest regular rows with deterministic bounded-drift member order preserve a strict complete-byte advantage on both frozen Shifted and Boundary while retaining exact filesystem semantics, corruption rejection, <=8x selected-member amplification, and <=8 MiB decode units?",
+  "prediction": {
+    "shifted": "complete sibling remains strictly smaller than same-run solid Zstd-19 by multiple KiB",
+    "boundary": "complete sibling remains strictly smaller than same-run solid Zstd-19; the inherited independent reproduction has only 211 B of strict slack, so any omitted framing/environment cost can falsify the route"
+  },
+  "frozen_sources": {
+    "resemblance_hostile_corpus_blob": "335169bd6eb336b6d444cfbd34c291101262c3a9",
+    "bounded_drift_container_blob": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "product_fs_blob": "72404386775be4576365cc687784f4e4f752d9de",
+    "canonical_final_blob": "caeaa2fb277481c500600af75eb13470f767d911",
+    "shifted_tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+    "boundary_tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d"
+  },
+  "inherited_evidence": {
+    "hosted_shifted_strict_win": "docs/V030_SHIFTED_BOUNDED_DRIFT_STRICT_WIN.md@92dcadad5ba824ab28088030dc77fbd12e725cea",
+    "coordered_independent_reproduction": "benchmarks/history/2026-10-04-v030-bd-coordered-materialized-independent-reproduction.json@ba92e3c9d7c8fd2fe18d37d26c05923350fe4422",
+    "generic_filesystem_hostile": "benchmarks/history/2026-10-04-v030-bd-coordered-generic-fs-hostile-materialization.json@c55d7c8d2e0b0405454338c27a0fae06aa36c8bd"
+  },
+  "court": [
+    "Generate frozen Shifted and Boundary directly from current-main resemblance_hostile_corpus_v1.",
+    "Capture the complete current filesystem-v1 manifest.",
+    "Order regular manifest rows by the exact deterministic bounded-drift content order and omit only ownership facts recoverable from authenticated BDC member identity.",
+    "Materialize the complete noncanonical sibling with the repository Python zstandard dependency.",
+    "Reconstruct filesystem tree and require byte-equal recaptured canonical filesystem manifest.",
+    "Flip candidate bytes and require corruption rejection.",
+    "Measure selected-member decoded context, amplification, max decode unit, complete stored bytes and create wall.",
+    "Build solid Zstd-19 on the same source in the same run and compare complete bytes/create."
+  ],
+  "kill_or_narrow": [
+    "Boundary complete sibling bytes >= same-run solid Zstd-19 bytes.",
+    "Shifted complete sibling bytes >= same-run solid Zstd-19 bytes.",
+    "filesystem manifest recapture is not byte-identical.",
+    "generic duplicate-content/hardlink/symlink ownership becomes ambiguous or incorrect.",
+    "corruption is accepted.",
+    "selected-member amplification > 8x or max decode unit > 8 MiB."
+  ],
+  "credit_boundary": "Research representation/execution evidence only. A green court earns one bounded v0.31 productization rung; it does not make the noncanonical sibling a shipping grammar, does not authorize release/publication, and does not waive native/recovery/portability/full-product economics.",
+  "next_if_positive": "Integrate prospective generic admission so bounded drift replaces/subsumes an expensive representation owner without unconditionally paying losing-candidate work; then measure complete product economics.",
+  "next_if_negative": "Retire/narrow coordered ownership at the failing semantic/byte boundary; preserve the earlier Shifted strict win without forcing global productization.",
+  "product_credit": false,
+  "release_credit": false
+}
