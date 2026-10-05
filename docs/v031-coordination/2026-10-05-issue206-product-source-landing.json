@@ -1,0 +1,48 @@
+{
+  "schema": "cmpct-v031-issue206-product-source-landing-v1",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-issue206-transactional-vzip",
+    "landing_commit": "b00f9a2bc59142dc526a0ee1eba335e1d28d83c4",
+    "builder_blob_before": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "builder_blob_after": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b"
+  },
+  "product_change": {
+    "mechanism": "row-sparse isolated per-content-hash transaction overlay around the existing explicit <8 ZIP/WHL VZIP discovery callsite",
+    "format_changed": false,
+    "reader_changed": false,
+    "codec_api_changed": false,
+    "exception_policy_changed": false,
+    "s_pack_policy_changed": false,
+    "direct_vzip_call_removed_from_canonical_builder": true
+  },
+  "inherited_evidence": {
+    "exhaustive_commit_cases": 4665,
+    "exhaustive_abort_cases": 4665,
+    "object_identity": "PASS",
+    "candidate_overlay_to_sparse_peak_bytes": {
+      "unique_existing_hint_20000": [
+        8109960,
+        2189960
+      ],
+      "duplicate_existing_hint_20000": [
+        648,
+        568
+      ],
+      "unique_existing_deflate_5000": [
+        3512592,
+        2352592
+      ]
+    },
+    "mark_and_sweep_primary_repair": "RETIRED because reachable candidates can retain leaked hint/Deflate policy state"
+  },
+  "exact_head_evidence": {
+    "pull_request_workflow_runs_observed": 0,
+    "combined_statuses_observed": 0,
+    "focused_test_create_attempt": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY"
+  },
+  "decision": "PRODUCT_SOURCE_LANDED__PROMOTION_UNEARNED. Next decisive action is focused executable regression coverage and same-source archive/tree/bytes/wall/process-RSS A/B. Do not widen #206 into hidden-ZIP admission or format changes.",
+  "product_credit": false,
+  "release_credit": false
+}
