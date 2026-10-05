@@ -1,0 +1,29 @@
+{
+  "schema": "cmpct-v031-ml-wrapper-custody-migration-v1",
+  "status": "PREREGISTERED",
+  "base": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+  "inherited_court": {
+    "branch": "agent/phased1-ml-wrapper-custody-court",
+    "benchmark_blob": "abb1d475ce0af2fe5d1b198063ee44320fdfa650",
+    "prereg_source": "PR #218",
+    "result": "UNEXECUTED"
+  },
+  "source_identity": {
+    "v2_worker_blob": "6336258267303e6c664fe89127b4518acfd1514f",
+    "canonical_worker_blob": "b50a60c98fd0fbdf0a61d6772a5b0bba25aa5c96",
+    "release_generalization_blob": "27f7c954fffa07fa20a74599819063bbda319e78",
+    "release_performance_blob": "d8cfe78dbedf20be23f3e553ff71e8f13fde6d88",
+    "release_product_blob": "f922b0b7b81f2ea0b51e606b87173ae8a91c4383"
+  },
+  "observation": "The five material dependencies are byte-identical between the historical custody branch and v0.31 development, so migration is additive research evidence rather than a product-code port.",
+  "mandatory_identity_hardening": [
+    "Fail closed on one physical archive SHA-256 per engine across both worker paths and all repeats.",
+    "Fail closed on one non-empty v0.30 filesystem_manifest_sha256 across every v0.30 arm.",
+    "Retain exact accepted-v0.29 bytes/tree identity and unchanged 1.10/1.25 thresholds.",
+    "Preserve raw per-pair timings and engine order; no product/release credit from the court alone."
+  ],
+  "kill": "Any source/blob drift, physical archive identity drift, filesystem-manifest identity drift, or non-positive canonical-minus-v2 median delta falsifies/narrows the migrated wrapper-custody hypothesis without threshold gardening.",
+  "next": "Land the hardened additive benchmark on this branch and execute exactly one hosted same-source court.",
+  "product_credit": false,
+  "release_credit": false
+}
