@@ -1,0 +1,33 @@
+{
+  "schema": "cmpct-v031-bounded-drift-hostile-valid-domain-repair-v1",
+  "recorded_at": "2026-10-04",
+  "authority_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "owner_branch": "agent/v031-bounded-drift-coordered-court",
+  "owner_head_observed": "8cb17e7a4d0b7efb7f5b134385ef55578264e938",
+  "benchmark_blob": "942923f95f678cb9e4462a56a38b6d5a0c81e47b",
+  "blocker_confirmation": {
+    "current_fixture_target": "../b.bin",
+    "current_fixture_is_outside_safe_domain": true,
+    "source_law": "experiments/entropygraph_v030_product_fs.py rejects any safe-mode symlink target containing a '..' path component under POSIX or Windows lexical semantics.",
+    "independent_test_coverage": "tests/test_v030_r25_symlink_platform_safety.py independently rejects ../escape, ..\\escape, POSIX absolute, Windows absolute/drive and UNC forms while accepting bounded sibling/subdir relative targets."
+  },
+  "repair": {
+    "target": "c.bin",
+    "location": "generic-source/d/link-c -> c.bin",
+    "safe_domain": true,
+    "mechanism_change": false,
+    "prereg_question_change": false,
+    "comparator_change": false,
+    "retained_hostile_dimensions": [
+      "duplicate regular content with distinct inode ownership",
+      "hardlink alias identity",
+      "symlink capture and exact target preservation",
+      "directory semantics",
+      "byte-identical filesystem-manifest recapture"
+    ]
+  },
+  "decision": "FIX_FIXTURE_ONLY_THEN_RUN_FULL_FROZEN_COURT. Do not weaken safe-symlink policy. The invalid-domain fixture is orthogonal to coordered ownership and path-security remains independently ratcheted by dedicated tests.",
+  "execution_status": "Benchmark source fix was attempted once in the activation and safety-blocked before execution; do not bypass or replay unchanged safety state.",
+  "product_credit": false,
+  "release_credit": false
+}
