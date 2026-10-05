@@ -3,11 +3,11 @@
   "recorded_at": "2026-10-04",
   "authority_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
   "owner_branch": "agent/v031-bounded-drift-coordered-court",
-  "owner_head_observed": "8ec00953c457f8ed6497e69fcfab6d9ea597b142",
-  "benchmark_blob": "942923f95f678cb9e4462a56a38b6d5a0c81e47b",
+  "owner_head_observed": "181d261b2340c1471af16c6a6e45c4100d9e8fcb",
+  "benchmark_blob": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
   "blocker_confirmation": {
-    "current_fixture_target": "../b.bin",
-    "current_fixture_is_outside_safe_domain": true,
+    "current_fixture_target": "b.bin",
+    "current_fixture_is_outside_safe_domain": false,
     "source_law": "experiments/entropygraph_v030_product_fs.py rejects any safe-mode symlink target containing a '..' path component under POSIX or Windows lexical semantics.",
     "independent_test_coverage": "tests/test_v030_r25_symlink_platform_safety.py independently rejects ../escape, ..\\escape, POSIX absolute, Windows absolute/drive and UNC forms while accepting bounded sibling/subdir relative targets."
   },
@@ -28,8 +28,8 @@
       "byte-identical filesystem-manifest recapture"
     ]
   },
-  "decision": "FIX_FIXTURE_ONLY_THEN_RUN_FULL_FROZEN_COURT. Prefer root link-b -> b.bin over d/link-c -> c.bin because duplicate-content ownership is coupled to the coordered representation question while nested symlink placement is not. Do not weaken safe-symlink policy.",
-  "execution_status": "Benchmark source fix was attempted once in the activation and safety-blocked before execution; do not bypass or replay unchanged safety state.",
+  "decision": "RUN_FROZEN_COURT_EXACTLY_ONCE. The fixture-only blocker is retired. Execute the preregistered Shifted+Boundary+generic-hostile court through the first legitimate hosted result route; Boundary remains the decisive byte falsifier.",
+  "execution_status": "FIX_LANDED at commit 181d261b2340c1471af16c6a6e45c4100d9e8fcb. The generic hostile is now root link-b -> b.bin inside canonical safe-relative-symlink semantics. Hosted court remains unexecuted; no product/release credit.",
   "product_credit": false,
   "release_credit": false
 }
