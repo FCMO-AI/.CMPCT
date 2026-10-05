@@ -1,0 +1,36 @@
+{
+  "schema": "cmpct-v031-issue206-event-log-control-v1",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "branch": "agent/v031-issue206-transactional-vzip",
+    "prior_head": "5a00114c0296908d17828be3b0f6e44c6b6d1619",
+    "builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+  },
+  "question": "Can a pure callback event log dominate the selected aggregate per-hash transactional overlay while preserving failure isolation?",
+  "memory_microcourt": {
+    "20000_unique_existing": {
+      "overlay_peak_median_bytes": 8109960,
+      "event_log_peak_median_bytes": 1453208,
+      "event_log_over_overlay": 0.1791880601
+    },
+    "20000_duplicate_existing": {
+      "overlay_peak_median_bytes": 648,
+      "event_log_peak_median_bytes": 1453208,
+      "event_log_over_overlay": 2242.6049382716
+    },
+    "5000_unique_existing_deflate": {
+      "overlay_peak_median_bytes": 3512592,
+      "event_log_peak_median_bytes": 1114552,
+      "event_log_over_overlay": 0.3173018671
+    }
+  },
+  "decision": "REJECT_EVENT_LOG_AS_DEFAULT. It wins the unique-hash metadata hostile but exports unbounded-by-unique-count event retention and loses by >2000x on a duplicate-heavy callback shape. Keep the aggregate live-object-reusing overlay as the workload-shape-robust default. The rollback-journal control remains the stronger fallback only if same-source product RSS rejects the isolated overlay.",
+  "productization_status": {
+    "builder_update_attempt": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
+    "product_source_changed": false,
+    "next": "When ordinary source mutation is available, land only the preregistered Builder overlay + focused tests, then measure same-source archive/tree/wall/process-RSS before deciding whether the lower-memory rollback journal is needed."
+  },
+  "product_credit": false,
+  "release_credit": false
+}
