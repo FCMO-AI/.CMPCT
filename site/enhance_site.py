@@ -95,7 +95,7 @@ def build_public_evidence(payload: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "schema": PUBLIC_EVIDENCE_SCHEMA,
-        "project_version": frontier.get("project_version") or project.get("project_version"),
+        "project_version": project.get("project_version") or frontier.get("project_version"),
         "canonical_format_revision": frontier.get("canonical_format_revision") or project.get("format_revision"),
         "frontier_name": (frontier.get("candidate") or {}).get("name") or "CMPCT research frontier",
         "frontier_status": (frontier.get("candidate") or {}).get("status") or frontier.get("kind") or "research frontier",
@@ -129,6 +129,7 @@ def build_public_evidence(payload: dict[str, Any]) -> dict[str, Any]:
         "capabilities": capabilities,
         "provenance": {
             "record": frontier.get("file"),
+            "evidence_project_version": frontier.get("project_version"),
             "date": frontier.get("date"),
             "tree_sha256": structural_source.get("tree_sha256"),
             "suite": structural_source.get("suite"),
