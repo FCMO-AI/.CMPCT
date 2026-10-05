@@ -1,0 +1,23 @@
+{
+  "schema": "cmpct-v031-bounded-drift-coordered-preexecution-blocker-v1",
+  "recorded_at": "2026-10-04",
+  "authority_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "owner_branch": "agent/v031-bounded-drift-coordered-court",
+  "owner_head_observed": "18d62bd1dddf9ce07b6b27b0bc70c9c498bdc211",
+  "benchmark_blob": "942923f95f678cb9e4462a56a38b6d5a0c81e47b",
+  "blocker": {
+    "location": "benchmarks/v031_bounded_drift_coordered_court.py::_generic_fs_hostile",
+    "observation": "The current hostile uses a symlink target containing a parent-traversal component.",
+    "current_law": "Current filesystem restoration rejects any symlink target with a '..' path component in safe mode; docs/FORMAT.md freezes the same host-independent rule.",
+    "consequence": "The court would fail on the orthogonal path-safety validator before it could decide the preregistered coordered-ownership question."
+  },
+  "repair_boundary": {
+    "requirement": "Keep safe-symlink policy unchanged. Move only the hostile fixture into the valid semantic domain, using a relative target inside the same directory.",
+    "mechanism_change": false,
+    "prereg_question_change": false,
+    "comparator_change": false
+  },
+  "execution_law": "Do not run or interpret the hosted coordered court until the fixture is corrected. After correction, execute the frozen Shifted+Boundary court exactly once; Boundary remains the decisive byte falsifier.",
+  "product_credit": false,
+  "release_credit": false
+}
