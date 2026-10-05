@@ -1,0 +1,74 @@
+{
+  "schema": "cmpct-v031-bounded-drift-canonical-owner-projection-v1",
+  "recorded_at": "2026-10-04",
+  "authority_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "owner_branch": "agent/v031-bounded-drift-coordered-court",
+  "current_owner_head_before_write": "3de405e69bc370fd3a24222c28ac706111e572db",
+  "current_prereg_blob": "f8e53f058a1c123ea4665b730c45f5619eb93d5f",
+  "current_benchmark_blob": "942923f95f678cb9e4462a56a38b6d5a0c81e47b",
+  "source_custody": {
+    "bounded_drift_container": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "bounded_drift_primitive": "d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+    "product_fs": "72404386775be4576365cc687784f4e4f752d9de"
+  },
+  "observation": {
+    "standard_bdc_exact_size_reproduction": {
+      "shifted_bytes": 1687646,
+      "boundary_bytes": 72554
+    },
+    "exact_inner_member_table_bytes": {
+      "shifted": 703,
+      "boundary": 459
+    },
+    "coordered_complete_bytes": {
+      "shifted": 1688045,
+      "boundary": 72885
+    },
+    "inherited_solid_zstd19_bytes": {
+      "shifted": 1694674,
+      "boundary": 73097
+    }
+  },
+  "mechanism": {
+    "canonical_owner": "Keep canonical filesystem-v1 logical size + SHA-256 + metadata ownership once in the outer filesystem/profile layer. Current bounded-drift EditPrograms are self-delimiting, so program offset/length and duplicate per-member logical SHA need not be serialized again inside the inner BDC table.",
+    "integrity": "Do not weaken logical SHA verification. The canonical outer owner remains authoritative; physical payload integrity remains authenticated by the containing representation/profile.",
+    "recovery": "Do not assume the research-only duplicated CMPNXBR3 metadata frame is the eventual product recovery boundary. Recovery ownership should be tested at the canonical archive/profile layer."
+  },
+  "projection": {
+    "shifted": {
+      "canonical_manifest_reintroduction_cost_bytes": 603,
+      "inner_table_removal_saving_bytes": 703,
+      "net_saving_bytes": 100,
+      "projected_complete_bytes": 1687945,
+      "delta_vs_inherited_zstd19_bytes": -6729
+    },
+    "boundary": {
+      "canonical_manifest_reintroduction_cost_bytes": 390,
+      "inner_table_removal_saving_bytes": 459,
+      "net_saving_bytes": 69,
+      "projected_complete_bytes": 72816,
+      "delta_vs_inherited_zstd19_bytes": -281
+    }
+  },
+  "self_delimiting_microcourt": {
+    "families": 100,
+    "programs": 1512,
+    "result": "PASS",
+    "property": "Concatenated current-grammar edit programs were segmented exactly without a stored per-program offset/length table, and derived logical sizes matched targets.",
+    "exact_patch_scan_median_ms": {
+      "shifted": 0.579447,
+      "boundary": 0.087637
+    }
+  },
+  "decision": "Preserve the currently preregistered coordered court as the control. If it runs green, the next representation oracle should compare canonical-owner/tableless BDC against that control and same-run Zstd-19 rather than wrapping the candidate in duplicated recovery metadata. This is a different ownership frame, not threshold tuning.",
+  "kill_or_narrow": [
+    "Exact current-main tableless parsing cannot reconstruct/select members deterministically from canonical outer metadata.",
+    "Actual current-main complete bytes erase Boundary headroom.",
+    "Selected-member scan CPU or decoded-work amplification becomes materially worse.",
+    "A hard integrity or recovery invariant requires duplicate per-member identity inside the BDC layer.",
+    "Generic duplicate-content/hardlink/symlink filesystem semantics become ambiguous."
+  ],
+  "claim_boundary": "Exact-source representation accounting plus local source-faithful scanning evidence. Not a hosted canonical archive, recovery implementation, runtime court, native port or product/release claim.",
+  "product_credit": false,
+  "release_credit": false
+}
