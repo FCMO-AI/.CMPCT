@@ -1,5 +1,5 @@
 {
-  "schema": "cmpct-v031-issue194-source-stat-falsifier-v1",
+  "schema": "cmpct-v031-issue194-source-stat-falsifier-v2",
   "recorded_at": "2026-10-04",
   "authority": {
     "base": "agent/v031-development@0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
@@ -58,9 +58,38 @@
       "size_ratio_distant_over_adjacent": 1.9989499977302752
     }
   ],
-  "decision": "NARROW_CHEAP_PREFILTER_FAMILY. File count/size, byte histogram or entropy, and unordered chunk/content-feature bags cannot safely bound attainable compressed bytes: exact shared facts can coexist with orders-of-magnitude different outcomes. Issue #194 should reject empirical thresholds on those facts. Reopen prospective pruning only with order-aware, grammar-aware forced state that is mathematically unavoidable under every continuation, or move to execution architecture that avoids fully materializing losing speculative candidates.",
+  "independent_reproduction": {
+    "generator": "fresh deterministic SHA-256 counter chunks and a separately seeded byte permutation",
+    "same_zero_order_statistics": {
+      "periodic_sha256": "2b07811057df887086f06a67edc6ebf911de8b6741156e7a2eb1416a4b8b1b2e",
+      "periodic_zstd19_bytes": 626,
+      "shuffled_sha256": "687d94470485592ccd9ab1de10bc7696af4547849c0d8336dffb91bcc0a2f4db",
+      "shuffled_zstd19_bytes": 4194413,
+      "ratio": 6700.340255591054
+    },
+    "same_unordered_chunk_multiset": {
+      "chunk_bytes": 65536,
+      "unique_chunks": 256,
+      "copies_per_chunk": 2,
+      "adjacent_sha256": "0cca694341d8ce3f6c15a4f432bff29df1ed61634e4d457ecfe18499e72655d1",
+      "adjacent_zstd19_bytes": 16786618,
+      "distant_sha256": "8784dbf29f57e58d64533a7204cb82d8d63daf0024efa5c7ceca13f9dff901f6",
+      "distant_zstd19_bytes": 33555214,
+      "ratio": 1.9989264067366042
+    },
+    "result": "REPLICATED"
+  },
+  "lineage_reconciliation": {
+    "current_main_resemblance_blob": "8c73f33cb8bb2983ac949edbd6fd30e6570b8cc0",
+    "current_main_still_rebuilds_historical_weak_index_per_delta_encode_call": true,
+    "prior_shifted_source_audit": "agent/phased1-issue194-shifted-current-profile@03932031bdefa042a025657203f09599eba0c083",
+    "prior_grouped_dict_hostile": "agent/phased3-issue194-dict-grouped-reuse@496eb341d2e536d8e8ad947a9d0d3a03341a43e8",
+    "prior_grouped_dict_prereg": "agent/phased3-issue194-dict-grouped-reuse@450f4df182a526ce57291f0a47a70752dd10d68c"
+  },
+  "decision": "NARROW_CHEAP_PREFILTER_FAMILY. File count/size, byte histogram or entropy, and unordered chunk/content-feature bags cannot safely bound attainable compressed bytes: exact shared facts can coexist with orders-of-magnitude different outcomes. Issue #194 should reject empirical thresholds on those facts. Reopen prospective pruning only with order-aware, grammar-aware forced state that is mathematically unavoidable under every continuation, or move to exact execution sharing that avoids recomputing losing speculative work.",
   "mandatory_hostile_preserved": "ML remains the product hostile: a +116 B pre-overlay gap can become a 161,843 B winner, so any safe bound must fail open there.",
-  "claim_boundary": "Lower-rung adversarial falsifier only. It does not prove every prospective gate impossible and earns no product/release credit.",
+  "next_discriminator": "Do not create another source-stat prefilter family. Fresh current-main audit confirms per-call weak-index construction still exists. Reconcile the already-preregistered ownership-only historical-dict reuse onto v0.31 only if a current integrated A/B can preserve exact candidate/final identity and show material child/product-wall improvement on Shifted plus Boundary/False-Neighbors controls.",
+  "claim_boundary": "Repeated lower-rung adversarial falsifier and current-source ownership reconciliation only. No product mutation or release credit.",
   "product_credit": false,
   "release_credit": false
 }
