@@ -1,0 +1,31 @@
+{
+  "schema": "cmpct-v031-bounded-drift-recovery-rehabilitation-hypothesis-v1",
+  "recorded_at": "2026-10-04",
+  "authority_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "owner_branch": "agent/v031-bounded-drift-coordered-court",
+  "source_custody": {
+    "bounded_drift_primitive_blob": "d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+    "bounded_drift_container_blob": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "product_fs_blob": "72404386775be4576365cc687784f4e4f752d9de",
+    "current_recovery_bound_blob": "6991e99dcbe2ca59eb8e0929987cf4649c567873"
+  },
+  "problem": {
+    "fact": "The current CMPNXBR3 duplicated-metadata recovery grammar has an optimistic Boundary floor of 73454 B, already 357 B larger than the unchanged 73097 B solid-Zstd-19 control.",
+    "constraint": "A positive coordered semantic court therefore cannot advance Boundary by wrapping the current recovery grammar unchanged."
+  },
+  "mechanism": {
+    "self_indexing": "Each bounded-drift EditProgram begins with a record_count and then exactly that many copy/delete/insert-length/literal records. Program boundaries are therefore derivable by a bounded sequential scan of the authenticated patch stream; program_offset and program_length need not be duplicated recovery authority.",
+    "open_identity": "Keep logical_size plus SHA-256 per content-ordered regular member so filesystem identity can be established during open/list without decoding the shared patch.",
+    "recovery_ownership": "Store the filesystem-semantic open bundle once. Duplicate only the smallest authenticated locator/index needed for primary-from-tail and tail-from-primary recovery. Payload corruption still fails closed; recovery protects metadata authority, not arbitrary damaged content."
+  },
+  "why_this_is_not_product_credit": [
+    "No exact recovery framing bytes have been materialized in current v0.31.",
+    "No primary-only/tail-only recovery execution has been measured.",
+    "No cold-open/list, read, verify, RSS, temporary-I/O, native, Android or portability evidence exists for this shape.",
+    "The coordered semantic court itself is still unexecuted at the time of this record."
+  ],
+  "next_if_coordered_green": "Run one exact Python-zstandard framing court that materializes two-way recovery with one semantic open bundle and duplicated compact recovery indexes. Boundary complete bytes >=73097 immediately narrows/retires Boundary; do not tune comparator, workload identity or admission to rescue it.",
+  "next_if_coordered_red": "Do not spend recovery engineering on the failing row. Preserve the earlier Shifted seed and narrow the representation at the semantic/byte failure.",
+  "product_credit": false,
+  "release_credit": false
+}
