@@ -4,15 +4,21 @@ Status: **no active primary Foundry thesis**.
 
 Constitutional authority: `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`. Current release authority remains independent under `docs/V030_RELEASE_LOCK.json` and the v0.30 coordination task ledger.
 
-## Temporary global priority — v0.30 efficiency recovery
+## Current allocation — v0.31 rolling development
 
-`docs/V030_EFFICIENCY_RECOVERY.md` is currently **ACTIVE** and is the dominant temporary allocator for CMPCT work until its explicit exit conditions are proven.
+v0.30.0 is published under `docs/PRE1_RELEASE_POLICY.md`; the historical v0.30 efficiency-recovery directive is **closed as a v0.30 release gate** and must not continue to allocate work merely because this file once said it was active.
 
-This is not a new Foundry thesis and does not weaken Foundry/Forge separation. It is a product-recovery priority created by measured end-to-end execution debt. While it is active, discretionary material work should directly advance, measure, unblock, or decisively falsify the efficiency-recovery mission: eliminate major create/extract/CPU/I/O/search waste, rehabilitate the proven v0.30 byte gains without exporting cost, and prove the real product against ZIP/Zstd and broader serious corpora rather than only the frozen 15-workload matrix.
+This does not create a new Foundry thesis. CMPCT remains in a **no active primary Foundry thesis** state. Under the rolling pre-1.0 policy, discretionary work should follow current repository evidence and the v0.31 development direction rather than an obsolete version-specific recovery campaign:
 
-Do not start an unrelated primary Foundry thesis merely to keep Foundry occupied while this recovery is red. A new thesis during this interval should have a credible broad path to attack an efficiency/representation bottleneck or another release-critical constraint and must still pass the normal Thesis Initiation Gate. Safety, exactness, integrity, recovery, portability and truthful evidence remain non-negotiable and can preempt performance work when they are genuine blockers.
+- preserve safety, exactness, integrity, recovery, portability and truthful evidence as non-negotiable;
+- pursue the highest-leverage measured improvement across representation, compression, create/extract cost, execution ownership and robustness;
+- keep strict 15/15 size+create domination versus ordinary ZIP/Deflate-9 and solid Zstd-19 as the **CMPCT 1.0 graduation target**, not a v0.31 release quota;
+- treat former v0.30 blockers as carried evidence-backed v0.31 opportunities when they still answer a current question, not as publication gates for an already released checkpoint;
+- do not relabel historical-fingerprint benchmark evidence as exact-current release authority merely to make a newer surface look complete.
 
-The recovery directive ends only when its repository-defined exit conditions are durably satisfied; schedule cadence or passage of time does not end it.
+As of the current v0.31 frontier, the strongest direct Forge representation owner is the preregistered bounded-drift coordered court on `agent/v031-bounded-drift-coordered-court`. It should be judged by its frozen semantic/byte/integrity/locality court, not by version pressure. Released-main evidence/publication coherence debt may be repaired in parallel because it affects the cleanliness of future v0.31 proof surfaces, but it is not itself evidence that the archive algorithm regressed.
+
+Foundry should reopen the Assumption Ledger only when a materially distinct thesis can clear the normal initiation gate and beat the expected value of the current Forge frontier. Do not invent a new thesis merely to keep Foundry occupied.
 
 ## A01 latent physical basis — FAMILY_RETIRED as current primary path
 
