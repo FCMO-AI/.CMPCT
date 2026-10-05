@@ -1,0 +1,38 @@
+{
+  "schema": "cmpct-v031-issue206-transactional-overlay-prereg-v1",
+  "authority": {
+    "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "branch": "agent/v031-issue206-transactional-vzip",
+    "builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "codec_blob": "29526db4203723d83523fc95d074c346b63d7587",
+    "issue": 206
+  },
+  "problem": "make_vzip_recipe mutates live Builder candidates member-by-member before the full recipe is known to succeed. A later unsupported/unreproducible member can return None after earlier candidate mutation. Reachability sweeping is insufficient because the earlier raw hash may already be live from another file.",
+  "mechanism": {
+    "name": "transactional candidate overlay",
+    "rule": "Stage per-content-SHA candidate deltas for one VZIP recipe and merge them into Builder.cands only after make_vzip_recipe returns a complete recipe. On None/exception, discard staging.",
+    "memory_refinement": "When a staged hash already exists in Builder.cands, reuse the live Candidate.raw object and any already-owned exact Deflate stream object instead of retaining duplicate bytes in staging. New raw/stream bytes are retained only when they are genuinely new candidate state.",
+    "invariant": "Successful recipe state must be byte/semantic equivalent to direct add_content calls: same returned hashes, hints, exact-Deflate stream identities/counts, recipe object and downstream archive semantics."
+  },
+  "lower_rung_evidence": {
+    "randomized_success_merge_equivalence": "10000/10000 cases PASS",
+    "randomized_failure_isolation": "10000/10000 cases PASS",
+    "real_zip_success": "stored + deflate-6 + deflate-9 recipe and final candidate state exactly equal under direct vs staged semantics",
+    "real_zip_late_failure": "stored first member followed by BZIP2 member returns None; transactional live state unchanged while current direct callback mutates an existing candidate hint",
+    "carrying_cost_hostile": {
+      "shape": "1000 existing unique 64KiB candidates replayed as fresh duplicate byte objects through a failing recipe callback",
+      "naive_staging_peak_bytes": 66112765,
+      "overlay_reuse_peak_bytes": 674921,
+      "peak_reduction_ratio": 97.9563
+    }
+  },
+  "controls": [
+    "Do not replace transaction isolation with mark-and-sweep; reachable candidate hints/Deflate observations can be poisoned by an abandoned recipe.",
+    "Do not alter VZIP reader grammar, file storage semantics, format revision, explicit ZIP/WHL admission, >=8-container pack policy, or exception behavior.",
+    "Do not catch new exception classes merely to force fallback; this change owns mutation isolation only."
+  ],
+  "next_decisive_action": "Implement the overlay in Builder, add focused successful-merge/failure-isolation/preexisting-candidate tests, then run exact same-source archive/tree/bytes/RSS/wall controls before product promotion.",
+  "product_credit": false,
+  "release_credit": false
+}
