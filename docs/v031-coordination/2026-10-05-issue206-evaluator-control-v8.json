@@ -1,0 +1,39 @@
+{
+  "schema": "cmpct-v031-issue206-evaluator-control-v8",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-issue206-transactional-vzip",
+    "prior_control_commit": "5ae56469ed006874e372e345e369123b823e4b95",
+    "product_landing_commit": "b00f9a2bc59142dc526a0ee1eba335e1d28d83c4",
+    "builder_blob": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b",
+    "release_product_blob": "f922b0b7b81f2ea0b51e606b87173ae8a91c4383",
+    "r24_prebuild_blob": "e3a5f2a13f8553dcdd87a5f0b566dc00ab9ec2a4"
+  },
+  "corrections_since_v7": [
+    "The shadow child must explicitly retain the exact real repository root on PYTHONPATH after the control-root slot; otherwise fresh child imports can accidentally depend on cwd or inherited environment.",
+    "Fresh-child receipts must bind Builder, codec and promoted-product source paths to that exact repository root, not only report the function owner.",
+    "The proof-only custody/bootstrap-neutrality source should be a deterministic small plain-text tree, not the VZIP research fixture: current promoted frontdoor routes this shape through canonical-final, whose shipping seam starts R24PrebuildProcess before profile work."
+  ],
+  "evaluator_contract": {
+    "child_process_class": "canonical R24PrebuildProcess unchanged",
+    "child_command": "canonical python -m experiments.entropygraph_v030_r24_process_prebuild unchanged",
+    "equal_shadow": "both arms use the same shadow worker module; one direct-control bit reconstructs the pre-fix Builder seam",
+    "source_custody": [
+      "builder_file",
+      "codec_file",
+      "product_file",
+      "shadow_file"
+    ],
+    "candidate_neutrality": "shadow candidate must be complete-archive/tree identical to exact canonical candidate and must not materially distort wall under >5% AND >3ms",
+    "proof_order": "child custody and candidate neutrality before any product timing claim"
+  },
+  "lower_rung_evidence": [
+    "synthetic fresh child outside source cwd passed after explicit real-root preservation",
+    "source-custody probe logic accepts exact-root imports and rejects a foreign product import",
+    "generated shadow module parses/compiles with exact source-path receipts"
+  ],
+  "next_decisive_action": "Execute v8 control-custody + candidate-neutrality gates on the exact package/native runtime; only if green run the focused transactional tests and shipping-r24/full-product Issue206 A/B.",
+  "product_credit": false,
+  "release_credit": false
+}
