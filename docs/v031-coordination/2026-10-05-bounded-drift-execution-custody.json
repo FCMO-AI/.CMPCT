@@ -1,0 +1,45 @@
+{
+  "schema": "cmpct-v031-bounded-drift-execution-custody-v1",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "release_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "v031_development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-bounded-drift-coordered-court",
+    "frozen_science_head": "c05ed957d3f152ba090a633c71ef31ece4983569"
+  },
+  "frozen_court": {
+    "benchmark_blob": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+    "prereg_blob": "f8e53f058a1c123ea4665b730c45f5619eb93d5f",
+    "hostile_corpus_blob": "335169bd6eb336b6d444cfbd34c291101262c3a9",
+    "bounded_drift_container_blob": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "product_fs_blob": "72404386775be4576365cc687784f4e4f752d9de",
+    "canonical_final_blob": "caeaa2fb277481c500600af75eb13470f767d911",
+    "safe_domain_repair_blob": "cd4ed87299c60a16ad0e02dcd5b43876f624d605",
+    "fixture_blocker": "RETIRED",
+    "scientific_result": "UNEXECUTED"
+  },
+  "execution_custody": {
+    "exact_head_actions_runs_observed": 0,
+    "exact_head_statuses_observed": 0,
+    "workflow_path": ".github/workflows/v031-bounded-drift-coordered-court.yml",
+    "workflow_present": false,
+    "frozen_external_control": {
+      "zstd_cli_version": "1.5.7",
+      "shifted_zstd19_bytes": 1694674,
+      "boundary_zstd19_bytes": 73097
+    },
+    "first_receipt_topology": [
+      "narrow push only on agent/v031-bounded-drift-coordered-court while workflow is absent from default branch",
+      "exact-SHA non-cancelling result custody",
+      "workflow_dispatch retained for later replay",
+      "fail closed unless scientific source differs from c05ed957... only by the workflow file",
+      "seal experiment-defining blobs",
+      "fail closed unless Zstd CLI is 1.5.7 and both same-run historical Zstd-19 byte fingerprints reproduce"
+    ],
+    "ordinary_workflow_create_attempt": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
+    "local_bootstrap_candidate_sha256": "9136486659e6ac54d0de5e463e01531a370139854c27a47e1e000da3555e2fc8"
+  },
+  "decision": "RUN_FROZEN_COURT_EXACTLY_ONCE through the first ordinary writable exact-source hosted route. Do not reopen mapping/compression/recovery variants first.",
+  "product_credit": false,
+  "release_credit": false
+}
