@@ -1,0 +1,51 @@
+{
+  "schema": "cmpct-pr221-evidence-obligation-custody-v1",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "pr": 221,
+    "pr_head": "93d864fb40e1c97fd9de10e226a92c89b54098aa",
+    "zip_parity_blob": "d653d4353a5d463faa7e099c8eea06209e25c688",
+    "authoritative_v2_blob": "2f095ec3b5b1028bc1fa49dd730de8062876e0ee",
+    "release_lock_blob": "3cd822e6e9fead8a5dc210beb252f26dc52e0735",
+    "release_checker_blob": "225c20aea99fc9c444d6b0af1e3d96634f2469ac",
+    "topology_checker_blob": "f3892b1f6a5d089c26f472f10ca5a89784af8a5e",
+    "split_custody_doc_blob": "ada0b312a8d07f8b8ae01c878221f312bb1e0081",
+    "split_test_blob": "4443100aaee958dedad76ac6b091b32179c09eb5"
+  },
+  "falsified_assumptions": [
+    "PR/ref cancelling + newest-commit-only classification can erase an unmet evidence obligation when a relevant queued classifier is superseded by a later irrelevant commit before admission.",
+    "The topology checker currently ratchets that scheduling shape, while the normative split-custody document already states that cancellation is safe only if the newer classifier cannot erase an unmet obligation.",
+    "The authoritative-v2 classifier reinterprets release fingerprint globs with fnmatch.fnmatchcase even though the release fingerprint uses glob.glob(..., recursive=true). All 15 current fingerprint patterns containing recursive **/* have a direct-child zero-directory witness that recursive glob matches and fnmatch misses."
+  ],
+  "required_invariants": [
+    "Classifier-only green is routing evidence, never satisfaction.",
+    "A semantic evidence obligation remains fail-closed until a substantive result is durably admitted or satisfied.",
+    "A later irrelevant commit may not erase an earlier unmet obligation.",
+    "Classifier impact must reuse the owning evidence/fingerprint semantics rather than maintain a second glob interpretation.",
+    "Any satisfaction mechanism must bind the semantic evidence fingerprint and provenance of the substantive result."
+  ],
+  "solution_frontier": [
+    {
+      "name": "candidate-vs-PR-base relevance",
+      "status": "safe control",
+      "debt": "can re-admit expensive evidence on every later irrelevant commit"
+    },
+    {
+      "name": "semantic evidence fingerprint plus durable substantive satisfaction",
+      "status": "preferred architecture",
+      "note": "use the last successful substantive receipt/fingerprint as the classifier boundary; failed or missing satisfaction fails closed and reruns"
+    },
+    {
+      "name": "queue/concurrency policy alone",
+      "status": "insufficient",
+      "note": "scheduling is resource control, not scientific satisfaction state"
+    }
+  ],
+  "separate_pr_blockers": [
+    "P1 release fingerprint glob semantics",
+    "P2 seven-cell public evidence receipt geometry"
+  ],
+  "next_decisive_action": "Add a deterministic state-transition ratchet for relevant-A queued/cancelled then irrelevant-B, plus a satisfied-receipt control. Then repair classifier/fingerprint semantics and only resolve the review thread after the ratchet passes.",
+  "product_credit": false,
+  "release_credit": false
+}
