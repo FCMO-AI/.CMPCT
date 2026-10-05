@@ -1,0 +1,37 @@
+{
+  "schema": "cmpct-v031-coordered-court-coordination-v1",
+  "recorded_at": "2026-10-04",
+  "current_product_truth": {
+    "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "release": "v0.30.0 rolling pre-1.0 checkpoint",
+    "v031_direction": "agent/v031-development",
+    "v031_direction_blob": "5e19eed73b2955209fe092f36672f6923111a0c7",
+    "strict_15_of_15": "CMPCT 1.0 graduation target; not a v0.31 release gate"
+  },
+  "owner": {
+    "branch": "agent/v031-bounded-drift-coordered-court",
+    "prereg_blob": "f8e53f058a1c123ea4665b730c45f5619eb93d5f",
+    "relation_to_v031_direction": "1 ahead / 0 behind at reconciliation"
+  },
+  "priority": {
+    "primary": "Execute the current-main coordered bounded-drift complete semantic court.",
+    "rationale": "Main already owns bounded-drift primitive/container/admission/recovery research seams and a hosted Shifted strict win; coordered ownership has positive complete-byte evidence on both Shifted and Boundary, with Boundary only 211 B from failure.",
+    "secondary": [
+      "Preserve compact-r24 full-matrix and ML-wrapper custody as bounded evidence lanes; neither is a v0.30 release blocker after checkpoint publication.",
+      "Do not reopen saturated hidden-ZIP current productization or pack-plan reuse families without a materially new mechanism."
+    ]
+  },
+  "control_plane_warning": {
+    "file": "docs/ACTIVE_RESEARCH_THESIS.md",
+    "blob": "464b76e2380263a7bcb37b98cd18bc9c228e3ce4",
+    "contradiction": "It still declares V030_EFFICIENCY_RECOVERY ACTIVE, while docs/V030_EFFICIENCY_RECOVERY.md@32ba2d6f is CLOSED and CURRENT_STATE/PRE1/Discovery start v0.31.",
+    "handling": "Repository/current v0.31 direction outranks that stale allocation paragraph. A direct correction was attempted on a dedicated branch and safety-blocked before execution; do not infer that v0.30 release recovery is still the active publication mission."
+  },
+  "implementation_status": {
+    "benchmark_prototype": "Prepared locally and py_compile-green; it removes the old-branch-only PrefixGraph oracle dependency and uses current-main corpus/BDC/filesystem/comparator surfaces.",
+    "github_source_write": "Attempted once on this owner branch and blocked before execution by platform safety checks.",
+    "next": "When legitimate source writes are available, land the preregistered benchmark against the exact current dependency blobs and execute one hosted result-bearing court; no duplicate branch/family."
+  },
+  "product_credit": false,
+  "release_credit": false
+}
