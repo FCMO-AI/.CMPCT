@@ -226,3 +226,15 @@ benchmark story. If work improves only the public surface, use `x.x.a`.
 Footnote: `tools/check_version_discipline.py` enforces the separation. It rejects numeric bumps without
 archive/engine participation, requires benchmark/release evidence for a core release, validates the
 alphabetic surface line, and prevents surface work from masquerading as a new core version.
+
+## Apoyo de Claudex
+
+Claudex es el harness de apoyo de FCMO. Los agentes de .CMPCT conservan la misión, las decisiones de promoción, su frontera de investigación, su cola y su roadmap. Continúa tu trabajo mientras pides ayuda.
+
+Puede aportar un carril Codex acotado de código o investigación y comprobaciones del host dentro de su autoridad. Respeta el presupuesto: sin lectura fiable de cuota no gasta; Codex se detiene al 95 %. El diseño cualitativo requiere dirección externa de Claude y no se envía a este canal como un carril cualitativo.
+
+Para pedir ayuda, abre una issue en FCMO-AI/.CMPCT con la etiqueta claudex-support y la plantilla «Apoyo acotado de Claudex». Completa: Qué está bloqueado; Qué se intentó; Pedido exacto; Evidencia; Qué seguirá haciendo el agente mientras tanto. El pedido debe definir archivos exactos, resultado y verificación. No envíes secretos ni datos de clientes.
+
+Claudex consulta el canal con `claudex proyectos`. La respuesta se espera en el siguiente sondeo autorizado, sujeto a cuota y a un máximo de dos apoyos abiertos por proyecto. Todavía no hay SLA ni timer instalado por este módulo: si no hay un operador o consumidor activo sondeando, no hay respuesta automática prometida. Un estancamiento de 48 h solo permite abrir una oferta de ayuda; la oferta no inicia trabajo y debes abrir un pedido explícito si lo necesitas.
+
+Cada pedido admite un único carril, en claudex/support-<número de issue>, con PR de vuelta que referencia la issue. Claudex no empuja a main, no integra, no cambia fronteras o colas y no cierra issues. El comentario de devolución indica el PR y el trabajo que debes continuar. Revisa la evidencia y los límites, integra si procede, continúa tu misión y cierra tú la issue al verificar el pedido. Una ampliación de alcance requiere otro pedido; no entregues el roadmap a Claudex.
