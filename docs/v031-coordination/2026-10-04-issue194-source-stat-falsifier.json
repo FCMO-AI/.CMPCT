@@ -139,5 +139,34 @@
     },
     "decision": "ADVANCE_EXISTING_PREREGISTERED_INTEGRATED_A_B",
     "credit_boundary": "Local lower-rung source-faithful evidence only; no hosted/product/release credit."
+  },
+  "current_v031_integrated_ab": {
+    "recorded_at": "2026-10-05",
+    "benchmark_path": "benchmarks/v031_issue194_grouped_dict_integrated_ab.py",
+    "benchmark_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+    "landing_commit": "2193215eef45b9a44c9a64632f30431ef15b2dfa",
+    "source_resemblance_blob": "8c73f33cb8bb2983ac949edbd6fd30e6570b8cc0",
+    "source_placement_blob": "d191f6fcaf2cad14e19704fe7dd987bad3d57795",
+    "mechanism": "Reuse the exact historical dict[int,list[int]] weak index once per immutable base; preserve candidate discovery, COPY/LITERAL scan, first-offset law, downstream assignment, archive grammar, reader and release law.",
+    "frozen_workloads": [
+      "01_shifted_versions",
+      "02_false_neighbors",
+      "03_boundary_churn",
+      "05_incompressible"
+    ],
+    "children": [
+      "v028",
+      "discovery-neutral-attempt5"
+    ],
+    "fail_closed": [
+      "exact child archive SHA-256 equality",
+      "exact final product archive SHA-256 equality",
+      "exact strong-verified tree identity",
+      "False Neighbors wall non-regression",
+      "RSS bound",
+      "no format/reader/admission/release-law change"
+    ],
+    "evidence_boundary": "Benchmark instrument landed; hosted integrated result remains UNEXECUTED. No product or release credit.",
+    "workflow_status": "Dedicated deep workflow creation was blocked before execution by platform safety; no hosted result job is pending."
   }
 }
