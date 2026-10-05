@@ -1,0 +1,35 @@
+{
+  "schema": "cmpct-v031-bounded-drift-current-recovery-overhead-bound-v1",
+  "current_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "source_grammar": {
+    "standard_bdc": "experiments/entropygraph_v030_bounded_drift_container_v1.py@ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "recovery_bdc": "experiments/entropygraph_v030_bounded_drift_recovery_v1.py@7896e3ce2f5b11f0ae034d48fa4c037cc05944c6"
+  },
+  "inherited_complete_bytes": {
+    "receipt": "benchmarks/history/2026-10-04-v030-bd-coordered-materialized-independent-reproduction.json@ba92e3c9d7c8fd2fe18d37d26c05923350fe4422",
+    "boundary_coordered": 72885,
+    "boundary_zstd19": 73097,
+    "boundary_margin": 212,
+    "shifted_coordered": 1688045,
+    "shifted_zstd19": 1694674
+  },
+  "derivation": {
+    "standard_bdc": "MAGIC(8) + five varints + base digest(32) + contexts + member table + trailer digest(32)",
+    "current_recovery": "HDR(44) + metadata + contexts + duplicate metadata + FTR(44)",
+    "metadata": "five varints + base digest(32) + patch digest(32) + member table",
+    "difference": "144 + five-varint bytes + member-table bytes",
+    "boundary_members": 12,
+    "optimistic_min_member_table_bytes": 420,
+    "optimistic_min_five_varint_bytes": 5,
+    "optimistic_min_extra_bytes": 569
+  },
+  "result": {
+    "optimistic_min_recovery_boundary_bytes": 73454,
+    "optimistic_min_delta_vs_zstd19_bytes": 357,
+    "conclusion": "CURRENT_RECOVERY_FRAMING_CANNOT_PRESERVE_BOUNDARY_ZSTD_WIN"
+  },
+  "decision": "If the current-main coordered court is green, do not wrap it in current CMPNXBR3 duplicated-metadata recovery and claim Boundary strict external domination. Either admit bounded drift only where full recovery-capable bytes dominate and fall back on Boundary, or invent a materially lower-overhead recovery ownership scheme. Shifted retains enough inherited margin to remain plausible.",
+  "claim_boundary": "Algebraic lower bound from current source grammar and inherited complete-byte evidence; no hosted/product/release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
