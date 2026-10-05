@@ -321,7 +321,9 @@ def _generic_fs_hostile(work: Path) -> dict:
     (source / "b.bin").write_bytes(payload)
     (source / "d" / "c.bin").write_bytes(b"other" * 1024)
     os.link(source / "a.bin", source / "hard-a.bin")
-    os.symlink("../b.bin", source / "d" / "link-b")
+    # Keep the semantic hostile inside the product's valid safe-relative-symlink domain.
+    # It still points at the duplicate-content owner; path traversal rejection is tested elsewhere.
+    os.symlink("b.bin", source / "link-b")
     for p in (source / "a.bin", source / "b.bin", source / "d" / "c.bin"): p.chmod(0o640)
     manifest_raw, regular_sources, _stats = _capture(source)
     sibling, _s = _encode_sibling(manifest_raw, regular_sources)
@@ -329,13 +331,13 @@ def _generic_fs_hostile(work: Path) -> dict:
     regular = _decoded_regular_map(control_raw, bdc_blob)
     restored = work / "generic-out"
     recaptured = _materialize_and_recapture(recovered_manifest, regular, restored)
-    a = restored / "a.bin"; h = restored / "hard-a.bin"; link = restored / "d" / "link-b"
+    a = restored / "a.bin"; h = restored / "hard-a.bin"; link = restored / "link-b"
     return {
         "manifest_recapture_exact": recaptured == manifest_raw,
         "duplicate_content_distinct_inode": a.stat().st_ino != (restored / "b.bin").stat().st_ino,
         "hardlink_relation_preserved": a.stat().st_ino == h.stat().st_ino,
-        "symlink_target_preserved": os.readlink(link) == "../b.bin",
-        "passed": recaptured == manifest_raw and a.stat().st_ino != (restored / "b.bin").stat().st_ino and a.stat().st_ino == h.stat().st_ino and os.readlink(link) == "../b.bin",
+        "symlink_target_preserved": os.readlink(link) == "b.bin",
+        "passed": recaptured == manifest_raw and a.stat().st_ino != (restored / "b.bin").stat().st_ino and a.stat().st_ino == h.stat().st_ino and os.readlink(link) == "b.bin",
     }
 
 
