@@ -1,5 +1,5 @@
 {
-  "schema": "cmpct-v031-issue194-source-stat-falsifier-v3",
+  "schema": "cmpct-v031-issue194-source-stat-falsifier-v4",
   "recorded_at": "2026-10-04",
   "authority": {
     "base": "agent/v031-development@0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
@@ -88,7 +88,7 @@
   },
   "decision": "NARROW_CHEAP_PREFILTER_FAMILY. File count/size, byte histogram or entropy, and unordered chunk/content-feature bags cannot safely bound attainable compressed bytes: exact shared facts can coexist with orders-of-magnitude different outcomes. Issue #194 should reject empirical thresholds on those facts. Reopen prospective pruning only with order-aware, grammar-aware forced state that is mathematically unavoidable under every continuation, or move to exact execution sharing that avoids recomputing losing speculative work.",
   "mandatory_hostile_preserved": "ML remains the product hostile: a +116 B pre-overlay gap can become a 161,843 B winner, so any safe bound must fail open there.",
-  "next_discriminator": "Do not create another source-stat prefilter family. Current main still rebuilds the historical weak index inside every delta_encode call; repeated lower-rung parity/timing plus prior Shifted/Boundary/False-Neighbors evidence justify one fresh v0.31 integrated ownership-only grouped-dict A/B if it can be reconciled onto current source without changing candidate discovery, delta bytes, assignments, locality, or final archive identity.",
+  "next_discriminator": "Execute the already-frozen grouped historical-dict integrated A/B on Shifted, Boundary, False Neighbors and Incompressible for v0.28 plus the current discovery-neutral attempt-5 child. Preserve exact candidate/final archive identity, candidate/assignment/locality facts, and measure child wall/CPU/process-tree RSS/temp-I/O plus complete-product create wall.",
   "claim_boundary": "Repeated lower-rung adversarial falsifier and current-source ownership reconciliation only. No product mutation or release credit.",
   "product_credit": false,
   "release_credit": false,
@@ -117,5 +117,27 @@
       "grouped_over_baseline_ratio": 0.8301697501
     },
     "interpretation": "The exact current historical-dict lookup semantics support ownership-only reuse without the packed-lookup regression seen on the old validation branch. This is not integrated child/product evidence; the already-preregistered Shifted/Boundary/False-Neighbors A/B remains the promotion rung."
+  },
+  "current_v031_grouped_dict_reconciliation": {
+    "reconciled_at": "2026-10-05",
+    "current_resemblance_blob": "8c73f33cb8bb2983ac949edbd6fd30e6570b8cc0",
+    "current_placement_blob": "d191f6fcaf2cad14e19704fe7dd987bad3d57795",
+    "historical_grouped_dict_prereg_blob": "450f4df182a526ce57291f0a47a70752dd10d68c",
+    "historical_lookup_hostile_blob": "496eb341d2e536d8e8ad947a9d0d3a03341a43e8",
+    "source_lineage_unchanged": true,
+    "historical_prereg_still_applicable": true,
+    "fresh_lower_rung": {
+      "randomized_parity_cases": 5500,
+      "parity_failures": 0,
+      "repeated_anchor_first_offset_cases": 5000,
+      "repeated_anchor_failures": 0,
+      "high_fanout_grouped_over_baseline_wall_ratio": 0.5852807873159522,
+      "false_neighbor_grouped_over_baseline_wall_ratio": 0.872947414490319,
+      "singleton_grouped_over_baseline_wall_ratio": 1.0002171149751842,
+      "downstream_row_order_cases": 100000,
+      "downstream_order_failures": 0
+    },
+    "decision": "ADVANCE_EXISTING_PREREGISTERED_INTEGRATED_A_B",
+    "credit_boundary": "Local lower-rung source-faithful evidence only; no hosted/product/release credit."
   }
 }
