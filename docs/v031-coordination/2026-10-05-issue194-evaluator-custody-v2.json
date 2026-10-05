@@ -1,0 +1,38 @@
+{
+  "schema": "cmpct-v031-issue194-evaluator-custody-v2",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-issue194-source-stat-falsifier",
+    "benchmark_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+    "frozen_prereg_blob": "450f4df182a526ce57291f0a47a70752dd10d68c",
+    "prior_custody_blob": "813d66edc1bce92c4f06fdede83b3526d8bdcd37"
+  },
+  "exact_prereg_reconciliation": {
+    "child_exactness": [
+      "archive SHA/bytes equality is necessary but insufficient",
+      "both child archives must strong-verify and bind verified tree SHA to the generated source tree",
+      "candidate-count, accepted measured-edge, central-base assignment and pack-plan/locality facts remain a separate observability obligation"
+    ],
+    "child_measurement": [
+      "whole live process-tree RSS is required; worker-self RUSAGE_SELF is not the prereg metric",
+      "at least one exposed structured row must show material same-row CPU and wall reduction",
+      "Boundary, False Neighbors and Incompressible must all fail closed on confirmed wall slowdown under the existing >5% AND >3ms convention"
+    ],
+    "product_measurement": [
+      "build-only process-tree RSS must stop before strong verification/proof materialization",
+      "baseline and candidate verified tree identity must also equal the generated source tree",
+      "when --product is requested, exact output plus complete-product wall and inherited <=1.25x RSS authority must control the decision and process exit"
+    ]
+  },
+  "current_harness_status": "DIAGNOSTIC_ONLY__DO_NOT_DISPATCH_AS_PREREG_COMPLETE",
+  "write_attempt": {
+    "benchmark_update": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
+    "retry": false,
+    "low_level_bypass": false
+  },
+  "next_decisive_action": "Harden the evaluator only—no mechanism/workload/comparator/threshold change. Then execute the frozen integrated A/B once. Keep intermediate semantic-fact capture explicit rather than inferring it from archive identity.",
+  "claim_boundary": "Evaluator/proof custody only. No benchmark result, product mutation or release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
