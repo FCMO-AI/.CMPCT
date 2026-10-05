@@ -1,5 +1,5 @@
 # ci-lane: release
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 # This lane is the mature canonical-r24 core/ZIP regression benchmark. It is intentionally NOT the v0.30 product
 # selector performance authority: v0.30 creation/extraction timing is owned by the v030 release-product workflows.
@@ -36,10 +36,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-performance-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
@@ -47,6 +43,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-performance-scope-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_performance: ${{ steps.scope.outputs.run_performance }}
     steps:
@@ -78,6 +77,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_performance == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    concurrency:
+      group: cmpct-performance-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     env:
       # Each engine is run twice in ABBA order. Seven repetitions/run yields fourteen timed
       # observations per metric per engine. The deeper sample is deliberate: the exact-head tiny
@@ -129,7 +131,10 @@ jobs:
           python -m pip install -e '.[audio,test]'
 
       - name: Correctness gate
-        run: python -m pytest -q
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python -m pytest -q 2>&1 | tee benchmark-artifacts/correctness.txt
 
       - name: Resolve direct comparison base
         id: base
@@ -327,7 +332,12 @@ jobs:
           from pathlib import Path
           bp=Path('benchmark-artifacts/base.json'); cp=Path('benchmark-artifacts/candidate.json')
           if not bp.exists() or not cp.exists():
-              raise SystemExit('missing r24 ZIP parity evidence for summary')
+              # Earlier gates already own the failure. Preserve that diagnostic without
+              # inventing benchmark evidence or another missing-file failure.
+              text='## CMPCT r24 core / ZIP performance gate\n\nBenchmark evidence unavailable; inspect the preceding failed step. No performance claim.\n'
+              summary=os.environ.get('GITHUB_STEP_SUMMARY')
+              if summary: Path(summary).write_text(text)
+              raise SystemExit(0)
           b=json.load(bp.open()); c=json.load(cp.open())
           lines=['## CMPCT r24 core / ZIP performance gate','',
                  '> This is canonical r24 core regression evidence, not promoted-v0.30 selector evidence.', '',
@@ -347,7 +357,7 @@ jobs:
         run: python tools/check_ci_topology.py .github/workflows/zip-parity.yml
 
       - name: Upload release benchmark evidence
-        if: always()
+        if: always() && hashFiles('benchmark-artifacts/**') != ''
         uses: actions/upload-artifact@v6
         with:
           name: cmpct-r24-core-performance-${{ env.EVIDENCE_HEAD }}
@@ -357,5 +367,5 @@ jobs:
 
 # Footnote: the long-lived v0.30 integration PR previously cancelled this 45-minute ABBA receipt whenever any
 # newer PR commit arrived, even when that commit did not change r24 performance inputs. Exact-head concurrency now
-# preserves a started/queued receipt, while the newest-commit classifier cheaply declines unrelated heads. This
+# preserves an admitted receipt, while PR/ref concurrency supersedes obsolete classifiers. This
 # changes only CI custody: corpus, ABBA design, thresholds and direct-base comparison semantics are unchanged.

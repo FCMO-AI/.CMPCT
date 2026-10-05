@@ -19,7 +19,9 @@ html { -webkit-text-size-adjust: 100%; }
 .hero-score,
 .arena,
 .matrix-card,
-.loss-card { min-inline-size: 0; }
+.loss-card,
+.receipt-body,
+.receipt-grid { min-inline-size: 0; }
 .hero-score p,
 .ladder-label,
 .ladder-value,
@@ -215,6 +217,11 @@ html { -webkit-text-size-adjust: 100%; }
   .canonical-copy h2 { font-size: clamp(2.55rem, 12vw, 4.4rem); }
   .arena-head { align-items: flex-start; gap: 16px; }
   .arena-legend { flex-wrap: wrap; justify-content: flex-end; }
+  /* A receipt's long record/contract must not size fractional tracks beyond the clipped card.
+     Both serving and measured identities need to remain readable on physical phone widths. */
+  .receipt-body { padding: 18px; }
+  .receipt-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .receipt-grid dd { white-space: normal; }
   .tool-card { padding: clamp(18px, 5vw, 24px); }
   .drop-zone { min-height: 190px; }
   .pick-actions { flex-wrap: wrap; }
@@ -287,6 +294,9 @@ html { -webkit-text-size-adjust: 100%; }
   .canonical-status strong { font-size: clamp(1.45rem, 8vw, 1.85rem); }
   .result-mini-grid { grid-template-columns: 1fr; }
   .result-mini-grid div { padding: 9px 10px; }
+  .receipt-grid { grid-template-columns: minmax(0, 1fr); }
+  .receipt-grid div:nth-child(n) { border-right: 0; border-bottom: 1px solid #252525; }
+  .receipt-grid div:last-child { border-bottom: 0; }
   .receipt-actions { gap: 8px 14px; }
 }
 
