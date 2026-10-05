@@ -1,0 +1,27 @@
+{
+  "schema": "cmpct-v031-issue194-evaluator-custody-v5",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-issue194-source-stat-falsifier",
+    "landed_benchmark_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+    "frozen_prereg_blob": "450f4df182a526ce57291f0a47a70752dd10d68c",
+    "prior_custody_blob": "e166130870262c209382ed9a20a41255446936ee"
+  },
+  "continuation": {
+    "status": "LOCAL_V7_CONTINUATION_READY__SOURCE_NOT_LANDED",
+    "sha256": "7c4631bc599b36fa7db8e949af1d40db7572d2d31f5c05a69e714d063d4a1cda",
+    "self_falsifications_repaired": [
+      "fresh product subprocess must execute the selected evaluator revision rather than a stale predecessor",
+      "product custody proof must require marker plus strong verified source-tree identity",
+      "a completed red product court narrows to efficiency debt instead of claiming ADVANCE_TO_PRODUCT_AB",
+      "shared portfolio requires child result stats; split minimal direct-child worker from contract-complete product worker",
+      "custody worker retains nested stats plus marker while timed direct-child workers remain minimal"
+    ],
+    "shared_worker_contract": "experiments/entropygraph_v030_shared_portfolio.py@a79063d7a45e2922759e0296ae9d96f2e7ff9953 consumes elapsed_s and stats from both spawned children"
+  },
+  "decision": "Do not execute landed v1 for promotion. The next legitimate source write should land the hardened evaluator matching this custody record, then run the frozen court once.",
+  "claim_boundary": "Evaluator/proof custody only. No benchmark result, product mutation or release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
