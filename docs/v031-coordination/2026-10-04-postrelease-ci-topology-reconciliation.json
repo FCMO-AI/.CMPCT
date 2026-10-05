@@ -1,0 +1,49 @@
+{
+  "schema": "cmpct-v031-postrelease-ci-topology-reconciliation-v1",
+  "recorded_at": "2026-10-04",
+  "authority_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "source_issue": {
+    "number": 128,
+    "title": "CI topology: PR #56 spawns a classifier storm on unrelated coordination/docs commits",
+    "status": "open",
+    "durable_law": "Reuse the proven retirement pattern: keep automatic routing only for current authorities; preserve completed historical research as manual replay instead of permanent PR tax."
+  },
+  "exact_main_topology": {
+    "run_id": 37243800893,
+    "job_id": 111557590167,
+    "workflows_parsed": 557,
+    "failing_workflows": 165,
+    "v030_failing": 162,
+    "non_v030_failing": [
+      "installed-native-package.yml",
+      "mosaic-failure-diagnostics.yml",
+      "mosaic-small-envelope-diagnostic.yml"
+    ],
+    "error_counts": {
+      "missing_cancel_or_receipt_policy": 130,
+      "missing_top_level_concurrency": 66,
+      "missing_lane": 60,
+      "missing_exact_head_classifier": 16,
+      "missing_deep_exact_head_gate": 12,
+      "split_receipt_invalid": 7,
+      "other": 10
+    }
+  },
+  "branch_reconciliation": {
+    "agent/phased2-ci-fleet-retirement-128": "0 ahead / 21 behind main",
+    "agent/ci-fanout-batch-current-deep": "0 ahead / 362 behind main",
+    "agent/ci-retire-r4-sparse-anchor": "0 ahead / 364 behind main",
+    "agent/ci-sparse-anchor-repro-route": "0 ahead / 358 behind main",
+    "agent/ci-sparse-anchor-topology-fix": "0 ahead / 356 behind main",
+    "fix/ci-fanout-v029-retirement": "14 ahead / 4549 behind main"
+  },
+  "decision": [
+    "No current aligned topology-cleanup branch owns the released-main debt.",
+    "Do not bulk-add concurrency comments/classifiers to 165 workflows.",
+    "Classify each v0.30 automatic workflow as current v0.31 authority, reusable current diagnostic, or durable historical one-shot.",
+    "Current/reusable automatic workflows must satisfy current CI architecture; historical one-shots should prefer workflow_dispatch-only retirement where repository doctrine permits.",
+    "Handle the three non-v0.30 failures separately because they are not covered by a blanket historical-v0.30 retirement argument."
+  ],
+  "product_credit": false,
+  "release_credit": false
+}
