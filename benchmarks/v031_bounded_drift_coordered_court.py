@@ -284,8 +284,13 @@ def _row(work: Path, name: str, expected: dict) -> dict:
     source = _build_source(work, name)
     tree = HOSTILE.tree_hash(source)
     if tree != expected["tree_sha256"]: raise RuntimeError(f"{name} tree identity drift: {tree}")
+    # Charge filesystem capture to candidate creation just as the external control charges
+    # its complete tar materialization inside create_s. Source generation/normalization stays
+    # outside both timers.
+    started = time.perf_counter()
     manifest_raw, regular_sources, manifest_stats = _capture(source)
-    started = time.perf_counter(); sibling, sibling_stats = _encode_sibling(manifest_raw, regular_sources); create_s = time.perf_counter() - started
+    sibling, sibling_stats = _encode_sibling(manifest_raw, regular_sources)
+    create_s = time.perf_counter() - started
     control_raw, bdc_blob, recovered_manifest = _parse_sibling(sibling)
     if recovered_manifest != manifest_raw: raise RuntimeError(f"{name} filesystem manifest recapture changed bytes")
     regular = _decoded_regular_map(control_raw, bdc_blob)
