@@ -1,0 +1,51 @@
+{
+  "schema": "cmpct-v031-issue206-transactional-overlay-result-v1",
+  "source_boundary": {
+    "branch_parent_commit": "98740afc746932eb050e0dc71d44f6ecaa83937f",
+    "builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "codec_blob": "29526db4203723d83523fc95d074c346b63d7587",
+    "modeled_functions": [
+      "Builder.add_content",
+      "codec.make_vzip_recipe",
+      "codec.deflate_level_for"
+    ],
+    "note": "Lower-rung source-faithful Python oracle. Product source is unchanged; no release credit."
+  },
+  "observations": {
+    "randomized_success_merge": {
+      "cases": 10000,
+      "result": "PASS",
+      "property": "direct live add_content state equals staged-per-hash overlay merged after success, including pre-existing candidates, hints, exact-Deflate identities and counts"
+    },
+    "randomized_failure_isolation": {
+      "cases": 10000,
+      "result": "PASS",
+      "property": "discarding staged state after failure leaves live candidate state byte/semantic identical"
+    },
+    "real_zip_success": {
+      "result": "PASS",
+      "shape": "ZIP_STORED + ZIP_DEFLATED level 6 + ZIP_DEFLATED level 9",
+      "property": "recipe object and final candidate state exactly equal under direct versus transactional callback semantics"
+    },
+    "real_zip_late_failure": {
+      "result": "PASS",
+      "shape": "first ZIP_STORED member aliases a pre-existing live raw hash; later ZIP_BZIP2 member forces recipe None",
+      "current_behavior": "direct callback mutates the live candidate by adding the staged member hint before failure",
+      "transactional_behavior": "live state remains unchanged; staged side effects are discarded"
+    },
+    "memory_hostile": {
+      "shape": "1000 pre-existing unique 64KiB candidates replayed as fresh duplicate byte objects",
+      "naive_candidate_staging_peak_bytes": 66112765,
+      "live_object_reusing_overlay_peak_bytes": 674921,
+      "peak_ratio": 97.9563015523,
+      "result": "The overlay should reuse already-owned live raw/Deflate byte objects when a staged hash/stream already exists."
+    }
+  },
+  "disposition": {
+    "mark_and_sweep": "NARROWED: useful only as defense-in-depth for unreachable physical blobs; cannot undo speculative mutation on already-reachable hashes.",
+    "transaction_overlay": "ADVANCE: exact success semantics + failure isolation established at lower evidence rung.",
+    "next": "Land product helper plus focused tests; then same-source product archive bytes/tree/RSS/wall A/B. Keep exception/fallback law unchanged."
+  },
+  "product_credit": false,
+  "release_credit": false
+}
