@@ -1,0 +1,26 @@
+{
+  "schema": "cmpct-v031-issue194-evaluator-custody-v4",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "landed_benchmark_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+    "frozen_prereg_blob": "450f4df182a526ce57291f0a47a70752dd10d68c",
+    "performance_gate_blob": "2267ccf95bb5cf574f3ced4912821d91ab27d5b6",
+    "prior_custody_blob": "90f844c05a8524dcbd57f509f1248ee69e2b1f3b"
+  },
+  "continuation": {
+    "local_v4_sha256": "0da06a3dfe5f8b64916da58c8241a972f342b36036566d134dc10dfca8e0cbf9",
+    "source_status": "not landed",
+    "required": [
+      "strong verification must be ok and equal the generated source tree in both arms",
+      "Shifted positive evidence must be same-row wall<=0.90 with CPU<1.0",
+      "Boundary, False Neighbors and Incompressible use confirmed >5% AND >3ms wall regression",
+      "child RSS requires live process-tree sampling with at least one sample",
+      "product mode must enforce archive/tree identity, confirmed-wall rule, nonzero RSS samples and <=1.25x process-tree RSS",
+      "timed/RSS workers keep only minimal build receipts; semantic proof remains separate and untimed"
+    ]
+  },
+  "decision": "Do not dispatch landed v1 for promotion. Land the hardened evaluator when benchmark-source writes are available, then execute the frozen court once.",
+  "product_credit": false,
+  "release_credit": false
+}
