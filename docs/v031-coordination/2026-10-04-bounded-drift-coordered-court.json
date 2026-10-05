@@ -1,36 +1,48 @@
 {
-  "schema": "cmpct-v031-coordered-court-coordination-v1",
+  "schema": "cmpct-v031-coordered-court-coordination-v2",
   "recorded_at": "2026-10-04",
   "current_product_truth": {
     "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
     "release": "v0.30.0 rolling pre-1.0 checkpoint",
-    "v031_direction": "agent/v031-development",
+    "v031_direction": "agent/v031-development@0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
     "v031_direction_blob": "5e19eed73b2955209fe092f36672f6923111a0c7",
     "strict_15_of_15": "CMPCT 1.0 graduation target; not a v0.31 release gate"
   },
   "owner": {
     "branch": "agent/v031-bounded-drift-coordered-court",
+    "head_before_this_update": "c7d2b1b689b13c886f0a36089c0c77ef2c0b7288",
+    "relation_to_v031_direction": "11 ahead / 0 behind before this update",
     "prereg_blob": "f8e53f058a1c123ea4665b730c45f5619eb93d5f",
-    "relation_to_v031_direction": "1 ahead / 0 behind at reconciliation"
+    "benchmark_blob": "942923f95f678cb9e4462a56a38b6d5a0c81e47b",
+    "discovery_prediction_commit": "3de405e69bc370fd3a24222c28ac706111e572db",
+    "canonical_owner_projection_commit": "c7d2b1b689b13c886f0a36089c0c77ef2c0b7288"
   },
   "priority": {
-    "primary": "Execute the current-main coordered bounded-drift complete semantic court.",
-    "rationale": "Main already owns bounded-drift primitive/container/admission/recovery research seams and a hosted Shifted strict win; coordered ownership has positive complete-byte evidence on both Shifted and Boundary, with Boundary only 211 B from failure.",
+    "primary": "Execute exactly one current-main coordered bounded-drift complete semantic court already preregistered on this branch.",
+    "rationale": "The benchmark source and append-only prediction now exist durably. Same-run Python-zstandard/Zstd-19 and full filesystem semantics can decide whether the narrow Boundary byte margin survives current environment charging.",
     "secondary": [
-      "Preserve compact-r24 full-matrix and ML-wrapper custody as bounded evidence lanes; neither is a v0.30 release blocker after checkpoint publication.",
+      "If the preregistered court is green, test the distinct canonical-owner/tableless representation recorded in docs/v031-coordination/2026-10-04-bounded-drift-canonical-owner-projection.json rather than wrapping duplicated recovery metadata.",
+      "Preserve compact-r24 and ML-wrapper custody as bounded secondary evidence lanes; neither is a v0.30 release blocker after checkpoint publication.",
       "Do not reopen saturated hidden-ZIP current productization or pack-plan reuse families without a materially new mechanism."
     ]
+  },
+  "concurrency_reconciliation": {
+    "observed_collision": "A neighboring activation landed the benchmark source and discovery prediction while earlier coordination still said source writes were blocked.",
+    "resolution": "Continued the existing owner instead of creating a duplicate branch/family; refreshed this coordination record after re-reading exact branch truth.",
+    "workflow_status": "No .github/workflows/v031-bounded-drift-coordered-court.yml exists on the owner. A path-scoped exact-receipt workflow create was attempted once and safety-blocked before execution.",
+    "ci_status_at_3de405": "No combined statuses and no pull-request workflow runs were visible."
   },
   "control_plane_warning": {
     "file": "docs/ACTIVE_RESEARCH_THESIS.md",
     "blob": "464b76e2380263a7bcb37b98cd18bc9c228e3ce4",
-    "contradiction": "It still declares V030_EFFICIENCY_RECOVERY ACTIVE, while docs/V030_EFFICIENCY_RECOVERY.md@32ba2d6f is CLOSED and CURRENT_STATE/PRE1/Discovery start v0.31.",
-    "handling": "Repository/current v0.31 direction outranks that stale allocation paragraph. A direct correction was attempted on a dedicated branch and safety-blocked before execution; do not infer that v0.30 release recovery is still the active publication mission."
+    "contradiction": "It still declares V030_EFFICIENCY_RECOVERY ACTIVE, while docs/V030_EFFICIENCY_RECOVERY.md is closed as a v0.30 release gate and CURRENT_STATE/PRE1/v031 direction make v0.31 current.",
+    "handling": "Current release/state/v031 direction outrank that stale allocation paragraph. Do not infer that v0.30 release recovery remains the active publication mission."
   },
   "implementation_status": {
-    "benchmark_prototype": "Prepared locally and py_compile-green; it removes the old-branch-only PrefixGraph oracle dependency and uses current-main corpus/BDC/filesystem/comparator surfaces.",
-    "github_source_write": "Attempted once on this owner branch and blocked before execution by platform safety checks.",
-    "next": "When legitimate source writes are available, land the preregistered benchmark against the exact current dependency blobs and execute one hosted result-bearing court; no duplicate branch/family."
+    "benchmark_source": "LANDED at benchmarks/v031_bounded_drift_coordered_court.py@942923f95f678cb9e4462a56a38b6d5a0c81e47b.",
+    "preregistration": "LANDED at benchmarks/history/2026-10-04-v031-bounded-drift-coordered-court-prereg.json@f8e53f058a1c123ea4665b730c45f5619eb93d5f.",
+    "discovery_prediction": "LANDED append-only in research/discovery_episodes.jsonl by commit 3de405e69bc370fd3a24222c28ac706111e572db.",
+    "next": "Execute the landed preregistered benchmark exactly once on a legitimate hosted route. Do not modify the frozen mechanism before observing that court. If green, advance the separately recorded canonical-owner/tableless ownership oracle; if red, narrow/retire at the observed byte/semantic boundary."
   },
   "product_credit": false,
   "release_credit": false
