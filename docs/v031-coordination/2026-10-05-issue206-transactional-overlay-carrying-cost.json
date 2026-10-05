@@ -1,0 +1,72 @@
+{
+  "schema": "cmpct-v031-issue206-transactional-overlay-carrying-cost-v1",
+  "source_boundary": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "overlay_result_commit": "e352cb1e5415fd6bb1f664b5f43e4bb56e9492ab",
+    "evidence_tier": "local source-faithful callback microcourt; not product wall/RSS"
+  },
+  "cpu_microcourt": {
+    "operation": "successful per-recipe callback ownership only; SHA/hint/Deflate bookkeeping plus overlay commit",
+    "rows": [
+      {
+        "members": 1,
+        "direct_median_ms": 0.002,
+        "overlay_median_ms": 0.0023,
+        "added_ms": 0.0003
+      },
+      {
+        "members": 4,
+        "direct_median_ms": 0.0063,
+        "overlay_median_ms": 0.007,
+        "added_ms": 0.0007
+      },
+      {
+        "members": 16,
+        "direct_median_ms": 0.0238,
+        "overlay_median_ms": 0.0274,
+        "added_ms": 0.0036
+      },
+      {
+        "members": 64,
+        "direct_median_ms": 0.0927,
+        "overlay_median_ms": 0.1047,
+        "added_ms": 0.012
+      },
+      {
+        "members": 256,
+        "direct_median_ms": 0.4362,
+        "overlay_median_ms": 0.5089,
+        "added_ms": 0.0727
+      },
+      {
+        "members": 1024,
+        "direct_median_ms": 1.7254,
+        "overlay_median_ms": 1.9804,
+        "added_ms": 0.2549
+      }
+    ],
+    "interpretation": "Python callback bookkeeping overhead stays sub-millisecond even at 1024 members in this isolated court; full product timing still required because ZIP parsing/decompression, encoding, dictionary work and allocator behavior are outside this measurement."
+  },
+  "memory_microcourt": {
+    "shape": "1000 already-owned unique 64KiB raw candidates replayed as fresh duplicate byte objects",
+    "naive_staging_peak_bytes": 66112765,
+    "live_object_reusing_overlay_peak_bytes": 674921,
+    "peak_reduction_ratio": 97.9563015523,
+    "decision": "Reuse live Candidate.raw and already-owned exact Deflate stream objects in the overlay; stage only delta metadata/counts for existing hashes."
+  },
+  "ordering_microcourt": {
+    "randomized_success_cases": 20000,
+    "result": "PASS",
+    "property": "candidate insertion order and per-candidate exact-Deflate insertion order match direct successful callback semantics"
+  },
+  "sequential_episode_microcourt": {
+    "randomized_cases": 10000,
+    "result": "PASS",
+    "current_direct_failed_recipe_side_effect_cases": 9109,
+    "property": "transactional state equals ideal state where only successful recipes commit"
+  },
+  "decision": "No lower-rung carrying-cost veto found. Advance the refined live-object-reusing transactional overlay to focused product implementation/tests, then measure complete same-source bytes/tree/wall/RSS.",
+  "product_credit": false,
+  "release_credit": false
+}
