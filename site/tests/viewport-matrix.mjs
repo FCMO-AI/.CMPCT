@@ -236,6 +236,21 @@ try {
 
     const result = await inspect(page, viewport);
     const errors = [...pageErrors, ...validate(result)];
+    // A new serving release must not relabel the committed historical frontier in the browser.
+    const identity = await page.evaluate(async () => {
+      const data = await (await fetch('project-data.json')).json();
+      return {
+        serving: data.project.project_version,
+        measured: data.frontier.project_version,
+        marker: document.querySelector('#frontier-version')?.textContent,
+        receipt: document.querySelector('#evidence-receipt-grid')?.textContent,
+      };
+    });
+    if (identity.marker !== `v${identity.measured}`) errors.push('historical frontier version relabeled');
+    if (!identity.receipt?.includes(`v${identity.serving}`) || !identity.receipt?.includes(`v${identity.measured}`)) {
+      errors.push('receipt must expose serving and measured identities');
+    }
+    result.evidenceIdentity = identity;
     failed ||= errors.length > 0;
     report.push({ ...result, errors });
 
