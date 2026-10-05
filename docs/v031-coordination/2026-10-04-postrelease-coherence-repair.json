@@ -22,7 +22,7 @@
     {
       "commit": "bdff99bba49461ae709860cb6779b69de02a8564",
       "surface": "site/enhance_site.py",
-      "decision": "public_evidence.project_version follows current project identity; historical frontier version is preserved separately as provenance.evidence_project_version"
+      "decision": "current release identity owns public_evidence.project_version; historical frontier version remains explicit provenance.evidence_project_version"
     },
     {
       "commit": "79b34a57aaf6495bcfc432864744090616b63293",
@@ -38,5 +38,27 @@
   "recommended_resolution": "Preserve V030_RELEASE_LOCK.json as the published checkpoint record. Scope the three historical strict-custody tests to the pre-release/strict-lock regime rather than mutating the released checkpoint fingerprint after publication.",
   "topology_boundary": "Classify active vs retired/manual historical workflows before bulk-editing the 165-file topology debt; do not mechanically make dormant research workflows automatic current CI.",
   "product_credit": false,
-  "release_credit": false
+  "release_credit": false,
+  "ci_topology_exact": {
+    "run_id": 37243800893,
+    "job_id": 111557590167,
+    "parsed_workflows": 557,
+    "failing_workflows": 165,
+    "v030_failing_workflows": 162,
+    "non_v030_failing_workflows": [
+      "installed-native-package.yml",
+      "mosaic-failure-diagnostics.yml",
+      "mosaic-small-envelope-diagnostic.yml"
+    ],
+    "error_counts": {
+      "missing_cancel_or_receipt_policy": 130,
+      "missing_top_level_concurrency": 66,
+      "missing_lane": 60,
+      "missing_exact_head_classifier": 16,
+      "missing_deep_exact_head_gate": 12,
+      "split_receipt_invalid": 7,
+      "other": 10
+    },
+    "decision": "Do not bulk-edit 165 workflows. Classify active v0.31/current product workflows separately from dormant/historical v0.30 research surfaces, then retire/manualize or repair only according to actual execution authority and replay value."
+  }
 }
