@@ -1,0 +1,41 @@
+{
+  "schema": "cmpct-v031-bounded-drift-canonical-owner-lineage-v1",
+  "recorded_at": "2026-10-04",
+  "owner_branch": "agent/v031-bounded-drift-coordered-court",
+  "authority_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "problem": "The new bounded-drift canonical-owner projection must not be treated as an isolated invention if current repository history already proves the same ownership principles in adjacent layers.",
+  "prior_mechanisms": [
+    {
+      "mechanism": "implicit-v4 filesystem control",
+      "source": "benchmarks/v030_r25_manifest_derived_identity_oracle.py@63947eb6621361c6623b4f424a0640b6ec833f15",
+      "proof": "Removes duplicate regular path/content identity from filesystem control when authenticated content ownership already supplies it, then expands back to exact filesystem-v1 semantics.",
+      "current_status": "The current v0.30/v0.31 substrate includes content-agnostic implicit-v4 admission and native/shared-reader parity; this ownership principle is already productized/custodied, not novel."
+    },
+    {
+      "mechanism": "membership-v1 contiguous membership wire",
+      "source": "docs/V030_R25_IMPLICIT_MEMBERSHIP_WIRE_RESULT_2026-09-12.md@32bd2e515a3a9d3ea0242e76da617f4fdb54d398",
+      "proof": "Hosted run 34732343735 earned deriving member offsets cumulatively instead of restating them; exact membership reconstruction and malformed-control gates passed while charging both metadata copies plus framing reserve.",
+      "current_status": "Research wire mechanism earned; it establishes the general rule that deterministic physical membership facts should be derived rather than duplicated."
+    },
+    {
+      "mechanism": "embedded filesystem control in authenticated primary/tail metadata",
+      "source": "experiments/entropygraph_v030_federated_embedded_fs_candidate_v5.py@98ffd5d815dcad08190014d3ab2de7761236d508",
+      "proof": "Stores bounded filesystem control in already-authenticated, already-primary/tail-replicated metadata to preserve two-way recovery while deleting a redundant physical control pack."
+    }
+  ],
+  "bounded_drift_increment": {
+    "already_inherited": [
+      "Do not duplicate logical identity when an authenticated owner already supplies it.",
+      "Do not store offsets that can be derived from canonical contiguous order.",
+      "Prefer an existing authenticated primary/tail recovery owner over a second metadata authority."
+    ],
+    "new_specific_question": "Current BDC EditPrograms are self-delimiting by record_count plus exactly that many copy/delete/insert-length/literal records. Can BDC therefore remove both stored program_offset/program_length and its duplicate logical SHA table while canonical filesystem/profile identity remains the one logical owner, with selective-read scan CPU still bounded?",
+    "local_evidence": "Source-faithful microcourt segmented 1,512 concatenated programs across 100 generated families exactly; exact frozen-patch scan medians were approximately 0.579447 ms Shifted and 0.087637 ms Boundary.",
+    "projection_record": "docs/v031-coordination/2026-10-04-bounded-drift-canonical-owner-projection.json"
+  },
+  "decision": "NARROW_NOVELTY_AND_REUSE_LINEAGE. Do not present canonical-owner/tableless BDC as a new general ownership principle. Treat it as a bounded composition/extension of already-proven implicit-v4 + membership-v1 + primary/tail recovery ownership, with one genuinely new discriminator: whether self-delimiting BDC programs let the inner per-member table disappear without exporting selective-read CPU, integrity, recovery or bytes.",
+  "next": "Preserve the currently preregistered coordered court as control. If green, run one exact current-main A/B that changes only the inner BDC ownership table while reusing existing canonical filesystem identity/recovery concepts; do not invent a parallel metadata/recovery architecture unless that A/B proves necessary.",
+  "claim_boundary": "Lineage/experiment-selection evidence only; no product/release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
