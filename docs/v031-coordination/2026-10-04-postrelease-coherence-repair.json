@@ -1,0 +1,42 @@
+{
+  "schema": "cmpct-v031-postrelease-coherence-repair-v1",
+  "recorded_at": "2026-10-04",
+  "authority_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "owner_branch": "agent/v031-postrelease-coherence-20261004",
+  "observed_main_ci": {
+    "regression_run": 37243801009,
+    "regression_job": 111557590255,
+    "regression_result": "4 failed / 782 passed",
+    "public_proof_run": 37243800897,
+    "public_proof_job": 111557590324,
+    "public_proof_result": "release_evidence_contract project_version mismatch",
+    "topology_run": 37243800893,
+    "topology_job": 111557590167
+  },
+  "classification": {
+    "product_algorithm_regression_proven": false,
+    "evidence_publication_coherence_regression_proven": true,
+    "inherited_pr_baseline_red": true
+  },
+  "landed_repairs": [
+    {
+      "commit": "bdff99bba49461ae709860cb6779b69de02a8564",
+      "surface": "site/enhance_site.py",
+      "decision": "public_evidence.project_version follows current project identity; historical frontier version is preserved separately as provenance.evidence_project_version"
+    },
+    {
+      "commit": "79b34a57aaf6495bcfc432864744090616b63293",
+      "surface": "tests/test_public_attribution.py",
+      "decision": "surface attribution ratchet follows released 0.30.a surface"
+    }
+  ],
+  "remaining_regression_failures": [
+    "tests/test_performance_base_native_release_custody.py still applies strict pre-release fingerprint custody to a published rolling checkpoint",
+    "tests/test_v030_ci_topology_split_receipts.py still requires strict pre-release public/legal/workflow fingerprint breadth",
+    "tests/test_v030_release_fingerprint_surface.py still requires strict pre-release r25/native/Android fingerprint breadth"
+  ],
+  "recommended_resolution": "Preserve V030_RELEASE_LOCK.json as the published checkpoint record. Scope the three historical strict-custody tests to the pre-release/strict-lock regime rather than mutating the released checkpoint fingerprint after publication.",
+  "topology_boundary": "Classify active vs retired/manual historical workflows before bulk-editing the 165-file topology debt; do not mechanically make dormant research workflows automatic current CI.",
+  "product_credit": false,
+  "release_credit": false
+}
