@@ -1,0 +1,42 @@
+{
+  "schema": "cmpct-v031-issue206-execution-custody-v1",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-issue206-transactional-vzip",
+    "owner_head": "7b12cebf9dc590df04332cfec98909745fd0a3b7",
+    "product_landing_commit": "b00f9a2bc59142dc526a0ee1eba335e1d28d83c4",
+    "builder_blob": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b"
+  },
+  "current_truth": {
+    "product_source_landed": true,
+    "focused_repository_test_present": false,
+    "open_pull_request": false,
+    "github_actions_runs_for_owner_branch": 0,
+    "combined_statuses_observed": 0,
+    "format_reader_codec_api_changed": false
+  },
+  "exact_source_audit": {
+    "helper": "Builder._make_vzip_recipe_transactional",
+    "canonical_callsite": "explicit <8 ZIP/WHL deferred path",
+    "live_state_rule": "stage sparse per-content-hash candidate deltas and merge only after complete recipe success",
+    "failure_rule": "None or recipe-time exception leaves live Builder candidate state untouched",
+    "downstream_risk_repaired": "abandoned recipe callbacks can otherwise leak hints/exact-Deflate observations into reachable candidates and alter later dictionary/Deflate policy"
+  },
+  "execution_attempts": {
+    "focused_test_create": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
+    "draft_pr_create": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
+    "hosted_result": "UNEXECUTED"
+  },
+  "decision": "PRODUCT_SOURCE_LANDED__EXECUTABLE_REPOSITORY_COVERAGE_AND_SAME_SOURCE_PRODUCT_COURT_REMAIN_THE_NEXT_DECISIVE_ACTION. Do not claim promotion/product credit from lower-rung oracles. When a legitimate route appears, land focused tests first, then run exact archive/tree/bytes/create-wall/process-RSS against the direct v0.31 base.",
+  "promotion_gates": [
+    "successful VZIP archive/tree deterministic parity versus direct base",
+    "late-failure hostile proves no abandoned candidate/policy state reaches physical archive",
+    "zero deterministic byte regression on same-input release-parity semantics",
+    "no confirmed create slowdown outside >5% and >3 ms same-runner envelope",
+    "process-tree RSS and material temporary I/O measured",
+    "inherited correctness/safety/integrity regression gates green"
+  ],
+  "product_credit": false,
+  "release_credit": false
+}
