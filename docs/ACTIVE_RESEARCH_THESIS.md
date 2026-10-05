@@ -100,10 +100,10 @@ Do not reopen through operator/grid expansion or result-driven relabeling withou
 
 Do **not** immediately invent another named thesis merely to keep Foundry busy. Re-open the Assumption Ledger and current product/evidence landscape, then choose the highest-headroom falsifiable assumption that is not already covered by stronger preserved evidence. A new thesis must pass the initiation gate in `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md` before expensive work.
 
-While `docs/V030_EFFICIENCY_RECOVERY.md` is ACTIVE, that recovery directive further constrains allocation: an otherwise valid new thesis should not displace the measured efficiency/release recovery mission unless it directly attacks a broad efficiency/representation bottleneck or new evidence proves a higher-severity product blocker.
+The historical `docs/V030_EFFICIENCY_RECOVERY.md` directive is closed as a v0.30 release gate. Its measured debts remain useful evidence, but it no longer constrains v0.31 allocation as an active version-specific mission.
 
-A15 (universal reconstruction IR) has only a **candidate initiation audit** on branch `agent/foundry-a15-initiation-audit`; it is not active and has no evidence credit. The cheap next step is semantic projection/inventory, not product code, and it is lower priority than the active efficiency-recovery mission unless new evidence changes that ordering.
+A15 (universal reconstruction IR) has only a **candidate initiation audit** on branch `agent/foundry-a15-initiation-audit`; it is not active and has no evidence credit. The cheap next step is semantic projection/inventory, not product code, and it remains lower priority than the strongest current evidence-backed Forge frontier unless new evidence clears the normal Foundry initiation gate.
 
 ## Forge separation
 
-No Foundry result in this file grants v0.30 release credit. Current v0.30 fingerprint authority remains unchanged by these docs-only research updates. Forge remains responsible for exact-head receipts, physical ARM64 Android evidence, performance/competitor authority and final release state. While the efficiency directive is ACTIVE, Forge performance/competitor convergence is the dominant discretionary mission.
+No Foundry result in this file grants release credit. The published v0.30 checkpoint remains historical authority while v0.31 advances under current repository evidence. Forge remains responsible for exact-head product evidence, performance/competitor authority and any future promotion state; no closed v0.30 directive may silently reclaim allocation authority.
