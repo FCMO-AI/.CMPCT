@@ -1,0 +1,24 @@
+{
+  "schema": "cmpct-v031-ci-required-status-audit-v1",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "repository": "FCMO-AI/.CMPCT",
+    "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "v031_development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b"
+  },
+  "direct_github_evidence": {
+    "main_branch": {
+      "protected": false,
+      "protection_enabled": false,
+      "required_status_contexts": [],
+      "required_status_checks": []
+    },
+    "repository_rulesets": [],
+    "branch_protection_detail_endpoint": "403 Resource not accessible by integration"
+  },
+  "decision": "The previously recorded blocker 'unknown repository required status contexts' is materially narrowed: GitHub's branch object reports main unprotected with protection disabled and no required contexts, and the repository rulesets endpoint returns an empty list. Do not preserve obsolete automatic workflows solely out of fear of repository-level required-check names.",
+  "boundary": "The integration cannot read the detailed branch-protection endpoint. Organization/enterprise policy outside repository-visible rules remains external configuration and must not be claimed absent from this audit.",
+  "consequence": "CI fleet cleanup can be designed from repository authority first: retain current product/evidence gates, retire durable historical experiment lanes to manual replay, and validate admission count with a neutral coordination commit. If an external org/enterprise rule later rejects the transition, treat that as infrastructure evidence rather than silently keeping the historical fleet.",
+  "product_credit": false,
+  "release_credit": false
+}
