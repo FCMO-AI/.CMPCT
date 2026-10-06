@@ -219,7 +219,9 @@ Earlier global/CDC/shared-store experiments can fail badly when their ownership 
 
 # A07 — Compression and indexing should be separate structures
 
-**Priority:** P1
+**Priority:** CLOSED/SATURATED for the current self-indexed-RAW mechanism; broader P1 question may reopen only under the predicate below
+
+**2026-10-06 reconciliation:** exact hosted C25CC02 self-indexed RAW evidence is recovered and negative: projected complete bytes were **10,220,043 B** versus **10,199,302 B** for Zstd-19 (**+20,741 B / loss**) despite exact semantics and locality. Do not rerun that mechanism or charter broad A07 from it. Reopen only with a materially different self-index/ownership mechanism, a broader discoverable regime, and a fully charged bound that directly addresses the retained deficit.
 
 ### Inherited assumption
 
@@ -427,7 +429,9 @@ The mechanism must transfer across semantically unrelated formats sharing struct
 
 # A15 — Reader-visible primitive count may grow with every successful research family
 
-**Priority:** P0 meta-architecture
+**Priority:** NARROWED / DO NOT CHARTER the current serialized universal-IR proposal
+
+**2026-10-06 reconciliation:** internal nonserialized projection/helper factoring is the stronger simpler control for the current architecture. Existing reader/native lineage already contains projection planning and prior source-kind work; a serialized universal reconstruction IR has not established enough novelty or carrying-cost advantage to justify a Foundry charter. Reopen only if a new exact composition otherwise requires a bespoke storage kind and release-corpus evidence shows a serialized IR beats helper factoring on carrying cost, locality, integrity and decode throughput.
 
 ### Inherited assumption
 
