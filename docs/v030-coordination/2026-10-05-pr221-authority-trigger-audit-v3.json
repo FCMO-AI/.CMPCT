@@ -1,0 +1,56 @@
+{
+  "schema": "cmpct-pr221-authority-trigger-audit-v3",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "pr": 221,
+    "pr_head": "93d864fb40e1c97fd9de10e226a92c89b54098aa",
+    "working_branch_before_write": "fc4123acc8fce7fb2263c847313b6de0b6531f98",
+    "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "release_lock_blob": "3cd822e6e9fead8a5dc210beb252f26dc52e0735",
+    "authoritative_v2_blob": "2f095ec3b5b1028bc1fa49dd730de8062876e0ee",
+    "topology_test_blob": "c378d8e2dbad2e0c7b037124a9d9fedecdc14601"
+  },
+  "exact_pr_surface": {
+    "changed_files_total": 13,
+    "release_fingerprinted_changed_files": [
+      ".github/workflows/tests.yml",
+      ".github/workflows/zip-parity.yml",
+      "SURFACE_REVISION",
+      "docs/V030_RELEASE_LOCK.json",
+      "site/enhance_site.py",
+      "site/src/assets/proof-renderer.js",
+      "site/src/assets/responsive.css",
+      "site/tests/release_evidence_contract.py",
+      "site/tests/viewport-matrix.mjs"
+    ],
+    "release_fingerprinted_changed_files_count": 9,
+    "newest_commit_visible_to_classifier": [
+      "PR-221-BODY.md"
+    ]
+  },
+  "trigger_gap": {
+    "authoritative_v2_pull_request_paths": [
+      "src/cmpct/**",
+      "experiments/entropygraph_v030_*.py",
+      "tests/test_v030_*.py",
+      "benchmarks/v030_*.py",
+      ".github/workflows/v030-authoritative-v2-pr.yml"
+    ],
+    "witness": "docs/V030_RELEASE_LOCK.json changes the release fingerprint but is outside authoritative-v2 pull_request.paths.",
+    "exact_head_observation": "No `CMPCT v0.30 authoritative v2` run is present among the 19 observed PR-head workflow runs.",
+    "decision": "A classifier repair is insufficient unless fingerprint-driven authority is also guaranteed to wake."
+  },
+  "ratchet_gap": {
+    "current_test": "tests/test_v030_ci_topology_split_receipts.py explicitly asserts `fnmatch.fnmatchcase` is present in authoritative-v2.",
+    "consequence": "The existing regression test currently ratchets the matcher divergence raised by the open P1 review thread.",
+    "repair": "Change the ratchet to require reuse of canonical recursive fingerprint matching and add a temporal relevant-A/cancelled -> irrelevant-B obligation test."
+  },
+  "candidate_scope": {
+    "immediate_correctness_control": "For PR events classify merge-base(base, exact head)..exact head with rename source and destination preserved.",
+    "reason": "Newest-head loses earlier obligations; base-tip two-dot can import base-only movement. Merge-base scope matches the candidate branch delta.",
+    "converged_architecture": "semantic evidence fingerprint plus durable substantive satisfaction"
+  },
+  "promotion_boundary": "No product/release credit. Do not resolve the three PR review threads until source fixes and their direct regressions pass on the reviewed candidate.",
+  "product_credit": false,
+  "release_credit": false
+}
