@@ -1,0 +1,43 @@
+{
+  "schema": "cmpct-v031-a08-temporal-entropygraph-o0-v1",
+  "recorded_date": "2026-10-06",
+  "authority": {
+    "development_branch": "agent/v031-development",
+    "discovery_state_blob": "e6093510a5c1465efe836d996c212882a617302c",
+    "assumption_ledger_blob": "27b2c183cab3c39c5c2bdc981fe2daa64836a084"
+  },
+  "question": "Does retained update history expose non-immediate exact relationships that beat periodic journal+checkpoint storage under the same bounded reconstruction depth?",
+  "oracle": {
+    "class": "local lower-rung synthetic exact oracle",
+    "checkpoint_interval": 8,
+    "max_dependency_depth": 7,
+    "neutral_compressor": "zlib-9 applied identically to serialized snapshot/delta records",
+    "exact_delta_programs": [
+      "changed-run substitution",
+      "prefix/suffix splice with literal middle"
+    ],
+    "fully_charged_facts": [
+      "record kind",
+      "parent generation id",
+      "target length",
+      "offset/length fields",
+      "literal bytes"
+    ],
+    "controls": [
+      "independent snapshots",
+      "immediate-predecessor journal+checkpoint",
+      "fixed-checkpoint version-family parent choice"
+    ]
+  },
+  "result": {
+    "linear_histories": "append/front-insert/middle-edit selected the immediate predecessor; generic parent choice was ~1.0008x journal bytes, so history alone provides no new gain.",
+    "alternating_branch_history": "fixed-checkpoint non-immediate parent selection reached ~0.220x journal total bytes and ~0.317x mean selective-read bytes at the same depth<=7 bound.",
+    "independent_control": "generic parent search did not beat journal bytes and must be rejected by complete-byte admission.",
+    "greedy_global_policy_negative": "a separate greedy checkpoint/parent policy regressed a middle-edit hostile by ~2.28x versus periodic journal, so greedy temporal parenting is retired."
+  },
+  "interpretation": "The surviving signal is non-immediate version-family structure among retained states, not a universal 'temporal' representation. Existing EntropyGraph/Mosaic-style relation machinery is the strongest simpler control; A08 is not chartered as a new format thesis.",
+  "decision": "NARROW_A08_TO_BRANCHING_OR_NONLOCAL_HISTORY_RELATIONSHIPS__DO_NOT_CHARTER_YET",
+  "next_discriminator": "Use a preregistered retained-generation trace with branching/reversion/nonlocal recurrence and compare current journal/checkpoint semantics against existing version-family graph ownership. Require complete stored bytes, update wall, selective generation recovery, failure-domain cost and zero carrying cost for current-state-only archives.",
+  "product_credit": false,
+  "release_credit": false
+}
