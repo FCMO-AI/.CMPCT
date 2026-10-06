@@ -3,97 +3,98 @@
   "status": "ACTIVE",
   "authority": {
     "canonical_release": "v0.30.0 rolling pre-1.0 checkpoint",
-    "active_frontier": "agent/v030-authoritative-integration@16b89044eeabb29f361d793ce960de875b1281de",
-    "product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
-    "candidate_fingerprint": "6f298e1636ba42176b250f607be82159dd58b37626c1c8624d7d6ce4c75a6f8f",
-    "note": "Repository and exact result-bearing evidence outrank this staleable cache. v0.30 no longer requires 15/15; strict external domination is a v1.0 target."
+    "v031_development": "agent/v031-development@0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "bounded_drift_owner": "agent/v031-bounded-drift-coordered-court@dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf",
+    "issue194_owner": "agent/v031-issue194-source-stat-falsifier@91c35b03cd815b850b078d5083684f3e8587475d",
+    "issue206_owner": "agent/v031-issue206-transactional-vzip@a4e74034b8d6af79877360864f59ef0d2af69575",
+    "note": "Repository heads, frozen preregistrations and exact result-bearing evidence outrank this staleable index. docs/V030_EFFICIENCY_RECOVERY.md is CLOSED as a v0.30 release gate; technical debt carries into v0.31. ACTIVE_RESEARCH_THESIS still contains older allocation prose and must not reopen closed v0.30 release gating."
   },
   "active_product_bottleneck": {
-    "id": "v031-frontier-opportunity",
-    "observation": "Former v0.30 blockers are no longer publication blockers; they remain evidence-backed v0.31 opportunities.",
-    "next_discriminator": "Choose the cheapest result-bearing experiment that materially improves complete product size, create/extract cost or execution ownership."
+    "id": "v031-result-custody-and-execution-ownership",
+    "observation": "The highest-value v0.31 mechanisms are decision-complete or product-landed, but their decisive courts are unexecuted: bounded drift lacks an exact-source hosted route; Issue194 has a frozen integrated A/B whose landed v1 evaluator is diagnostic-only; Issue206 has a landed transactional VZIP fix whose exact package/native product court remains unexecuted.",
+    "next_discriminator": "Use the first legitimate exact-source/runtime route to execute one already-frozen court. Do not invent nearby mechanism variants merely because execution custody is blocked."
   },
   "primary_question": {
-    "id": "compact-r24-corrected-full-matrix",
-    "family": "product-compression",
-    "hypothesis": "The correctly bound compact-r24 candidate preserves the unchanged full 15-row product/parity matrix after the focused Incremental Backups blocker was corrected.",
-    "kill": "Any deterministic canonical-product byte regression retires compact-r24 without threshold, workload, comparator, evaluator or custody gardening.",
+    "id": "v031-bounded-drift-coordered-court",
+    "family": "representation-execution",
+    "hypothesis": "The frozen coordered bounded-drift court can improve the exact Shifted/Boundary representation frontier under unchanged filesystem, integrity, locality, comparator and release semantics.",
+    "kill": "Any frozen-court byte/locality/equality failure retires or narrows the current bounded-drift promotion claim; do not rescue it by changing thresholds, fixtures, mappings or comparators.",
     "status": "BLOCKED",
     "evidence": [
-      "PR #217 e235686d2a9fd4757c5478526600f410e59c6eb8 remains the corrected evidence route; visible generic CI does not include the authorized matrix.",
-      "Existing executor agent/phased3-pr217-corrected-matrix-exec@6af2fcc18c02566b35923473672a753574bdd7b0 is exact-head aligned to PR #217, carries the exact historical policy-boundary control and current runtime/selective wrappers, and has zero result-bearing workflow runs."
+      "docs/v031-coordination/2026-10-05-bounded-drift-execution-custody.json@156d2902d01462b17d242a1d0897ea46493ff6ec",
+      "frozen benchmark blob 2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+      "frozen prereg blob f8e53f058a1c123ea4665b730c45f5619eb93d5f",
+      "owner head dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf has zero exact-head Actions runs/statuses and the dedicated workflow is absent"
     ]
   },
   "frontier_candidates": [
     {
-      "id": "ml-wrapper-custody",
-      "family": "runtime-evidence-ownership",
-      "question": "On one deterministic current ML tree, does the unchanged canonical worker produce a materially worse v0.30/v0.29 create ratio than the unchanged v2 worker?",
-      "status": "READY",
-      "evidence": "Exact current source/fingerprint is v2-green at 1.244515635x and canonical-red at 1.286112912x / 1.290749683x / 1.271885107x. PR #218 / agent/phased1-ml-wrapper-custody-court@5bb1c71a20c10cda55e836935900a1a10b080012 owns the frozen same-source court; no result-bearing court has executed. Static source audit narrows a positive mechanism to broader process/import/cache/global-state custody rather than simple late loading of the v0.29 algorithm."
+      "id": "issue194-grouped-historical-index-ownership",
+      "family": "execution-ownership",
+      "question": "Does reusing the exact historical weak index once per immutable base preserve child/product identity and materially improve the frozen Shifted court without held-out wall/RSS debt?",
+      "status": "BLOCKED",
+      "evidence": "Owner head 91c35b03cd815b850b078d5083684f3e8587475d; landed benchmark blob 38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc; convergence record e43f5dd4ecdba6b4b798970e8c6051f1a29284fe. Lower-rung evidence is strongly positive, but the hardened promotion-quality evaluator remains unlanded/unexecuted."
     },
     {
-      "id": "bounded-drift-selected-row",
-      "family": "representation-execution",
-      "question": "Can bounded drift replace current PrefixGraph winners on Shifted and Boundary under exact filesystem, integrity and locality law; and if the byte result survives, can prospective generic admission avoid paying the expensive existing G04/PrefixGraph search?",
-      "status": "READY",
-      "evidence": "PR #213 and PR #215 own bounded-drift semantics and primitive acceleration. Repaired selected-row branch agent/phased3-bd-pg-selected-row-hosted@8097b34ec738af81039d2cde0fc5f3aa24e80820 remains unexecuted. Lower-rung projection puts Shifted 6,024 B below strongest-current upstream Zstd-19 and Boundary 179 B above it; post-search substitution alone cannot satisfy the strict joint size+create contract."
+      "id": "issue206-transactional-vzip-evidence",
+      "family": "transactional-state-correctness",
+      "question": "Does the landed transactional VZIP repair preserve complete product bytes/tree while removing speculative state leakage without create/RSS/I-O regression on the exact package/native runtime?",
+      "status": "BLOCKED",
+      "evidence": "Owner head a4e74034b8d6af79877360864f59ef0d2af69575; product landing b00f9a2bc59142dc526a0ee1eba335e1d28d83c4; evaluator-control v8 blob 82eb21628b17b38a4b449e679ee429001454e016. Exact package/native custody, focused tests and six-court product A/B remain unexecuted."
     },
     {
-      "id": "g04-authenticated-direct-baseline-reuse",
-      "family": "duplicate-semantic-work",
-      "question": "If wrapper custody is falsified, can G04 reuse provenance-proven level-19 Zstd physical-group payloads as Hierarchical Geometry direct baselines while preserving exact outputs and saving enough complete-G04 wall time to matter?",
+      "id": "a15-universal-reconstruction-ir-semantic-projection",
+      "family": "information-model",
+      "question": "Can a universal reconstruction IR subsume multiple exact reconstruction mechanisms without increasing reader complexity or carrying cost enough to erase leverage?",
       "status": "QUEUED",
-      "evidence": "Existing claim branch agent/phased1-g04-authenticated-reuse is aligned to authority. Current ML has 13 actual-HG-entering exact reuse records covering 12,408,137 B (81.14% of HG direct input). Advance only on exact output identity and >=0.34 s conventional-median complete-G04 wall saving."
+      "evidence": "ACTIVE_RESEARCH_THESIS records A15 only as a candidate initiation audit; the next honest step is cheap semantic projection/inventory, not product code, and it remains below live Forge courts."
     }
   ],
   "saturated_families": [
     {
-      "family": "compact-r24-executor-refinement",
-      "reason": "The existing executor is decision-complete; only execution can change the primary science."
+      "family": "bounded-drift-nearby-variants",
+      "reason": "The frozen v0.31 court is scientifically ready; result-route custody is the blocker. Do not reopen mapping/compression/recovery variants before the court executes."
     },
     {
-      "family": "pack-plan-compression-reuse",
-      "reason": "PR #154 measured the duplicate-compression owner and merged PR #155 already productized bounded exact-length reuse in current v0.30."
+      "family": "issue194-historical-index-variant-expansion",
+      "reason": "Historical and current source-faithful evidence already converges on ownership-only reuse of the exact dict[int,list[int]] index. The missing information is the preregistered integrated child/product A/B, not another lookup representation."
     },
     {
-      "family": "whole-overlay-progressive-futility-as-current-ML-fix",
-      "reason": "Current ML is a real byte winner; the completed optimistic lower bound remains 175,333 B below the accepted v0.29 floor, so this proof cannot fire on the row."
+      "family": "weak-exact-futility-and-unordered-prefilters",
+      "reason": "Issue194 source-stat falsifiers show identical unordered statistics can coexist with orders-of-magnitude different compression outcomes; framing-only pre-audition floors are far too weak. Reopen only with a materially stronger already-forced payload invariant."
     },
     {
-      "family": "zero-threshold-level6-hierarchy-screen",
-      "reason": "A deterministic held-out structural hostile reverses level-6 versus level-19 ordering and preserves a valid exact hierarchical win."
-    },
-    {
-      "family": "hidden-ZIP-current-productization-family",
-      "reason": "PR #205 retained major Office byte savings but final create remained 1.330773x > 1.25 after multiple materially different rehabilitation attempts; the current family is retired pending a new mechanism."
+      "family": "a01-latent-synthetic-basis-primary",
+      "reason": "ACTIVE_RESEARCH_THESIS marks A01 FAMILY_RETIRED after stronger R4 evidence: optimistic payload floor +48,362 B and full archive +49,392 B versus solid Zstd-19 with major create debt. Reopen only with a genuinely new mechanism addressing that failure or a broad pre-result regime outside it."
     }
   ],
   "decision_evidence": {
-    "external_competitors": "PR #189 run 35681729751 / artifact 10676455534: strongest-current historical research evidence records strict joint size+create wins on 4/15, ZIP size wins 15/15, Zstd-19 size wins 7/15, ZIP create wins 4/15, Zstd-19 create wins 5/15. Historical fingerprint only; no current release credit.",
-    "external_execution_partition": "On all 14 PR #189 rows exposing r24 timing, gifted r24 create beats Zstd-19 create; it beats ZIP create on 10/14. This localizes broad Zstd-create debt to speculative r25/search work while four rows retain a base-r24 ZIP-create floor.",
-    "release_custody": "docs/V030_RELEASE_LOCK.json requires 13 exact-fingerprint receipts. Three receipt files exist but none binds current fingerprint 6f298e1636ba42176b250f607be82159dd58b37626c1c8624d7d6ce4c75a6f8f; native-r25 is also stale against current assertion schema."
+    "bounded_drift": "Frozen court/source custody intact; scientific result UNEXECUTED because the exact workflow/result route is absent.",
+    "issue194": "Shifted preserved lower-rung evidence: 972 candidate edges / 80 bases, 892 redundant weak-index builds, historical delta-audition wall 28.5108s -> 17.1527s. Boundary 180/25 -> 7.6096s -> 4.7981s. False Neighbors 15/5 -> 0.5550s -> 0.5235s. Current v0.31 microcourts preserve 5,500 parity cases and 100,000 downstream-order cases.",
+    "issue206": "Transactional Builder source is landed; v8 control explicitly binds fresh-child source custody and requires candidate-neutrality before product timing credit.",
+    "external_frontier": "Historical external scoreboard remains 15/15 ZIP size wins, 7/15 Zstd-19 size wins, 4/15 ZIP create wins, 5/15 Zstd-19 create wins, 4/15 strict joint wins; historical fingerprint only, not current release credit."
   },
   "process_lessons": [
     {
-      "lesson": "Search merged and closed lineage before treating a visible source optimization seam as novel.",
-      "evidence": "Pack-plan repeated compression was already measured in PR #154 and productized by merged PR #155."
+      "lesson": "Hosted compute availability is not scientific result custody; exact-source workflow/runtime identity must bind the frozen question.",
+      "evidence": "Bounded drift has generic GitHub Actions availability but no exact v0.31 court workflow."
     },
     {
-      "lesson": "Under a strict joint size+create contract, representation evidence must be paired with execution ownership.",
-      "evidence": "Bounded drift can flip Shifted bytes versus Zstd-19 while unchanged existing r25 search costs tens of seconds versus sub-second external controls."
+      "lesson": "Compile frozen decision law into constructive false-green witnesses before buying an expensive run.",
+      "evidence": "Issue194 landed v1 evaluator could pass while Boundary/Incompressible/product regressions violated its preregistration; evaluator hardening became a prerequisite."
     },
     {
-      "lesson": "Release receipt presence is not release authority; verify exact current fingerprint and current assertion schema.",
-      "evidence": "Three receipt files exist, zero bind current fingerprint, and native-r25 predates current required assertions."
+      "lesson": "Separate semantic proof, timing, RSS and post-build verification when one instrument can contaminate another.",
+      "evidence": "Issue194 and Issue206 evaluator audits independently found proof/materialization work capable of owning create RSS or timing."
     },
     {
-      "lesson": "Intersect semantic eligibility with actual shipping control flow before summing optimization headroom.",
-      "evidence": "Only 13 of 19 current ML records both enter HG and carry reusable level-19 Zstd provenance."
+      "lesson": "Trace controls across process/import boundaries and caller contracts before trusting same-source A/B.",
+      "evidence": "Issue206 parent-only control and Issue194 product-worker substitution both exposed fresh-child/interface custody failures before expensive execution."
     }
   ],
   "pending_jobs": [],
-  "next_action": "Begin v0.31. Preserve v0.30 losses; 15/15 is a 1.0 target, not a 0.x gate.",
+  "next_action": "Run the frozen bounded-drift court exactly once through the first legitimate exact-source route. If that route remains unavailable, execute the already-converged Issue194 integrated A/B when hardened benchmark-source/runtime custody becomes available; otherwise execute Issue206 v8 on the exact package/native runtime. Do not reopen saturated nearby variants merely to make progress look active.",
   "release_policy": {
     "effective_date": "2026-10-04",
     "pre1_mode": "rolling material checkpoints",
