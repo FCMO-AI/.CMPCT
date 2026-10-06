@@ -549,7 +549,9 @@ These metrics never replace final byte/runtime truth. They are causal instrument
 
 ---
 
-# Current primary Foundry recommendation
+# Historical Foundry recommendation — superseded
+
+> **Current status:** This section preserves the original F-01 proposal as assumption/thesis lineage only. `docs/ACTIVE_RESEARCH_THESIS.md` is the current Foundry-status authority and records **no active primary Foundry thesis**; F-01 is retired unless new evidence satisfies its repository-defined reopening conditions. Do not treat the heading below as a live allocation instruction.
 
 ## Thesis F-01 — General Reversible Structure Compiler
 
