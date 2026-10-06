@@ -1,0 +1,24 @@
+{
+  "schema": "cmpct-v031-issue26-delta-encoder-overhead-control-v1",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "resemblance_blob": "8c73f33cb8bb2983ac949edbd6fd30e6570b8cc0",
+    "transactions_blob": "964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c"
+  },
+  "question": "Is the current Python resemblance encoder cost intrinsic to the depth-1 relation mechanism, or implementation debt?",
+  "control": "A small native C implementation of the exact resemblance.delta_encode semantics was compared byte-for-byte with the Python encoder on deterministic 1 MiB controls. Payload identity was exact before timing.",
+  "results": {
+    "random_replace_4KiB": {"payload_bytes": 4111, "python_median_s": 0.1675298390, "native_median_s": 0.0018503860, "speedup": 90.5378},
+    "random_replace_512KiB": {"payload_bytes": 524304, "python_median_s": 0.4027032550, "native_median_s": 0.0340422100, "speedup": 11.8295},
+    "compressible_replace_4KiB": {"payload_bytes": 4110, "python_median_s": 0.1598609290, "native_median_s": 0.0017447360, "speedup": 91.6247}
+  },
+  "interpretation": [
+    "Python byte-wise delta construction is implementation debt, not a fundamental mechanism cost.",
+    "Small local edits can be encoded in roughly 2 ms by a native exact implementation on this local court.",
+    "Large-churn relations still cost tens of milliseconds and need product-level admission/runtime measurement.",
+    "Highly compressible data remains an economics edge case: the relation may save very few bytes even when native encoding is fast, so direct fallback/admission must consider absolute benefit."
+  ],
+  "decision": "Do not reject Issue26 reference deltas because the current Python research encoder is slow. A product prototype should bind an exact native/memory-safe encoder or equivalent accelerated path and retain direct ordinary fallback. This is implementation feasibility evidence only, not product timing credit.",
+  "product_credit": false,
+  "release_credit": false
+}
