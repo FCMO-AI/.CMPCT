@@ -1,0 +1,80 @@
+{
+  "schema": "cmpct-pr221-cumulative-obligation-implementation-v4",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "pr": 221,
+    "pr_head": "93d864fb40e1c97fd9de10e226a92c89b54098aa",
+    "branch_parent": "89966abdbd62383a557deeecf3825c9901663653",
+    "zip_parity_blob": "d653d4353a5d463faa7e099c8eea06209e25c688",
+    "authoritative_v2_blob": "2f095ec3b5b1028bc1fa49dd730de8062876e0ee",
+    "topology_checker_blob": "f3892b1f6a5d089c26f472f10ca5a89784af8a5e",
+    "release_lock_checker_blob": "225c20aea99fc9c444d6b0af1e3d96634f2469ac"
+  },
+  "hosted_exact_head_reproduction": {
+    "final_release": {
+      "run": 37286518657,
+      "classifier_job": 111686601241,
+      "classifier_observed_paths": [
+        "PR-221-BODY.md"
+      ],
+      "substantive_jobs": [
+        "contracts:skipped",
+        "compression-and-product-parity:skipped",
+        "runtime-and-selective-read:skipped",
+        "external-frontier:skipped"
+      ]
+    },
+    "authoritative_pr": {
+      "run": 37286518560,
+      "classifier_job": 111686600506,
+      "classifier_observed_paths": [
+        "PR-221-BODY.md"
+      ],
+      "substantive_jobs": [
+        "shared-rehab:skipped",
+        "runtime:skipped",
+        "generalization:skipped",
+        "reader-fuzz:skipped"
+      ]
+    },
+    "r24_zip": {
+      "run": 37286518470,
+      "classifier_job": 111686600245,
+      "classifier_observed_paths": [
+        "PR-221-BODY.md"
+      ],
+      "substantive_jobs": [
+        "performance:skipped"
+      ]
+    }
+  },
+  "external_platform_contract": {
+    "source": "GitHub Actions official documentation, verified 2026-10-05",
+    "pull_request_paths": "three-dot candidate diff; path-filter evaluation can be limited to the first 3000 changed files",
+    "concurrency": "default one pending per group; queue:max permits up to 100 pending and cannot combine with cancel-in-progress:true"
+  },
+  "decision": {
+    "immediate": "Additive cumulative-pr-obligation-gate using merge-base(PR base, exact head)..exact head with --no-renames; retain exact-SHA non-cancelling result custody.",
+    "final_authority": "Wake the cheap fingerprint authority broadly enough to run its canonical matcher; do not duplicate V030_RELEASE_LOCK glob semantics in trigger or fnmatch code.",
+    "convergence": "Semantic evidence fingerprint plus durable substantive satisfaction is the target architecture after the immediate fail-closed repair."
+  },
+  "local_court": {
+    "candidate_scope": [
+      "relevant A survives irrelevant B",
+      "base-only movement excluded",
+      "rename source and destination preserved"
+    ],
+    "fingerprint_matcher": "15/15 current recursive **/* patterns have direct-child recursive-glob witnesses that fnmatch misses",
+    "topology_contract": "legacy latest-head contract can coexist with a separately ratcheted cumulative obligation contract"
+  },
+  "write_boundary": {
+    "attempted_source_write": "tools/ci_pr_candidate_paths.py create on agent/phased3-pr221-three-layer-fix",
+    "result": "blocked before mutation by platform safety",
+    "retried": false,
+    "low_level_bypass": false
+  },
+  "promotion_boundary": "No PR review thread resolves and no product/release credit is earned until source fixes land and direct tests/hosted authority pass.",
+  "product_credit": false,
+  "release_credit": false
+}
