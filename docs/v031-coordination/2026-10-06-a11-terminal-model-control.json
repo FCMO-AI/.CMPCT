@@ -1,0 +1,75 @@
+{
+  "schema": "cmpct-v031-a11-terminal-model-control-v1",
+  "date": "2026-10-06",
+  "starting_authority": "agent/v031-development@4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "claim": "agent/phased1-a11-terminal-model-control",
+  "assumption": "A11 — one conventional terminal entropy model may obscure typed-stream opportunities",
+  "question": "Does a small heterogeneous bounded terminal-model portfolio create material compression headroom after exact typed decomposition, relative to independent Zstd-19 and to stronger reversible-geometry controls?",
+  "classification": "research/oracle only; no product or release credit",
+  "results": {
+    "small_portfolio": {
+      "models": ["STORE", "ZSTD-19", "canonical Huffman"],
+      "split_zstd19_bytes": 218922,
+      "portfolio_bytes": 218892,
+      "saving_bytes": 30,
+      "saving_pct": 0.0137035,
+      "interpretation": "No material new model headroom. Huffman was never selected; tiny wins are raw/store avoidance of frame overhead already present in current Geometry."
+    },
+    "broad_codec_diagnostic": {
+      "models": ["STORE", "ZSTD-19", "zlib-9", "bzip2-9", "xz-9e"],
+      "bytes": 190974,
+      "saving_vs_split_zstd19_bytes": 27948,
+      "saving_pct": 12.7662,
+      "classification": "post-result diagnostic only"
+    },
+    "stronger_simpler_geometry_control": {
+      "bytes": 111656,
+      "saving_vs_split_zstd19_bytes": 107266,
+      "saving_pct": 48.9974,
+      "smaller_than_codec_zoo_bytes": 79318,
+      "interpretation": "Reversible information geometry/preconditioning dominates terminal codec heterogeneity on the synthetic positive suite."
+    },
+    "generator_distinct_transfer": {
+      "deflate_like": {
+        "split_zstd19_bytes": 28492,
+        "codec_zoo_bytes": 22845,
+        "geometry_control_bytes": 11119
+      },
+      "geometry_like": {
+        "split_zstd19_bytes": 555543,
+        "codec_zoo_bytes": 547266,
+        "geometry_control_bytes": 520359
+      }
+    }
+  },
+  "historical_controls": {
+    "columnar_residual": {
+      "source_commit": "b80c81a58fc91ddb79088280592b8a9ee2208b1c",
+      "workflow_run": 32008781540,
+      "artifact_id": 9281033248,
+      "artifact_sha256": "fac8a57fba95da8b073d6d62ce3f7769cce10f8335d2e415ca8f86e60d5fba1f",
+      "eligible_groups": 12,
+      "canonical_recipe_bytes": 64492,
+      "canonical_residual_physical_bytes": 30315,
+      "improved_groups": 0,
+      "all_roundtrips_exact": true,
+      "decision": "REJECT"
+    },
+    "bounded_lzma2_backend": {
+      "workflow_run": 32023150777,
+      "artifact_id": 9286240239,
+      "candidate_payload_bytes": 47006600,
+      "profitable_records": 1,
+      "best_net_saving_bytes": 152,
+      "decision": "REJECT"
+    }
+  },
+  "decision": "A11_OBVIOUS_TERMINAL_CODEC_HETEROGENEITY_FRAME_NARROWED_NOT_CHARTERED",
+  "reopening_condition": "Reopen only when a current or held-out typed stream population retains material complete-artifact headroom after the strongest applicable reversible geometry/preconditioning control, and a bounded terminal model adds unique gain large enough to justify codec bytes, native/platform dependency surface, decode memory/time, integrity/recovery and maintenance burden.",
+  "primary_frontier_unchanged": "Execute the frozen bounded-drift court through the first legitimate exact-source route; do not reopen nearby bounded-drift variants.",
+  "notes": [
+    "Current Geometry already tournaments RAW versus Zstd-19 per physical stream.",
+    "Revision-24 is codec-agile but shipping/native portability is a hard gate; a codec zoo is not free.",
+    "No canonical format/product mutation is justified by this oracle."
+  ]
+}
