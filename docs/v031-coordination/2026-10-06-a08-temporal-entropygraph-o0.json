@@ -36,8 +36,13 @@
     "greedy_global_policy_negative": "a separate greedy checkpoint/parent policy regressed a middle-edit hostile by ~2.28x versus periodic journal, so greedy temporal parenting is retired."
   },
   "interpretation": "The surviving signal is non-immediate version-family structure among retained states, not a universal 'temporal' representation. Existing EntropyGraph/Mosaic-style relation machinery is the strongest simpler control; A08 is not chartered as a new format thesis.",
-  "decision": "NARROW_A08_TO_BRANCHING_OR_NONLOCAL_HISTORY_RELATIONSHIPS__DO_NOT_CHARTER_YET",
+  "decision": "NARROW_A08_TO_BRANCHING_OR_NONLOCAL_HISTORY_RELATIONSHIPS__NONIMMEDIATE_DELTA_PARENTING_IS_PRIOR_ART__DO_NOT_CHARTER_YET",
   "next_discriminator": "Use a preregistered retained-generation trace with branching/reversion/nonlocal recurrence and compare current journal/checkpoint semantics against existing version-family graph ownership. Require complete stored bytes, update wall, selective generation recovery, failure-domain cost and zero carrying cost for current-state-only archives.",
   "product_credit": false,
-  "release_credit": false
+  "release_credit": false,
+  "external_control": {
+    "source": "Git pack-objects / pack-format (official git-scm.com documentation)",
+    "observation": "Git already compares nearby objects within a bounded --window for delta compression and caps delta-chain --depth because deeper chains increase unpack cost. Pack entries may delta from another base object using copy/insert instructions.",
+    "implication": "Non-immediate bounded delta-parent selection is mature prior art, not an A08 novelty claim. Any CMPCT A08 contribution must come from transactional retained-history semantics, content-only opportunity discovery, recovery/failure-domain co-design, or a stronger exact ownership model."
+  }
 }
