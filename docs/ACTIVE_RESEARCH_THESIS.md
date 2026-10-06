@@ -102,7 +102,7 @@ Do **not** immediately invent another named thesis merely to keep Foundry busy. 
 
 The historical `docs/V030_EFFICIENCY_RECOVERY.md` directive is closed as a v0.30 release gate. Its measured debts remain useful evidence, but it no longer constrains v0.31 allocation as an active version-specific mission.
 
-A15 (universal reconstruction IR) has only a **candidate initiation audit** on branch `agent/foundry-a15-initiation-audit`; it is not active and has no evidence credit. The cheap next step is semantic projection/inventory, not product code, and it remains lower priority than the strongest current evidence-backed Forge frontier unless new evidence clears the normal Foundry initiation gate.
+A15 (universal reconstruction IR) was reconciled on 2026-10-06 as **NARROWED / DO NOT CHARTER** for its current serialized-IR framing. Internal nonserialized projection/helper factoring is the stronger simpler control; reopen only if a new exact composition otherwise requires a bespoke storage kind and release-corpus evidence shows serialized IR wins on carrying cost, locality, integrity and decode throughput. The same Foundry reconciliation recovered exact hosted A07/C25CC02 self-indexed-RAW evidence at **+20,741 B versus Zstd-19** despite exact semantics/locality; do not rerun or charter broad A07 from that mechanism without a materially different ownership/index design and a fully charged bound.
 
 ## Forge separation
 
