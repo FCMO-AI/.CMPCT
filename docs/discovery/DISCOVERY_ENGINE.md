@@ -39,7 +39,7 @@ A candidate killed by a BONK becomes durable negative knowledge when the reason 
 
 ### A — Exploit the measured bottleneck
 
-When exact product evidence exposes a dominant owner, prefer causal localization and the smallest decisive A/B. This is the default while v0.30 runtime debt is release-critical.
+When exact product evidence exposes a dominant owner, prefer causal localization and the smallest decisive A/B. Give this loop priority whenever current repository truth identifies a release- or product-critical measured owner.
 
 Do not optimize wrappers when child attribution points into candidate construction. Do not tune thresholds before determining whether work can be eliminated, reused, bounded, proven unnecessary, or terminated early.
 
