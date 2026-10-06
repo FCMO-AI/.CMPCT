@@ -1,0 +1,73 @@
+{
+  "schema": "cmpct-pr221-three-layer-authority-custody-v2",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "pr": 221,
+    "pr_head": "93d864fb40e1c97fd9de10e226a92c89b54098aa",
+    "working_branch": "agent/phased3-pr221-review-blockers",
+    "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "zip_parity_blob": "d653d4353a5d463faa7e099c8eea06209e25c688",
+    "authoritative_v2_blob": "2f095ec3b5b1028bc1fa49dd730de8062876e0ee",
+    "release_lock_checker_blob": "225c20aea99fc9c444d6b0af1e3d96634f2469ac",
+    "topology_checker_blob": "f3892b1f6a5d089c26f472f10ca5a89784af8a5e"
+  },
+  "hosted_exact_head_evidence": {
+    "final_release": {
+      "run": 37286518657,
+      "classifier_job": 111686601241,
+      "observed_candidate_paths": [
+        "PR-221-BODY.md"
+      ],
+      "substantive_jobs": [
+        "contracts:skipped",
+        "compression-and-product-parity:skipped",
+        "runtime-and-selective-read:skipped",
+        "external-frontier:skipped"
+      ]
+    },
+    "authoritative_pr": {
+      "run": 37286518560,
+      "classifier_job": 111686600506,
+      "observed_candidate_paths": [
+        "PR-221-BODY.md"
+      ],
+      "substantive_jobs": [
+        "shared-rehab:skipped",
+        "runtime:skipped",
+        "generalization:skipped",
+        "reader-fuzz:skipped"
+      ]
+    },
+    "r24_zip": {
+      "run": 37286518470,
+      "classifier_job": 111686600245,
+      "observed_candidate_paths": [
+        "PR-221-BODY.md"
+      ],
+      "substantive_jobs": [
+        "performance:skipped"
+      ]
+    }
+  },
+  "reproduced_failure_model": [
+    "Layer 1 trigger: fingerprint-driven authority can fail to wake when pull_request.paths is narrower than the fingerprint surface.",
+    "Layer 2 obligation: a cancellable classifier that examines only newest HEAD can erase earlier relevant PR changes before substantive admission.",
+    "Layer 3 satisfaction: workflow-level success with skipped result jobs is routing evidence only, never substantive evidence."
+  ],
+  "required_repairs": [
+    "Use merge-base(PR base, exact head)..exact head for PR candidate impact; preserve rename source+destination names.",
+    "Reuse the canonical release fingerprint's recursive-glob semantics instead of fnmatch reinterpretation.",
+    "Ensure fingerprint-driven authority wakes on every relevant candidate; avoid a narrower hand-maintained trigger surface.",
+    "Add a temporal regression: relevant A queued/cancelled before admission then irrelevant B must still carry the unmet obligation.",
+    "Keep result-bearing jobs exact-SHA and non-cancelling.",
+    "Converge later to semantic evidence fingerprint plus durable substantive satisfaction so irrelevant commits can reuse a valid receipt without rerunning it."
+  ],
+  "review_threads": {
+    "cancellation": "PRRT_kwDOT4AHZM6o62ih",
+    "glob_semantics": "PRRT_kwDOT4AHZM6o-Ae5",
+    "receipt_geometry": "PRRT_kwDOT4AHZM6o-AfA"
+  },
+  "promotion_boundary": "No review thread resolves until the corresponding source repair and regression evidence are landed on the reviewed PR head or a legitimate successor.",
+  "product_credit": false,
+  "release_credit": false
+}
