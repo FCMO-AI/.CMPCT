@@ -1,0 +1,29 @@
+{
+  "schema": "cmpct-v031-transaction-local-refinement-immediate-admission-result-v1",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "base_ref": "agent/v031-development",
+    "transactions_blob": "964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c",
+    "codec_blob": "29526db4203723d83523fc95d074c346b63d7587",
+    "reader_blob": "e716233403dabd0966863c45635e18fa5ac6afb8",
+    "resemblance_blob": "8c73f33cb8bb2983ac949edbd6fd30e6570b8cc0"
+  },
+  "question": "Can format-preserving local refinement activate under a current-state-only no-regression admission rule without gifting fine slices from an existing coarse blob?",
+  "result": "NO_ADMISSION_ON_ALL_TESTED_HISTORIES",
+  "mechanism": "For each update, compare the exact current generation cost of ordinary shipping coarse CDC versus refining every non-reused coarse chunk into ordinary 16/64/256KiB resemblance.fastcdc leaves. Fine leaves may reuse only hashes physically present in prior committed generations. Commit refinement only when that generation is strictly smaller.",
+  "tested_histories": [
+    "same-region 4KiB replacements",
+    "wandering 4KiB replacements",
+    "same-region 4KiB insertions",
+    "same-region 4KiB deletions",
+    "two-state oscillation",
+    "512KiB churn",
+    "independent random states",
+    "compressible repeating binary with 4KiB edits"
+  ],
+  "observation": "Refinement was selected 0 times. Before fine leaves exist physically, splitting a changed coarse chunk cannot beat storing that same changed bytes directly because it adds blob framing and S_CDC entry metadata. The earlier cumulative byte headroom requires paying a seeding/migration generation first; it is not current-state-safe admission.",
+  "decision": "FORMAT_PRESERVING_LOCAL_REFINEMENT_NARROWED. Do not prototype it as the next product path under the zero-byte current-state regression discipline. Re-elevate the existing Issue #26 depth-1 reference-delta route, which can exploit the already-present ordinary coarse parent on the first changed generation.",
+  "next": "Court the existing Issue #26 coarse-CDC depth-1 relation with previous-generation same-ordinal/plus-or-minus-one parent ownership, strict direct fallback and current-generation byte admission. Charge parent+delta cold range work and prove the total decode unit remains within inherited locality/resource limits before any source integration.",
+  "product_credit": false,
+  "release_credit": false
+}
