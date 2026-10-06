@@ -1,0 +1,65 @@
+{
+  "schema": "cmpct-pr221-postrelease-authority-frame-review-v6",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "current_checkpoint": "v0.30.0",
+    "canonical_revision": 24,
+    "pre1_policy_blob": "4eddc0a9fe5879bbe57a3a88603b8b23aed083c7",
+    "current_state_blob": "1c5f9e1e85e83ea628d053087af4142c701625f0",
+    "pr221_head": "93d864fb40e1c97fd9de10e226a92c89b54098aa"
+  },
+  "frame_review": {
+    "trigger": "Repeated effort on v0.30-specific admission exposed a stronger simplification question after v0.30 was already published and v0.31 made the active development line.",
+    "repository_law": [
+      "v0.30.0 is a published rolling pre-1.0 checkpoint.",
+      "v0.31 starts immediately.",
+      "normal pre-1.0 numeric core advancement moves the minor line and uses PATCH=0; surface-only maintenance uses SURFACE_REVISION."
+    ],
+    "question": "Which PR221 blockers belong to still-live generic authority, and which are obsolete automatic v0.30 promotion routes that should be retired/manualized instead of perfected?"
+  },
+  "lane_split": {
+    "zip-parity.yml": {
+      "class": "LIVE_GENERIC_CORE_REGRESSION",
+      "decision": "KEEP_AUTOMATIC_AND_REPAIR",
+      "reason": "Canonical r24/ZIP regression evidence remains useful for core changes independent of the v0.30 release lifecycle.",
+      "repair": "cumulative PR obligation when cancellation can occur before admission; exact-SHA substantive custody remains unchanged"
+    },
+    "public-proof receipt": {
+      "class": "LIVE_PUBLIC_SURFACE",
+      "decision": "KEEP_AUTOMATIC_AND_REPAIR",
+      "reason": "Surface revision 0.30.b/public proof remains current maintenance truth.",
+      "repair": "seven-cell Contract terminus plus hydrated child-geometry ratchet"
+    },
+    "v030-authoritative-v2-pr.yml": {
+      "class": "VERSION_SPECIFIC_PROMOTION_AUTHORITY",
+      "decision": "PREFER_RETIRE_TO_MANUAL_ONLY_UNLESS_A_CURRENT_POSTRELEASE_CLAIM_REQUIRES_AUTOMATIC_EXECUTION",
+      "reason": "v0.30 is already published; v0.31 is the next numeric development line. Broadening this old final fingerprint authority to every PR may spend compute maintaining a superseded promotion route.",
+      "consequence": "If retired to workflow_dispatch, the open fnmatch admission defect is removed from automatic custody rather than reimplemented; manual replay should run substantive authority directly."
+    },
+    "v030-final-release-authority.yml": {
+      "class": "VERSION_SPECIFIC_PROMOTION_AUTHORITY",
+      "decision": "PREFER_RETIRE_TO_MANUAL_ONLY_AFTER_DEPENDENCY_AUDIT",
+      "reason": "There is no normal future v0.30 numeric promotion to protect; preserving replay is useful, automatic PR admission is not automatically justified."
+    },
+    "v030-authoritative-pr-gates.yml": {
+      "class": "VERSION_SPECIFIC_PROMOTION_AUTHORITY",
+      "decision": "PREFER_RETIRE_OR_NARROW_AFTER_DEPENDENCY_AUDIT",
+      "reason": "Its exact-head skipped jobs are evidence of stale automatic routing cost, not a reason by themselves to keep a released-line promotion lane hot."
+    }
+  },
+  "remaining_fingerprint_law": {
+    "manual_replay": "Keep check_v030_release_lock.py and historical receipt semantics for archaeology/reverification.",
+    "self_anchor": "Canonical V030_RELEASE_LOCK.json should still fail closed if it removes its own fingerprint anchor; manual authority must not be self-erasing.",
+    "future": "Design v0.31 authority from the semantic-fingerprint/satisfaction model rather than cloning v0.30 newest-head classifiers."
+  },
+  "cheapest_decisive_next_action": [
+    "Search current main and open PR policy for any still-live requirement that v0.30 final/authoritative workflows auto-run after the published checkpoint.",
+    "If none exists, retire those version-specific PR triggers to workflow_dispatch while preserving exact historical replay.",
+    "Keep the generic zip-parity and public-proof fixes in PR221.",
+    "Do not mass-edit all historical v030 workflows; retire/migrate only authoritative live surfaces."
+  ],
+  "promotion_boundary": "No source retirement or review-thread resolution has landed. This is a frame-review decision record, not product/release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
