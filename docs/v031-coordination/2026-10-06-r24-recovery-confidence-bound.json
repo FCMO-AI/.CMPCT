@@ -1,0 +1,33 @@
+{
+  "schema": "cmpct-v031-r24-recovery-confidence-bound-v1",
+  "recorded_at": "2026-10-06",
+  "development_base": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "source_blobs": {
+    "reader": "e716233403dabd0966863c45635e18fa5ac6afb8",
+    "transactions": "964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c",
+    "validation": "51c2849061f99a4afeddb7666956b24566ce7de0",
+    "format": "19d3e687f62f5a6a95942022da7212eb074f8d53"
+  },
+  "question": "Can revision-24 tolerant corrupt-tail fallback be made hostile-authoritative using only local footer validity, root placement, and prev ancestry?",
+  "decision": "NO__CONFIDENCE_TIERING_REQUIRED",
+  "causal_bound": "An incomplete/uncommitted tail may contain a complete self-consistent generation payload+footer G' whose prev points at the prior committed footer P. The exact same observed bytes through G' are also a valid history in which G' was intentionally committed. No reader-only predicate over those bytes can recover external writer intent.",
+  "surviving_hardening": [
+    "Read and validate the r24 header before scanning transaction footers.",
+    "Derive the canonical initial footer position from HDR.size + primary_csize + data_span + primary_csize.",
+    "Reject candidate footers physically before that canonical initial tail.",
+    "Allow prev=0 checkpoint authority only at the canonical initial footer and bind its payload hash to the header index hash.",
+    "Classify selection of an older valid footer with trailing bytes as best-effort prior-generation recovery rather than hostile-authoritative current state.",
+    "Keep arbitrary BMAGIC scanning heuristic; local CRC/SHA proves candidate content, not placement or commit membership.",
+    "Future dependency representations, including Issue26 backward-offset bases, may consume only authoritative committed ownership."
+  ],
+  "confidence_tiers": [
+    "authoritative-current-tail",
+    "best-effort-prior-generation",
+    "primary-index-fallback",
+    "structural-salvage",
+    "heuristic-magic-scan"
+  ],
+  "format_effect": "None for confidence-tiering. Stronger authoritative recovery after arbitrary metadata/footer loss would require a future authenticated topology/chaining design or external trust.",
+  "product_credit": false,
+  "release_credit": false
+}
