@@ -1,0 +1,33 @@
+{
+  "schema": "cmpct-v031-control-plane-state-drift-v7",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "base": "agent/v031-development",
+    "base_release_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "state_blob": "942e0231f8617af0fcaddf364c60b7f50e4d4ee9",
+    "active_thesis_main_blob": "464b76e2380263a7bcb37b98cd18bc9c228e3ce4",
+    "active_thesis_reconciled_blob": "694770056030a28f3db14fcf7255b4242c062aab",
+    "foundry_reconciliation_blob": "c3b58bbd0cbac653e32b91b4726217dbacaa2ea9"
+  },
+  "contradiction": [
+    "agent/v031-development STATE still lists A15 universal reconstruction IR as QUEUED.",
+    "The same branch now contains 2026-10-06 Foundry reconciliation with A15=NARROWED_DO_NOT_CHARTER.",
+    "The same reconciliation recovers exact hosted A07/C25CC02 negative evidence and says do not rerun/charter A07 from that mechanism.",
+    "ACTIVE_RESEARCH_THESIS on release main still contains obsolete v0.30 efficiency-recovery allocation, while the existing reconcile branch correctly switches to v0.31 rolling development."
+  ],
+  "decision": [
+    "Treat the branch-local Foundry reconciliation as newer scientific truth than the stale A15 queue entry.",
+    "Do not charter A15 or A07 from their currently reconciled mechanisms.",
+    "Preserve bounded drift as primary; Issue194 and Issue206 remain the two live dependency-safe Forge candidates.",
+    "When normative-file mutation is available, reconcile ACTIVE_RESEARCH_THESIS and STATE atomically enough that zero-history agents cannot revive closed v0.30 allocation or narrowed Foundry families."
+  ],
+  "next_exact_edit": [
+    "Copy docs/ACTIVE_RESEARCH_THESIS.md from agent/v031-active-thesis-reconcile-20261004 onto the current v0.31 development lineage.",
+    "Remove A15 from STATE.frontier_candidates.",
+    "Add A15 and A07 to STATE.saturated_families with their existing reopen conditions.",
+    "Retain current bounded-drift / Issue194 / Issue206 ownership and next-action law unchanged."
+  ],
+  "claim_boundary": "Decision-state reconciliation only. No product mutation, new benchmark result, threshold change, release promotion, or product/release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
