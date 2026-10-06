@@ -36,13 +36,22 @@
     "greedy_global_policy_negative": "a separate greedy checkpoint/parent policy regressed a middle-edit hostile by ~2.28x versus periodic journal, so greedy temporal parenting is retired."
   },
   "interpretation": "The surviving signal is non-immediate version-family structure among retained states, not a universal 'temporal' representation. Existing EntropyGraph/Mosaic-style relation machinery is the strongest simpler control; A08 is not chartered as a new format thesis.",
-  "decision": "NARROW_A08_TO_BRANCHING_OR_NONLOCAL_HISTORY_RELATIONSHIPS__NONIMMEDIATE_DELTA_PARENTING_IS_PRIOR_ART__DO_NOT_CHARTER_YET",
-  "next_discriminator": "Use a preregistered retained-generation trace with branching/reversion/nonlocal recurrence and compare current journal/checkpoint semantics against existing version-family graph ownership. Require complete stored bytes, update wall, selective generation recovery, failure-domain cost and zero carrying cost for current-state-only archives.",
+  "decision": "NARROW_A08_TO_HISTORICAL_NONIDENTICAL_RELATIONSHIP_REUSE__SOURCE_FAITHFUL_ORACLE_REQUIRED__DO_NOT_CHARTER",
+  "next_discriminator": "Build the next A08 oracle around actual transactions.py semantics: current whole-archive blob-table reuse + CDC + index-delta/checkpoint behavior as the baseline, then test whether non-identical historical blobs/chunks admit additional exact EntropyGraph/Mosaic-style relationships that reduce complete retained-history bytes without update-wall, recovery, locality or current-state-only carrying-cost debt.",
   "product_credit": false,
   "release_credit": false,
   "external_control": {
     "source": "Git pack-objects / pack-format (official git-scm.com documentation)",
     "observation": "Git already compares nearby objects within a bounded --window for delta compression and caps delta-chain --depth because deeper chains increase unpack cost. Pack entries may delta from another base object using copy/insert instructions.",
     "implication": "Non-immediate bounded delta-parent selection is mature prior art, not an A08 novelty claim. Any CMPCT A08 contribution must come from transactional retained-history semantics, content-only opportunity discovery, recovery/failure-domain co-design, or a stronger exact ownership model."
+  },
+  "current_product_reconciliation": {
+    "transactions_blob": "964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c",
+    "facts": [
+      "Current append_update uses content-addressed blob reuse across the entire archive blob table, not file-level delta coding against only the immediate predecessor.",
+      "Large updated files are CDC-chunked; unchanged chunks are reused by content hash and only new chunks are appended.",
+      "The transactional generation journal stores index/file-row deltas, with a compact full checkpoint when delta depth reaches 63; it is not itself a compressed full-file delta chain."
+    ],
+    "consequence": "The O0 file-delta journal/temporal-parent oracle is an abstract information-model court, not a source-faithful measurement of current append_update. Its branching win may overlap functionality already supplied by global chunk reuse and existing EntropyGraph/Mosaic relationships. No product credit or product-size prediction is valid from this oracle."
   }
 }
