@@ -13,7 +13,7 @@
     "reopen_only_if": "A new exact composition otherwise requires a bespoke storage kind and release-corpus evidence shows serialized IR beats helper factoring on carrying cost, locality, integrity and decode throughput."
   },
   "a07": {
-    "status": "AUDIT_CANDIDATE_NOT_CHARTERED",
+    "status": "NARROWED_NOT_CHARTERED",
     "existing_oracle": "benchmarks/v030_c25cc02_self_indexed_raw_oracle.py@d65ae7de32a45c782394558aa16cee266cbaba8b",
     "existing_workflow": ".github/workflows/v030-c25cc02-self-indexed-raw.yml@3a5f19d385c834b6243af26f99ccede35006485f",
     "exact_custody_commits": [
@@ -21,8 +21,22 @@
       "e0954948a0d377185d7ed4349b69a101512e23a2",
       "83094b3ca14e26064217d09542569c2c195c71ec"
     ],
-    "durable_result_search": "No committed C25CC02 result record, issue/PR result, or active self-indexed branch was recovered. The workflow is manual-dispatch capable and uploads 90-day artifacts, but current available automation tooling cannot enumerate workflow-dispatch runs by workflow.",
-    "next_discriminator": "Recover an exact C25CC02 receipt/artifact if it exists, or execute that existing narrow oracle through a legitimate exact-source route before proposing broader A07/F-04 self-index structures."
+    "durable_result_search": "Recovered exact-head workflow run #33296257896 and unexpired artifact #9727565317. The narrow RAW/meta-free self-indexed composition loses to Zstd-19 by 20,741 B despite exact semantics/locality, so this measured mechanism is retired.",
+    "next_discriminator": "Do not rerun C25CC02 or charter broad A07 from it. Reopen A07 only with a materially different self-index/ownership mechanism, a broader discoverable regime, and a fully charged bound that addresses the retained ~20.7 KiB deficit.",
+    "recovered_result": {
+      "workflow_run_id": 33296257896,
+      "candidate_head": "83094b3ca14e26064217d09542569c2c195c71ec",
+      "artifact_id": 9727565317,
+      "artifact_digest": "sha256:c1b17c7fab64ec110b7a5706303d85b7b8e878c36bdb76c67d6b7c17e4812c7c",
+      "projected_complete_bytes": 10220043,
+      "zstd19_bytes": 10199302,
+      "margin_bytes": -20741,
+      "control_comp_bytes_per_copy": 13384,
+      "exact_semantics": true,
+      "locality_within_8x": true,
+      "decode_unit_within_8mib": true,
+      "promotion_signal": false
+    }
   },
   "process_lesson": "A Foundry assumption-ledger item is not fresh space merely because its broad label remains open. Reconcile prior instruments, workflows and terminal negatives before chartering.",
   "product_credit": false,
