@@ -1,0 +1,36 @@
+{
+  "schema": "cmpct-pr221-fingerprint-self-authority-custody-v5",
+  "recorded_at": "2026-10-05",
+  "authority": {
+    "branch_head_before_write": "418eb6f48a9ef87671caa9080515e3391e5054a3",
+    "release_lock_blob": "3cd822e6e9fead8a5dc210beb252f26dc52e0735",
+    "release_lock_checker_blob": "225c20aea99fc9c444d6b0af1e3d96634f2469ac",
+    "authoritative_v2_blob": "2f095ec3b5b1028bc1fa49dd730de8062876e0ee"
+  },
+  "new_finding": {
+    "current_manifest_self_fingerprints": true,
+    "load_manifest_enforces_self_fingerprint": false,
+    "failure_model": [
+      "The planned changed-path classifier correctly reuses the *new* manifest's recursive-glob vocabulary.",
+      "If one commit edits V030_RELEASE_LOCK.json and removes its own `docs/V030_RELEASE_LOCK.json` fingerprint entry, that changed manifest path can become invisible to the new vocabulary.",
+      "Without a structural self-anchor, an authority-surface mutation can therefore redefine the matcher that decides whether that same mutation invalidates evidence."
+    ],
+    "classification": "control-plane self-reference / fail-closed authority root",
+    "why_distinct": "This is separate from the open fnmatch P1. Unifying matcher semantics does not by itself prevent the manifest from deleting its own admission anchor."
+  },
+  "cheapest_repair": {
+    "invariant": "Canonical load_manifest() must fail closed unless `docs/V030_RELEASE_LOCK.json` remains in fingerprint_globs.",
+    "classifier_behavior": "authoritative-v2 must load the manifest through that validator; a malformed/self-unanchored manifest makes classifier red rather than stale-green.",
+    "regression": "Remove only the self fingerprint entry from an otherwise valid manifest and assert canonical load rejects it.",
+    "scope": "Do not hard-code the entire mutable 85-pattern surface. Only ratchet the authority document's self-anchor; ordinary surface evolution remains permitted and fingerprint-changing."
+  },
+  "relation_to_three_layer_repair": [
+    "Layer 1: authoritative-v2 cheap classifier must wake broadly enough to observe manifest changes.",
+    "Layer 2: cumulative merge-base PR candidate scope must carry the manifest mutation.",
+    "Layer 2b: canonical matcher must be self-anchored so the changed manifest cannot make itself irrelevant.",
+    "Layer 3: exact-SHA substantive receipts remain required; classifier-only green never satisfies authority."
+  ],
+  "source_write_status": "UNLANDED; do not retry source mutation while platform safety blocks the current source-write route.",
+  "product_credit": false,
+  "release_credit": false
+}
