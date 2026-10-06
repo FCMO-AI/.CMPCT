@@ -23,5 +23,13 @@
   "decision": "CONVERGE_EXISTING_PREREGISTERED_INTEGRATED_A_B. Do not invent another historical-index representation or reopen weak exact-futility variants before the frozen integrated court. Land the hardened evidence wrapper when source writes are legitimately available, then execute exactly once.",
   "claim_boundary": "Durable convergence/evidence ownership only. No product mutation, benchmark result or release credit.",
   "product_credit": false,
-  "release_credit": false
+  "release_credit": false,
+  "source_write": {
+    "hardened_wrapper_path": "benchmarks/v031_issue194_grouped_dict_integrated_ab_hardened.py",
+    "create_attempt": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
+    "retry_after_capability_change": true,
+    "low_level_git_bypass": false,
+    "consequence": "The durable convergence record landed, but the hardened evaluator source remains unlanded and unexecuted."
+  },
+  "next_decisive_action": "Execute bounded drift through its first legitimate exact-source route if that appears first. Otherwise, when benchmark-source mutation is permitted, land the hardened Issue194 evidence wrapper without changing mechanism/workloads/comparators/thresholds, then execute the frozen child + complete-product A/B exactly once."
 }
