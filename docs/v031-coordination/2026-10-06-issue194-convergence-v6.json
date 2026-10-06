@@ -1,0 +1,27 @@
+{
+  "schema": "cmpct-v031-issue194-convergence-v6",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "development": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "owner_branch": "agent/v031-issue194-source-stat-falsifier",
+    "owner_head_before_write": "6e4d70cb7a89b0afa10bdba1742ad9554244f115",
+    "landed_benchmark_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+    "frozen_prereg_blob": "450f4df182a526ce57291f0a47a70752dd10d68c",
+    "historical_lookup_hostile_blob": "496eb341d2e536d8e8ad947a9d0d3a03341a43e8"
+  },
+  "decisive_reconciliation": {
+    "historical_fanout": [
+      "Shifted: 972 candidate edges / 80 distinct bases => 892 historical weak-index builds are redundant under ownership-only reuse; preserved lower-rung full delta-audition wall 28.5108s -> 17.1527s.",
+      "Boundary: 180 / 25 => 155 redundant index builds; 7.6096s -> 4.7981s.",
+      "False Neighbors: 15 / 5 => 10 redundant index builds; 0.5550s -> 0.5235s while preserving historical dict lookup semantics.",
+      "Incompressible: zero candidate edges, therefore zero mechanism exposure."
+    ],
+    "current_v031_lower_rung": "Source-faithful v0.31 microcourts preserve 5,500 randomized parity cases, 100,000 downstream-order cases, high-fanout grouped/baseline wall 0.5853x, false-neighbor 0.8729x and singleton 1.0002x.",
+    "a10_boundary": "The separate 397 discovery-source attempt5 auditions were already proven byte-dead and productized away; Issue194 owns residual repeated-index construction inside the surviving audition family, not that retired discovery source.",
+    "ensemble_bound": "Perfect speculative-work suppression improves create wins but left strict joint size+create wins unchanged at 4/15; Issue194 is necessary efficiency work but cannot monopolize representation debt."
+  },
+  "decision": "CONVERGE_EXISTING_PREREGISTERED_INTEGRATED_A_B. Do not invent another historical-index representation or reopen weak exact-futility variants before the frozen integrated court. Land the hardened evidence wrapper when source writes are legitimately available, then execute exactly once.",
+  "claim_boundary": "Durable convergence/evidence ownership only. No product mutation, benchmark result or release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
