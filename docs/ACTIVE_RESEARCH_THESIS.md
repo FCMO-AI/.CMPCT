@@ -4,15 +4,21 @@ Status: **no active primary Foundry thesis**.
 
 Constitutional authority: `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`. Current release authority remains independent under `docs/V030_RELEASE_LOCK.json` and the v0.30 coordination task ledger.
 
-## Temporary global priority — v0.30 efficiency recovery
+## Current allocation — v0.31 rolling development
 
-`docs/V030_EFFICIENCY_RECOVERY.md` is currently **ACTIVE** and is the dominant temporary allocator for CMPCT work until its explicit exit conditions are proven.
+v0.30.0 is published under `docs/PRE1_RELEASE_POLICY.md`; the historical v0.30 efficiency-recovery directive is **closed as a v0.30 release gate** and must not continue to allocate work merely because this file once said it was active.
 
-This is not a new Foundry thesis and does not weaken Foundry/Forge separation. It is a product-recovery priority created by measured end-to-end execution debt. While it is active, discretionary material work should directly advance, measure, unblock, or decisively falsify the efficiency-recovery mission: eliminate major create/extract/CPU/I/O/search waste, rehabilitate the proven v0.30 byte gains without exporting cost, and prove the real product against ZIP/Zstd and broader serious corpora rather than only the frozen 15-workload matrix.
+This does not create a new Foundry thesis. CMPCT remains in a **no active primary Foundry thesis** state. Under the rolling pre-1.0 policy, discretionary work should follow current repository evidence and the v0.31 development direction rather than an obsolete version-specific recovery campaign:
 
-Do not start an unrelated primary Foundry thesis merely to keep Foundry occupied while this recovery is red. A new thesis during this interval should have a credible broad path to attack an efficiency/representation bottleneck or another release-critical constraint and must still pass the normal Thesis Initiation Gate. Safety, exactness, integrity, recovery, portability and truthful evidence remain non-negotiable and can preempt performance work when they are genuine blockers.
+- preserve safety, exactness, integrity, recovery, portability and truthful evidence as non-negotiable;
+- pursue the highest-leverage measured improvement across representation, compression, create/extract cost, execution ownership and robustness;
+- keep strict 15/15 size+create domination versus ordinary ZIP/Deflate-9 and solid Zstd-19 as the **CMPCT 1.0 graduation target**, not a v0.31 release quota;
+- treat former v0.30 blockers as carried evidence-backed v0.31 opportunities when they still answer a current question, not as publication gates for an already released checkpoint;
+- do not relabel historical-fingerprint benchmark evidence as exact-current release authority merely to make a newer surface look complete.
 
-The recovery directive ends only when its repository-defined exit conditions are durably satisfied; schedule cadence or passage of time does not end it.
+As of the current v0.31 frontier, the strongest direct Forge representation owner is the preregistered bounded-drift coordered court on `agent/v031-bounded-drift-coordered-court`. It should be judged by its frozen semantic/byte/integrity/locality court, not by version pressure. Released-main evidence/publication coherence debt may be repaired in parallel because it affects the cleanliness of future v0.31 proof surfaces, but it is not itself evidence that the archive algorithm regressed.
+
+Foundry should reopen the Assumption Ledger only when a materially distinct thesis can clear the normal initiation gate and beat the expected value of the current Forge frontier. Do not invent a new thesis merely to keep Foundry occupied.
 
 ## A01 latent physical basis — FAMILY_RETIRED as current primary path
 
@@ -94,10 +100,10 @@ Do not reopen through operator/grid expansion or result-driven relabeling withou
 
 Do **not** immediately invent another named thesis merely to keep Foundry busy. Re-open the Assumption Ledger and current product/evidence landscape, then choose the highest-headroom falsifiable assumption that is not already covered by stronger preserved evidence. A new thesis must pass the initiation gate in `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md` before expensive work.
 
-While `docs/V030_EFFICIENCY_RECOVERY.md` is ACTIVE, that recovery directive further constrains allocation: an otherwise valid new thesis should not displace the measured efficiency/release recovery mission unless it directly attacks a broad efficiency/representation bottleneck or new evidence proves a higher-severity product blocker.
+The historical `docs/V030_EFFICIENCY_RECOVERY.md` directive is closed as a v0.30 release gate. Its measured debts remain useful evidence, but it no longer constrains v0.31 allocation as an active version-specific mission.
 
-A15 (universal reconstruction IR) has only a **candidate initiation audit** on branch `agent/foundry-a15-initiation-audit`; it is not active and has no evidence credit. The cheap next step is semantic projection/inventory, not product code, and it is lower priority than the active efficiency-recovery mission unless new evidence changes that ordering.
+A15 (universal reconstruction IR) has only a **candidate initiation audit** on branch `agent/foundry-a15-initiation-audit`; it is not active and has no evidence credit. The cheap next step is semantic projection/inventory, not product code, and it remains lower priority than the strongest current evidence-backed Forge frontier unless new evidence clears the normal Foundry initiation gate.
 
 ## Forge separation
 
-No Foundry result in this file grants v0.30 release credit. Current v0.30 fingerprint authority remains unchanged by these docs-only research updates. Forge remains responsible for exact-head receipts, physical ARM64 Android evidence, performance/competitor authority and final release state. While the efficiency directive is ACTIVE, Forge performance/competitor convergence is the dominant discretionary mission.
+No Foundry result in this file grants release credit. The published v0.30 checkpoint remains historical authority while v0.31 advances under current repository evidence. Forge remains responsible for exact-head product evidence, performance/competitor authority and any future promotion state; no closed v0.30 directive may silently reclaim allocation authority.
