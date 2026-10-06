@@ -1,0 +1,77 @@
+{
+  "schema": "cmpct-v031-a02-factor-prevalence-repairv6-v1",
+  "date": "2026-10-06",
+  "authority": {
+    "base_branch": "agent/v031-development",
+    "base_head": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "claim_branch": "agent/phased1-a02-prevalence-repairv6",
+    "evidence_class": "Foundry lower-rung prevalence/control evidence; no product or release credit"
+  },
+  "question": "Does the previously positive content-only affine/XOR factor mechanism expose material family prevalence on accepted repair-v6 workloads without names, paths, extensions, schemas, workload identity, rank widening or threshold tuning?",
+  "frozen_frame": {
+    "objects": "distinct regular-file bytes grouped only by exact length; <=512 KiB",
+    "nomination": "exact full-object XOR relation digest recurring at least twice",
+    "max_rank": 7,
+    "materiality": ">=1% and >=1024 B versus best pairwise-star control; modeled logical read amplification <=8x",
+    "backend": "Zstd CLI level 3 research backend",
+    "controls": [
+      "best pairwise star",
+      "solid concatenated Zstd-3 byte floor"
+    ]
+  },
+  "accepted_substrates": [
+    {
+      "workload": "06_incremental_backups",
+      "tree_sha256": "a823728d98e5882542645e3ab0f777894479cfb3de4dedcec14341fedbb11a05",
+      "files": 769,
+      "logical_bytes": 14006619,
+      "eligible_logical_bytes": 11785932,
+      "exact_length_buckets": 1,
+      "pair_relations": 1128,
+      "recurring_relation_digests": 0,
+      "candidate_components": 0,
+      "material_components": 0
+    },
+    {
+      "workload": "01_developer_repository",
+      "tree_sha256": "d1706c497de75764b6bd0f49c5d8bdde251694eea40fc683dcbbfed5027c2f49",
+      "files": 1266,
+      "logical_bytes": 2624373,
+      "eligible_logical_bytes": 1888938,
+      "exact_length_buckets": 52,
+      "pair_relations": 443,
+      "recurring_relation_digests": 0,
+      "candidate_components": 0,
+      "material_components": 0
+    }
+  ],
+  "stronger_control": {
+    "workload": "01_developer_repository",
+    "change": "Remove the recurrence prefilter and directly audition every exact-length distinct-object bucket of size 4..32 under the same affine basis/cost law.",
+    "families_tested": 52,
+    "material_families": 0,
+    "best_saving_bytes": -29,
+    "best_saving_pct": -1.0709010339734122,
+    "interpretation": "The recurrence prefilter is not hiding a material equal-length affine-factor win on the accepted developer workload."
+  },
+  "decision": "A02_AFFINE_FACTOR_SUBCASE_NARROWED_NO_ACCEPTED_PREVALENCE_SIGNAL_2_OF_2",
+  "interpretation": "The synthetic affine-factor mechanism remains valid headroom evidence, but this bounded equal-length XOR frame has no demonstrated accepted-corpus prevalence. Do not charter a reader-visible primitive from the synthetic result.",
+  "limits": [
+    "No global impossibility claim for A02.",
+    "Variable-length and non-XOR factor algebras were not tested.",
+    "Only two exact accepted repair-v6 workloads were scanned.",
+    "No current product/native/complete-artifact court executed."
+  ],
+  "reopening_predicates": [
+    "A held-out/current content-only scan exposes a material family under unchanged or stronger generic admission.",
+    "A materially different factor algebra or ownership boundary addresses variable-length/cross-object structure and beats strong controls after full charge."
+  ],
+  "forbidden_rescue": [
+    "rank-cap increase",
+    "materiality-threshold change",
+    "workload/path/extension identity",
+    "friendly synthetic generator only"
+  ],
+  "product_credit": false,
+  "release_credit": false
+}
