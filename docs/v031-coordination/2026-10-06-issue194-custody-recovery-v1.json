@@ -1,0 +1,38 @@
+{
+  "schema": "cmpct-v031-issue194-custody-recovery-v1",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "owner_branch": "agent/v031-issue194-source-stat-falsifier",
+    "owner_head": "91c35b03cd815b850b078d5083684f3e8587475d",
+    "landed_v1_evaluator_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+    "custody_v5_blob": "99156df3d808ea278612d3cc74b83898d6e56edb",
+    "convergence_v6_blob": "e43f5dd4ecdba6b4b798970e8c6051f1a29284fe"
+  },
+  "recovery_audit": {
+    "expected_hardened_path": "benchmarks/v031_issue194_grouped_dict_integrated_ab_hardened.py",
+    "expected_local_sha256_from_v5": "7c4631bc599b36fa7db8e949af1d40db7572d2d31f5c05a69e714d063d4a1cda",
+    "checked_branches": [
+      "agent/v031-issue194-source-stat-falsifier",
+      "agent/v031-issue194-grouped-dict-hosted",
+      "agent/phased1-v031-issue194-evaluator-hardening-v2",
+      "agent/phased1-v031-issue194-grouped-dict-integrated"
+    ],
+    "hardened_path_found": false,
+    "misleading_branch_name_finding": "agent/phased1-v031-issue194-evaluator-hardening-v2 still carries the same landed v1 evaluator blob 38dc11e1...; it does not contain the custody-v5 hardened continuation.",
+    "repository_commit_search": "No matching commit recovered from searches for Issue194 evaluator hardening / hardened evaluator / custody v5.",
+    "external_file_surface_search": "Conversation/library search for the expected path and exact SHA did not recover the continuation source."
+  },
+  "decision": "EXACT_CUSTODY_V5_CONTINUATION_SOURCE_IS_CURRENTLY_UNRECOVERED. Do not claim that an existing branch contains it and do not execute landed v1 for promotion. If the exact source cannot be recovered from a durable source, construct a new hardened evaluator from the frozen v1 + custody v1-v5 + convergence v6 contract and assign a new source identity rather than pretending to reproduce 7c4631bc....",
+  "hardening_contract_preserved": [
+    "four alternating baseline/candidate timing pairs",
+    "whole live process-tree RSS sampled only during build",
+    "hashing and strong verification outside sampled build lifetime",
+    "separate untimed semantic proof for candidate rows, accepted measured edges, central-base assignment, pack-plan/locality",
+    "Shifted positive evidence requires same-row wall <=0.90 and CPU <1.0",
+    "Boundary, False Neighbors and Incompressible fail closed on confirmed >5% AND >3ms slowdown",
+    "product mode enforces archive/tree identity, confirmed-wall rule, nonzero RSS samples and <=1.25x process-tree RSS",
+    "fresh product subprocess executes the selected evaluator revision and proves marker plus strongly verified source-tree custody"
+  ],
+  "product_credit": false,
+  "release_credit": false
+}
