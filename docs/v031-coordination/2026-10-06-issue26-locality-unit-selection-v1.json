@@ -1,0 +1,20 @@
+{
+  "schema": "cmpct-v031-issue26-locality-unit-selection-v1",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "release_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "v031_development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b"
+  },
+  "decision": "Do not charter A08 or broaden temporal search. Treat retained update-history similarity as Forge convergence of existing Issue26/EntropyGraph-II bounded resemblance units.",
+  "decisive_evidence": [
+    "Shipping transaction CDC uses 128KiB minimum / 512KiB average / 2MiB maximum units.",
+    "On the deterministic 4MiB court, 0/7 initial shipping CDC chunks fit Issue26's original 256KiB reference-anchor ceiling.",
+    "Whole-CDC 1-2MiB relation controls recovered large byte headroom but remain oracle-only because selective/recovery work widens with the unit.",
+    "Repository already owns bounded 16/64/256KiB FastCDC resemblance units plus exact rolling COPY/LITERAL deltas in src/cmpct/resemblance.py.",
+    "Same-ordinal previous-generation ownership captures the small-edit controls once admissible; ordinal +/-1 captures nearly all gifted all-previous value on larger churn."
+  ],
+  "next_rung": "Court previous-generation same-member bounded FastCDC resemblance units inside append_update ownership: exact SHA reuse first, depth-1 ordinary anchors, direct fallback. Charge incremental bytes, update CPU/wall/process-tree RSS, selective physical/logical bytes, decoded work, recovery/integrity and native/reader carrying cost.",
+  "kill": "If fully charged transaction integration loses most of the byte headroom or exported update/locality/recovery/reader cost erases product value, retire transaction relation productization rather than widening history search.",
+  "product_credit": false,
+  "release_credit": false
+}
