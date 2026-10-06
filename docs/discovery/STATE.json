@@ -8,7 +8,8 @@
     "bounded_drift_owner": "agent/v031-bounded-drift-coordered-court@dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf",
     "issue194_owner": "agent/v031-issue194-source-stat-falsifier@91c35b03cd815b850b078d5083684f3e8587475d",
     "issue206_owner": "agent/v031-issue206-transactional-vzip@a4e74034b8d6af79877360864f59ef0d2af69575",
-    "note": "Repository heads, frozen preregistrations and exact result-bearing evidence outrank this staleable index. docs/V030_EFFICIENCY_RECOVERY.md is CLOSED as a v0.30 release gate; technical debt carries into v0.31. ACTIVE_RESEARCH_THESIS still contains older allocation prose and must not reopen closed v0.30 release gating."
+    "note": "Repository heads, frozen preregistrations and exact result-bearing evidence outrank this staleable index. v0.30.0 is published; the historical v0.30 efficiency-recovery directive is closed as a release gate. ACTIVE_RESEARCH_THESIS is reconciled on this branch to the v0.31 rolling-development allocation.",
+    "control_plane_reconcile": "agent/phased3-v031-control-plane-sync-v2@e8b4f4f564413fcfdad14029731707980f19a44c"
   },
   "active_product_bottleneck": {
     "id": "v031-result-custody-and-execution-ownership",
@@ -42,13 +43,6 @@
       "question": "Does the landed transactional VZIP repair preserve complete product bytes/tree while removing speculative state leakage without create/RSS/I-O regression on the exact package/native runtime?",
       "status": "BLOCKED",
       "evidence": "Owner head a4e74034b8d6af79877360864f59ef0d2af69575; product landing b00f9a2bc59142dc526a0ee1eba335e1d28d83c4; evaluator-control v8 blob 82eb21628b17b38a4b449e679ee429001454e016. Exact package/native custody, focused tests and six-court product A/B remain unexecuted."
-    },
-    {
-      "id": "a15-universal-reconstruction-ir-semantic-projection",
-      "family": "information-model",
-      "question": "Can a universal reconstruction IR subsume multiple exact reconstruction mechanisms without increasing reader complexity or carrying cost enough to erase leverage?",
-      "status": "QUEUED",
-      "evidence": "ACTIVE_RESEARCH_THESIS records A15 only as a candidate initiation audit; the next honest step is cheap semantic projection/inventory, not product code, and it remains below live Forge courts."
     }
   ],
   "saturated_families": [
@@ -67,6 +61,14 @@
     {
       "family": "a01-latent-synthetic-basis-primary",
       "reason": "ACTIVE_RESEARCH_THESIS marks A01 FAMILY_RETIRED after stronger R4 evidence: optimistic payload floor +48,362 B and full archive +49,392 B versus solid Zstd-19 with major create debt. Reopen only with a genuinely new mechanism addressing that failure or a broad pre-result regime outside it."
+    },
+    {
+      "family": "a15-universal-reconstruction-ir-charter",
+      "reason": "2026-10-06 Foundry reconciliation narrows A15 to DO_NOT_CHARTER: internal nonserialized projection/helper factoring is the stronger simpler control, and serialized universal-IR carrying-cost advantage is not established. Reopen only when a new exact composition otherwise needs a bespoke storage kind and release-corpus evidence shows serialized IR wins on carrying cost/locality/integrity/decode throughput."
+    },
+    {
+      "family": "a07-self-indexed-raw-current-mechanism",
+      "reason": "Exact hosted C25CC02 self-indexed RAW evidence is recovered and negative: projected complete bytes 10,220,043 versus Zstd-19 10,199,302, a 20,741 B loss despite exact semantics and locality. Do not rerun or charter broad A07 from this mechanism; reopen only with a materially different self-index/ownership mechanism and fully charged bound."
     }
   ],
   "decision_evidence": {
@@ -91,10 +93,14 @@
     {
       "lesson": "Trace controls across process/import boundaries and caller contracts before trusting same-source A/B.",
       "evidence": "Issue206 parent-only control and Issue194 product-worker substitution both exposed fresh-child/interface custody failures before expensive execution."
+    },
+    {
+      "lesson": "A broad Assumption-Ledger label is not fresh research space by itself; reconcile prior exact instruments, workflows and terminal negatives before chartering.",
+      "evidence": "2026-10-06 Foundry reconciliation narrowed A15 to helper factoring and recovered exact hosted A07/C25CC02 negative evidence (-20,741 B versus Zstd-19)."
     }
   ],
   "pending_jobs": [],
-  "next_action": "Run the frozen bounded-drift court exactly once through the first legitimate exact-source route. If that route remains unavailable, execute the already-converged Issue194 integrated A/B when hardened benchmark-source/runtime custody becomes available; otherwise execute Issue206 v8 on the exact package/native runtime. Do not reopen saturated nearby variants merely to make progress look active.",
+  "next_action": "Run the frozen bounded-drift court exactly once through the first legitimate exact-source route. If that route remains unavailable, execute the already-converged Issue194 integrated A/B when hardened benchmark-source/runtime custody becomes available; otherwise execute Issue206 v8 on the exact package/native runtime. Foundry does not charter A15 or A07 from their currently reconciled mechanisms. Do not reopen saturated nearby variants merely to make progress look active.",
   "release_policy": {
     "effective_date": "2026-10-04",
     "pre1_mode": "rolling material checkpoints",
