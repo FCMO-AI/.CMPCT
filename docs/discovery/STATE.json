@@ -3,7 +3,7 @@
   "status": "ACTIVE",
   "authority": {
     "canonical_release": "v0.30.0 rolling pre-1.0 checkpoint",
-    "v031_development": "agent/v031-development@0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+    "v031_development": "agent/v031-development (live head; read repository before trusting this staleable cache)",
     "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
     "bounded_drift_owner": "agent/v031-bounded-drift-coordered-court@dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf",
     "issue194_owner": "agent/v031-issue194-source-stat-falsifier@91c35b03cd815b850b078d5083684f3e8587475d",
@@ -42,13 +42,6 @@
       "question": "Does the landed transactional VZIP repair preserve complete product bytes/tree while removing speculative state leakage without create/RSS/I-O regression on the exact package/native runtime?",
       "status": "BLOCKED",
       "evidence": "Owner head a4e74034b8d6af79877360864f59ef0d2af69575; product landing b00f9a2bc59142dc526a0ee1eba335e1d28d83c4; evaluator-control v8 blob 82eb21628b17b38a4b449e679ee429001454e016. Exact package/native custody, focused tests and six-court product A/B remain unexecuted."
-    },
-    {
-      "id": "a15-universal-reconstruction-ir-semantic-projection",
-      "family": "information-model",
-      "question": "Can a universal reconstruction IR subsume multiple exact reconstruction mechanisms without increasing reader complexity or carrying cost enough to erase leverage?",
-      "status": "QUEUED",
-      "evidence": "ACTIVE_RESEARCH_THESIS records A15 only as a candidate initiation audit; the next honest step is cheap semantic projection/inventory, not product code, and it remains below live Forge courts."
     }
   ],
   "saturated_families": [
@@ -67,13 +60,23 @@
     {
       "family": "a01-latent-synthetic-basis-primary",
       "reason": "ACTIVE_RESEARCH_THESIS marks A01 FAMILY_RETIRED after stronger R4 evidence: optimistic payload floor +48,362 B and full archive +49,392 B versus solid Zstd-19 with major create debt. Reopen only with a genuinely new mechanism addressing that failure or a broad pre-result regime outside it."
+    },
+    {
+      "family": "a15-universal-reconstruction-ir-primary",
+      "reason": "Current reader/native lineage already has nonserialized projection/helper factoring and typed-source prior art. Naive serialized projection descriptors carry material byte overhead. Do not charter A15 unless a new exact composition requires a bespoke storage kind and release-corpus evidence beats helper factoring on carrying cost, locality, integrity and decode throughput."
+    },
+    {
+      "family": "a07-self-indexed-raw-semantic-root",
+      "reason": "Recovered exact-head C25CC02 run 33296257896 at candidate 83094b3ca14e26064217d09542569c2c195c71ec: projected complete 10,220,043 B versus Zstd-19 10,199,302 B (-20,741 B margin), with exact semantics/locality/decode-unit gates green but promotion_signal=false. Compatible optimistic semantic-root + 40-byte self-record floor remains 3,857 B above Zstd-19. Reopen only with changed payload/information ownership and broader discoverable headroom."
     }
   ],
   "decision_evidence": {
     "bounded_drift": "Frozen court/source custody intact; scientific result UNEXECUTED because the exact workflow/result route is absent.",
     "issue194": "Shifted preserved lower-rung evidence: 972 candidate edges / 80 bases, 892 redundant weak-index builds, historical delta-audition wall 28.5108s -> 17.1527s. Boundary 180/25 -> 7.6096s -> 4.7981s. False Neighbors 15/5 -> 0.5550s -> 0.5235s. Current v0.31 microcourts preserve 5,500 parity cases and 100,000 downstream-order cases.",
     "issue206": "Transactional Builder source is landed; v8 control explicitly binds fresh-child source custody and requires candidate-neutrality before product timing credit.",
-    "external_frontier": "Historical external scoreboard remains 15/15 ZIP size wins, 7/15 Zstd-19 size wins, 4/15 ZIP create wins, 5/15 Zstd-19 create wins, 4/15 strict joint wins; historical fingerprint only, not current release credit."
+    "external_frontier": "Historical external scoreboard remains 15/15 ZIP size wins, 7/15 Zstd-19 size wins, 4/15 ZIP create wins, 5/15 Zstd-19 create wins, 4/15 strict joint wins; historical fingerprint only, not current release credit.",
+    "a15": "NARROWED / DO NOT CHARTER: internal nonserialized projection/helper factoring is the stronger simpler control; serialized IR carrying-cost advantage is not established. Durable coordination: docs/v031-coordination/2026-10-06-foundry-reconciliation-a15-a07.json.",
+    "a07": "NARROWED / NOT CHARTERED: exact-head C25CC02 run 33296257896 recovered from Actions artifact 9727565317; projected complete 10,220,043 B versus Zstd-19 10,199,302 B, margin -20,741 B, exact semantics/locality green, promotion_signal=false. Two earlier artifacts reproduce the ~20.7 KiB loss."
   },
   "process_lessons": [
     {
@@ -91,10 +94,14 @@
     {
       "lesson": "Trace controls across process/import boundaries and caller contracts before trusting same-source A/B.",
       "evidence": "Issue206 parent-only control and Issue194 product-worker substitution both exposed fresh-child/interface custody failures before expensive execution."
+    },
+    {
+      "lesson": "Absence of a committed result file is not absence of scientific evidence when CI artifacts are an explicit custody surface.",
+      "evidence": "Exact-head historical Actions/artifact search recovered C25CC02 run 33296257896 and resolved A07 from UNKNOWN to a replicated negative."
     }
   ],
   "pending_jobs": [],
-  "next_action": "Run the frozen bounded-drift court exactly once through the first legitimate exact-source route. If that route remains unavailable, execute the already-converged Issue194 integrated A/B when hardened benchmark-source/runtime custody becomes available; otherwise execute Issue206 v8 on the exact package/native runtime. Do not reopen saturated nearby variants merely to make progress look active.",
+  "next_action": "Run the frozen bounded-drift court exactly once through the first legitimate exact-source route. If unavailable, execute the converged Issue194 integrated A/B when hardened source/runtime custody becomes available; otherwise execute Issue206 v8 on the exact package/native runtime. Foundry currently has no chartered primary thesis; A15 and A07 are narrowed, so do not reopen them without changed evidence.",
   "release_policy": {
     "effective_date": "2026-10-04",
     "pre1_mode": "rolling material checkpoints",
