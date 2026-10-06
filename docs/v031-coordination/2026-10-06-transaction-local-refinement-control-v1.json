@@ -1,0 +1,35 @@
+{
+  "schema": "cmpct-v031-transaction-local-refinement-control-v1",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "v031_development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "codec_blob": "29526db4203723d83523fc95d074c346b63d7587",
+    "transactions_blob": "964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c",
+    "reader_blob": "e716233403dabd0966863c45635e18fa5ac6afb8",
+    "resemblance_blob": "8c73f33cb8bb2983ac949edbd6fd30e6570b8cc0"
+  },
+  "question": "Can retained update-history redundancy be captured without any new reference-delta codec or storage grammar?",
+  "mechanism": "Keep shipping CDC as the outer update partition. Reuse an unchanged coarse CDC blob exactly. For each non-identical coarse CDC chunk only, split that chunk with existing resemblance.fastcdc (16/64/256KiB), then exact-hash reuse/store the fine subchunks as ordinary existing blobs. Emit one ordinary S_CDC entry sequence mixing reused coarse blobs and fine refined blobs. No new codec ID, storage kind, dependency edge or reader grammar.",
+  "why_format_preserving": [
+    "Revision-24 S_CDC records explicit [logical_length, blob_ref] pairs; the reader does not depend on the chunker.",
+    "read_range already decodes only intersecting S_CDC entries.",
+    "All refined leaves remain ordinary independently authenticated RAW/Zstd/etc physical blobs."
+  ],
+  "migration_aware_court": {
+    "base": "existing deterministic 4 MiB archive owning only current coarse shipping-CDC blobs; eight sequential updates",
+    "charged": "new ordinary blob framing/payloads + generation blob rows/footer; no fine chunks from the original base are gifted",
+    "ratios_candidate_over_current_shipping_cdc": {
+      "replace_4KiB": 0.7453518707,
+      "insert_4KiB": 0.8041212939,
+      "delete_4KiB": 0.7422671031,
+      "replace_512KiB": 0.7131702965,
+      "compressible_replace_4KiB": 0.4090495528
+    },
+    "note": "A simpler whole-file fine-CDC migration control was not universally dominant because its first update had to materialize the entire fine partition (e.g. 1.232x on eight 4KiB replacements). Local refinement avoids that migration tax by refining only coarse chunks that actually changed."
+  },
+  "decision": "PROMOTE_TO_NEXT_CHEAP_FALSIFIER, NOT PRODUCT CREDIT. This format-preserving local-refinement control dominates immediate reference-delta format work on complexity and produces positive lower-rung retained-history bytes across all tested local-edit controls.",
+  "next": "Before adding a reference-delta codec/storage kind, implement a source-faithful append_update A/B for local refinement and measure exact archive bytes, update wall/CPU/process-tree RSS, generation/index growth, read_range physical/logical bytes and decoded work, compaction, recovery/integrity and native reader parity. Admission must be local/current-state only; no future-history oracle or workload identity.",
+  "kill": "Retire local refinement if fully charged update/index/runtime costs or held-out histories erase the byte advantage. Only then spend new format/reader complexity on residual relationship headroom.",
+  "product_credit": false,
+  "release_credit": false
+}
