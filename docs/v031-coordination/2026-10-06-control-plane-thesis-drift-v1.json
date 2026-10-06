@@ -1,0 +1,29 @@
+{
+  "schema": "cmpct-v031-control-plane-thesis-drift-v1",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "release_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "branch": "agent/phased3-v031-issue26-convergence-v5",
+    "state_blob": "e6093510a5c1465efe836d996c212882a617302c",
+    "active_thesis_blob": "464b76e2380263a7bcb37b98cd18bc9c228e3ce4"
+  },
+  "contradiction": {
+    "discovery_state": "Explicitly says v0.30.0 is published, V030_EFFICIENCY_RECOVERY is CLOSED as a release gate, primary question is bounded drift, and Issue194/Issue206 own the live secondary frontier.",
+    "active_research_thesis": "Still says V030_EFFICIENCY_RECOVERY is ACTIVE and the dominant temporary allocator, and still uses v0.30 release-oriented Forge prose.",
+    "resolution": "Live repository heads, exact result-bearing evidence and the fresher Discovery STATE outrank the stale thesis allocation prose. Do not reopen v0.30 release gating from ACTIVE_RESEARCH_THESIS."
+  },
+  "current_allocation": [
+    "Primary: execute frozen bounded-drift court through the first legitimate exact-source route.",
+    "Then Issue194 once its hardened evaluator/runtime custody lands.",
+    "Then Issue206 evaluator-control v8 on exact package/native runtime.",
+    "Issue26/A08 retained-history work is Forge convergence of existing bounded resemblance prior art, not a new primary Foundry thesis."
+  ],
+  "mutation_boundary": {
+    "active_thesis_update_attempted": true,
+    "result": "blocked before mutation by platform safety",
+    "retried": false,
+    "next": "Reconcile ACTIVE_RESEARCH_THESIS through the next legitimate content-update/review path; until then preserve this explicit contradiction record."
+  },
+  "product_credit": false,
+  "release_credit": false
+}
