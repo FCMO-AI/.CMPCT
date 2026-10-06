@@ -1,0 +1,49 @@
+{
+  "schema": "cmpct-v031-ci-topology-inventory-v1",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "v031_development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "development_tree": "0958ac2e5ff9e51c8406f6ea7ee2ceeeecdc1a2d",
+    "release_main": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "workflow_diff_main_to_development": 0,
+    "issue": 128
+  },
+  "direct_inventory": {
+    "workflow_yaml_files_in_exact_tree": 566,
+    "github_code_search_default_branch_observation": {
+      "note": "Main and v0.31 development have zero workflow-file diffs, so default-branch workflow search observes the same workflow sources as the exact development tree. Search is used only as a trigger-surface inventory, not scientific/product evidence.",
+      "pull_request_colon_files": 239,
+      "pull_request_deep_lane_files": 216,
+      "pull_request_deep_with_exact_head_diff_tree_classifier": 204,
+      "pull_request_release_lane_files": 11,
+      "pull_request_fast_lane_files": 10,
+      "workflow_dispatch_colon_files": 549
+    },
+    "audited_deep_pr_without_exact_head_diff_tree": [
+      ".github/workflows/installed-native-package.yml",
+      ".github/workflows/v030-eg08-single-expansion.yml",
+      ".github/workflows/v030-federated-hybrid-rle-v7-effort.yml",
+      ".github/workflows/v030-federated-rle-fs-v6-effort.yml",
+      ".github/workflows/v030-logs-inverse-edge-oracle.yml",
+      ".github/workflows/v030-medium-binary-terminal-parity.yml",
+      ".github/workflows/v030-parallel-candidate-oracle.yml",
+      ".github/workflows/v030-r24-medium-binary-pack-generalization.yml",
+      ".github/workflows/v030-r24-terminal-oracle.yml",
+      ".github/workflows/v030-r24-wide-chunk-oracle.yml",
+      ".github/workflows/v030-segmented-dict-oracle.yml",
+      ".github/workflows/v030-segmented-solid-oracle.yml"
+    ],
+    "legacy_lane_value_outside_current_checker_allowlist": [
+      ".github/workflows/v030-r27-incremental-backups-floor-diagnostic.yml",
+      ".github/workflows/v030-r28-incremental-backups-r24-carrying-cost-builder.yml"
+    ]
+  },
+  "inherited_control": {
+    "ci_architecture_target": "ordinary changes should wake roughly 3-6 relevant workflows; hundreds queued is a topology regression",
+    "current_required_status_audit": "docs/v031-coordination/2026-10-06-ci-required-status-audit-v1.json on agent/phased3-v031-issue26-convergence-v5 reports main unprotected, no repository-visible required contexts, and no repository rulesets; detailed protection endpoint remained inaccessible"
+  },
+  "decision": "ISSUE128_REMAINS_MATERIAL_AND_NOW_HAS_CURRENT_V031_FLEET_SCALE. Do not add another classifier architecture. Inventory current-authority workflows, retire durable historical research lanes to workflow_dispatch/manual replay in a coordinated tranche, keep only the small live product/evidence set automatically PR-triggered, and then validate with a fingerprint-neutral coordination/docs commit.",
+  "kill_or_disproof": "If an exact source parser shows the code-search trigger inventory materially overstates automatic PR triggers, or if repository/org-required checks make the proposed retirement unsafe, narrow the tranche before mutation. Do not delete evidence gates; change when historical gates run, preserving manual replay and exact-source custody.",
+  "product_credit": false,
+  "release_credit": false
+}
