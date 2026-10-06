@@ -1,0 +1,30 @@
+{
+  "schema": "cmpct-v031-foundry-reconciliation-v1",
+  "recorded_date": "2026-10-06",
+  "authority": {
+    "development": "agent/v031-development@65a4baaa056dcf9d416371afa697480ae06ff675",
+    "discovery_state_blob": "942e0231f8617af0fcaddf364c60b7f50e4d4ee9",
+    "active_research_thesis_blob": "464b76e2380263a7bcb37b98cd18bc9c228e3ce4",
+    "assumption_ledger_blob": "27b2c183cab3c39c5c2bdc981fe2daa64836a084"
+  },
+  "a15": {
+    "status": "NARROWED_DO_NOT_CHARTER",
+    "decision": "Internal nonserialized projection/helper factoring is the stronger simpler control. Current reader/native lineage already contains projection planning and prior source-kind work; serialized universal-IR novelty and carrying-cost advantage are not established.",
+    "reopen_only_if": "A new exact composition otherwise requires a bespoke storage kind and release-corpus evidence shows serialized IR beats helper factoring on carrying cost, locality, integrity and decode throughput."
+  },
+  "a07": {
+    "status": "AUDIT_CANDIDATE_NOT_CHARTERED",
+    "existing_oracle": "benchmarks/v030_c25cc02_self_indexed_raw_oracle.py@d65ae7de32a45c782394558aa16cee266cbaba8b",
+    "existing_workflow": ".github/workflows/v030-c25cc02-self-indexed-raw.yml@3a5f19d385c834b6243af26f99ccede35006485f",
+    "exact_custody_commits": [
+      "c353b9d2f3527db406f4899095f43cd0121e6f73",
+      "e0954948a0d377185d7ed4349b69a101512e23a2",
+      "83094b3ca14e26064217d09542569c2c195c71ec"
+    ],
+    "durable_result_search": "No committed C25CC02 result record, issue/PR result, or active self-indexed branch was recovered. The workflow is manual-dispatch capable and uploads 90-day artifacts, but current available automation tooling cannot enumerate workflow-dispatch runs by workflow.",
+    "next_discriminator": "Recover an exact C25CC02 receipt/artifact if it exists, or execute that existing narrow oracle through a legitimate exact-source route before proposing broader A07/F-04 self-index structures."
+  },
+  "process_lesson": "A Foundry assumption-ledger item is not fresh space merely because its broad label remains open. Reconcile prior instruments, workflows and terminal negatives before chartering.",
+  "product_credit": false,
+  "release_credit": false
+}
