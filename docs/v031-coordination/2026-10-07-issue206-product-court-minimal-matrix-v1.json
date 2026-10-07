@@ -1,0 +1,76 @@
+{
+  "schema": "cmpct-v031-issue206-product-court-minimal-matrix-v1",
+  "recorded_at": "2026-10-07",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "branch": "agent/phased2-v031-issue206-current-transactional-v1",
+    "head_before_write": "6cf2588abd522a80dda2142395289799b092672e",
+    "builder_preimage": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "required_builder_postimage": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b",
+    "codec_blob": "29526db4203723d83523fc95d074c346b63d7587"
+  },
+  "source_derived_scope": {
+    "structural_vzip_reachable_only_when": "deferred ZIP/WHL count < 8",
+    "max_vzip_attempts_per_build": 7,
+    "eight_or_more_control": "container-pack path; make_vzip_recipe unreachable"
+  },
+  "courts": [
+    {
+      "id": "success-single-high-member",
+      "purpose": "candidate-neutral success semantics and carrying cost",
+      "shape": "1 supported ZIP/WHL with high member count",
+      "must_hold": [
+        "complete archive byte identity",
+        "exact extracted tree identity",
+        "candidate-neutrality under frozen >5% AND >3ms timing law",
+        "process-tree RSS and block I/O within v8 law"
+      ]
+    },
+    {
+      "id": "late-unsupported-policy-poison",
+      "purpose": "prove the real fallback/product benefit",
+      "shape": "1 ZIP with 16 distinct >=7009-byte .txt members followed by unsupported BZIP2 tail",
+      "current_control_facts": [
+        "direct VZIP callbacks leave 16 speculative text candidates before fallback",
+        "that state crosses current dictionary-training admission: 16 samples / 112144 B",
+        "transactional failure leaves candidate/dictionary eligibility unchanged"
+      ],
+      "must_hold": [
+        "exact logical source tree identity",
+        "same full-ZIP fallback blob identity",
+        "transactional complete archive strictly smaller than direct preimage",
+        "no create/RSS/I-O regression under frozen law"
+      ]
+    },
+    {
+      "id": "sequential-seven-mixed",
+      "purpose": "transaction composition at maximum reachable outer-archive count",
+      "shape": "7 deferred archives mixing successful supported recipes and late rejected recipes",
+      "must_hold": [
+        "prior successful recipes preserved",
+        "each rejected archive contributes zero speculative live state",
+        "complete extracted tree exact"
+      ]
+    },
+    {
+      "id": "eight-archive-unreachable-negative",
+      "purpose": "prove the transaction is behaviorally absent outside its reachable domain",
+      "shape": "8 deferred ZIP/WHL archives",
+      "must_hold": [
+        "both versions take container-pack path",
+        "complete archive byte identity",
+        "exact tree identity",
+        "no timing/RSS claim required beyond confirming no product drift"
+      ]
+    }
+  ],
+  "kill_conditions": [
+    "Any successful-VZIP archive byte/tree mismatch retires or narrows the exact transplant.",
+    "Any transaction-induced confirmed create slowdown above >5% AND >3ms, process-tree RSS regression, or material block-I/O regression blocks promotion.",
+    "Any nonzero product drift in the 8-archive unreachable negative control is evidence of unintended source differences/custody failure.",
+    "A late-rejection court that does not remove speculative serialized candidates falsifies the claimed product benefit even if callback rollback looks correct."
+  ],
+  "decision": "SMALLEST_PRODUCT_MATRIX_THAT_SEPARATES_SUCCESS_NEUTRALITY_FAILURE_BENEFIT_COMPOSITION_AND_UNREACHABLE_CONTROL",
+  "product_credit": false,
+  "release_credit": false
+}
