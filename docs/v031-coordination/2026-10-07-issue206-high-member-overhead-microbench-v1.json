@@ -1,0 +1,24 @@
+{
+  "schema": "cmpct-v031-issue206-high-member-overhead-microbench-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "projection_branch": "agent/phased2-v031-issue206-current-transactional-v1",
+  "source_binding": {
+    "codec_blob": "29526db4203723d83523fc95d074c346b63d7587",
+    "development_builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "owner_builder_blob": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b",
+    "method": "source-faithful Python transcription of make_vzip_recipe/add_content/transaction helper over real STORED ZIP members; 3 repeats/arm; tracemalloc Python allocation peak"
+  },
+  "rows": [
+    {"members": 100, "wall_ratio_transactional_over_direct": 0.9190363774, "python_peak_ratio_transactional_over_direct": 0.8787531152},
+    {"members": 500, "wall_ratio_transactional_over_direct": 0.9580712197, "python_peak_ratio_transactional_over_direct": 0.8585621888},
+    {"members": 1000, "wall_ratio_transactional_over_direct": 0.9949962920, "python_peak_ratio_transactional_over_direct": 0.8563324194},
+    {"members": 2500, "wall_ratio_transactional_over_direct": 1.0038814145, "python_peak_ratio_transactional_over_direct": 0.8538386023}
+  ],
+  "decision": "NO_CATASTROPHIC_PYTHON_LEVEL_STAGING_OVERHEAD_OBSERVED_UP_TO_2500_MEMBERS",
+  "interpretation": "The transaction does not exhibit an obvious Python-level O(N^2) or large-allocation cliff over this hostile member-count sweep. This narrows carrying-cost risk but cannot substitute for exact package/native process wall/RSS/I-O evidence.",
+  "claim_boundary": "Lower-rung microbenchmark only. tracemalloc is Python allocation peak, not process RSS. No release/product credit.",
+  "next": "Keep the mechanism family closed. Land the exact Builder postimage and run focused repository tests plus fresh-child v8/package-native complete-product evidence.",
+  "product_credit": false,
+  "release_credit": false
+}
