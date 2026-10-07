@@ -1,5 +1,5 @@
 {
-  "schema": "cmpct-v031-issue194-current-v14-landing-claim-v2",
+  "schema": "cmpct-v031-issue194-current-v14-landing-claim-v3",
   "recorded_at": "2026-10-07",
   "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
   "projection_parent": "e6965f73938db50527587522440f5722e5df4d9c",
@@ -17,10 +17,21 @@
     "projection_target_present": false
   },
   "ordinary_source_landing": {
-    "target": "benchmarks/v031_issue194_grouped_dict_integrated_ab_hardened_v14.py",
-    "target_branch": "agent/phased2-v031-issue194-current-projection-v1",
-    "target_head_before_attempt": "7ff43d56d5792fca50eadde05bf6cead705d24f3",
-    "result": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
+    "exact_source_sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
+    "attempts": [
+      {
+        "target_branch": "agent/phased2-v031-issue194-current-projection-v1",
+        "target_head_before_attempt": "7ff43d56d5792fca50eadde05bf6cead705d24f3",
+        "target_absent": true,
+        "result": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY"
+      },
+      {
+        "target_branch": "agent/phased2-v031-issue194-current-v14-v1",
+        "target_head_before_attempt": "87f5ca5db9bc1b200d54001fcb4672a760fb982c",
+        "target_absent": true,
+        "result": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY"
+      }
+    ],
     "retry_same_surface": false,
     "low_level_git_bypass": false
   },
@@ -28,7 +39,7 @@
     "the source-identity blocker conclusion in docs/v031-coordination/2026-10-07-issue194-c386-source-recovery-audit-v1.json"
   ],
   "purpose": "Exclusive current-development landing surface for the promotion-quality new-identity Issue194 evaluator. Exact c386 source bytes are now recovered; do not reconstruct or relabel the missing historical custody-v5 source.",
-  "next_decisive_action": "When an ordinary authorized executable-source mutation route is available, land the exact recovered c386 bytes, bind source/process custody, then execute the frozen child + complete-product A/B once.",
+  "next_decisive_action": "Ordinary executable-source mutation is now proven blocked on both the PR223 projection and the designated v14 landing branch. Do not retry unchanged or bypass with low-level Git plumbing. Keep exact c386 bytes preserved; resume landing only when mutation capability materially changes. Until then advance a dependency-safe frontier lane.",
   "product_credit": false,
   "release_credit": false
 }
