@@ -1,0 +1,95 @@
+{
+  "schema": "cmpct-v031-issue194-current-projection-ci-reconciliation-v4",
+  "recorded_at": "2026-10-07",
+  "pr": 223,
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "previous_evidence_head": "db67017aa8b6beb49ab7d76b8327be66d7628955",
+  "latest_evidence_head": "be5c5ff1dabecbf14061e4edc5f427ae1c5cbd49",
+  "latest_head_delta": {
+    "from_previous_evidence_head": "one docs-only commit",
+    "path": "docs/v031-coordination/2026-10-07-issue194-current-projection-ci-reconciliation.json",
+    "source_or_test_delta": false
+  },
+  "workflow_and_result_bearing_truth": {
+    "tests": {
+      "run_id": 37623414343,
+      "job_id": 112799049490,
+      "workflow_conclusion": "failure",
+      "result_bearing_job": "test: failure",
+      "summary": "4 failed / 782 passed in 380.48s",
+      "artifact_id": 11482594111,
+      "artifact_digest": "sha256:0a61cd2b728eb917ba8c4db858fff49bbb7602cf2de760d867fc137a6d4256fa",
+      "evidence_credit": true
+    },
+    "version_discipline": {
+      "run_id": 37623414144,
+      "job_id": 112799049107,
+      "workflow_conclusion": "success",
+      "result_bearing_job": "version-discipline: success",
+      "evidence_credit": true
+    },
+    "r24_zip_performance": {
+      "run_id": 37623414391,
+      "workflow_conclusion": "success",
+      "classifier_job": "latest-head-impact: success",
+      "classifier_job_id": 112799049273,
+      "result_bearing_job": "performance: skipped",
+      "result_bearing_job_id": 112799113958,
+      "evidence_credit": false
+    },
+    "r36_wait_owner_attribution": {
+      "run_id": 37623414697,
+      "workflow_conclusion": "success",
+      "classifier_job": "classify-latest-head: success",
+      "classifier_job_id": 112799050618,
+      "result_bearing_job": "r36-attribution: skipped",
+      "result_bearing_job_id": 112799098492,
+      "evidence_credit": false
+    },
+    "engineering_evidence": {
+      "run_id": 37623414137,
+      "job_id": 112799048431,
+      "workflow_conclusion": "failure",
+      "result_bearing_job": "evidence: failure",
+      "reason": "GitHub pull_request.body still lacks the repository-standard eleven evidence sections; the tracked dossier is structurally compliant but is not the event PR body.",
+      "artifact_id": 11482932517,
+      "artifact_digest": "sha256:158ea0dcfb44c8e5745f18c5b4e14ee62a996f9a5a7684716f6873d5d8ab7f01",
+      "evidence_credit": false
+    }
+  },
+  "inherited_test_failure_causality": {
+    "conclusion": "The four pytest failures remain inherited current-development post-release control-plane debt, not Issue194 projection regressions.",
+    "failed_tests": [
+      "tests/test_performance_base_native_release_custody.py::test_historical_native_materializer_is_release_fingerprinted",
+      "tests/test_public_attribution.py::test_surface_revision_records_attribution_campaign",
+      "tests/test_v030_ci_topology_split_receipts.py::test_authoritative_v2_classifier_is_release_fingerprint_driven",
+      "tests/test_v030_release_fingerprint_surface.py::test_release_fingerprint_covers_r25_oracle_and_android_custody_inputs"
+    ],
+    "unchanged_base_to_projection_controls": {
+      "tests/test_performance_base_native_release_custody.py": "e0c92e3a986b58e9693d9c51fb0dabad2a8a54ca",
+      "tests/test_public_attribution.py": "37a9b54eb32d4921cfecae9b7abd3daf289fba48",
+      "tests/test_v030_ci_topology_split_receipts.py": "c378d8e2dbad2e0c7b037124a9d9fedecdc14601",
+      "tests/test_v030_release_fingerprint_surface.py": "a23cc8126ad8f76374af9c6538ca73d6f59966fe",
+      "docs/V030_RELEASE_LOCK.json": "988a7b05ad4e0833fac0453de74133b38f890f87",
+      "SURFACE_REVISION": "d439b4070b9aa2e076cceb4b0486c702b74d932d",
+      ".github/workflows/v030-authoritative-v2-pr.yml": "2f095ec3b5b1028bc1fa49dd730de8062876e0ee",
+      "tools/materialize_performance_base_native.py": "47771a27c5bc4fd75cd6f00f316c1f71a9104b5d"
+    }
+  },
+  "classifier_only_green_rule": "A workflow-level success whose result-bearing job is skipped is routing evidence only and earns no performance/attribution credit.",
+  "engineering_evidence_boundary": {
+    "tracked_dossier_blob": "df0ab5d5f8929f3b319f923317a81e1133d3632e",
+    "tracked_dossier_static_contract": "PASS",
+    "github_pr_body_update": "BLOCKED_BY_PLATFORM_SAFETY",
+    "law": "Do not claim the engineering-evidence gate green until the actual PR event body satisfies the checker."
+  },
+  "v14_boundary": {
+    "expected_new_identity_sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
+    "historical_missing_custody_v5_sha256": "7c4631bc599b36fa7db8e949af1d40db7572d2d31f5c05a69e714d063d4a1cda",
+    "status": "UNLANDED",
+    "law": "Do not substitute or relabel a different reconstruction as the expected c386 new identity or the missing historical custody-v5 source."
+  },
+  "promotion_boundary": "This projection cannot earn Issue194 promotion credit without the exact expected new-identity hardened evaluator source/process custody and the frozen four-repetition child plus complete-product A/B.",
+  "product_credit": false,
+  "release_credit": false
+}

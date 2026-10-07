@@ -1,0 +1,36 @@
+{
+  "schema": "cmpct-v031-issue194-c386-source-recovery-audit-v1",
+  "recorded_at": "2026-10-07",
+  "projection_pr": 223,
+  "projection_head": "a5905b37371e2456c7da653f81b81a5902893f2f",
+  "current_development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "designated_v14_branch": "agent/phased2-v031-issue194-current-v14-v1@ff551c3b4105f0b5b5dd6eb034751f083aedf580",
+  "expected_new_identity_v14_sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
+  "historical_missing_custody_v5_sha256": "7c4631bc599b36fa7db8e949af1d40db7572d2d31f5c05a69e714d063d4a1cda",
+  "search_surfaces": [
+    "current-v14 branch target path",
+    "PR223 projection target path",
+    "issue194 evaluator-hardening/custody-recovery/hardened-v8/hardened-v11/hardened-v13/hosted branch trees",
+    "current conversation and persistent Library exact-hash/title search",
+    "currently mounted /mnt/data files and ZIP members"
+  ],
+  "branch_tree_result": {
+    "executable_hardened_v14_source_found": false,
+    "landed_pure_contract": "benchmarks/v031_issue194_evaluator_contract.py@e8db8aa085d9c56b098d4c6da0456082ad5ab058",
+    "landed_frozen_v1": "benchmarks/v031_issue194_grouped_dict_integrated_ab.py@38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc"
+  },
+  "file_surface_result": {
+    "expected_c386_source_found": false,
+    "historical_v5_source_found": false,
+    "recorded_c386_attachment": "file_00000000c27c8209a77f58e7d0f6362a",
+    "recorded_attachment_visible_in_current_files_surface": false
+  },
+  "visible_non_authoritative_reconstruction": {
+    "sha256": "1eb74a5474c4aa8e47f5f3f12c9900067be9b76514935b47dbcb646dc497d895",
+    "status": "different unlanded reconstruction; must not be relabeled as c386 or historical custody-v5"
+  },
+  "decision": "SOURCE_IDENTITY_BLOCKER_CONFIRMED__NO_SUBSTITUTION",
+  "next": "Recover exact c386 bytes from a legitimate durable source if they become visible. If recovery remains impossible, establish and review a deliberately different new identity and update landing authority before any timed scientific execution.",
+  "product_credit": false,
+  "release_credit": false
+}

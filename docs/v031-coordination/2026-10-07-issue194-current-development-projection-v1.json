@@ -1,0 +1,34 @@
+{
+  "schema": "cmpct-v031-issue194-current-projection-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "owner": "91c35b03cd815b850b078d5083684f3e8587475d",
+  "frozen_v1_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+  "independent_contract_blob": "e8db8aa085d9c56b098d4c6da0456082ad5ab058",
+  "direct_dependency_parity": "6 direct runtime dependencies are byte-identical between owner and current development; the frozen v1 benchmark is the only direct import absent from development.",
+  "decision": "Current v0.31 development is a source-compatible execution substrate for Issue194. Do not rebase the historically diverged owner branch merely to answer the court; project only the exact Issue194 experiment/evaluator sources and preserve their identities.",
+  "product_credit": false,
+  "release_credit": false,
+  "common_base": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+  "current_development_drift_since_common_base": {
+    "commits": 8,
+    "source_or_test_files_changed": 0,
+    "changed_paths": [
+      "docs/ASSUMPTION_LEDGER.md",
+      "docs/discovery/STATE.json",
+      "docs/v031-coordination/2026-10-06-a08-temporal-entropygraph-o0.json",
+      "docs/v031-coordination/2026-10-06-foundry-reconciliation-a15-a07.json"
+    ]
+  },
+  "direct_dependency_recheck": {
+    "identical_count": 6,
+    "paths": [
+      "benchmarks/resemblance_hostile_corpus_v1.py",
+      "src/cmpct/resemblance.py",
+      "experiments/entropygraph_v029_residual_fast.py",
+      "experiments/entropygraph_v030_discovery_neutral_worker.py",
+      "experiments/entropygraph_v030_release.py",
+      "experiments/entropygraph_v030_shared_portfolio.py"
+    ]
+  }
+}
