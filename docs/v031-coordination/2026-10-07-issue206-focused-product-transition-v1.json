@@ -1,0 +1,34 @@
+{
+  "schema": "cmpct-v031-issue206-focused-product-transition-v1",
+  "recorded_at": "2026-10-07",
+  "head_before_write": "1f56f7f16d8afae1d9c362f848c84816cf59e4b9",
+  "canonical_discovery_state_blob": "e6093510a5c1465efe836d996c212882a617302c",
+  "prior_state": {
+    "issue206_status": "BLOCKED",
+    "prior_evidence_claim": "Exact package/native custody, focused tests and product A/B remain unexecuted."
+  },
+  "new_state": {
+    "focused_product_court": "POSITIVE_LOCAL_EXACT_SOURCE_PACKAGE_NATIVE",
+    "focused_product_receipt": "docs/v031-coordination/2026-10-07-issue206-focused-package-native-product-court-v1.json",
+    "focused_product_receipt_commit": "1f56f7f16d8afae1d9c362f848c84816cf59e4b9",
+    "mark_and_sweep_sole_repair": "RETIRED",
+    "transactional_vzip": "ADVANCED_TO_PRODUCTIZATION_SIGNAL",
+    "nearby_transaction_variants": "SATURATED"
+  },
+  "decision": {
+    "global_frontier_rank_changed": false,
+    "issue206_evidence_rung_changed": true,
+    "reason": "Focused exact-source/package-native court now passes the frozen four-case matrix with exact tree reconstruction, neutral supported/unreachable controls, and strict byte/create wins on late-failure and seven-archive composition paths.",
+    "canonical_state_status": "STALE_ON_ISSUE206_EVIDENCE_RUNG_ONLY"
+  },
+  "remaining_promotion_gates": [
+    "Land exact Builder postimage 6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b onto the current-development projection.",
+    "Land focused repository tests and run them against the exact landed package.",
+    "Execute evaluator-control v8 fresh-child source/candidate custody including R24PrebuildProcess shadow-neutrality.",
+    "Independently reproduce the frozen four-court matrix on the repository-hosted exact candidate.",
+    "Do not claim release authority until normal repository promotion/release gates pass."
+  ],
+  "next_decisive_action": "When ordinary source mutation becomes available, land the exact one-helper/one-callsite Builder delta plus focused tests; do not invent another rollback/mark-and-sweep/event-log mechanism.",
+  "product_credit": "FOCUSED_MECHANISM_ONLY",
+  "release_credit": false
+}
