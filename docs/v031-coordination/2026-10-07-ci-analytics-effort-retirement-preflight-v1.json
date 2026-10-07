@@ -1,0 +1,50 @@
+{
+  "schema": "cmpct-v031-ci-analytics-effort-retirement-preflight-v1",
+  "recorded_at": "2026-10-07",
+  "owner_before": "0e7d113136fc785c587951e2c079d80db8f35328",
+  "source_receipt": "docs/v031-coordination/2026-10-07-ci-analytics-effort-retirement-v1.json",
+  "targets": [
+    {
+      "path": ".github/workflows/v030-analytics-reusable-zstd-context.yml",
+      "blob": "2e59f8a8f498d2b0febf218a14f13a916abdef11"
+    },
+    {
+      "path": ".github/workflows/v030-analytics-searchlog6-ablation.yml",
+      "blob": "51cca3a13bb124f13aa87bf12d16f55bcabe56ff"
+    },
+    {
+      "path": ".github/workflows/v030-analytics-l19-cost-attribution.yml",
+      "blob": "11a47d9e5be95b524086552f22f1bc1f081dc216"
+    },
+    {
+      "path": ".github/workflows/v030-analytics-margin-cpu-oracle.yml",
+      "blob": "68a99014467b35359cfb6c4782c9629c95ab017c"
+    }
+  ],
+  "simulated_transform": {
+    "add_marker": "# ci-auto-policy: retired-manual-only",
+    "event_surface_after": "workflow_dispatch only",
+    "preserve": [
+      "# ci-lane: deep",
+      "runner jobs",
+      "scientific command",
+      "artifact upload",
+      "manual exact replay"
+    ],
+    "result": "PASS_ALL_FOUR"
+  },
+  "checks": [
+    "current blobs match lifecycle receipt",
+    "manual-only marker present after transform",
+    "workflow_dispatch retained",
+    "pull_request/push/schedule absent after transform",
+    "deep lane retained",
+    "scientific benchmark command preserved",
+    "artifact upload preserved"
+  ],
+  "current_checker": "tools/check_ci_topology.py@f3892b1f6a5d089c26f472f10ca5a89784af8a5e",
+  "required_real_validation": "After actual source mutation, run tools/check_ci_topology.py on every touched workflow and a fingerprint-neutral docs/coordination control.",
+  "source_mutation_landed": false,
+  "product_credit": false,
+  "release_credit": false
+}
