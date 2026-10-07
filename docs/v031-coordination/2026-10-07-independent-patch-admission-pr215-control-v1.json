@@ -1,0 +1,58 @@
+{
+  "schema": "cmpct-v031-independent-digest-patch-admission-pr215-control-v1",
+  "recorded_at": "2026-10-07T23:14:00Z",
+  "line": "agent/phased1-v031-independent-patch-o0",
+  "development_base": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "predecessor_receipt": "docs/v031-coordination/2026-10-07-independent-digest-patch-ownership-o0-v1.json@e2166380f0897c0b907a905649450a01c9aa93a8",
+  "status": "RESEARCH_SEED_PRESERVED; CHEAP_SIMILARITY_PRESCREENS_RETIRE; NEW_RESync_IMPLEMENTATION_RETIRED_AGAINST_OWNED_PR215",
+  "objective": "Find cheap generic prospective admission for independent per-digest edit patches without false-rejecting recoverable smaller stored representations, or an already-owned stronger execution control.",
+  "evidence": [
+    {
+      "question": "48 equally spaced samples of 16 B, at least three exact samples per target relative to SHA-min base",
+      "cases": 240,
+      "actual_candidate_byte_winners": 192,
+      "false_rejected_winners": 32,
+      "missed_winning_bytes": 21416,
+      "hostile_admitted_losers": 12,
+      "outcome": "RETIRE THIS SCREEN: 32 missed strict byte wins",
+      "prereg_sha256": "380c20106c95f7b7c7b18bc940334f1688ac242e71f718b56ab1ef3b78b86c2d",
+      "result_sha256": "866ccdda0ee32f2cff4af32c6bf358cbfabd50ec2ae21d4fae527c6be6c9d2b4"
+    },
+    {
+      "question": "Does presence of a 48B exact common substring with digest-min base avoid false negatives?",
+      "cases": 352,
+      "strict_byte_winners": 160,
+      "false_rejected_winners": 12,
+      "missed_winning_bytes": 5814,
+      "outcome": "RETIRE THIS SCREEN: 48B full match is not a necessary condition for compression benefit from shorter aligned islands",
+      "prereg_sha256": "aacef58ca816b656cdb79ee1e771dfc55115a55855cd5f051183fa10218037d9",
+      "result_sha256": "1bf8669d80d727722509b2485e3607d5fb80670f17012b2749705cb3139c3a95"
+    },
+    {
+      "question": "Is a four-scalar-then-stdlib-equality-stream resync implementation materially better than already-owned PR215 48-scalar-then-C-bigint-XOR?",
+      "PR215": 215,
+      "PR215_head": "88210d2adb21fc6eace88794aa1bda222a6cdefa",
+      "PR215_source_blob": "0f3975c49186b2173b182ad8e7d8f938b9b2439a",
+      "direct_same_return_cases": 1689,
+      "source_owner_byte_identical_cases": 592,
+      "frozen_timed_cases": 22,
+      "unseen_timed_cases": 12,
+      "replicates_per_frozen_arm": 5,
+      "replicates_per_unseen_arm": 3,
+      "stdlib_greater_than_10pct_speed_advantage_cases": 0,
+      "stdlib_greater_than_10pct_slower_cases": 24,
+      "outcome": "RETIRE OWN VARIANT: the already-owned PR215 is the dominant measured control and has stronger prior equivalence proof; no duplicate implementation",
+      "prereg_sha256": "49a4e7d579c3bcce92b6678fecd13abab2600cf823cc7efc741c655fd034323b",
+      "result_sha256": "05f1d6b8896f9e08ca34e58d41f0a3ace1810271d8de49854ce1466d0a5c444e"
+    }
+  ],
+  "strongest_negative": "A cheap fully generic substring screen can miss strictly winning independent indexed patches. The O1 and O2 constructions are false-negative on measured synthetic regimes, and threshold gardening is not warranted. PR215 already owns the more efficient exact resync implementation.",
+  "evaluator_integrity": "No baseline, metric, threshold, source generator, comparator, selected base, parser, reader, or release law was changed to rescue the screen. A wrong-module early execution smoke result was quarantined, not counted.",
+  "adversarial_boundary": "All O1/O2 and PR215 comparison numbers are local synthetic/source-equivalent research; PR215's algorithm was transcribed into the controlled harness, not run from its exact historical Git blob. No actual hosted CMPCT runner, canonical writer/reader, full physical I/O, native Android, or format result was obtained.",
+  "active_scientific_primary": "Frozen v0.31 bounded-drift Shifted/Boundary court still unexecuted; same exact benchmark blob 2fd04bacd64c14b45678b8575ba8ae7c692aa2df; this isolated work does not supersede it.",
+  "next": "Focus on exact-source execution custody of frozen court, otherwise coordinated Issue128 historical source retirement; do not reopen 16B/48B threshold variants or duplicate PR215. Preserve independently indexed patches as lower-rung seed until a structurally stronger conservative admission or credible complete-product route exists.",
+  "evidence_location": "Local reproducible activation archive cmpct_run191; inputs/experiment scripts/prereg/results retained outside repository pending hosted source custody.",
+  "discovery_policy_change_earned": false,
+  "product_credit": false,
+  "release_credit": false
+}
