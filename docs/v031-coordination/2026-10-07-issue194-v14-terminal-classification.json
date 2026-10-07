@@ -1,0 +1,23 @@
+{
+  "schema": "cmpct-v031-issue194-v14-terminal-classification-v1",
+  "source_base": "agent/phased2-v031-issue194-hardened-v13@bd6d6b45bbd8aa8900ce7d30970953d59f0d5693",
+  "historical_custody_v5_source_recovered": false,
+  "local_v14_source_sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
+  "problem": "Local v13 is fail-closed but misclassifies any child-gate failure as product efficiency debt when --product is requested. An ownership or semantic failure is a mechanism failure, not downstream complete-product efficiency debt.",
+  "v14_contract": [
+    "child/semantic/ownership gate failure -> RETIRE_OR_NARROW_GROUPED_DICT_OWNERSHIP",
+    "child gate green and product gate red -> NARROW_TO_EFFICIENCY_DEBT",
+    "child gate green without product court -> ADVANCE_TO_PRODUCT_AB",
+    "child gate green and product gate green -> ADVANCE_GROUPED_DICT_OWNERSHIP",
+    "workloads, comparator, timing thresholds, RSS thresholds, product gates, reader, admission and release law remain unchanged"
+  ],
+  "local_validation": {
+    "py_compile": "PASS",
+    "randomized_runner_contract_cases": 100000,
+    "randomized_runner_contract_mismatches": 0
+  },
+  "evidence_boundary": "Evaluator-law and causal-routing evidence only. v14 source is not landed by this record and the frozen child/product A/B remains unexecuted.",
+  "product_credit": false,
+  "release_credit": false,
+  "next": "Land and review v14 or a stronger new-identity evaluator through an ordinary source-write route, then execute the frozen Issue194 child plus complete-product A/B once. Do not claim recovery of the missing historical custody-v5 source."
+}
