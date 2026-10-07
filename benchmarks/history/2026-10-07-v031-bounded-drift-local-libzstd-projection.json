@@ -1,0 +1,79 @@
+{
+  "schema": "cmpct-v031-bounded-drift-local-libzstd-projection-v1",
+  "recorded_at": "2026-10-07",
+  "owner_branch": "agent/v031-bounded-drift-coordered-court",
+  "frozen_benchmark_blob": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+  "prereg_blob": "f8e53f058a1c123ea4665b730c45f5619eb93d5f",
+  "method": {
+    "classification": "lower-rung independent local reproduction; NOT the exact-source hosted court",
+    "runtime": "container-local Python reproduction using system libzstd through its C API plus the system zstd CLI",
+    "source_alignment": [
+      "frozen resemblance generator behavior reproduced exactly on Shifted and Boundary tree hashes",
+      "frozen bounded-drift primitive/container algorithm reproduced from blobs d210b0d6... and ed3165ce...",
+      "current coordered control framing reproduced with the frozen 96-byte header+trailer width",
+      "solid Tar+Zstd-19 comparator uses the frozen benchmark's deterministic tar semantics"
+    ],
+    "important_limitations": [
+      "the repository Python zstandard package was unavailable in this runtime, so libzstd C API was used directly",
+      "canonical filesystem constants were projected from current source rather than importing the complete canonical wrapper",
+      "local UID/GID metadata differs from GitHub-hosted runner metadata",
+      "this cannot earn the preregistered exact hosted court or product/release credit"
+    ]
+  },
+  "rows": {
+    "shifted": {
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "bdc_bytes": 1687646,
+      "bdc_bytes_match_inherited_independent_reproduction": true,
+      "solid_zstd19_bytes": 1694674,
+      "solid_zstd19_bytes_match_inherited_independent_reproduction": true,
+      "local_control_zstd12_bytes": 242,
+      "complete_projected_bytes": 1687984,
+      "delta_vs_zstd19_bytes": -6690,
+      "three_run_candidate_create_s": [
+        0.4568646100000251,
+        0.5310249190000036,
+        0.5281359049999992
+      ],
+      "three_run_zstd19_create_s": [
+        0.6880360820000533,
+        0.73925195999999,
+        0.6769628350000403
+      ],
+      "candidate_median_s": 0.5281359049999992,
+      "zstd19_median_s": 0.6880360820000533
+    },
+    "boundary": {
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+      "bdc_bytes": 72554,
+      "bdc_bytes_match_inherited_independent_reproduction": true,
+      "solid_zstd19_bytes": 73097,
+      "solid_zstd19_bytes_match_inherited_independent_reproduction": true,
+      "local_control_zstd12_bytes": 187,
+      "complete_projected_bytes": 72837,
+      "delta_vs_zstd19_bytes": -260,
+      "three_run_candidate_create_s": [
+        0.09519038500002353,
+        0.0974778409999999,
+        0.10843686200001912
+      ],
+      "three_run_zstd19_create_s": [
+        0.2640409080000268,
+        0.25174641399996744,
+        0.2958171170000128
+      ],
+      "candidate_median_s": 0.0974778409999999,
+      "zstd19_median_s": 0.2640409080000268
+    }
+  },
+  "generic_filesystem_hostile": {
+    "manifest_recapture_exact": true,
+    "duplicate_content_distinct_inode": true,
+    "hardlink_relation_preserved": true,
+    "symlink_target_preserved": "b.bin",
+    "passed": true
+  },
+  "decision": "KEEP_EXACT_COURT_PRIMARY. The independent local projection reproduces the inherited BDC and solid-Zstd bytes exactly and remains strictly smaller on both decisive rows, including Boundary. This sharply reduces algorithm/libzstd-version risk but does not substitute for the frozen hosted court because Python-zstandard framing and exact hosted filesystem metadata remain unmeasured.",
+  "product_credit": false,
+  "release_credit": false
+}
