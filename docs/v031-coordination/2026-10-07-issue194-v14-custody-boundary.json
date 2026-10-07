@@ -1,0 +1,24 @@
+{
+  "schema": "cmpct-v031-issue194-v14-custody-boundary-v1",
+  "source_base": "agent/phased2-v031-issue194-hardened-v13@42d0f61ba05ab1b55944f03cd64e99a0a350642f",
+  "local_v14_source_sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
+  "finding": "Source/process custody is an execution precondition, not product efficiency debt. The local v14 runner executes a separate proof-only product-custody subprocess before timed product A/B and raises on nested worker marker, evaluator source, or verified source-tree mismatch. Those failures must not be routed through NARROW_TO_EFFICIENCY_DEBT.",
+  "execution_contract": [
+    "proof-only product custody must succeed before timed product evidence is accepted",
+    "nested v028 and mosaic workers must carry the exact evaluator marker/module/source identity",
+    "custody archive must strong-verify to the exact source tree",
+    "timed product arms independently bind evaluator marker/module/source identity",
+    "custody failure is evidence/infrastructure failure and aborts the court; it is neither ownership-mechanism debt nor product-efficiency debt"
+  ],
+  "independent_contract_correction": {
+    "initial_local_contract_error": "A first pure-contract draft incorrectly represented custody_ok=false as a product failure, which would have mislabeled custody loss as efficiency debt.",
+    "correction": "Pure contract v3 begins only after proof-only custody succeeds, matching the actual v14 runner boundary.",
+    "local_contract_v3_sha256": "REPLACE_AFTER_LOCAL_SEAL",
+    "local_tests": "9 passed",
+    "local_v14_parity_fuzz": "100000 cases / 0 mismatches after the custody precondition"
+  },
+  "scientific_semantics_changed": false,
+  "product_credit": false,
+  "release_credit": false,
+  "next": "When executable v14 or a stronger successor lands, preserve this proof-before-measurement custody boundary and keep custody failures out of mechanism/product performance classification."
+}
