@@ -1,6 +1,6 @@
 # CMPCT curated localization contract
 
-Status: **public-surface quality gate** at Surface `0.29.k`.
+Status: **public-surface quality gate** at Surface `0.30.a`.
 
 CMPCT localization is not runtime machine translation. English remains the canonical semantic source.
 Supported translations are committed as reviewable locale packs under `site/src/assets/i18n/locales/`,
@@ -132,7 +132,7 @@ the translated README to the website preserve the chosen locale through `?lang=`
 - accidental unchanged English prose except narrow technical loanwords;
 - absence of known runtime translation-provider endpoints;
 - Chinese script-aware locale routing;
-- root/localized README source selection, existence, discoverability and current v0.29/r24/0.29.k/evidence markers.
+- root/localized README source selection, existence, discoverability and current v0.30/r24/0.30.a authority markers plus preserved v0.29 research-evidence markers.
 
 `site/tests/i18n-viewport.mjs` automatically renders **every non-English supported locale** in Chromium at
 three translation-stress geometries: compact phone, landscape phone and short laptop. With the current 19
