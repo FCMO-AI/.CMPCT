@@ -1,0 +1,34 @@
+{
+  "schema": "cmpct-v031-pr221-ci-reconciliation-v1",
+  "recorded_at": "2026-10-06",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "claim_branch": "agent/phased1-v031-pr221-ci-reconcile",
+  "observation": {
+    "pr222_head": "7678113c7779991dd6ccd352aa630ce89a883438",
+    "pr222_tests_run": 37556436503,
+    "pr222_result": "4 failed, 782 passed",
+    "failures": [
+      "V030_RELEASE_LOCK omits tools/materialize_performance_base_native.py",
+      "tests/test_public_attribution.py pins obsolete SURFACE_REVISION 0.29.k while current is 0.30.a",
+      "V030_RELEASE_LOCK omits docs/PUBLIC_SURFACE.md and related classifier-custody inputs",
+      "V030_RELEASE_LOCK omits current r25 golden/conformance/native/Android custody inputs"
+    ]
+  },
+  "strongest_existing_control": {
+    "pr": 221,
+    "head": "93d864fb40e1c97fd9de10e226a92c89b54098aa",
+    "tests_run": 37286518446,
+    "result": "791 passed in 350.79s on Python 3.11.16",
+    "note": "PR221 already repairs the same fingerprint/attribution failure family, but is based on main and is 6 ahead / 9 behind current v031 development."
+  },
+  "minimal_reconciliation": {
+    "fingerprint_manifest_source_blob": "3cd822e6e9fead8a5dc210beb252f26dc52e0735",
+    "attribution_test_source_blob": "37432e9807d56f13b91705b141ceb0f154384525",
+    "current_manifest_blob": "988a7b05ad4e0833fac0453de74133b38f890f87",
+    "current_attribution_test_blob": "37a9b54eb32d4921cfecae9b7abd3daf289fba48",
+    "rationale": "Port only the already-hosted-green fingerprint custody expansion and core-line-aware attribution assertion onto current v031 development; do not import PR221 site/workflow/surface-bump changes blindly."
+  },
+  "mutation_attempt": "ordinary high-level update of the two files was blocked before mutation by platform safety; no alternate ref/object/force-write bypass attempted",
+  "product_credit": false,
+  "release_credit": false
+}
