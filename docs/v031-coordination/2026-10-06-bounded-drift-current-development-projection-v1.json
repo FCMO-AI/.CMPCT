@@ -1,0 +1,35 @@
+{
+  "schema": "cmpct-v031-bounded-drift-current-development-projection-v1",
+  "recorded_at": "2026-10-06",
+  "base": {
+    "branch": "agent/v031-development",
+    "head": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b"
+  },
+  "source_owner": {
+    "branch": "agent/v031-bounded-drift-coordered-court",
+    "head": "dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf"
+  },
+  "frozen": {
+    "benchmark_path": "benchmarks/v031_bounded_drift_coordered_court.py",
+    "benchmark_blob": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+    "prereg_path": "benchmarks/history/2026-10-04-v031-bounded-drift-coordered-court-prereg.json",
+    "prereg_blob": "f8e53f058a1c123ea4665b730c45f5619eb93d5f"
+  },
+  "execution_dependencies": {
+    "benchmarks/resemblance_hostile_corpus_v1.py": "335169bd6eb336b6d444cfbd34c291101262c3a9",
+    "experiments/entropygraph_v030_bounded_drift_container_v1.py": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "experiments/entropygraph_v030_bounded_drift_v1.py": "d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+    "experiments/entropygraph_v030_canonical_final.py": "caeaa2fb277481c500600af75eb13470f767d911",
+    "experiments/entropygraph_v030_product_fs.py": "72404386775be4576365cc687784f4e4f752d9de"
+  },
+  "compatibility": "All five execution-defining dependency blobs are byte-identical between current development and the frozen court owner.",
+  "landed_this_projection": {
+    "prereg_commit": "0d879187b81aebc97b2a11279ad82931ccbaf489",
+    "benchmark_source": false
+  },
+  "blocker": "Ordinary create-file of the exact frozen benchmark source was blocked before mutation by platform safety checks. Do not retry the same write surface or bypass it through low-level Git objects.",
+  "decision": "PREREG_CUSTODY_LANDED_ON_CURRENT_DEVELOPMENT_BRANCH__BENCHMARK_SOURCE_STILL_BLOCKED__NO_SCIENTIFIC_RESULT",
+  "next": "Use the first legitimate source-write route to project the exact 2fd04bac... benchmark bytes unchanged, then execute the frozen court once under exact source/tool/runner custody.",
+  "product_credit": false,
+  "release_credit": false
+}
