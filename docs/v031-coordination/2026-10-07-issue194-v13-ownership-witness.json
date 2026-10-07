@@ -1,0 +1,33 @@
+{
+  "schema": "cmpct-v031-issue194-v13-ownership-witness-v1",
+  "source_base": "agent/phased2-v031-issue194-custody-recovery-v1@7678113c7779991dd6ccd352aa630ce89a883438",
+  "historical_custody_v5_source_sha256": "7c4631bc599b36fa7db8e949af1d40db7572d2d31f5c05a69e714d063d4a1cda",
+  "historical_custody_v5_source_recovered": false,
+  "local_v13_source_sha256": "8f4001972512384c7f4628f264c3849cb2a4f8a47ec14d2cc8df71f0f46c78c2",
+  "problem": "The latest local v12 evaluator did not gate the preregistered ownership mechanism itself: timed candidate children already emit dict_build_count, but the final evaluator could advance a synthetically green state even when dict_build_count was inconsistent with once-per-distinct-immutable-base ownership.",
+  "constructive_falsifier": {
+    "all_other_child_gates_green": true,
+    "timed_candidate_dict_build_count": 999999,
+    "expected_distinct_immutable_bases": 3,
+    "v12_passed_child_gate": true,
+    "v12_decision": "ADVANCE_TO_PRODUCT_AB"
+  },
+  "v13_contract": [
+    "untimed semantic proof counts distinct live immutable base objects actually presented to delta_encode",
+    "semantic HistoricalDictEncoder.build_count must equal that exact count",
+    "every timed candidate repetition must report the same dict_build_count",
+    "ownership mismatch fails closed before product promotion",
+    "workloads, comparator, reader, timing thresholds, RSS thresholds, product gates and release law are unchanged"
+  ],
+  "local_validation": {
+    "py_compile": "PASS",
+    "valid_ownership_randomized_cases": 50000,
+    "valid_ownership_decision_mismatches_vs_v12": 0,
+    "invalid_ownership_randomized_cases": 10000,
+    "invalid_ownership_unexpected_child_passes": 0
+  },
+  "evidence_boundary": "Evaluator-law evidence only. v13 source is not landed here and the frozen child/product A/B remains unexecuted.",
+  "product_credit": false,
+  "release_credit": false,
+  "next": "Land and review v13 or a stronger new-identity evaluator, then execute the frozen Issue194 child plus complete-product A/B once. Do not claim recovery of the missing historical custody-v5 source."
+}
