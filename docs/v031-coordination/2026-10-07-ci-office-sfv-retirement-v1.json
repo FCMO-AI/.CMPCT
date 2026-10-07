@@ -1,0 +1,91 @@
+{
+  "schema": "cmpct-v031-ci-office-sfv-retirement-v1",
+  "recorded_at": "2026-10-07",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "owner_branch": "agent/phased1-v031-ci-topology-inventory",
+    "owner_head_before_write": "e1bb31d49ad240b17ce88bad698f1e286c4fe2dc",
+    "issue": 128,
+    "ci_architecture": "docs/CI_ARCHITECTURE.md"
+  },
+  "question": "Which broad Office SFV/composition PR workflows have durable evidence and no current shipping ownership, so automatic PR admission can retire without deleting the research substrate?",
+  "decisions": [
+    {
+      "workflow": ".github/workflows/v030-r4-office-sfv2-physical-locality.yml",
+      "workflow_blob": "c01ee71499928ba6729642c60c28a17d3d234332",
+      "decision": "RETIRE_PULL_REQUEST_TO_MANUAL_REPLAY",
+      "reason": "This workflow owns a research-only physical-locality falsifier. Later SFV3/SFV4/page-slab/referee work consumes the Office federation substrate; current shipping src/experiments do not import this workflow's physical-locality owner.",
+      "preserve": "v030_r4_office_exact_stream_federation_v2 and all later research consumers remain untouched."
+    },
+    {
+      "workflow": ".github/workflows/v030-r4-office-sfv3-derived-views.yml",
+      "workflow_blob": "0b23247fb221fcb30c5d82199c7f8b4bf0bb48c5",
+      "decision": "RETIRE_PULL_REQUEST_TO_MANUAL_REPLAY",
+      "hosted_control": {
+        "head": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+        "run": 35770824331,
+        "job": 106895273360,
+        "artifact": 10715080115,
+        "artifact_digest": "sha256:77c95055eafefcb761ecd6f5ed6ef7d1d8f93e2210679ec273d50d503f91ff2b",
+        "candidate_bytes": 6493793,
+        "accepted_v029_bytes": 5954026,
+        "margin_vs_v029_bytes": -539767,
+        "max_derived_physical_amplification": 132.588623046875,
+        "max_derived_reconstruction_amplification": 132.642333984375,
+        "product_supported": false
+      },
+      "reason": "Later authority-head rerun reproduces the negative product decision. The module remains a reusable research substrate for later referees, but the historical workflow no longer needs permanent PR ownership."
+    },
+    {
+      "workflow": ".github/workflows/v030-r4-office-sfv4-all-member-skeleton.yml",
+      "workflow_blob": "a9e6e1cd89e8ceb26c5c1392c1eed7f28c1c9f41",
+      "decision": "RETIRE_PULL_REQUEST_TO_MANUAL_REPLAY",
+      "hosted_control": {
+        "head": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+        "run": 35770822564,
+        "job": 106897091431,
+        "artifact": 10715210849,
+        "artifact_digest": "sha256:8643966029f961fb499ff2d4c62c1480548d9703e7f0e324724a733c6cd5b3c6",
+        "candidate_bytes": 6506050,
+        "accepted_v029_bytes": 5954026,
+        "margin_vs_v029_bytes": -552024,
+        "max_derived_physical_amplification": 132.588623046875,
+        "max_derived_reconstruction_amplification": 132.642333984375,
+        "product_supported": false
+      },
+      "reason": "Later authority-head rerun again reproduces the same density/locality failure. SFV4 remains imported by later Office research/referee modules, but automatic execution of this predecessor workflow is no longer the current decision owner."
+    },
+    {
+      "workflow": ".github/workflows/v030-r4-composed-mode2-office-matrix.yml",
+      "decision": "RETIRE_PULL_REQUEST_TO_MANUAL_REPLAY",
+      "hosted_control": {
+        "head": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+        "run": 35770822907,
+        "job": 106899023108,
+        "artifact": 10714769889,
+        "artifact_digest": "sha256:257c5636d35cc0f00f242d4dfde9741e5032b7f904410316c92dd0e0feafc2a0",
+        "candidate_bytes": 138617435,
+        "genesis_v029_bytes": 137499525,
+        "margin_vs_genesis_v029_bytes": -1117910,
+        "supported_for_next_hardening": true
+      },
+      "reason": "This is a durable composition result and research waypoint, not current shipping authority. Later locality/productization work owns the open debts; preserving manual exact replay retains the evidence without rerunning the whole 15-workload matrix on broad PR paths."
+    },
+    {
+      "workflow": ".github/workflows/v030-office-v025-locality-oracle.yml",
+      "workflow_blob": "1026a8d2a37ef648c9c8a6a9940a6ee8636220c9",
+      "decision": "DEFER_RETIREMENT",
+      "evidence": "docs/research/V030_OFFICE_V025_LOCALITY_RESULT.md@3cd385b46671de24b3f1c24d291c1960b75dd4cb",
+      "reason": "The v0.25 compact floor remains live Office prior art and a reopening boundary: 5,954,026 B, <=8x locality, exact tree, terminal COMPACT_FLOOR_SURVIVES_LOCALITY_FALSIFIER. Retire only after current Office frontier records an explicit substitute authority."
+    }
+  ],
+  "mutation_contract": {
+    "retired_event_surface": "workflow_dispatch only",
+    "marker": "# ci-auto-policy: retired-manual-only",
+    "preserve": "benchmark modules, scientific results, artifacts, later research imports and manual replay",
+    "validate": "tools/check_ci_topology.py on every touched workflow",
+    "current_product_semantics_unchanged": true
+  },
+  "product_credit": false,
+  "release_credit": false
+}
