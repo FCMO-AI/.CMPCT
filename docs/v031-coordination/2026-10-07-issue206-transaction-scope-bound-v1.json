@@ -1,0 +1,36 @@
+{
+  "schema": "cmpct-v031-issue206-transaction-scope-bound-v1",
+  "recorded_at": "2026-10-07",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "branch": "agent/phased2-v031-issue206-current-transactional-v1",
+    "head_before_write": "04dffc41c8ae1b34d06fc7a8b54c651330a37829",
+    "builder_preimage": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "owner_postimage": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b"
+  },
+  "exact_current_scan_law": {
+    "virtual_extensions": [
+      ".zip",
+      ".whl"
+    ],
+    "cohort_pack_threshold": 8,
+    "vzip_branch": "only when len(deferred) < 8",
+    "consequence": "A Builder.scan can invoke structural VZIP virtualization at most seven times. With eight or more deferred ZIP/WHL files the current product takes the container-pack path and never enters make_vzip_recipe for that cohort."
+  },
+  "carrying_cost_bound": {
+    "concurrent_transaction_journals": 1,
+    "outer_archives_per_build_max": 7,
+    "peak_transaction_metadata_scales_with": "the largest single parsed archive's distinct staged content/Deflate hashes, not the sum across all deferred archives",
+    "note": "This does not bound member count inside one nested archive; the 2,048/8,192-member stress courts remain relevant."
+  },
+  "product_court_implication": [
+    "Keep at least one 1-archive high-member supported case for success carrying cost.",
+    "Keep at least one <=7-archive mixed success/failure composition case for sequential journal composition.",
+    "Use >=8 deferred archives as an explicit negative control: both preimage and transactional postimage should take container-pack and be byte/tree identical because the transaction path is unreachable.",
+    "Do not extrapolate transaction overhead to large outer-archive cohorts where the product already selects container-pack."
+  ],
+  "decision": "NARROW_PRODUCT_COURT_TO_REACHABLE_TRANSACTION_DOMAIN",
+  "claim_boundary": "Structural source-derived execution bound. No product/release credit.",
+  "product_credit": false,
+  "release_credit": false
+}
