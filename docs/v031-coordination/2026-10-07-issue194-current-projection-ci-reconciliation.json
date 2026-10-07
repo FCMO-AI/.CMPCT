@@ -1,0 +1,30 @@
+{
+  "schema": "cmpct-v031-issue194-current-projection-ci-reconciliation-v1",
+  "recorded_at": "2026-10-07",
+  "pr": 223,
+  "observed_head": "e6965f73938db50527587522440f5722e5df4d9c",
+  "exact_head_runs": {
+    "r24_zip_performance": "success",
+    "r36_wait_owner_attribution": "success",
+    "version_discipline": "success",
+    "engineering_evidence": "failure: PR body is missing the repository-standard evidence sections",
+    "tests": "failure: 4 failed / 782 passed in 366.79s"
+  },
+  "inherited_test_failure_causality": {
+    "conclusion": "The four pytest failures are inherited current-development control-plane debt, not caused by the Issue194 projection.",
+    "test_and_control_blobs_identical_base_to_head": {
+      "tests/test_performance_base_native_release_custody.py": "e0c92e3a986b58e9693d9c51fb0dabad2a8a54ca",
+      "tests/test_public_attribution.py": "37a9b54eb32d4921cfecae9b7abd3daf289fba48",
+      "tests/test_v030_ci_topology_split_receipts.py": "c378d8e2dbad2e0c7b037124a9d9fedecdc14601",
+      "tests/test_v030_release_fingerprint_surface.py": "a23cc8126ad8f76374af9c6538ca73d6f59966fe",
+      "docs/V030_RELEASE_LOCK.json": "988a7b05ad4e0833fac0453de74133b38f890f87",
+      "SURFACE_REVISION": "d439b4070b9aa2e076cceb4b0486c702b74d932d",
+      ".github/workflows/v030-authoritative-v2-pr.yml": "2f095ec3b5b1028bc1fa49dd730de8062876e0ee",
+      "tools/materialize_performance_base_native.py": "47771a27c5bc4fd75cd6f00f316c1f71a9104b5d"
+    }
+  },
+  "engineering_evidence_boundary": "The engineering-evidence red is metadata/evidence-envelope debt. It does not establish a source or product regression. PR body still requires the standard Problem/Baseline through Future Leverage sections.",
+  "promotion_boundary": "This projection still cannot earn Issue194 promotion credit without the hardened new-identity evaluator source/process custody and frozen child + complete-product A/B.",
+  "product_credit": false,
+  "release_credit": false
+}
