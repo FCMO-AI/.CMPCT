@@ -1,0 +1,14 @@
+{
+  "schema": "cmpct-v031-issue194-v14-custody-boundary-correction-v1",
+  "supersedes_for_contract_identity": "docs/v031-coordination/2026-10-07-issue194-v14-custody-boundary.json",
+  "reason": "The prior custody-boundary record was created with a literal placeholder in local_contract_v3_sha256. An immediate in-place correction was attempted but blocked before mutation by the platform safety boundary. This additive correction is authoritative for that local contract identity; the prior placeholder must not be treated as evidence.",
+  "local_v14_source_sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
+  "local_contract_v3_sha256": "3d6e6344894f7f8ffd9c642aa7b4631f4e9da911360a389a970cc3e2ccb1b2b0",
+  "local_contract_v3_tests": "9 passed",
+  "local_v14_parity_fuzz": "100000 cases / 0 mismatches after proof-only custody succeeds",
+  "custody_boundary": "Source/process custody is a proof-only execution precondition. The v14 runner raises on nested-worker marker, evaluator-source, or verified-source-tree mismatch before timed product A/B. Custody failure is evidence/infrastructure failure, not ownership-mechanism debt and not product-efficiency debt.",
+  "scientific_semantics_changed": false,
+  "product_credit": false,
+  "release_credit": false,
+  "next": "When executable v14 or a stronger successor lands, preserve proof-before-measurement custody and ignore the placeholder value in the superseded record."
+}
