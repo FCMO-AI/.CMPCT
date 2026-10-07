@@ -1,0 +1,19 @@
+{
+  "schema": "cmpct-v031-active-thesis-resync-boundary-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "branch": "agent/phased2-v031-active-thesis-resync-v1",
+  "active_thesis_blob_before_attempt": "ddf5b5d5562077e642220c93c1fab4263be623bd",
+  "closed_efficiency_directive_blob": "32ba2d6f80084ad79c8838572dc37ce96169c421",
+  "authoritative_efficiency_status": "CLOSED AS A v0.30 RELEASE GATE — technical findings carry into v0.31",
+  "residual_stale_predicates": [
+    "Foundry next-action law still begins with 'While docs/V030_EFFICIENCY_RECOVERY.md is ACTIVE'.",
+    "A15 paragraph still says it is lower priority than the active efficiency-recovery mission.",
+    "Forge separation still says 'While the efficiency directive is ACTIVE' and calls Forge performance/competitor convergence dominant."
+  ],
+  "correct_current_allocation": "Use PRE1_RELEASE_POLICY, CURRENT_STATE and current docs/discovery/STATE.json. Current Discovery ranks bounded drift, Issue194, then Issue206; the v0.30 efficiency directive is historical evidence, not an active allocator.",
+  "repair_attempt": "A precise in-place update was attempted after exact-blob revalidation and was blocked before mutation by platform safety checks.",
+  "retry_law": "Do not repeat the same in-place write unchanged or route around the block through low-level Git plumbing. The stale predicates remain a control-plane defect until an ordinary authorized text-update route succeeds.",
+  "product_credit": false,
+  "release_credit": false
+}
