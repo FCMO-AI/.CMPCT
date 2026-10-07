@@ -1,0 +1,29 @@
+{
+  "schema": "cmpct-v031-issue206-current-v8-execution-reconciliation-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "projection_branch": "agent/phased2-v031-issue206-current-transactional-v1",
+  "owner": "agent/v031-issue206-transactional-vzip@a4e74034b8d6af79877360864f59ef0d2af69575",
+  "common_base": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+  "builder_preimage": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+  "builder_postimage": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b",
+  "owner_evaluator_control_v8_blob": "82eb21628b17b38a4b449e679ee429001454e016",
+  "current_source_compatibility": {
+    "development_drift_since_common_base": "8 commits, documentation/discovery only; zero product/test source changes",
+    "owner_code_delta": "one product source path: src/cmpct/builder.py; remaining owner-only paths are coordination evidence",
+    "decision": "The v8 control contract remains the correct execution-control design after the exact Builder postimage is transplanted onto current v0.31 development."
+  },
+  "v8_proof_order": [
+    "Install the exact Builder postimage and focused transactional tests through an ordinary reviewed source-write route.",
+    "Run proof-only fresh-child custody on a deterministic small plain-text source. Bind builder_file, codec_file, product_file and shadow_file to the exact repository root.",
+    "Use the canonical R24PrebuildProcess and canonical python -m experiments.entropygraph_v030_r24_process_prebuild command unchanged.",
+    "Require the shadow candidate to be complete-archive/tree identical to the exact canonical candidate and candidate-neutral under the existing >5% AND >3 ms timing law.",
+    "Only after custody and neutrality are green, run focused transactional coverage and the shipping-r24 / full-product same-source A/B.",
+    "Measure complete archive/tree/bytes, wall, whole-process-tree RSS and block I/O; use stats['unique_blobs'] for physical candidate count."
+  ],
+  "semantic_hostile": "Untimed policy-poison proof: 16 already-reachable distinct .seed owners replayed as STORED .txt members before one unsupported BZIP2 tail. Failure must leave all live candidate hints/Deflate policy state unchanged.",
+  "promotion_boundary": "Successful VZIP must remain complete-archive byte/tree identical to the direct control. Failure cases may improve bytes only. No confirmed create slowdown beyond >5% AND >3 ms; process-tree RSS and material temporary I/O are explicit gates.",
+  "anti_local_optimum": "Do not invent another overlay, sweep, journal or preflight mechanism unless exact v8/product evidence falsifies the landed transaction design. Execution custody is the missing information.",
+  "product_credit": false,
+  "release_credit": false
+}
