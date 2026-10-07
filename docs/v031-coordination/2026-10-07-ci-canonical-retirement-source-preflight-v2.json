@@ -1,0 +1,79 @@
+{
+  "schema": "cmpct-v031-ci-canonical-retirement-source-preflight-v2",
+  "recorded_at": "2026-10-07",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "owner_before": "11ae1b2ba6d1c08dc85c3ff1ed77d89846ca1da2",
+    "issue": 128,
+    "checker": "tools/check_ci_topology.py@f3892b1f6a5d089c26f472f10ca5a89784af8a5e"
+  },
+  "canonical_retirement_candidates": 32,
+  "source_state": {
+    "already_retired_manual_only": 0,
+    "still_automatic": 32,
+    "all_have_workflow_dispatch": true,
+    "legacy_lane_requires_normalization": [
+      {
+        "workflow": ".github/workflows/v030-r27-incremental-backups-floor-diagnostic.yml",
+        "blob": "cc4910a284a2626a58e17b5d8b591b2cdcdfe530",
+        "lane": "forge-diagnostic",
+        "normalize_to": "deep"
+      },
+      {
+        "workflow": ".github/workflows/v030-r28-incremental-backups-r24-carrying-cost-builder.yml",
+        "blob": "492cca54dc69abdceaeda2f8865129937d0a2917",
+        "lane": "forge-diagnostic",
+        "normalize_to": "deep"
+      }
+    ],
+    "workflow_call_special_case": [
+      {
+        "workflow": ".github/workflows/v030-r36-project-wait-owner.yml",
+        "blob": "754359dffcdadfcd53af997a4c8ac28757e25cea",
+        "events": [
+          "pull_request",
+          "push",
+          "workflow_call",
+          "workflow_dispatch"
+        ],
+        "rule": "Recheck current callers immediately before mutation; remove workflow_call only if still unreferenced."
+      }
+    ],
+    "broad_src_cmpct_historical_owners": [
+      ".github/workflows/v030-r4-office-sfv2-physical-locality.yml",
+      ".github/workflows/v030-r4-office-sfv3-derived-views.yml",
+      ".github/workflows/v030-r4-office-sfv4-all-member-skeleton.yml",
+      ".github/workflows/v030-r4-composed-mode2-office-matrix.yml",
+      ".github/workflows/v030-r4-npz-owner-budgeted-restart-locality.yml"
+    ]
+  },
+  "analytics_effort_preflight": {
+    "receipt": "docs/v031-coordination/2026-10-07-ci-analytics-effort-retirement-v1.json",
+    "four_target_blobs_match": true,
+    "simulated_retired_manual_only_transform": "PASS",
+    "preserved": [
+      "deep lane",
+      "workflow_dispatch",
+      "scientific command",
+      "artifact upload"
+    ]
+  },
+  "landing_contract": {
+    "default_transform": "add # ci-auto-policy: retired-manual-only and preserve workflow_dispatch; remove automatic pull_request/push/schedule ownership",
+    "preserve": [
+      "benchmark/oracle source",
+      "durable evidence",
+      "manual replay",
+      "current product/release authority"
+    ],
+    "re_fetch_every_blob_before_mutation": true,
+    "validation": [
+      "tools/check_ci_topology.py on every touched workflow",
+      "fingerprint-neutral docs/coordination control after coordinated tranche",
+      "genuinely relevant current-product change must retain decision-bearing current evidence"
+    ]
+  },
+  "realized_source_retirements": 0,
+  "product_credit": false,
+  "release_credit": false
+}
