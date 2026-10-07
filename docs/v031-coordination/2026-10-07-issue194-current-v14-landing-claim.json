@@ -1,0 +1,14 @@
+{
+  "schema": "cmpct-v031-issue194-current-v14-landing-claim-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "projection_parent": "e6965f73938db50527587522440f5722e5df4d9c",
+  "branch": "agent/phased2-v031-issue194-current-v14-v1",
+  "frozen_v1_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+  "expected_new_identity_v14_sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
+  "historical_missing_custody_v5_sha256": "7c4631bc599b36fa7db8e949af1d40db7572d2d31f5c05a69e714d063d4a1cda",
+  "purpose": "Exclusive current-development landing surface for the promotion-quality new-identity Issue194 evaluator. Do not reconstruct or relabel the missing historical custody-v5 source.",
+  "next_decisive_action": "Land/review executable hardened evaluator source at its new identity, bind exact source/process custody, then execute the frozen child + complete-product A/B once.",
+  "product_credit": false,
+  "release_credit": false
+}
