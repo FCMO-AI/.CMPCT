@@ -1,0 +1,12 @@
+{
+  "schema": "cmpct-v031-issue194-current-projection-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "owner": "91c35b03cd815b850b078d5083684f3e8587475d",
+  "frozen_v1_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
+  "independent_contract_blob": "e8db8aa085d9c56b098d4c6da0456082ad5ab058",
+  "direct_dependency_parity": "6 direct runtime dependencies are byte-identical between owner and current development; the frozen v1 benchmark is the only direct import absent from development.",
+  "decision": "Use current development as the execution substrate. Materialize or land the exact frozen v1 benchmark plus the independently reviewed hardened evaluator identity before executing the court.",
+  "product_credit": false,
+  "release_credit": false
+}
