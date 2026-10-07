@@ -1,0 +1,128 @@
+{
+  "schema": "cmpct-v031-ci-incremental-backups-lineage-retirement-v2",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "issue": 128,
+    "owner_branch": "agent/phased1-v031-ci-topology-inventory",
+    "inventory_blob": "f66721459f1e2414bb97323606cc456807e1d76b",
+    "prior_tranche_blob": "59f48bb8fffa6615c302e29450f3444ce83c5dc5",
+    "policy": "docs/CI_ARCHITECTURE.md"
+  },
+  "question": "Which remaining Incremental-Backups / regenerable-Deflate v0.30 deep lanes are already terminal historical evidence and therefore no longer justify automatic pull_request admission after v0.30 publication?",
+  "decision": "RETIRE_11_ADDITIONAL_VERSION_SPECIFIC_DEEP_PR_WAKEUPS_TO_MANUAL_REPLAY",
+  "retirement_candidates": [
+    {
+      "workflow": ".github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml",
+      "workflow_blob": "7527174b7d1b46518ff91638c9e2821d3a0d2a10",
+      "terminal_owner": "R41 global dictionary-effort concept compression",
+      "run": 33866909210,
+      "result": "RETAIN_SPLIT_POLICY_R40_BOUNDARY",
+      "reason": "R41 is terminal and closed; this file is now only a registered historical bridge. Manual replay preserves archaeology."
+    },
+    {
+      "workflow": ".github/workflows/v030-r27-incremental-backups-floor-diagnostic.yml",
+      "workflow_blob": "cc4910a284a2626a58e17b5d8b591b2cdcdfe530",
+      "run": 33827368679,
+      "artifact": 9920565922,
+      "result": "D2_LAWFUL_GENUINE_R24_FLOOR_EXISTS_REQUIRE_CARRYING_COST_BUILDER",
+      "reason": "R27 answered its floor question and directly triggered the superseding R28/R29 lineage."
+    },
+    {
+      "workflow": ".github/workflows/v030-r28-incremental-backups-r24-carrying-cost-builder.yml",
+      "workflow_blob": "492cca54dc69abdceaeda2f8865129937d0a2917",
+      "run": 33828582239,
+      "artifact": 9920861648,
+      "result": "SUBSTRATE_OR_CORRECTNESS_FAILURE",
+      "reason": "R28 is terminal invalid evidence and is explicitly superseded by R29; no automatic rerun can change that frozen interpretation."
+    },
+    {
+      "workflow": ".github/workflows/v030-r30-deflate-locality-risk-conditional-builder.yml",
+      "workflow_blob": "f8cc321676993c3d61451cc817b54df677442009",
+      "run": 33833358148,
+      "artifact": 9922557163,
+      "result": "BYTE_WIN_RUNTIME_OR_RSS_DEBT",
+      "reason": "R30 is terminal and superseded by later rehabilitation/attribution stages."
+    },
+    {
+      "workflow": ".github/workflows/v030-r31-regenerable-deflate-codec-effort-rehab.yml",
+      "workflow_blob": "20af8b88ad6a4c0308da96e2f8cfed414dc93492",
+      "run": 33836424844,
+      "artifact": 9923471721,
+      "result": "BYTE_IDENTITY_WIN_RUNTIME_DEBT_REMAINS",
+      "reason": "R31 terminally retired the single-level sufficiency claim and was superseded by R32."
+    },
+    {
+      "workflow": ".github/workflows/v030-r32-regenerable-deflate-output-dead-zstd-elision.yml",
+      "workflow_blob": "9713559df037cfda6a52c7c593484eb02b2920fc",
+      "run": 33836846159,
+      "artifact": 9923664295,
+      "result": "OUTPUT_DEAD_CONFIRMED_RUNTIME_DEBT_REMAINS",
+      "reason": "R32 is terminal and its residual debt was subsequently localized by R33-R38."
+    },
+    {
+      "workflow": ".github/workflows/v030-r33-regenerable-deflate-residual-phase-attribution.yml",
+      "workflow_blob": "bc2d7640c3b2eed114c2ebc8f8404bab58e6cc45",
+      "run": 33839947373,
+      "artifact": 9924649389,
+      "result": "SUBSTRATE_OR_IDENTITY_FAILURE",
+      "reason": "R33 is a terminal negative custody result explicitly superseded by R34 same-run attribution."
+    },
+    {
+      "workflow": ".github/workflows/v030-r34-regenerable-deflate-same-run-phase-attribution.yml",
+      "workflow_blob": "87bd40e0993ba2131b74ff34d67e0f6a82ad7360",
+      "run": 33840569358,
+      "artifact": 9924836130,
+      "result": "PHASE_OWNER_LOCALIZED",
+      "reason": "R34 answered the phase-owner question and is superseded by R35/R36 caller attribution."
+    },
+    {
+      "workflow": ".github/workflows/v030-r35-regenerable-deflate-lock-caller-attribution.yml",
+      "workflow_blob": "7b0934a085eb4ab9fc445ab08c354b645900d4bc",
+      "run": 33845550023,
+      "artifact": 9926485563,
+      "result": "LOCK_CALLER_LOCALIZED",
+      "reason": "R35 is terminal and its Python wait sink was superseded by R36 project-frame localization."
+    },
+    {
+      "workflow": ".github/workflows/v030-r36-project-wait-owner.yml",
+      "workflow_blob": "754359dffcdadfcd53af997a4c8ac28757e25cea",
+      "run": 33846369660,
+      "artifact": 9926800448,
+      "result": "PROJECT_WAIT_OWNER_LOCALIZED",
+      "reason": "R36 is terminal, has an especially broad bare pull_request trigger, and was superseded by the R37/R38 causal sequence."
+    },
+    {
+      "workflow": ".github/workflows/v030-r38-regenerable-deflate-encode-critical-path.yml",
+      "workflow_blob": "3fc5cbeb2876ffaf6993f74079c2dcd54ddaa889",
+      "run": 33852378791,
+      "artifact": 9928922357,
+      "result": "ENCODE_FAMILY_DISTRIBUTED",
+      "reason": "R38 is terminal and directly motivated R39; R39/R40 are already manual-only."
+    }
+  ],
+  "already_manual_controls": [
+    ".github/workflows/v030-r29-incremental-backups-r24-carrying-cost-same-run.yml",
+    ".github/workflows/v030-r39-selected-dictionary-effort-rehabilitation.yml",
+    ".github/workflows/v030-r40-selected-dictionary-effort-hostile-review.yml"
+  ],
+  "no_automatic_workflow_found": [
+    "R37 wait-once Builder has committed terminal evidence but no separate current workflow file on v0.31 development."
+  ],
+  "combined_effect_with_prior_tranche": {
+    "prior_retirement_candidates": 11,
+    "new_retirement_candidates": 11,
+    "total_classified_historical_pr_wakeups": 22,
+    "expected_effect": "Remove at least 22 historical/version-specific deep pull_request workflow instantiations from ordinary PR topology while preserving workflow_dispatch/manual replay."
+  },
+  "non_negotiable": [
+    "Do not delete terminal result documents or immutable evidence references.",
+    "Do not weaken current product/release gates.",
+    "Preserve workflow_dispatch/manual replay for historical experiments.",
+    "Retire automatic admission only; classifier green is not scientific evidence.",
+    "Validate any source mutation with tools/check_ci_topology.py and a representative fingerprint-neutral PR commit."
+  ],
+  "source_mutation": "NOT_ATTEMPTED_THIS_ACTIVATION: prior ordinary workflow-edit route is already platform-safety blocked; do not loop on the same mutation path.",
+  "product_credit": false,
+  "release_credit": false
+}
