@@ -1,0 +1,70 @@
+{
+  "schema": "cmpct-v031-independent-digest-patch-ownership-o0-v1",
+  "recorded_at": "2026-10-07",
+  "development_base": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "research_line": "isolated Phased1 content-ownership O0, independent of frozen v0.31 coordered bounded-drift court",
+  "prior_art": "benchmarks/v030_shifted_segmented_relation_payload_floor.py@8eba88588f2b0db529e75c615cd482ce6945e863",
+  "source_boundary": "experiments/entropygraph_v030_bounded_drift_v1.py@d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+  "mechanism": "Store one digest-selected base and one independently compressed, indexed, SHA-bound edit program per distinct logical content digest; occurrences reuse the digest. Selected reconstruction touches base plus one program, never every family program.",
+  "preregistration": {
+    "exploratory_sha256": "67dff7663cad08564b6deee3015297880682472423fb6cf8eebb1290e62a3a8f",
+    "heldout_sha256": "1a42766a22fa65a9131e956e3cb148830e2ea2af3073e0837846841ada03cb16",
+    "filesystem_bridge_sha256": "f97d9838a0e5458c0cee6c540063dc94a6471fbb6b7d7d0ae0c6cc586aa216cc",
+    "cli_replication_sha256": "9c0d957a3ac0d178f754b6f03f00d47a4705d2d83295fc2e9a36868df2ea822e",
+    "create_cost_sha256": "e5f5510a64031bbfbdf9b872af9789978c12686ee49a0035e4d3da114a5390e9"
+  },
+  "evidence": {
+    "exploratory": {
+      "cases": 80,
+      "smaller_than_distinct_object_dedup": 48,
+      "smaller_than_legacy_shared_BDC": 48,
+      "content_only_selected_8x_pass": 80,
+      "legacy_shared_BDC_8x_pass": 29
+    },
+    "independent_structural_heldout": {
+      "cases": 80,
+      "smaller_than_distinct_object_dedup": 64,
+      "smaller_than_legacy_shared_BDC": 52,
+      "content_only_selected_8x_pass": 80,
+      "legacy_shared_BDC_8x_pass": 35,
+      "regimes": "64B insert, 512B delete, shuffled 512B blocks, shared-prefix with random tail, and unrelated random",
+      "random_dedup_loss_cases": 16
+    },
+    "filesystem_v1_metadata_bridge": {
+      "cases": 96,
+      "exact_synthetic_messagepack_manifest_and_selected_path_content_roundtrip": 96,
+      "indexed_patch_full_metadata_8x_pass": 96,
+      "distinct_object_dedup_full_metadata_8x_pass": 96,
+      "legacy_shared_BDC_full_metadata_8x_pass": 40,
+      "smaller_than_full_metadata_dedup": 64,
+      "smaller_than_full_metadata_BDC": 64,
+      "simultaneous_byte_win_over_both_and_selected_8x": 40,
+      "metadata": "32KiB bounded path-range index/chunk codec; none versus independent per-file 1KiB xattrs"
+    },
+    "independent_compressor_path": {
+      "cases": 160,
+      "cli_zstd19_vs_c_libzstd19_dedup_sign_agreement": 160,
+      "BDC_sign_agreement": 160,
+      "exact_command": "zstd -19 --single-thread -q -c; metadata compressor left unchanged"
+    },
+    "create_cost_micro": {
+      "cases": 4,
+      "repetitions_per_candidate": 5,
+      "candidate_vs_dedup_near_mid_8unique_ms": [
+        12.39,
+        3.53
+      ],
+      "candidate_vs_dedup_independent_random_ms": [
+        50.04,
+        3.61
+      ],
+      "notes": "same synthetic inputs, wall/CPU/RSS tracked separately; different source-equivalent validation work; no product timing credit"
+    }
+  },
+  "strongest_negative": "Indexed patches lose to independently compressed content-dedup on all 32 independent/random and high-mutation exploratory cases and all 16 unrelated held-out cases. They also export extra create work, especially on unrelated content, so unconditional candidate construction is unjustified.",
+  "scientific_decision": "PRESERVE_SCOPED_SEED__NO_PRODUCT_CREDIT; materially changed content ownership defeats the all-patch selective decoded-work obstruction on tested families, but generic cheap admission, full-product economics, native reader, recovery and exact hosted Python-zstandard proof remain unresolved.",
+  "counterfactual": "The earlier shared-BCD locality negative should not be interpreted as a general impossibility for bounded base+edit representations: independent per-digest patch ownership changes the decoder-visible dependency closure.",
+  "authority_boundary": "All rows and replay scripts were generated locally and are NOT yet GitHub-hosted; numbers are O0 lower-rung only and must not be claimed as canonical CI, hosted result or release benchmark. The frozen Shifted/Boundary court is unchanged/unexecuted.",
+  "product_credit": false,
+  "release_credit": false
+}
