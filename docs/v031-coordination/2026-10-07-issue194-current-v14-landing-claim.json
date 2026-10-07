@@ -1,5 +1,5 @@
 {
-  "schema": "cmpct-v031-issue194-current-v14-landing-claim-v1",
+  "schema": "cmpct-v031-issue194-current-v14-landing-claim-v2",
   "recorded_at": "2026-10-07",
   "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
   "projection_parent": "e6965f73938db50527587522440f5722e5df4d9c",
@@ -7,8 +7,28 @@
   "frozen_v1_blob": "38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc",
   "expected_new_identity_v14_sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
   "historical_missing_custody_v5_sha256": "7c4631bc599b36fa7db8e949af1d40db7572d2d31f5c05a69e714d063d4a1cda",
-  "purpose": "Exclusive current-development landing surface for the promotion-quality new-identity Issue194 evaluator. Do not reconstruct or relabel the missing historical custody-v5 source.",
-  "next_decisive_action": "Land/review executable hardened evaluator source at its new identity, bind exact source/process custody, then execute the frozen child + complete-product A/B once.",
+  "exact_source_recovery": {
+    "status": "RECOVERED_EXACT_BYTES",
+    "source_surface": "current conversation attachment file_00000000c27c8209a77f58e7d0f6362a",
+    "bytes": 34598,
+    "lines": 862,
+    "sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
+    "py_compile": "PASS in writable local copy",
+    "projection_target_present": false
+  },
+  "ordinary_source_landing": {
+    "target": "benchmarks/v031_issue194_grouped_dict_integrated_ab_hardened_v14.py",
+    "target_branch": "agent/phased2-v031-issue194-current-projection-v1",
+    "target_head_before_attempt": "7ff43d56d5792fca50eadde05bf6cead705d24f3",
+    "result": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
+    "retry_same_surface": false,
+    "low_level_git_bypass": false
+  },
+  "supersedes": [
+    "the source-identity blocker conclusion in docs/v031-coordination/2026-10-07-issue194-c386-source-recovery-audit-v1.json"
+  ],
+  "purpose": "Exclusive current-development landing surface for the promotion-quality new-identity Issue194 evaluator. Exact c386 source bytes are now recovered; do not reconstruct or relabel the missing historical custody-v5 source.",
+  "next_decisive_action": "When an ordinary authorized executable-source mutation route is available, land the exact recovered c386 bytes, bind source/process custody, then execute the frozen child + complete-product A/B once.",
   "product_credit": false,
   "release_credit": false
 }
