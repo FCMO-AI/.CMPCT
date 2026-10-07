@@ -1,18 +1,54 @@
 {
-  "schema": "cmpct-v031-issue194-current-projection-ci-reconciliation-v1",
+  "schema": "cmpct-v031-issue194-current-projection-ci-reconciliation-v2",
   "recorded_at": "2026-10-07",
   "pr": 223,
-  "observed_head": "e6965f73938db50527587522440f5722e5df4d9c",
-  "exact_head_runs": {
-    "r24_zip_performance": "success",
-    "r36_wait_owner_attribution": "success",
-    "version_discipline": "success",
-    "engineering_evidence": "failure: PR body is missing the repository-standard evidence sections",
-    "tests": "failure: 4 failed / 782 passed in 366.79s"
+  "projection_head_observed_by_initial_runs": "e6965f73938db50527587522440f5722e5df4d9c",
+  "current_branch_head_at_reconciliation": "08afb148554ec401efdef4525451ebf686f180fa",
+  "workflow_and_result_bearing_truth": {
+    "r24_zip_performance": {
+      "run_id": 37614099769,
+      "workflow_conclusion": "success",
+      "classifier_job": "latest-head-impact: success",
+      "result_bearing_job": "performance: skipped",
+      "evidence_credit": false
+    },
+    "r36_wait_owner_attribution": {
+      "run_id": 37614099719,
+      "workflow_conclusion": "success",
+      "classifier_job": "classify-latest-head: success",
+      "result_bearing_job": "r36-attribution: skipped",
+      "evidence_credit": false
+    },
+    "version_discipline": {
+      "run_id": 37614099797,
+      "workflow_conclusion": "success",
+      "result_bearing_job": "version-discipline: success",
+      "evidence_credit": true
+    },
+    "engineering_evidence": {
+      "run_id": 37614099938,
+      "workflow_conclusion": "failure",
+      "result_bearing_job": "evidence: failure",
+      "reason": "PR body is missing the repository-standard evidence sections",
+      "evidence_credit": false
+    },
+    "tests": {
+      "run_id": 37614099720,
+      "workflow_conclusion": "failure",
+      "result_bearing_job": "test: failure",
+      "summary": "4 failed / 782 passed in 371.93s",
+      "evidence_credit": true
+    }
   },
   "inherited_test_failure_causality": {
     "conclusion": "The four pytest failures are inherited current-development control-plane debt, not caused by the Issue194 projection.",
-    "test_and_control_blobs_identical_base_to_head": {
+    "failed_tests": [
+      "tests/test_performance_base_native_release_custody.py::test_historical_native_materializer_is_release_fingerprinted",
+      "tests/test_public_attribution.py::test_surface_revision_records_attribution_campaign",
+      "tests/test_v030_ci_topology_split_receipts.py::test_authoritative_v2_classifier_is_release_fingerprint_driven",
+      "tests/test_v030_release_fingerprint_surface.py::test_release_fingerprint_covers_r25_oracle_and_android_custody_inputs"
+    ],
+    "test_and_control_blobs_identical_base_to_projection": {
       "tests/test_performance_base_native_release_custody.py": "e0c92e3a986b58e9693d9c51fb0dabad2a8a54ca",
       "tests/test_public_attribution.py": "37a9b54eb32d4921cfecae9b7abd3daf289fba48",
       "tests/test_v030_ci_topology_split_receipts.py": "c378d8e2dbad2e0c7b037124a9d9fedecdc14601",
@@ -23,8 +59,9 @@
       "tools/materialize_performance_base_native.py": "47771a27c5bc4fd75cd6f00f316c1f71a9104b5d"
     }
   },
+  "classifier_only_green_rule": "A workflow-level success whose result-bearing job is skipped is routing evidence only and earns no performance/attribution credit.",
   "engineering_evidence_boundary": "The engineering-evidence red is metadata/evidence-envelope debt. It does not establish a source or product regression. PR body still requires the standard Problem/Baseline through Future Leverage sections.",
-  "promotion_boundary": "This projection still cannot earn Issue194 promotion credit without the hardened new-identity evaluator source/process custody and frozen child + complete-product A/B.",
+  "promotion_boundary": "This projection cannot earn Issue194 promotion credit without hardened new-identity evaluator source/process custody and the frozen child + complete-product A/B.",
   "product_credit": false,
   "release_credit": false
 }
