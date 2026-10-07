@@ -1,0 +1,60 @@
+{
+  "schema": "cmpct-v031-ci-v029-historical-lane-audit-v1",
+  "recorded_at": "2026-10-06",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "issue": 128,
+    "owner_branch": "agent/phased1-v031-ci-topology-inventory",
+    "inventory_blob": "f66721459f1e2414bb97323606cc456807e1d76b",
+    "ci_architecture": "docs/CI_ARCHITECTURE.md"
+  },
+  "question": "Can remaining automatic v0.29 deep workflows be retired without erasing a live v0.31 dependency or current product regression gate?",
+  "decisions": [
+    {
+      "workflow": ".github/workflows/v029-local-pair-fusion.yml",
+      "workflow_blob": "80236097d6130550eb13be815c1927d2f9cf3525",
+      "decision": "RETIRE_PULL_REQUEST_TO_MANUAL_REPLAY",
+      "evidence": {
+        "durable_record": "benchmarks/history/2026-08-17-mosaic-v029-local-pair-fusion-reject.json",
+        "record_blob": "655f7d4c03c70ad82e0c700839c98de031d714f0",
+        "run": 32033550973,
+        "job": 95398702023,
+        "artifact": 9290196175,
+        "artifact_sha256": "b598f31831d558218938240d290bb9e598019afa17aeccee42b630b5c3986bbc",
+        "decision": "REJECT_BOUNDED_LZMA2_SOLIDITY",
+        "measured": "908 locality-admissible candidate pairs, zero profitable pairs, zero selected pairs, 0 B saving"
+      },
+      "dependency_audit": "Default-branch search finds the pair-fusion oracle only in its own experiment/test and historical/release documentation; no current v0.30/v0.31 product module imports it.",
+      "reason": "This is a closed negative historical oracle with durable result custody. Automatic PR admission adds topology cost without protecting current product semantics."
+    },
+    {
+      "workflow": ".github/workflows/v029-parallel-portfolio.yml",
+      "workflow_blob": "fbca65e8b9f5e9a4d8651669dd1b2a9f2a915bba",
+      "decision": "DO_NOT_RETIRE_YET__LIVE_DEPENDENCY_REQUIRES_SUBSTITUTE_COVERAGE_AUDIT",
+      "evidence": {
+        "durable_record": "benchmarks/history/2026-08-17-mosaic-v029-parallel-portfolio-attempt5-v2.json",
+        "record_blob": "4831b7182f341bdadc5b7ab67c6c3658a8bfcf82",
+        "run": 32049354204,
+        "job": 95444708998,
+        "artifact": 9294641438,
+        "decision": "PASS",
+        "measured": "47,147,764 B exact accepted attempt-5 archive; 4/4 byte-identical pairs; 182.454s -> 97.944s median wall"
+      },
+      "live_dependency": [
+        "experiments/entropygraph_v030_shared_portfolio.py imports entropygraph_v029_parallel_portfolio",
+        "experiments/entropygraph_v030_discovery_neutral_worker.py imports CHILD_RESULT_TIMEOUT_S / ACCEPTED_ENGINE from the historical scheduler",
+        "experiments/entropygraph_v029_release.py still calls scheduler.build_parallel",
+        "tests/test_v029_parallel_portfolio.py is explicitly included in current v0.30 release-reader/current authoritative gates"
+      ],
+      "reason": "The historical performance receipt is durable, but the module remains in the live current product/research dependency graph. Retirement is safe only after proving current automatic gates fully replace the workflow's exact scheduler/performance responsibilities."
+    }
+  ],
+  "aggregate": {
+    "new_unambiguous_retirement_candidates": 1,
+    "new_keep_or_defer": 1,
+    "principle": "Historical age is not sufficient for retirement; durable terminal evidence plus absence of live current dependency is required."
+  },
+  "source_mutation": "NOT_ATTEMPTED_THIS_ACTIVATION: workflow source mutation remains on the previously safety-blocked path; this receipt only sharpens the owner backlog.",
+  "product_credit": false,
+  "release_credit": false
+}
