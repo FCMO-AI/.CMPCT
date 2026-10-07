@@ -1,4 +1,4 @@
-/* CMPCT curated locale catalogue assembly — Surface 0.29.k.
+/* CMPCT curated locale catalogue assembly — Surface 0.30.a.
    Footnote: locale content lives in reviewable source-keyed or source-order packs. This assembly deliberately
    contains no translation logic and cannot synthesize missing copy. Missing entries remain quality-gate failures. */
 import {
@@ -97,5 +97,5 @@ export const MESSAGES = Object.freeze({ ...coreMessages, ...ATTRIBUTION_MESSAGES
 // Footnote: the English source file describes the original localization campaign. The assembled catalogue
 // advances with the public-surface milestone so CI can reject stale translation evidence without rewriting the
 // canonical English phrase identities that all locale packs key against.
-export const QUALITY_CONTRACT = Object.freeze({ ...SOURCE_QUALITY_CONTRACT, catalogueRevision: '0.29.k' });
+export const QUALITY_CONTRACT = Object.freeze({ ...SOURCE_QUALITY_CONTRACT, catalogueRevision: '0.30.a' });
 export { PROTECTED_TOKENS };
