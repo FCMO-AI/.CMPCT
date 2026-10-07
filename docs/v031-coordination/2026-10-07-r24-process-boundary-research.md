@@ -20,7 +20,19 @@ The local guarded-process prototype (SHA-256 `ed5e84b2d9704e21bf41c2fdc145a0a095
 
 **The boundary is limited:** Linux syscall filtering is not an attestation of the Python source or native shared objects, does not police pre-existing descendants/external helpers, and does not cover macOS or Windows. Source/file/bytecode provenance, exact package-native dependency fingerprints, input/output identity and real-product no-subprocess assumptions still require independent verification. It must fail closed if the filter cannot install and may alter behavior if legitimate product code needs external processes. No change to release thresholds, selectors, format, comparator or court is authorized.
 
+## Subsequent decisive product-path falsifier — RETIRE blanket denial
+
+**Same activation, later evidence.** The first small installed-wheel compatibility court happened not to trigger dictionary training. It was therefore insufficient evidence of general product neutrality.
+
+A larger independently materialized same-input source tree (scale 8; four encode workers) changed the result decisively. The unguarded **exact Builder preimage** `663ef0922992b1fbb8f19e6eea88d55c10a56044` and the same package-owned native binary built and extracted a valid **806,254-byte** CMPCT archive. The guarded arm failed before emitting an archive: `PermissionError: [Errno 1] Operation not permitted: '/usr/bin/zstd'`.
+
+This is not a random unrelated subprocess. Current `Builder._train_dictionary` at the exact preimage invokes the external `zstd --train-fastcover=...` CLI once the unchanged eligibility gate has at least 16 sufficiently large text candidates and at least 96 KiB of sample bytes. The seccomp guard correctly blocks that legitimate `posix_spawn`. Removing the trainer, changing admission, suppressing the failure, or excluding its real work from performance accounting would weaken CMPCT semantics and cannot rescue the proposed evaluator.
+
+**DECISION:** **REJECT blanket process creation/exec denial as a generally product-neutral v8 control**. It remains a narrowly useful negative-control instrument for synthetic products explicitly known not to require descendant work. A legitimate product evaluator must instead preserve and authenticate required descendants (including the zstd executable and its I/O/work/cost), or separately productize an exact in-process dictionary trainer with equivalent fully charged behavior—neither has been established here.
+
+The earlier benign small-corpus evidence, Python-thread preservation, and hostile grandchild denial remain valid *at their original scope* but are not general promotion evidence. No product/format/release credit; the formal hosted v8 product court remains pending.
+
 ## PARETOBONK decision
-Three previous activations had repeatedly explored Python import/path/bytecode custody. This is a deliberate **different-frame test**: constrain operating-system process creation rather than add another metadata-only receipt. A bounded Linux-only path is supported; expanding more custody microvariants without exact v8 implementation would have lower information value.
+Three previous activations had repeatedly explored Python import/path/bytecode custody. This is a deliberate **different-frame test**: constrain operating-system process creation rather than add another metadata-only receipt. A bounded Linux-only path is supported only for a no-descendant negative control; the later actual Builder dictionary-training falsifier retires blanket denial as a general evaluator. The next frontier is authenticated, charged, legitimately required descendants or a strictly equivalent in-process trainer—not another metadata receipt.
 
 **Next:** reconcile current R24 ownership and source-custody requirements, land an executable bounded evaluator only through ordinary authorized source writes, then run the fixed candidate-neutrality and independent complete-product court. Preserve the existing highest scientific priority on bounded drift and Issue194. No product or release credit.
