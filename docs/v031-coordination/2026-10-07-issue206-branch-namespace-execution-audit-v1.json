@@ -1,0 +1,29 @@
+{
+  "schema": "cmpct-v031-issue206-branch-namespace-execution-audit-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "owner": "agent/v031-issue206-transactional-vzip@a4e74034b8d6af79877360864f59ef0d2af69575",
+  "branches_checked": {
+    "agent/phased2-v031-issue206-focused-tests-v1": "identical to owner: 0 ahead / 0 behind",
+    "agent/phased2-v031-issue206-high-member-court-v1": "identical to owner: 0 ahead / 0 behind",
+    "agent/phased2-v031-issue206-known-unsupported-preflight-v1": "identical to owner: 0 ahead / 0 behind"
+  },
+  "owner_material_paths_relative_to_current_development": [
+    "src/cmpct/builder.py",
+    "docs/v031-coordination/2026-10-05-issue206-evaluator-control-v7.json",
+    "docs/v031-coordination/2026-10-05-issue206-evaluator-control-v8.json",
+    "docs/v031-coordination/2026-10-05-issue206-event-log-control.json",
+    "docs/v031-coordination/2026-10-05-issue206-execution-custody.json",
+    "docs/v031-coordination/2026-10-05-issue206-product-source-landing.json",
+    "docs/v031-coordination/2026-10-05-issue206-rollback-journal-control.json",
+    "docs/v031-coordination/2026-10-05-issue206-sparse-overlay-control.json",
+    "docs/v031-coordination/2026-10-05-issue206-transactional-overlay-carrying-cost.json",
+    "docs/v031-coordination/2026-10-05-issue206-transactional-overlay-prereg.json",
+    "docs/v031-coordination/2026-10-05-issue206-transactional-overlay-result.json"
+  ],
+  "finding": "The focused-tests, high-member-court and known-unsupported-preflight branch names do not contain additional executable test/evaluator/court source; they are exact pointers to the current owner state. Evaluator-control v8 is a durable contract/coordination artifact, not a landed executable court implementation.",
+  "decision": "Do not infer executable evidence from branch names. The next legitimate Issue206 route must actually land the exact Builder postimage, focused tests, and a source-custodied v8 execution instrument on current development before product timing credit.",
+  "anti_duplication": "Do not create another named Issue206 branch merely to represent a planned test/court. Reuse the current-development transactional landing branch and add real source/evidence only when the mutation route is available.",
+  "product_credit": false,
+  "release_credit": false
+}
