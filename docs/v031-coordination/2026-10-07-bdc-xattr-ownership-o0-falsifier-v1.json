@@ -1,0 +1,78 @@
+{
+  "schema": "cmpct-v031-bdc-xattr-ownership-o0-falsifier-v1",
+  "recorded_at": "2026-10-07",
+  "source_boundary": {
+    "science_owner": "agent/v031-bounded-drift-coordered-court@91e650088cfc5fd5c70ebf7cc8aea977aacffc68",
+    "frozen_benchmark_blob": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+    "bounded_drift_container_blob": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "bounded_drift_primitive_blob": "d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+    "product_fs_blob": "72404386775be4576365cc687784f4e4f752d9de"
+  },
+  "primary_decision": "KILL_METADATA_ONLY_REHABILITATION_FOR_CURRENT_SINGLE_BASE_ALL_PROGRAM_BDC_ON_SCOPED_INDEPENDENT_CONTENT_GROUP_FAMILY",
+  "scope": "O0 synthetic filesystem-v1 structural research. Does not replace, run, or falsify the frozen Shifted/Boundary hosted productization court. No product/release credit.",
+  "evidence_ladder": {
+    "inline_partition": {
+      "prereg_sha256": "b649f8c0b4c40d13e784a7afbc7b5aa05115d72a9c97917b8d472576acf21ca2",
+      "cases": 54,
+      "variants": 162,
+      "optimistic_metadata_only_locality_pass_variants": 162,
+      "inline_stored_bytes_extra_vs_monolithic_coordered_all_162": true,
+      "worst_extra_bytes": 879937,
+      "mechanism": "Independent path-range decoding loses cross-range xattr byte reuse, especially when xattrs correlate with content rather than path."
+    },
+    "shared_xattr_pool": {
+      "prereg_sha256": "ff64d77191c0c237e6a1a8704aef7d8957c3a51e07c94b2a77558b0cdb0ee86f",
+      "independent_heldout_cases": 54,
+      "preregistered_eligible_cases": 34,
+      "pool_saved_bytes_vs_inline_in_eligible_cases": 34,
+      "minimum_saving": 2362,
+      "median_saving": 21341,
+      "maximum_saving": 706605,
+      "complete_synthetic_manifest_reconstruction": true,
+      "selected_integrity_checks": "Index/chunk/xattr/frame/footer/unowned-ref mutations all failed closed in metadata-only prototype.",
+      "optimistic_metadata_decode_8x_path_eligible": 34,
+      "caution": "Only 2/34 had complete pooled metadata bytes smaller than the monolithic coordered control; all 34 pay separate BDC base+patch decoded work."
+    },
+    "original_BDC_owner": {
+      "prereg_sha256": "23abbd0eb735f20de8e0af6d5afebe2f7206190581f17b59256e1039c3d6b09c",
+      "tested_cases": 54,
+      "pool_eligible_cases": 34,
+      "source_equivalent_edit_program_decode_roundtrip": "54/54 families and each distinct member group exact",
+      "base_plus_patch_plus_selected_member_fails_8x": 54,
+      "pool_plus_BDC_fails_8x": 34,
+      "patch_raw_range_bytes": [
+        242383,
+        8286176
+      ]
+    },
+    "independent_source_level_floor": {
+      "prereg_sha256": "deaf6f2dac7b2edad342075af4c44095e5df5623972e773d85781081a293ceb8",
+      "exact_48byte_cross_content_matches": 0,
+      "per_distinct_nonbase_member_max_copied_bytes": 1551,
+      "minimum_insert_literal_bytes_per_nonbase_member": 6641,
+      "minimum_nonbase_members": 29,
+      "guaranteed_lower_amplification": 25.5093994140625,
+      "independent_failures_out_of_54": 54,
+      "proof": "With no shared 48-byte substring, _find_resync cannot succeed and consumes 256-byte fallbacks. At most 32 fallbacks yield at most 33 copy runs, each at most 47 bytes; any 8192-byte nonbase member must therefore write >=8192-33*47=6641 literal bytes. Existing BDC charges all programs to each selected member. Since there are >=29 nonbase members, even the lower bound [base 8192 + selected 8192 + 29*6641] exceeds 8*8192 before metadata."
+    },
+    "strongest_simpler_control": {
+      "prereg_sha256": "7b64feb4e3ceb66f1e393111cd11cfcf2e40193152111718cd8d117f3d600e40",
+      "same_source_cases": 54,
+      "content_dedup_owner_smaller_than_BDC_owner": 50,
+      "dedup_plus_metadata_smaller_than_BDC_plus_coordered": 48,
+      "optimistic_selected_decode_8x_path_for_dedup_plus_metadata": 54,
+      "BDC_selected_decode_8x_path": 0,
+      "caution": "C-libzstd/metadata-only source-equivalent projection, NOT actual r24 product benchmark or release credit; six density cases favor BDC and must remain visible."
+    }
+  },
+  "inference": "Do not productize an xattr-only metadata partition/pool to rescue independent-content-group inputs under the unchanged all-members shared BDC patch owner. Stronger simpler current-product content dedup is the first control; reopen only through materially changed content ownership with all metadata/index/proof/recovery costs fully charged.",
+  "reproduction_boundary": "The full local O0 research scripts, preregistration files and raw rows were prepared during the activation but are not repository-hosted by this JSON receipt; independent hosted/product promotion requires landing sources and replaying exact tests.",
+  "outcome_no_changes": [
+    "No frozen threshold/evaluator/corpus/comparator changed",
+    "No archive grammar/reader/writer/release gate changed",
+    "No new version",
+    "No claim of general BDC impossibility"
+  ],
+  "product_credit": false,
+  "release_credit": false
+}
