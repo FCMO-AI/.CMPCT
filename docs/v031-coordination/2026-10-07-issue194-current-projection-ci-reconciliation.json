@@ -1,49 +1,59 @@
 {
-  "schema": "cmpct-v031-issue194-current-projection-ci-reconciliation-v3",
+  "schema": "cmpct-v031-issue194-current-projection-ci-reconciliation-v4",
   "recorded_at": "2026-10-07",
   "pr": 223,
   "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
-  "projection_head": "db67017aa8b6beb49ab7d76b8327be66d7628955",
+  "previous_evidence_head": "db67017aa8b6beb49ab7d76b8327be66d7628955",
+  "latest_evidence_head": "be5c5ff1dabecbf14061e4edc5f427ae1c5cbd49",
+  "latest_head_delta": {
+    "from_previous_evidence_head": "one docs-only commit",
+    "path": "docs/v031-coordination/2026-10-07-issue194-current-projection-ci-reconciliation.json",
+    "source_or_test_delta": false
+  },
   "workflow_and_result_bearing_truth": {
     "tests": {
-      "run_id": 37620610213,
-      "job_id": 112790097694,
+      "run_id": 37623414343,
+      "job_id": 112799049490,
       "workflow_conclusion": "failure",
       "result_bearing_job": "test: failure",
-      "summary": "4 failed / 782 passed in 289.73s",
-      "artifact_id": 11481529448,
-      "artifact_digest": "sha256:45e33cfdbe2516849b08dc43ae4bfbc7bb23e9cc0403f75c70fc0ab2abb0e805",
+      "summary": "4 failed / 782 passed in 380.48s",
+      "artifact_id": 11482594111,
+      "artifact_digest": "sha256:0a61cd2b728eb917ba8c4db858fff49bbb7602cf2de760d867fc137a6d4256fa",
       "evidence_credit": true
     },
     "version_discipline": {
-      "run_id": 37620610199,
-      "job_id": 112789629795,
+      "run_id": 37623414144,
+      "job_id": 112799049107,
       "workflow_conclusion": "success",
       "result_bearing_job": "version-discipline: success",
       "evidence_credit": true
     },
     "r24_zip_performance": {
-      "run_id": 37620610211,
+      "run_id": 37623414391,
       "workflow_conclusion": "success",
       "classifier_job": "latest-head-impact: success",
+      "classifier_job_id": 112799049273,
       "result_bearing_job": "performance: skipped",
+      "result_bearing_job_id": 112799113958,
       "evidence_credit": false
     },
     "r36_wait_owner_attribution": {
-      "run_id": 37620610207,
+      "run_id": 37623414697,
       "workflow_conclusion": "success",
       "classifier_job": "classify-latest-head: success",
+      "classifier_job_id": 112799050618,
       "result_bearing_job": "r36-attribution: skipped",
+      "result_bearing_job_id": 112799098492,
       "evidence_credit": false
     },
     "engineering_evidence": {
-      "run_id": 37620610197,
-      "job_id": 112789628479,
+      "run_id": 37623414137,
+      "job_id": 112799048431,
       "workflow_conclusion": "failure",
       "result_bearing_job": "evidence: failure",
-      "reason": "PR metadata body still lacks the repository-standard eleven evidence sections; the tracked draft dossier is not the GitHub PR body.",
-      "artifact_id": 11481782253,
-      "artifact_digest": "sha256:20f63dc57963fa228a2677d1e2348d4128b0fb834180cab74b9702561410f207",
+      "reason": "GitHub pull_request.body still lacks the repository-standard eleven evidence sections; the tracked dossier is structurally compliant but is not the event PR body.",
+      "artifact_id": 11482932517,
+      "artifact_digest": "sha256:158ea0dcfb44c8e5745f18c5b4e14ee62a996f9a5a7684716f6873d5d8ab7f01",
       "evidence_credit": false
     }
   },
@@ -67,11 +77,17 @@
     }
   },
   "classifier_only_green_rule": "A workflow-level success whose result-bearing job is skipped is routing evidence only and earns no performance/attribution credit.",
+  "engineering_evidence_boundary": {
+    "tracked_dossier_blob": "df0ab5d5f8929f3b319f923317a81e1133d3632e",
+    "tracked_dossier_static_contract": "PASS",
+    "github_pr_body_update": "BLOCKED_BY_PLATFORM_SAFETY",
+    "law": "Do not claim the engineering-evidence gate green until the actual PR event body satisfies the checker."
+  },
   "v14_boundary": {
     "expected_new_identity_sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
     "historical_missing_custody_v5_sha256": "7c4631bc599b36fa7db8e949af1d40db7572d2d31f5c05a69e714d063d4a1cda",
     "status": "UNLANDED",
-    "law": "Do not substitute or relabel a different local reconstruction as the expected c386 new identity or the missing historical custody-v5 source."
+    "law": "Do not substitute or relabel a different reconstruction as the expected c386 new identity or the missing historical custody-v5 source."
   },
   "promotion_boundary": "This projection cannot earn Issue194 promotion credit without the exact expected new-identity hardened evaluator source/process custody and the frozen four-repetition child plus complete-product A/B.",
   "product_credit": false,
