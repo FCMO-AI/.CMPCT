@@ -1,0 +1,17 @@
+{
+  "schema": "cmpct-v031-issue194-v14-source-write-boundary-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "projection_branch": "agent/phased2-v031-issue194-current-projection-v1",
+  "projection_reconciliation_commit": "f834550415e39d92b697dd15de38e841f11888d9",
+  "target_path": "benchmarks/v031_issue194_grouped_dict_integrated_ab_hardened_v14.py",
+  "target_path_precheck": "absent",
+  "expected_new_identity_v14_sha256": "c3864eebade1502f22c96ecae9675375f31982b03bad1f22b312322f08955638",
+  "source_artifact": "conversation attachment file_00000000c27c8209a77f58e7d0f6362a",
+  "attempt": "Read the exact prior artifact and create the target through the ordinary GitHub contents API on the reconciled current-development projection.",
+  "result": "BLOCKED_BEFORE_MUTATION_BY_PLATFORM_SAFETY",
+  "retry_law": "Do not retry the same executable-source write unchanged and do not route around the block through low-level Git object/ref APIs. Continue another dependency-safe lane until the execution/source-write capability boundary materially changes.",
+  "scientific_state": "UNEXECUTED. The block is infrastructure/evidence-enablement, not a product loss or mechanism failure.",
+  "product_credit": false,
+  "release_credit": false
+}
