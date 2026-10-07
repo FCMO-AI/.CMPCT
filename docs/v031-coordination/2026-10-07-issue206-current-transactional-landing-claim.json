@@ -1,0 +1,21 @@
+{
+  "schema": "cmpct-v031-issue206-current-transactional-landing-claim-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "projection_parent": "7906410ab8f748a071a407d0d357d06a88152f21",
+  "branch": "agent/phased2-v031-issue206-current-transactional-v1",
+  "builder_preimage": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+  "required_builder_postimage": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b",
+  "owner": "agent/v031-issue206-transactional-vzip@a4e74034b8d6af79877360864f59ef0d2af69575",
+  "evaluator_control_v8_blob": "82eb21628b17b38a4b449e679ee429001454e016",
+  "purpose": "Exclusive current-development landing surface for the exact one-file transactional VZIP Builder transplant and focused repository evidence. Do not invent a nearby overlay variant.",
+  "preconditions": [
+    "Revalidate Builder preimage immediately before any source mutation.",
+    "Transplant only the exact owner Builder postimage.",
+    "Land focused success/None/exception/policy-poison tests before product credit.",
+    "Execute evaluator-control v8 source-custody and candidate-neutrality on exact package/native runtime before timed product evidence."
+  ],
+  "next_decisive_action": "Land exact Builder postimage plus focused tests through an ordinary reviewed route, then run v8 custody/neutrality and complete archive/tree/bytes/wall/process-tree-RSS/I-O A/B.",
+  "product_credit": false,
+  "release_credit": false
+}
