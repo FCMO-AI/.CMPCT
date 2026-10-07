@@ -1,0 +1,26 @@
+{
+  "schema": "cmpct-v031-issue206-causal-proof-ladder-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "branch": "agent/phased2-v031-issue206-current-transactional-v1",
+  "head_before_write": "cce294e71f240f52f71f62212498371048f6b1c8",
+  "source_binding": {
+    "builder_preimage": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "required_builder_postimage": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b",
+    "codec_blob": "29526db4203723d83523fc95d074c346b63d7587"
+  },
+  "evidence": [
+    "Real-ZIP microcourt already landed: supported/late-unsupported, live-identity, CRC-exception and dictionary-policy poison all green for transaction semantics.",
+    "Independent 2,000-case actual-ZIP adversarial fuzz: 0 transactional success mismatches and 0 rollback failures across success/None/exception paths.",
+    "Independent 500-root / 2,221-archive composition court: 0 transaction composition failures with cross-archive shared payloads.",
+    "1,000-case fallback poststate court: full fallback ZIP identity preserved; direct path retains median 49 extra speculative candidates while transaction retains none.",
+    "Current Builder serializes every remaining self.cands entry, so failed-VZIP speculative candidates have a deterministic archive-byte path rather than being transient memory only.",
+    "Actual parser policy-poison court: 16 x 7,009-byte text members before an unsupported tail make direct path dictionary-eligible at 16 samples / 112,144 B while transactional path remains 0 / 0.",
+    "Lower-rung carrying-cost courts up to 8,192 members show no catastrophic staging cliff; explicit commit cost remains small relative to parser work in warm-cache controls."
+  ],
+  "decision": "MECHANISM_STRONGLY_SUPPORTED__DO_NOT_EXPAND_ROLLBACK_FAMILY",
+  "next": "Land only the exact Builder postimage plus focused tests when ordinary source mutation becomes available, then run evaluator-control v8 fresh-child custody/neutrality and the complete same-source archive/tree/bytes/wall/process-tree-RSS/I-O court.",
+  "claim_boundary": "Lower-rung mechanism and causal product-path evidence only. No product/release credit until exact current source is landed and the complete product court executes.",
+  "product_credit": false,
+  "release_credit": false
+}
