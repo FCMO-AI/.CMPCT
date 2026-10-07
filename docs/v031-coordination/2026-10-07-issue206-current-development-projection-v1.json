@@ -1,0 +1,13 @@
+{
+  "schema": "cmpct-v031-issue206-current-development-projection-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "owner": "a4e74034b8d6af79877360864f59ef0d2af69575",
+  "common_base": "0d66e6c7d57fc72f3cd4ea4e992378387bb21090",
+  "builder_preimage": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+  "builder_postimage": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b",
+  "development_drift_since_common_base": "8 commits; only documentation/discovery paths changed, with zero product/test source changes",
+  "decision": "Current development still matches the exact recorded Builder preimage. The transactional Builder fix remains a mechanically clean one-file transplant; the missing decision-changing evidence is focused repository coverage plus v8 package/native custody and same-source product A/B.",
+  "product_credit": false,
+  "release_credit": false
+}
