@@ -1,0 +1,69 @@
+{
+  "schema": "cmpct-v031-issue206-real-zip-transactional-microcourt-v1",
+  "recorded_at": "2026-10-07",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "projection_branch": "agent/phased2-v031-issue206-current-transactional-v1",
+  "projection_head_before_write": "6c50387d1e1b0d257b77186f48431cfaedb0c249",
+  "source_binding": {
+    "codec_make_vzip_recipe_blob": "29526db4203723d83523fc95d074c346b63d7587",
+    "development_builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "owner_builder_blob": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b",
+    "method": "source-faithful transcription of the exact relevant functions/structures from fresh GitHub blobs; not installed-package/native execution"
+  },
+  "courts": {
+    "supported_and_late_unsupported": {
+      "cases": 250,
+      "supported_success_cases": 166,
+      "late_unsupported_cases": 84,
+      "success_state_or_recipe_mismatches": 0,
+      "current_direct_path_mutated_before_late_rejection": 84,
+      "transactional_rollback_passes": 84
+    },
+    "live_identity": {
+      "cases": 200,
+      "failures": 0,
+      "invariants": [
+        "pre-existing Candidate object identity preserved",
+        "pre-existing raw bytes object identity preserved",
+        "pre-existing exact Deflate stream object identity preserved",
+        "successful replay increments existing exact-stream count exactly once",
+        "new extension hint merges without erasing existing hint"
+      ]
+    },
+    "late_crc_exception": {
+      "cases": 120,
+      "current_direct_path_leaks": 120,
+      "transactional_rollback_passes": 120,
+      "exception_detection_failures": 0
+    },
+    "downstream_policy_poison": {
+      "already_reachable_owners": 16,
+      "bytes_per_owner": 7009,
+      "current_direct_before": {
+        "sample_count": 0,
+        "sample_bytes": 0,
+        "dictionary_training_eligible": false
+      },
+      "current_direct_after": {
+        "sample_count": 16,
+        "sample_bytes": 112144,
+        "dictionary_training_eligible": true
+      },
+      "transactional_before": {
+        "sample_count": 0,
+        "sample_bytes": 0,
+        "dictionary_training_eligible": false
+      },
+      "transactional_after": {
+        "sample_count": 0,
+        "sample_bytes": 0,
+        "dictionary_training_eligible": false
+      }
+    }
+  },
+  "decision": "LOWER_RUNG_TRANSACTIONAL_MECHANISM_EVIDENCE_GREEN__DO_NOT_EXPAND_MECHANISM_FAMILY",
+  "interpretation": "Actual ZIP parsing/reconstruction logic reproduces the causal leak and validates the transaction boundary: current direct callbacks can mutate live candidate and downstream dictionary-policy state before late None/exception rejection; owner staging preserves successful semantics and live object ownership while rolling back rejected/exceptional recipes.",
+  "next": "Do not award product credit. The missing information remains exact Builder postimage landing, focused repository tests, fresh-child v8 source/candidate custody, then exact package/native complete-product archive/tree/bytes/wall/process-tree-RSS/I-O A/B.",
+  "product_credit": false,
+  "release_credit": false
+}
