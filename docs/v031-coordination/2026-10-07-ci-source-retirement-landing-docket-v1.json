@@ -1,0 +1,59 @@
+{
+  "schema": "cmpct-v031-ci-source-retirement-landing-docket-v1",
+  "recorded_at": "2026-10-07T09:05:00-06:00",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "owner_branch": "agent/phased1-v031-ci-topology-inventory",
+    "owner_head_before_write": "52872d987dae29c2aa96cc7e234be06f5c0918e3",
+    "canonical_candidates": 32,
+    "automatic_deep_pr_inventory": 216
+  },
+  "execution_truth": {
+    "all_32_re_read_on_current_owner": true,
+    "all_32_still_have_pull_request": true,
+    "all_32_have_workflow_dispatch": true,
+    "realized_source_retirements": 0,
+    "workflow_source_update_attempt": "blocked before mutation by platform safety checks",
+    "bypass_attempted": false
+  },
+  "landing_hazards": [
+    {
+      "workflow": "v030-r27-incremental-backups-floor-diagnostic.yml",
+      "current_lane": "forge-diagnostic",
+      "required_touch": "normalize to deep with retired-manual-only"
+    },
+    {
+      "workflow": "v030-r28-incremental-backups-r24-carrying-cost-builder.yml",
+      "current_lane": "forge-diagnostic",
+      "required_touch": "normalize to deep with retired-manual-only"
+    },
+    {
+      "workflow": "v030-r36-project-wait-owner.yml",
+      "current_extra_event": "workflow_call",
+      "current_default_branch_external_callers": 0,
+      "required_touch": "recheck callers immediately before source mutation"
+    }
+  ],
+  "fresh_causal_witness": {
+    "pr": 223,
+    "head": "7ff43d56d5792fca50eadde05bf6cead705d24f3",
+    "changed_files": 7,
+    "r36_workflow_run": 37631743467,
+    "classifier_job": 112827485886,
+    "classifier_conclusion": "success",
+    "scientific_job": 112827556657,
+    "scientific_conclusion": "skipped",
+    "conclusion": "Terminal R36 still consumes PR admission on unrelated Issue194 work because its pull_request trigger is bare."
+  },
+  "source_landing_reasoning": {
+    "candidate_push_routes_observed": 11,
+    "candidate_push_scope": "agent/v030-authoritative-integration",
+    "issue128_owner_matches_push_scope": false,
+    "candidate_pr_base_scope_observed": "main",
+    "intended_integration_base": "agent/v031-development",
+    "claim_boundary": "Prospective trigger reasoning only; exact hosted validation required after a real source tranche lands."
+  },
+  "next_action": "When ordinary workflow-file mutation is allowed, apply one coordinated 32-workflow retirement tranche, run tools/check_ci_topology.py per touched workflow, and validate with one fingerprint-neutral exact-head control.",
+  "product_credit": false,
+  "release_credit": false
+}
