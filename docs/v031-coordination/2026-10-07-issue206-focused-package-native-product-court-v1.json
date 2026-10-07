@@ -1,0 +1,104 @@
+{
+  "schema": "cmpct-v031-issue206-focused-package-native-product-court-v1",
+  "recorded_at": "2026-10-07",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "projection_branch": "agent/phased2-v031-issue206-current-transactional-v1",
+    "projection_head_before_write": "16bf87216cbbcd95faf7d350f382cb9506ac9ef9",
+    "current_builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "candidate_builder_blob": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b",
+    "codec_blob": "29526db4203723d83523fc95d074c346b63d7587",
+    "evaluator_control_v8_blob": "82eb21628b17b38a4b449e679ee429001454e016"
+  },
+  "package_native_custody": {
+    "github_run": 35674245477,
+    "artifact_id": 10672741320,
+    "artifact_digest": "sha256:409df683bc2607b616ea5b37303a5eb5a161ddb4e67b9836be7877108d514a6e",
+    "wheel_sha256": "4b4ce3b0e713fc6e91c6b5c343cbebee561fabec4a69fd1f4bcc2a1a4d133d50",
+    "native_core_sha256": "439045987871fdf167ac241b1ca0250dbc2058345392fec15629b1c080f86a7e",
+    "native_dynamic_zstd_dependency": false,
+    "native_source_identity_current_development": {
+      "Cargo.lock": "3be7a855b382dabfa5927c1a614dd3a16913a651",
+      "Cargo.toml": "f40fd54f123c75111e0ae88c07bf719489547147",
+      "codec_abi.rs": "75205fbd91c5beffdf0657c79689ff40cdcff516",
+      "native_codec.py": "c928e69e1513fa1f7898e4016cbccd8bda3dfbec"
+    },
+    "boundary": "The preserved wheel metadata is historical 0.29.0. Before execution, Python Builder/codec source was reconciled byte-for-byte to the current v0.31 Git blobs above; the native source/dependency graph is byte-identical to current development and the package-owned native binary has no ambient libzstd dependency. This is focused current-source/package-native mechanism evidence, not a rebuilt current-v0.31 wheel or release authority."
+  },
+  "frozen_law": {
+    "pairs_per_arm": 4,
+    "confirmed_create_slowdown": ">5% relative AND >3ms absolute",
+    "matrix": "docs/v031-coordination/2026-10-07-issue206-product-court-minimal-matrix-v1.json"
+  },
+  "courts": {
+    "success-single-high-member": {
+      "archive_bytes_base": 364283,
+      "archive_bytes_candidate": 364283,
+      "archive_sha_identity": true,
+      "tree_exact": true,
+      "create_ratio": 1.0089198222569817,
+      "create_delta_seconds": 0.0008956759999136921,
+      "confirmed_slowdown": false,
+      "rss_ratio_max": 1.000505227157903,
+      "decision": "PASS_NEUTRAL_SUCCESS_PATH"
+    },
+    "late-unsupported-policy-poison": {
+      "archive_bytes_base": 3342,
+      "archive_bytes_candidate": 1484,
+      "archive_delta_bytes": -1858,
+      "archive_delta_pct": -55.59545182525434,
+      "base_candidates": 18,
+      "candidate_candidates": 1,
+      "base_dictionary_bytes": 144,
+      "candidate_dictionary_bytes": 0,
+      "tree_exact": true,
+      "create_ratio": 0.24585297001337747,
+      "rss_ratio_max": 0.9809890506557575,
+      "decision": "PASS_STRICT_PRODUCT_BENEFIT"
+    },
+    "sequential-seven-mixed": {
+      "archive_bytes_base": 93026,
+      "archive_bytes_candidate": 65018,
+      "archive_delta_bytes": -28008,
+      "archive_delta_pct": -30.107711822501237,
+      "base_candidates": 175,
+      "candidate_candidates": 103,
+      "recipe_count_both": 4,
+      "tree_exact": true,
+      "create_ratio": 0.7476678909733226,
+      "rss_ratio_max": 1.0023103112840468,
+      "decision": "PASS_COMPOSITION_BENEFIT"
+    },
+    "eight-archive-unreachable-negative": {
+      "archive_bytes_base": 43114,
+      "archive_bytes_candidate": 43114,
+      "archive_sha_identity": true,
+      "tree_exact": true,
+      "base_candidates": 1,
+      "candidate_candidates": 1,
+      "recipe_count_both": 0,
+      "create_ratio": 0.9996765252770271,
+      "rss_ratio_max": 1.000569777379838,
+      "decision": "PASS_UNREACHABLE_NEUTRAL_CONTROL"
+    }
+  },
+  "focused_tests": {
+    "candidate": "7 passed",
+    "current_direct_control": "6 failed / 1 passed as expected",
+    "interpretation": "The focused test surface is discriminating rather than green by construction."
+  },
+  "fresh_child_custody": {
+    "base_builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "candidate_builder_blob": "6e9e3bb0e3ae65b2321a28c8fa0d31ff7ab2ee6b",
+    "base_codec_blob": "29526db4203723d83523fc95d074c346b63d7587",
+    "candidate_codec_blob": "29526db4203723d83523fc95d074c346b63d7587",
+    "native_library_sha256_both": "439045987871fdf167ac241b1ca0250dbc2058345392fec15629b1c080f86a7e",
+    "result": "PASS for arm-specific package roots",
+    "remaining_v8_gate": "Canonical R24PrebuildProcess shadow-neutrality has not executed."
+  },
+  "decision": "FOCUSED_PRODUCT_COURT_POSITIVE__TRANSACTIONAL_VZIP_EARNS_PRODUCTIZATION_SIGNAL",
+  "next": "Do not invent another rollback/mark-and-sweep/event-log mechanism. Land the exact one-helper/one-callsite Builder postimage plus focused tests, then independently reproduce this frozen matrix under repository-hosted evaluator-control-v8 custody including R24PrebuildProcess shadow-neutrality.",
+  "claim_boundary": "Focused mechanism product evidence only. No release credit; canonical development still lacks the Builder patch; repository-hosted v8 promotion authority remains pending.",
+  "product_credit": "FOCUSED_MECHANISM_ONLY",
+  "release_credit": false
+}
