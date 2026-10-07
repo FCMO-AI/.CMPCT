@@ -1,0 +1,21 @@
+{
+  "schema": "cmpct-v031-pr221-ci-reconciliation-v2",
+  "recorded_at": "2026-10-06",
+  "supersedes": "docs/v031-coordination/2026-10-06-pr221-ci-reconciliation-v1.json",
+  "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "new_counterevidence": {
+    "phase3_postrelease_review_blob": "56f6050aad42eca98bbe645ff8d5377062b278e9",
+    "finding": "PR221 follow-up already concluded that after v0.30 publication, version-specific v0.30 promotion authorities should preferably retire to manual replay unless a live postrelease claim needs automatic execution. Generic zip-parity/public-proof stay live; old final promotion routing should not be perfected by default.",
+    "consequence": "Do not treat wholesale restoration of the 85-glob v0.30 automatic authority surface as the settled v0.31 repair."
+  },
+  "root_cause": {
+    "fingerprint_regression_commit": "93896324210c3e1c0bbbe0d5f69b89f8c8bdd4fe",
+    "fingerprint_change": "81 globs -> 10 globs while strict receipts/tasks were retired",
+    "attribution_regression_commit": "08d7dac391c4e6d83e17eaab36ea95a3f3fc3290",
+    "attribution_change": "SURFACE_REVISION 0.29.k -> 0.30.a without generalizing the old literal regression test"
+  },
+  "revised_decision": "FRAME_REVIEW_REQUIRED_BEFORE_SOURCE_FIX",
+  "next": "First separate still-live generic regression/custody invariants from obsolete v0.30 promotion-only invariants. Then either restore only live fingerprint/manual-replay custody or retire stale automatic v0.30 assertions explicitly. Never delete a failing test merely to green CI; replace it only with a stronger postrelease invariant.",
+  "product_credit": false,
+  "release_credit": false
+}
