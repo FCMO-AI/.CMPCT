@@ -1,0 +1,26 @@
+{
+  "schema": "cmpct-v031-ci-retirement-manifest-source-identity-correction-v1",
+  "observed_at_utc": "2026-10-08T08:10:00Z",
+  "repository": "FCMO-AI/.CMPCT",
+  "owner_pr": 224,
+  "owner_branch": "agent/phased1-v031-ci-topology-inventory",
+  "owner_head_observed": "ab18170c364b3bb1cdf332ada732262ce23bc9a6",
+  "baseline_head_observed": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+  "source": "GitHub Contents API directory listing and per-file source on both branches",
+  "prior_local_artifact": "cmpct_run198/manifest32.tsv",
+  "candidates_checked": 32,
+  "matching_git_blob_ids": 31,
+  "discrepancy": {
+    "path": ".github/workflows/v030-r4-office-sfv4-all-member-skeleton.yml",
+    "prior_local_manifest_blob": "a9e6e1cd89e8ceb26c5c1392c1eed7f28c1f9f41",
+    "current_owner_and_development_blob": "a9e6e1cd89e8ceb26c5c1392c1eed7f28c1c9f41",
+    "classification": "prior manifest transcription error, not an observed Git branch change",
+    "correction": "replace only this one blob ID in the proposed retirement staging manifest; preserve source content, trigger/criterion law and all other entries"
+  },
+  "consequences": "The current run198 staging manifest would fail its fail-closed SHA preflight on at least this one source; do not call 32-file staging validated until its manifest is reconciled.",
+  "material_work_landed": false,
+  "source_workflows_retired": 0,
+  "product_credit": false,
+  "release_credit": false,
+  "next_action": "Reconcile manifest at current Git head, re-fetch all 32 before any mutation, stage atomically, run official CI topology checker and relevant tests, then a fingerprint-neutral hosted control."
+}
