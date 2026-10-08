@@ -1,0 +1,82 @@
+{
+  "schema": "cmpct-v031-ci-analytics-effort-retirement-v1",
+  "recorded_at": "2026-10-07",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "issue128_owner_before": "agent/phased1-v031-ci-topology-inventory"
+  },
+  "question": "Which terminal v0.30 Analytics high-effort diagnostics still need automatic PR ownership?",
+  "durable_terminal_result": {
+    "path": "docs/V030_ANALYTICS_MARGIN_CPU_ORACLE_RESULT_2026-09-12.md",
+    "blob": "a4860342b6949f2821394a5bf6856dc3eaf857a8",
+    "source": "ce52c04223fe73b097030bcbccaf2df069d94b77",
+    "run": 34731164461,
+    "result_job": 103654092561,
+    "artifact": 10308479350,
+    "artifact_digest": "sha256:ca91f84257771889812bf31da6e47bdd9c48273bacc8929bd03ff96d996a5d33",
+    "accepted_v029_bytes": 6135172,
+    "byteplane4_strong_bytes": 6063752,
+    "spendable_margin_bytes": 71420,
+    "selected_packs": 11,
+    "byte_giveback": 67780,
+    "cpu_removed_s": 1.724148013,
+    "cpu_remaining_s": 4.056003831,
+    "cpu_removal_fraction": 0.298288,
+    "continuation_hurdle_fraction": 0.7,
+    "verdict": "MARGIN_INSUFFICIENT_RETIRE_SKIP_ONLY"
+  },
+  "retire_to_manual_replay": [
+    {
+      "workflow": ".github/workflows/v030-analytics-reusable-zstd-context.yml",
+      "blob": "2e59f8a8f498d2b0febf218a14f13a916abdef11",
+      "reason": "Byte-identical reusable libzstd context/buffer state recovered only about 0.6% wall time; terminal margin result explicitly retires context-allocation micro-optimization as a primary route."
+    },
+    {
+      "workflow": ".github/workflows/v030-analytics-searchlog6-ablation.yml",
+      "blob": "51cca3a13bb124f13aa87bf12d16f55bcabe56ff",
+      "reason": "searchLog-1 gave back 48,963 B but recovered only about 7.2% CPU, below the frozen 20% hurdle; terminal margin result forbids deeper searchLog tuning as primary route."
+    },
+    {
+      "workflow": ".github/workflows/v030-analytics-l19-cost-attribution.yml",
+      "blob": "11a47d9e5be95b524086552f22f1bc1f081dc216",
+      "reason": "Per-pack attribution is a consumed diagnostic: top 12 of 45 packs own only about one third of measured L19 CPU, falsifying the >=70% concentration route."
+    },
+    {
+      "workflow": ".github/workflows/v030-analytics-margin-cpu-oracle.yml",
+      "blob": "68a99014467b35359cfb6c4782c9629c95ab017c",
+      "reason": "Exact omniscient margin oracle is terminal: even perfect post-result knowledge removes only 29.8288% CPU vs the frozen 70% continuation hurdle."
+    }
+  ],
+  "positive_successor_control": {
+    "result": "docs/V030_ANALYTICS_BYTEPLANE4_LEVEL17_TRANSFER_RESULT_2026-09-12.md",
+    "result_blob": "094503cc04763bd00a1c5a62d160206213129976",
+    "source": "673f65c74bd016fb589d23cdc75ac8b62dff78e6",
+    "run": 34731374179,
+    "verdict": "LEVEL17_STRUCTURAL_CROSSOVER",
+    "candidate_bytes": 6134444,
+    "accepted_v029_bytes": 6135172,
+    "lead_vs_v029_bytes": 728,
+    "candidate_verified_create_s": 2.723128948,
+    "direct_l19_verified_create_s": 6.120821358,
+    "workflow": ".github/workflows/v030-analytics-byteplane4-level17-transfer.yml",
+    "workflow_blob": "487551a0b0034c8e89e350702490e131ea4c1fe5",
+    "event_shape": "path-scoped authority-branch push + workflow_dispatch; no pull_request",
+    "meaning": "Positive research remains reproducible without permanent PR admission."
+  },
+  "decision": "RETIRE_FOUR_TERMINAL_ANALYTICS_EFFORT_PR_OWNERS_TO_MANUAL_REPLAY",
+  "mutation_contract": {
+    "add_marker": "# ci-auto-policy: retired-manual-only",
+    "event_surface_after": "workflow_dispatch only",
+    "preserve": [
+      "benchmark source",
+      "durable results",
+      "artifact custody",
+      "manual replay"
+    ],
+    "validate": "tools/check_ci_topology.py"
+  },
+  "canonical_backlog_after_receipt": 32,
+  "source_retirement_landed": false,
+  "product_credit": false,
+  "release_credit": false
+}

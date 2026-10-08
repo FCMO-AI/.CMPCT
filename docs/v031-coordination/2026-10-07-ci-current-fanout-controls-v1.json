@@ -1,0 +1,38 @@
+{
+  "schema": "cmpct-v031-ci-current-fanout-controls-v1",
+  "recorded_at": "2026-10-07",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "issue128_owner_before": "6d92d70215d177f0105874db7f0c068effcc1bd5",
+    "issue": 128
+  },
+  "controls": [
+    {
+      "head": "56e6f40f5cb18e4bd04d420d563e46a73f636892",
+      "change": "docs/discovery/STATE.json only",
+      "actions_total_count": 240,
+      "interpretation": "One-file docs change on the long-lived authority PR still instantiates historical PR workflows; latest-head classifiers cannot recover admission capacity."
+    },
+    {
+      "head": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+      "change": "two-file exact-Deflate product merge",
+      "actions_total_count": 292,
+      "prior_issue128_comment_count": 290,
+      "interpretation": "Current API count is 292; use exact head/time-bound count rather than treating the earlier 290 comment as immutable."
+    },
+    {
+      "pr": 205,
+      "head": "012951c8e8cd578e10790d8a39915893f3d16362",
+      "state": "closed_unmerged",
+      "changed_files": 42,
+      "commits": 340,
+      "actions_total_count": 15,
+      "all_observed_exact_head_runs_success": true,
+      "interpretation": "Focused current-head control remains an order of magnitude smaller than long-lived accumulated-diff authority reproductions."
+    }
+  ],
+  "conclusion": "ADMISSION_TOPOLOGY_REMAINS_DOMINANT__COUNTS_MUST_BIND_EXACT_HEAD_AND_OBSERVATION",
+  "current_architecture_target": "roughly 3-6 relevant workflows per ordinary change",
+  "product_credit": false,
+  "release_credit": false
+}

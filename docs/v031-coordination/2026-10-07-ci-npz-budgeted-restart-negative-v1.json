@@ -1,0 +1,54 @@
+{
+  "schema": "cmpct-v031-ci-npz-budgeted-restart-negative-v1",
+  "recorded_at": "2026-10-07",
+  "authority": {
+    "development": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "issue128_owner_before": "831c2b2c9d4e4c4e779416a7189b6365e5bb4ab3"
+  },
+  "question": "Should the historical v030 R4 budgeted NPZ-owner independent-history restart falsifier retain automatic PR ownership?",
+  "exact_scientific_receipt": {
+    "source": "e93d2f489c66a878f018b1e28917e1a471cf5e75",
+    "workflow": ".github/workflows/v030-r4-npz-owner-budgeted-restart-locality.yml",
+    "run": 34668688160,
+    "classifier_job": 103485745817,
+    "result_job": 103485762727,
+    "artifact": 10290241030,
+    "artifact_digest": "sha256:d37faab94552a17c8ccb601642b7d02d8b190ba890980b9db1cf8e6ec2d9b4e2",
+    "selection_feasible": false,
+    "candidate_restart_points": 937,
+    "selected_restart_points": 1,
+    "coverage_end": 29885,
+    "logical_npy_bytes": 3840128,
+    "selection_failure_reason": "reconstruction budget cannot cover output beyond 29885",
+    "npz_owner_bytes": 4453187,
+    "restart_state_bytes": 3003,
+    "accepted_v029_bytes": 6135172,
+    "exact_npz_owner_tree": true,
+    "reconstruction_budget_covers_stream": false,
+    "supported_for_product_prototype": false
+  },
+  "predecessor": {
+    "durable_result": "docs/v030-rnd/V030_R4_NPZ_OWNER_RESTART_LOCALITY_NEGATIVE_2026-09-11.md",
+    "fixed_27k_candidate_bytes": 6206721,
+    "accepted_v029_bytes": 6135172,
+    "margin_vs_v029_bytes": -71549,
+    "max_physical_amplification": 8.62744140625,
+    "max_reconstruction_amplification": 9.052978515625,
+    "terminal": "REJECT_FIXED_27K_INDEPENDENT_HISTORY_RESTARTS; INVESTIGATE_SHARED/HIERARCHICAL_HISTORY_ONLY WITH PREREGISTERED HELD-OUT LAW"
+  },
+  "decision": "RETIRE_AUTOMATIC_PR_OWNERSHIP_TO_MANUAL_REPLAY",
+  "scope": "The fixed-span and budget-driven independent-history restart placement family is durably negative under the inherited 8x law. Preserve benchmark/workflow for workflow_dispatch exact replay. Reopen only with a separately motivated shared/hierarchical history mechanism.",
+  "mutation_contract": {
+    "add_marker": "# ci-auto-policy: retired-manual-only",
+    "event_surface_after": "workflow_dispatch only",
+    "preserve": [
+      "benchmark source",
+      "frozen thresholds",
+      "artifact/result custody",
+      "manual replay"
+    ],
+    "validate": "tools/check_ci_topology.py"
+  },
+  "product_credit": false,
+  "release_credit": false
+}
