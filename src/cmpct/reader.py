@@ -555,6 +555,13 @@ class CMPCT:
                 cdh=ZCDH.pack(0x02014b50,(3<<8)|20,20,flags,method,ztime,zdate,crc,csize,usize,len(name),0,0,0,0,ext,local_off)
                 f.write(cdh);f.write(name);offset+=len(cdh)+len(name)
             cd_size=offset-cd_start;n=len(entries)
-            if n>0xffff or cd_start>0xffffffff or cd_size>0xffffffff:raise OverflowError('ZIP64 central directory not implemented in fast endpoint')
-            eocd=ZEOCD.pack(0x06054b50,0,0,n,n,cd_size,cd_start,0);f.write(eocd)
+            if cd_start>0xffffffff or cd_size>0xffffffff:
+                raise OverflowError('ZIP64 central-directory spans need a separate writer')
+            if n>0xffff:
+                # ZIP64 is required for the entry count even when all byte spans fit in 32 bits.
+                # Preserve every direct Deflate stream and central record; add only the ZIP64 tail.
+                f.write(struct.pack('<IQHHIIQQQQ',0x06064b50,44,45,45,0,0,n,n,cd_size,cd_start))
+                f.write(struct.pack('<IIQI',0x07064b50,0,offset,1))
+            classic_count=min(n,0xffff)
+            eocd=ZEOCD.pack(0x06054b50,0,0,classic_count,classic_count,cd_size,cd_start,0);f.write(eocd)
         return out
