@@ -121,19 +121,33 @@ def _wav_parts(raw:bytes):
     start,end=data;return raw[:start],raw[start:end],raw[end:],ch,rate,bits
 
 def wavflac_compress(raw:bytes):
-    np,sf=_audio_modules();parts=_wav_parts(raw)
+    # A WAV wrapper is only a candidate for the optional FLAC representation.
+    # Reject unsupported formats before importing the heavy audio dependencies.
+    parts=_wav_parts(raw)
     if not parts:return None
     prefix,pcm,suffix,ch,rate,bits=parts
-    if bits==16:arr=np.frombuffer(pcm,dtype='<i2');sub='PCM_16'
-    elif bits==32:arr=np.frombuffer(pcm,dtype='<i4');sub='PCM_32'
-    elif bits==8:
-        # WAV PCM8 is unsigned while libsndfile integer arrays are signed; not enabled by the current exact WAV-FLAC path.
+    # Current libsndfile FLAC writing does not support PCM_32; using it aborts
+    # archive creation even though ordinary CMPCT codecs can store it exactly.
+    # PCM8/PCM24 also need distinct bit-preserving paths that are not enabled.
+    if bits!=16:return None
+    # The tested libsndfile writer accepts 1..8 channels and rates 1..655350;
+    # this is backend capability, not a universal FLAC specification claim.
+    if not (1<=ch<=8 and 1<=rate<=655350):return None
+    # Partial frames and zero-frame streams are not safe FLAC candidates.
+    if not pcm or len(pcm)%(2*ch):return None
+    try:
+        np,sf=_audio_modules()
+    except (ImportError,OSError):
+        # Audio libraries are optional; other lossless candidates remain valid.
         return None
-    else:
-        # 24-bit exact handling is deliberately deferred rather than silently risking altered bytes.
-        return None
+    arr=np.frombuffer(pcm,dtype='<i2')
     if ch>1:arr=arr.reshape(-1,ch)
-    bio=io.BytesIO();sf.write(bio,arr,rate,format='FLAC',subtype=sub,compression_level=1.0)
+    bio=io.BytesIO()
+    try:
+        sf.write(bio,arr,rate,format='FLAC',subtype='PCM_16',compression_level=1.0)
+    except (OSError,ValueError,RuntimeError,OverflowError):
+        # Backend refusal must not abort otherwise valid archive creation.
+        return None
     meta=msgpack.packb([prefix,suffix,ch,rate,bits],use_bin_type=True)
     return bio.getvalue(),meta
 def wavflac_decompress(comp:bytes, meta:bytes)->bytes:
