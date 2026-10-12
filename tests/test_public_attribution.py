@@ -17,7 +17,8 @@ def read(path: str) -> str:
 
 
 def test_surface_revision_records_attribution_campaign() -> None:
-    assert read("SURFACE_REVISION").strip() == "0.29.k"
+    # v0.30.0 began a new surface track; attribution itself must survive that reset.
+    assert read("SURFACE_REVISION").strip() == "0.30.a"
 
 
 def test_repository_facade_preserves_quiet_maker_credit() -> None:
