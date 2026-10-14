@@ -494,6 +494,9 @@ class CMPCT:
             if (m!=BMAGIC or c!=codec or rus!=us or rcs!=cs or rml!=ml
                     or sha(raw)!=bytes(rh)):
                 raise IOError(f'physical SHA-256 verification failure: blob {idx}')
+            # _blob caches small decoded records. Do not let a full physical sweep retain every
+            # record in RAM before the logical pass; nested dictionary caches may still be reused.
+            with self._cache_lock:self.cache.pop(idx,None)
         n=0
         for row in self.files:
             if row[1]==K_DIR:continue

@@ -69,3 +69,33 @@ def test_strong_verify_checks_orphan_physical_record() -> None:
                      include_member=False)
     with pytest.raises(OSError, match="physical SHA-256"):
         reader.verify()
+
+
+
+def test_physical_sweep_does_not_retain_every_small_blob() -> None:
+    blocks = [bytes([i, 0x55]) * 12 for i in range(1, 70)]
+    reader = _reader(b"", b"", include_member=False)
+    raw_records = []
+    offsets = []
+    pos = 0
+    for block in blocks:
+        record = BHDR.pack(
+            BMAGIC, 0, 0, 0, len(block), len(block), 0,
+            binascii.crc32(block) & 0xFFFFFFFF, _sha(block),
+        ) + block
+        offsets.append((pos, len(block), len(block), 0, 0))
+        raw_records.append(record)
+        pos += len(record)
+    reader.mm = b"".join(raw_records)
+    reader.blobs = offsets
+    max_cached = [0]
+
+    def fetch(index: int) -> bytes:
+        reader.cache[index] = blocks[index]
+        max_cached[0] = max(max_cached[0], len(reader.cache))
+        return blocks[index]
+
+    reader._blob = fetch
+    assert reader.verify() == 0
+    assert max_cached == [1]
+    assert reader.cache == {}
