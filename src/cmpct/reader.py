@@ -481,10 +481,26 @@ class CMPCT:
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
                 except OSError:pass
     def verify(self):
+        # A strong verify must inspect the current committed physical records, not a CRC-only
+        # decoded cache from an earlier ordinary read. This is not an atomic snapshot against
+        # external writers: callers must keep the archive immutable during verification.
+        with self._cache_lock:self.cache.clear()
+        self.vcache.clear()
+        for idx,(off,us,cs,codec,ml) in enumerate(self.blobs):
+            raw=self._blob(idx)
+            pos=self.record_base+off
+            m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+            # Whole-object identity also covers bytes in a pack that no logical member references.
+            if (m!=BMAGIC or c!=codec or rus!=us or rcs!=cs or rml!=ml
+                    or sha(raw)!=bytes(rh)):
+                raise IOError(f'physical SHA-256 verification failure: blob {idx}')
         n=0
         for row in self.files:
             if row[1]==K_DIR:continue
-            raw=self.read(row[0]);want=self.file_sha256(row[0])
+            raw=self.read(row[0])
+            # file_sha256(S_PACK) may hash read(name) itself; that circular proof can accept a
+            # wrong same-length segment. Prefer the independent digest in the authenticated index.
+            want=bytes(row[5]) if row[5] is not None else self.file_sha256(row[0])
             if sha(raw)!=want:raise IOError(f'SHA-256 verification failure: {row[0]}')
             n+=1
         return n
