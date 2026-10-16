@@ -33,6 +33,13 @@ def main() -> None:
     assert data["project"]["surface_revision"] == surface
     assert evidence.get("schema") == "cmpct-public-evidence-v1"
     assert evidence.get("project_version") == version
+    # Footnote: historical research can remain visible after a core checkpoint, but its
+    # measured version/format must survive normalization separately from serving identity.
+    frontier = data.get("frontier") or {}
+    provenance = evidence.get("provenance") or {}
+    assert provenance.get("project_version") == frontier.get("project_version")
+    assert provenance.get("canonical_format_revision") == frontier.get("canonical_format_revision")
+    assert evidence.get("canonical_format_revision") == data["project"]["format_revision"]
     assert (out / "surface-revision.txt").read_text(encoding="utf-8").strip() == surface
     assert (out / ".nojekyll").exists(), "static branch publication must bypass Jekyll"
 

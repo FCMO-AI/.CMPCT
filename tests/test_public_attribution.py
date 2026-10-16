@@ -17,7 +17,16 @@ def read(path: str) -> str:
 
 
 def test_surface_revision_records_attribution_campaign() -> None:
-    assert read("SURFACE_REVISION").strip() == "0.29.k"
+    from tools.check_version_discipline import alpha_value, parse_surface
+
+    major, minor, suffix = parse_surface(read("SURFACE_REVISION"))
+    project = tomllib.loads(read("pyproject.toml"))["project"]
+    assert (major, minor) == tuple(map(int, project["version"].split(".")[:2]))
+    # Footnote: attribution landed at 0.29.k. A later core line resets its surface to .a;
+    # preserve that campaign's floor without pinning future releases to its old identity.
+    assert (major, minor) >= (0, 29)
+    if (major, minor) == (0, 29):
+        assert alpha_value(suffix) >= alpha_value("k")
 
 
 def test_repository_facade_preserves_quiet_maker_credit() -> None:
