@@ -266,6 +266,8 @@ def _load_effective_index(f, archive_size: int, limits: ParserLimits):
     # Mirror reader recovery semantics: newest valid committed footer wins; an incomplete/corrupt tail
     # may be ignored in favor of the previous committed generation.
     for footer_pos in _footer_candidates(f, archive_size):
+        if footer_pos < record_base + data_span:
+            continue  # Primary blob bytes cannot contain committed journal footers.
         recovered = _index_from_footer(f, archive_size, footer_pos, limits)
         if recovered is not None:
             index, depth = recovered

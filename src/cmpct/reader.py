@@ -86,13 +86,20 @@ class CMPCT:
         # Scan backward for the newest valid commit footer. A partial append after an older footer
         # is harmless: the older footer remains discoverable and its hash/parent chain still validates.
         self.f.seek(0,2);size=self.f.tell();block=1024*1024;pos=size;carry=b'';magic=FMAGIC
+        # Footer-like bytes within the primary physical data span are ordinary
+        # member bytes, not committed journal metadata.
+        self.f.seek(0);header=self.f.read(HDR.size);primary_data_end=0
+        if len(header)==HDR.size:
+            m,v,fl,cs,us,ds,ih=HDR.unpack(header)
+            if m==MAGIC and v==VERSION and not fl and HDR.size+cs<=size and ds<=size-(HDR.size+cs):
+                primary_data_end=HDR.size+cs+ds
         while pos>0:
             n=min(block,pos);pos-=n;self.f.seek(pos);chunk=self.f.read(n)+carry;search=len(chunk)
             while True:
                 i=chunk.rfind(magic,0,search)
                 if i<0:break
                 fp=pos+i
-                if fp+FTR.size<=size:
+                if primary_data_end <= fp and fp+FTR.size<=size:
                     got=self._index_from_footer(fp)
                     if got is not None:return got[0],fp,got[1]
                 search=i
