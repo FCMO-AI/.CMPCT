@@ -1,0 +1,21 @@
+{
+  "schema": "cmpct-v031-bdc-frozen-court-comparator-attestation-gap-v1",
+  "recorded_at": "2026-10-16",
+  "observed_owner": "agent/v031-bounded-drift-coordered-court@c3cdb0888d2444628412624df09ddbfc1695154c",
+  "source": "benchmarks/v031_bounded_drift_coordered_court.py@2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+  "frozen_prereg": "benchmarks/history/2026-10-04-v031-bounded-drift-coordered-court-prereg.json@f8e53f058a1c123ea4665b730c45f5619eb93d5f",
+  "observed_invariant_gap": "_row records solid_zstd19.matches_historical_current_fingerprint_bytes, but run() computes passed using only each row's strict_size_win plus generic_fs_hostile.passed; thus a same-run external comparator fingerprint drift can coexist with returned passed=true and ADVANCE_ONE_PRODUCTIZATION_RUNG.",
+  "constructive_counterexample": "Two true strict_size_win flags plus generic_fs_hostile.passed=true, with Boundary same-run Zstd-19 archive_bytes=73200 instead of frozen 73097 and corresponding matches_historical_current_fingerprint_bytes=false. Frozen run() still declares passed=true when mocked row outputs hold; this is a receipt/evaluator false-green, not a measured CMPCT size loss.",
+  "mandatory_external_control_bytes": {
+    "01_shifted_versions": 1694674,
+    "03_boundary_churn": 73097
+  },
+  "disposition": "EVIDENCE_CUSTODY_GAP__FROZEN_SOURCE_UNCHANGED",
+  "required_route": "Execute frozen benchmark and independent fail-closed receipt validator in same trustworthy exact-source hosted job; validate both historical Zstd-19 byte controls before interpreting green. Also verify seven exact source blobs, filesystem semantics, locality, hostile gate and actual complete byte deltas.",
+  "local_detector_tests": "17 of 17 deterministic unittest methods pass on detached validator; 16 held-out forged comparator/fingerprint perturbations rejected; no real frozen scientific A/B run performed.",
+  "scientific_result": "UNEXECUTED",
+  "product_credit": false,
+  "release_credit": false,
+  "do_not_do": "Do not modify the frozen benchmark/prereg or weaken comparator, source identity, thresholds, or product gates merely to make an evaluator pass.",
+  "next": "Land tested detached validator plus hosted exact-source route when legitimately writable; otherwise preserve local reproducible validator without claiming hosted scientific evidence."
+}
