@@ -209,6 +209,7 @@ impl Archive {
                 "trailing bytes after root index object".into(),
             ));
         }
+        reject_ambiguous_maps(&index)?;
         let blobs = parse_blobs(&index, data_span)?;
         let dict_blob = parse_dictionary_blob(&index, &blobs)?;
         let entries = parse_entries(&index, &blobs)?;
@@ -703,6 +704,64 @@ fn le_u32(bytes: &[u8]) -> u32 {
 
 fn le_u64(bytes: &[u8]) -> u64 {
     u64::from_le_bytes(bytes.try_into().expect("fixed-width header slice"))
+}
+
+/// Reject duplicate MessagePack keys before the native reader interprets an index.
+///
+/// An authenticated revision-24 index can otherwise mean different things to
+/// different readers: Python previously kept the final key occurrence, while
+/// this reader's map_field() selects the first. Reject ambiguity recursively,
+/// including maps inside storage recipes and future optional metadata.
+fn reject_ambiguous_maps(index: &Value) -> Result<(), CmpctError> {
+    let mut pending = vec![index];
+    while let Some(node) = pending.pop() {
+        match node {
+            Value::Map(pairs) => {
+                // Match the Python reference decoder's strict string/binary-key
+                // policy; a separate set per type preserves their distinction.
+                let mut text_keys = HashSet::with_capacity(pairs.len().min(65_536));
+                let mut byte_keys = HashSet::with_capacity(pairs.len().min(65_536));
+                for (key, value) in pairs {
+                    match key {
+                        Value::String(s) => {
+                            let name = s.as_str().ok_or_else(|| {
+                                CmpctError::Schema("invalid UTF-8 MessagePack map key".into())
+                            })?;
+                            if !text_keys.insert(name) {
+                                return Err(CmpctError::Schema(
+                                    "duplicate MessagePack map key".into(),
+                                ));
+                            }
+                        }
+                        Value::Binary(bytes) => {
+                            if !byte_keys.insert(bytes.as_slice()) {
+                                return Err(CmpctError::Schema(
+                                    "duplicate MessagePack map key".into(),
+                                ));
+                            }
+                        }
+                        _ => {
+                            return Err(CmpctError::Schema(
+                                "invalid MessagePack map key type".into(),
+                            ))
+                        }
+                    }
+                    if matches!(value, Value::Map(_) | Value::Array(_)) {
+                        pending.push(value);
+                    }
+                }
+            }
+            Value::Array(values) => {
+                for value in values {
+                    if matches!(value, Value::Map(_) | Value::Array(_)) {
+                        pending.push(value);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 fn map_field<'a>(value: &'a Value, key: &str) -> Result<&'a Value, CmpctError> {
@@ -1429,6 +1488,36 @@ pub unsafe extern "C" fn cmpct_entry_read_range(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn authenticated_messagepack_maps_have_unique_keys() {
+        let repeated = Value::Map(vec![
+            (Value::from("blobs"), Value::from(1u64)),
+            (Value::from("blobs"), Value::from(2u64)),
+        ]);
+        assert!(reject_ambiguous_maps(&repeated).is_err());
+
+        let nested = Value::Map(vec![(
+            Value::from("storage"),
+            Value::Array(vec![Value::Map(vec![
+                (Value::Binary(vec![0x00, 0xff]), Value::from(1u64)),
+                (Value::Binary(vec![0x00, 0xff]), Value::from(2u64)),
+            ])]),
+        )]);
+        assert!(reject_ambiguous_maps(&nested).is_err());
+
+        let invalid_key = Value::Map(vec![(Value::from(1u64), Value::Nil)]);
+        assert!(reject_ambiguous_maps(&invalid_key).is_err());
+
+        let valid = Value::Map(vec![
+            (Value::from("blobs"), Value::Array(vec![])),
+            (Value::from("files"), Value::Map(vec![
+                (Value::Binary(vec![0x61]), Value::from(1u64)),
+                (Value::from("a"), Value::from(2u64)),
+            ])),
+        ]);
+        assert!(reject_ambiguous_maps(&valid).is_ok());
+    }
 
     #[test]
     fn canonical_path_rejects_aliases_and_traversal() {
