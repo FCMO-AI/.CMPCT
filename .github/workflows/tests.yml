@@ -45,13 +45,15 @@ jobs:
           python -m pip install -e '.[test,audio]'
 
       - name: Run regression suite
+        id: regression
         run: |
           mkdir -p test-artifacts
           set -o pipefail
           python -m pytest -q 2>&1 | tee test-artifacts/pytest.txt
 
       - name: Retain regression diagnostic
-        if: always()
+        # A pre-test failure has no pytest stream; keep its original cause visible.
+        if: always() && steps.regression.outcome != 'skipped' && steps.regression.outcome != ''
         uses: actions/upload-artifact@v4
         with:
           name: pytest-${{ env.EVIDENCE_HEAD }}
