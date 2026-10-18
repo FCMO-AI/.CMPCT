@@ -43,3 +43,7 @@ A separately constructed local ZIP64/POSIX + bounded-verification three-way merg
 ## Next decision
 
 First obtain an authorized stacked review/PR and exact-head Python/native/security/release gates for this source. Reconcile with the physical-SHA owner, ZIP64/POSIX work and newer branches instead of reopening duplicate narrow implementations. A failed performance, portability or integrity gate is promotion debt, not reason to weaken it. Preserve the test fixtures and 4-GiB resource harness as a cheap decisive future control.
+
+## Additional bounded negative — hardlink digest amplification (2026-10-18)
+
+A new independently framed r24 `S_CHUNKS` archive with one 64-MiB logical owner and 0/1/3/7 valid hardlink aliases was strongly verified on the exact candidate source blob. Three independent process samples per group produced median verify CPU of **0.0413 / 0.0804 / 0.1674 / 0.3443 s** respectively, tracking **64 / 128 / 256 / 512 MiB** of repeated logical SHA work. All verified exact semantics. This does **not** undermine bounded RSS or physical authenticity; it exposes repeat-owner CPU amplification. The simpler prospective fix is to cache the already-verified owner's digest within one immutable verify pass, after separately validating each alias row's size and independent commitment. That optimization is **not implemented or measured**; archive mutation and cross-row proof semantics must be considered before promotion. No performance claim beyond this local synthetic control.
