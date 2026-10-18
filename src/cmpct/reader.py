@@ -487,24 +487,124 @@ class CMPCT:
         with self._cache_lock:self.cache.clear()
         self.vcache.clear()
         for idx,(off,us,cs,codec,ml) in enumerate(self.blobs):
-            raw=self._blob(idx)
             pos=self.record_base+off
             m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
-            # Whole-object identity also covers bytes in a pack that no logical member references.
-            if (m!=BMAGIC or c!=codec or rus!=us or rcs!=cs or rml!=ml
-                    or sha(raw)!=bytes(rh)):
-                raise IOError(f'physical SHA-256 verification failure: blob {idx}')
+            if (m!=BMAGIC or c!=codec or rus!=us or rcs!=cs or rml!=ml):
+                raise IOError(f'physical framing mismatch: blob {idx}')
+            if codec==CODEC_RAW:
+                # Authenticate mapped RAW payloads without making an archive-sized Python copy.
+                # This is an identity check over the *whole* stored object, including unreferenced
+                # pack tails, not merely the logical ranges returned by read().
+                start=pos+BHDR.size+ml;end=start+cs
+                if cs!=us or start<0 or end>len(self.mm):
+                    raise IOError(f'physical RAW bounds failure: blob {idx}')
+                digest=hashlib.sha256();crc=0
+                for off0 in range(start,end,1024*1024):
+                    view=memoryview(self.mm)[off0:min(end,off0+1024*1024)]
+                    try:
+                        digest.update(view);crc=binascii.crc32(view,crc)
+                    finally:view.release()
+                if digest.digest()!=bytes(rh) or crc&0xffffffff!=rcrc:
+                    raise IOError(f'physical SHA-256/CRC verification failure: blob {idx}')
+            else:
+                raw=self._blob(idx)
+                if sha(raw)!=bytes(rh):
+                    raise IOError(f'physical SHA-256 verification failure: blob {idx}')
             # _blob caches small decoded records. Do not let a full physical sweep retain every
             # record in RAM before the logical pass; nested dictionary caches may still be reused.
             with self._cache_lock:self.cache.pop(idx,None)
         n=0
         for row in self.files:
             if row[1]==K_DIR:continue
-            raw=self.read(row[0])
-            # file_sha256(S_PACK) may hash read(name) itself; that circular proof can accept a
-            # wrong same-length segment. Prefer the independent digest in the authenticated index.
-            want=bytes(row[5]) if row[5] is not None else self.file_sha256(row[0])
-            if sha(raw)!=want:raise IOError(f'SHA-256 verification failure: {row[0]}')
+            # Sparse holes are bytes in the logical SHA-256, not physical allocations. The
+            # size limit of read() is not an intrinsic limit of verifying their identity.
+            sparse_row=row
+            if row[1]==K_HARDLINK:
+                # A hardlink to a huge sparse owner is another name for the same logical bytes.
+                # Resolving its owner before hashing avoids read() allocating the owner image.
+                visited=set()
+                while sparse_row[1]==K_HARDLINK:
+                    target=sparse_row[6][0]
+                    if target in visited or target not in self.by:
+                        raise IOError(f'invalid hardlink ownership: {row[0]}')
+                    visited.add(target);sparse_row=self.by[target]
+                if row[4]!=sparse_row[4]:
+                    raise IOError(f'hardlink logical length mismatch: {row[0]}')
+            if sparse_row[6][0]==S_SPARSE:
+                # A missing independent logical commitment cannot be 'verified' by hashing
+                # read(name) against itself. Hardlinks may inherit the owner commitment.
+                want=(bytes(row[5]) if row[5] is not None else
+                      (bytes(sparse_row[5]) if sparse_row[5] is not None else None))
+                if want is None or len(want)!=32:
+                    raise IOError(f'missing sparse logical SHA-256: {row[0]}')
+                digest=hashlib.sha256();cursor=0;size=row[4]
+                zeros=bytes(1024*1024)
+                for start,length,ids in sparse_row[6][1]:
+                    if start<cursor or length<0 or start+length>size:
+                        raise IOError(f'invalid sparse extent: {row[0]}')
+                    gap=start-cursor
+                    while gap:
+                        nzero=min(len(zeros),gap);digest.update(memoryview(zeros)[:nzero]);gap-=nzero
+                    covered=0
+                    for idx in ids:
+                        raw=self._blob(idx)
+                        covered+=len(raw)
+                        if covered>length:raise IOError(f'sparse extent overrun: {row[0]}')
+                        digest.update(raw)
+                        with self._cache_lock:self.cache.pop(idx,None)
+                    if covered!=length:raise IOError(f'sparse extent length mismatch: {row[0]}')
+                    cursor=start+length
+                gap=size-cursor
+                while gap:
+                    nzero=min(len(zeros),gap);digest.update(memoryview(zeros)[:nzero]);gap-=nzero
+                if digest.digest()!=want:
+                    raise IOError(f'SHA-256 verification failure: {row[0]}')
+            elif sparse_row[6][0] in (S_CHUNKS,S_CDC):
+                # Concatenated logical records are a stream for verification, not a
+                # mandatory allocation. The r24 Builder commits a distinct logical SHA
+                # for these maps; never let file_sha256()->read() attest itself.
+                want=(bytes(row[5]) if row[5] is not None else
+                      (bytes(sparse_row[5]) if sparse_row[5] is not None else None))
+                if want is None or len(want)!=32:
+                    raise IOError(f'missing chunk-map logical SHA-256: {row[0]}')
+                total=0;digest=hashlib.sha256();last_idx=None;last_blob=None
+                is_cdc=(sparse_row[6][0]==S_CDC)
+                refs=sparse_row[6][1]
+                for item in refs:
+                    if is_cdc:
+                        declared,idx=item
+                        if type(declared) is not int or declared<=0:
+                            raise IOError(f'invalid CDC chunk length: {row[0]}')
+                    else:
+                        idx=item;declared=None
+                    # Python booleans alias 0/1 when indexing lists; hostile wire
+                    # references must be exact integer indices, as in preflight.
+                    if type(idx) is not int or idx<0 or idx>=len(self.blobs):
+                        raise IOError(f'invalid chunk-map blob reference: {row[0]}')
+                    if idx==last_idx:
+                        raw=last_blob
+                    else:
+                        raw=self._blob(idx)
+                        # Keep only the immediately reusable decode unit. Cache policy
+                        # must not retain an entire large logical map as physical copies.
+                        with self._cache_lock:self.cache.pop(idx,None)
+                        last_idx=idx;last_blob=raw
+                    if declared is not None and declared!=len(raw):
+                        raise IOError(f'CDC declared chunk length mismatch: {row[0]}')
+                    total+=len(raw)
+                    if total>row[4]:
+                        raise IOError(f'chunk-map logical size overrun: {row[0]}')
+                    digest.update(raw)
+                if total!=row[4]:
+                    raise IOError(f'chunk-map logical length mismatch: {row[0]}')
+                if digest.digest()!=want:
+                    raise IOError(f'SHA-256 verification failure: {row[0]}')
+            else:
+                raw=self.read(row[0])
+                # Packed logical slices have no independent per-slice digest in some r24
+                # archives; preserve the inherited verification semantics on those rows.
+                want=bytes(row[5]) if row[5] is not None else self.file_sha256(row[0])
+                if sha(raw)!=want:raise IOError(f'SHA-256 verification failure: {row[0]}')
             n+=1
         return n
     def _zip_dos_time(self,mtime_ns:int):
