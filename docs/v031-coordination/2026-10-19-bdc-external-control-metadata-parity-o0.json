@@ -1,0 +1,58 @@
+{
+  "schema": "cmpct-v031-bdc-detached-external-control-and-fs-semantic-parity-o0-v1",
+  "recorded_at": "2026-10-19",
+  "source_authority": {
+    "owner_branch": "agent/v031-bounded-drift-coordered-court",
+    "observed_owner_head": "20ac473d217d04a86c5e7ffb7b81f2d30a6fa129",
+    "frozen_court_blob": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+    "frozen_prereg_blob": "f8e53f058a1c123ea4665b730c45f5619eb93d5f",
+    "hostile_generator_blob": "335169bd6eb336b6d444cfbd34c291101262c3a9",
+    "product_fs_blob": "72404386775be4576365cc687784f4e4f752d9de",
+    "note": "This is a detached replication of the frozen external comparator arm, NOT the full preregistered BDC court. Do not change frozen source/prereg/comparator/thresholds."
+  },
+  "external_comparator": {
+    "method": "Source generator was fetched at exact git blob SHA and executed; source mode/mtime normalization, Python tarfile PAX TarInfo uid=gid=0, solid Zstd CLI -19, decode/extract, compare full tree SHA. Two workloads over three independent loops.",
+    "runtime": "Python 3.13.5; installed Zstd CLI v1.5.7; repository Python zstandard/BDC sibling not run.",
+    "repetitions": 3,
+    "all_original_historical_byte_and_tree_fingerprints_match": true,
+    "rows": [
+      {
+        "name": "01_shifted_versions",
+        "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+        "zstd19_bytes": 1694674,
+        "observed_tar_sha256": "2c77b16ee1b7812982bc3087931b322bf23d4b0997bf84f1d7cd6ff9d1fbb06e",
+        "observed_archive_sha256": "6e093ac314c0e801f49fd802a5f2ee8a0032137291348271248cdf4aeff52f18"
+      },
+      {
+        "name": "03_boundary_churn",
+        "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+        "zstd19_bytes": 73097,
+        "observed_tar_sha256": "984831eeeeff9b16cdc6ef3066d87a5daf6fd62ec000c2423aac6166894e6494",
+        "observed_archive_sha256": "7220fee51be600ab8ff31c4ab6a761509c728b8a7d324aa1c20ae745c5df4eb5"
+      }
+    ],
+    "interpretation": "This controls local same-input Zstd-19 byte fingerprint drift for two original fixed workloads, not Zstd 1.5.7 checksum-pinned upstream tarball provenance or an exact-source hosted run. No BDC archive candidate was produced."
+  },
+  "held_out_semantics": {
+    "experimental_mutations": "Held-out modifications preserving frozen path+content tree SHA: chown a Boundary file to uid=4242/gid=4343; separately set user.cmpct_evidence_probe xattr.",
+    "owner_result": "Both original and owner-mutated source generate bit-identical solid tar+Zstd-19, yet extracted owner differs from mutated source.",
+    "xattr_result": "Both original and xattr-mutated source generate bit-identical solid tar+Zstd-19, yet extracted xattr absent.",
+    "causal_mechanism": "Frozen comparator tar writer explicitly forces uid/gid zero, does not serialize xattrs; hostile.tree_hash covers paths+content bytes only; FS.capture_filesystem_manifest and _xattrs preserve owners and xattrs. This is an out-of-domain comparator semantics limitation, NOT a failing result on the two frozen workloads.",
+    "scope": "Held-out semantic perturbation not included in the frozen prereg; no benchmark/workload/comparator threshold changed."
+  },
+  "evaluator_attestation": {
+    "inherited_oct16_gap_blob": "0e4a5915f9429228bf98f70b8e7fb07ed5663f37",
+    "observation": "Frozen run().passed omits matches_historical_current_fingerprint_bytes; extra independent validator needed to prevent external fingerprint false green.",
+    "current_local_detached_validator_tests": "21/21 PASS, mutations rejecting incomplete/mismatched comparator receipts.",
+    "boundary": "Independent schema/receipt audit is not authenticated CI provenance, and is not scientific BDC promotion."
+  },
+  "discovery_decision": {
+    "primary_frozen_question": "UNEXECUTED",
+    "scientific_decision_changed": false,
+    "metadata_generalization_question": "External comparator preserves path+byte identities, but owner/xattr semantic parity is false for held-out mutated sources.",
+    "next": "Execute frozen BDC coordered court on a legitimate exact-source hosted route, with mandatory independent per-row historical Zstd-19 fingerprint gate. Preserve original frozen workload semantics; any future held-out full-fidelity comparator must normalize and/or serialize metadata symmetrically.",
+    "product_credit": false,
+    "release_credit": false,
+    "policy_change": false
+  }
+}
