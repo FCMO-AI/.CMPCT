@@ -121,6 +121,13 @@ class CMPCT:
     def _zdict_decode(self,comp:bytes,usize:int)->bytes:
         # Load the archive dictionary once into the package-owned native DCtx.  This preserves the
         # measured tiny-file lifetime benefit without retaining a second Python-owned DDict/buffer.
+        # The archive dictionary must be independently decodable. An authenticated index can
+        # otherwise point it at codec-3 data, causing recursive acquisition of this non-reentrant lock.
+        if (not isinstance(self.dict_idx, int) or isinstance(self.dict_idx, bool)
+                or self.dict_idx < 0 or self.dict_idx >= len(self.blobs)):
+            raise IOError("invalid Zstd dictionary blob reference")
+        if self.blobs[self.dict_idx][3] == CODEC_ZSTDDICT:
+            raise IOError("dictionary blob cannot require its own Zstd dictionary")
         with self._zdict_lock:
             if self._zdict_decoder is None:
                 if self.dict_idx is None:raise IOError('missing Zstd dictionary')

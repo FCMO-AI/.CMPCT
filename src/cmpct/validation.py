@@ -434,7 +434,10 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
 
     dict_idx = index.get("dict_blob")
     if dict_idx is not None:
-        _ref(dict_idx, len(blobs), "dictionary blob")
+        dict_idx = _ref(dict_idx, len(blobs), "dictionary blob")
+        # The global dictionary cannot be bootstrapped through its own dependent codec.
+        if blobs[dict_idx][3] == CODEC_ZSTDDICT:
+            raise ValidationError("dictionary blob cannot require its own Zstd dictionary")
 
     seen_paths = set()
     hardlinks = {}

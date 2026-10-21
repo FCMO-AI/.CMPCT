@@ -105,3 +105,14 @@ This is a representation-specific safety increment, not a replacement for full n
 ## Revision rule
 
 No format revision bump is required for this increment because it writes **no new field, record, codec, transform or storage semantic**. If later hardening requires a reader-visible on-disk rule, that change must follow the repository's normal revision/spec/history/current-state/conformance gate.
+
+## Authenticated Zstd dictionary bootstrap invariant (v0.31 candidate)
+
+The single revision-24 `dict_blob` owner must be independently decodable: a dictionary owner
+encoded with `CODEC_ZSTDDICT` depends on the very decoder it initializes. An authenticated index
+with this cycle can deadlock the ordinary Python Reader at its non-reentrant decoder lock.
+The structural preflight and ordinary Reader must both fail closed, since preflight is optional.
+Out-of-range/negative dictionary references are also rejected by the ordinary Reader at decode entry.
+`tests/test_v031_dictionary_owner_invariant.py` contains a Builder-independent authenticated
+index mutation and subprocess timeout oracle, preserving the valid RAW-dictionary control.
+Native exact-head behavior and cross-platform product CI require independent verification before merge.
