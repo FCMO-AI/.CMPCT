@@ -28,4 +28,9 @@ def canonical_logical_path(path: str, *, max_path_bytes: int | None = None) -> t
     parts = tuple(normalized.split('/'))
     if any(part in ('', '.', '..') for part in parts):
         raise ValueError('unsafe logical path component')
+    # A drive-relative component resets preceding Windows os.path.join segments,
+    # even when nested within an otherwise relative archive logical path.
+    # ntpath also treats non-letter single-character designators as drives.
+    if any(len(part) >= 2 and part[1] == ':' for part in parts):
+        raise ValueError('Windows drive-prefixed logical path component')
     return '/'.join(parts), parts
