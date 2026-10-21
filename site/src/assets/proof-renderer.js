@@ -90,6 +90,8 @@ function normalizeLegacy(data) {
     known_losses: f.known_losses || [],
     provenance: {
       record: f.file || "—",
+      project_version: f.project_version,
+      canonical_format_revision: f.canonical_format_revision,
       date: f.date || "—",
       tree_sha256: overall.method?.tree_sha256 || f.structural_competitor_contract?.tree_sha256 || null,
       method: overall.method || {},
@@ -221,9 +223,15 @@ function renderLosses(e) {
 
 function renderAuthority(e) {
   const version = $("#frontier-version");
-  if (version) version.textContent = `v${e.project_version || "—"}`;
+  if (version) version.textContent = `v${measuredVersion(e) || "—"}`;
   const label = $("#frontier-label");
   if (label) label.textContent = e.frontier_status || "research frontier";
+}
+
+function measuredVersion(e) {
+  // Older schema-v1 payloads used project_version for the measured frontier. New payloads
+  // keep serving identity separate so a core checkpoint cannot relabel historical evidence.
+  return e.provenance?.project_version ?? e.project_version;
 }
 
 function shortenHash(value) {
@@ -241,6 +249,7 @@ function renderReceipt(e) {
   const cells = [
     ["Project", `v${e.project_version || "—"}`],
     ["Format", `r${e.canonical_format_revision ?? "—"}`],
+    ["Measured frontier", `v${measuredVersion(e) || "—"} · r${e.provenance?.canonical_format_revision ?? e.canonical_format_revision ?? "—"}`],
     ["Tree", shortenHash(tree)],
     ["Files", Number(e.structural?.files || 0).toLocaleString()],
     ["Record", e.provenance?.record || "—"],
@@ -265,7 +274,7 @@ function renderAfterBaseUI(evidence, attempt = 0) {
   // to overwrite proof-surface values afterward. Waiting for app.js to stamp the current frontier marker
   // makes ordering deterministic without coupling the stable renderer to a release-specific script.
   const marker = $("#frontier-version");
-  const expected = String(evidence.project_version || "");
+  const expected = String(measuredVersion(evidence) || "");
   const baseReady = expected && marker?.textContent?.includes(expected);
   if (baseReady || attempt >= 180) {
     render(evidence);

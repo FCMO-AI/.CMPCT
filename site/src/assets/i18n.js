@@ -162,6 +162,9 @@ function translate(source, targetLocale) {
 function isTechnicalOrDataLabel(text, node) {
   if (!text || text.length < 3) return true;
   if (/^(v?\d+(?:\.\d+){1,3}|r\d+|[0-9.,%+−×/:· -]+)$/.test(text)) return true;
+  // A version/revision pair is immutable provenance, not authored prose.
+  // Match only complete numeric identifiers; untranslated copy remains visible to CI.
+  if (/^v\d+(?:\.\d+){1,3}\s*·\s*r\d+$/.test(text)) return true;
   if (/^(CMPCT|ZIP|ZSTD|Zstd|LZMA2|ZPAQ|RAW|Deflate|GitHub|SHA-256|CRC32|CLI|MiB|KiB|GiB)$/i.test(text)) return true;
   if (/^[A-Fa-f0-9]{12,}$/.test(text)) return true;
   if (/^[\w.-]+\.(?:json|md|txt|cmpct)$/i.test(text)) return true;
