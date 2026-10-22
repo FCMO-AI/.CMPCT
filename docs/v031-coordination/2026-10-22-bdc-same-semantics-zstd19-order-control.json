@@ -1,0 +1,48 @@
+{
+  "schema": "cmpct-v031-bdc-same-semantics-external-control-order-o0-v1",
+  "date_utc": "2026-10-22",
+  "head_at_observation": "80e41440abeadf12af77dec0cc155ee07c6ab35a",
+  "source_blobs": {
+    "hostile_corpus": "335169bd6eb336b6d444cfbd34c291101262c3a9",
+    "frozen_court": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df"
+  },
+  "method": "Independently regenerate both source trees using pinned generators. Tarfile.PAX_FORMAT with identical names, complete file content and frozen mtime/mode/uid/gid and GNU-compatible Zstd CLI 1.5.7 -19. Only vary file member order. Decompress each Zstd artifact, compare its TAR SHA-256 to the source TAR, extract and verify the complete SHA-256 logical tree. These additional orderings are separate controls, never substitutes for the frozen path-ascending comparator.",
+  "cases": [
+    {
+      "name": "01_shifted_versions",
+      "source_tree": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "frozen_bytes": 1694674,
+      "orderings_bytes": {
+        "path_asc": 1694674,
+        "path_desc": 1694524,
+        "size_asc": 1694674,
+        "size_desc": 1694524,
+        "sha_asc": 1693496,
+        "sha_desc": 1694056
+      },
+      "best_competitor_bytes": 1693496,
+      "best_gain_over_frozen_bytes": 1178
+    },
+    {
+      "name": "03_boundary_churn",
+      "source_tree": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+      "frozen_bytes": 73097,
+      "orderings_bytes": {
+        "path_asc": 73097,
+        "path_desc": 73267,
+        "size_asc": 73097,
+        "size_desc": 73097,
+        "sha_asc": 73132,
+        "sha_desc": 73173
+      },
+      "best_competitor_bytes": 73097,
+      "largest_ordering_inflation_bytes": 170
+    }
+  ],
+  "verification": "12/12 compressed Zstd frames decompressed to exactly matching tar bytes; 12/12 extracted data trees match their frozen SHA-256. The original two path-ascending variants match previous physical SHA-256 controls.",
+  "strongest_negative": "Tar order alone changes complete stored bytes under exactly matching logical trees. The reverse Boundary control is +170 B and could create misleading near-boundary apparent headroom if substituted; the strongest observed Shifted SHA sort is 1,178 B smaller than the frozen baseline. Neither finding changes the frozen preregistered comparator, which remains path-ascending.",
+  "decision": "MAINTAIN_FROZEN_COMPARATOR; preserve same-semantics alternate Zstd-19 order as a stronger auxiliary control; do not infer BDC candidate size/whole-product result from these comparator-only measurements.",
+  "disposition": "INDEPENDENT_EXTERNAL_COMPETITOR_O0__NO_CANDIDATE_CREDIT",
+  "product_credit": false,
+  "release_credit": false
+}
