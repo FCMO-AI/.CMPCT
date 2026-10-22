@@ -1,0 +1,32 @@
+{
+  "schema": "cmpct-v031-bdc-zstd19-control-local-reproduction-v1",
+  "date_utc": "2026-10-22",
+  "source_head": "20ac473d217d04a86c5e7ffb7b81f2d30a6fa129",
+  "frozen_court_blob": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+  "source_corpus_blob": "335169bd6eb336b6d444cfbd34c291101262c3a9",
+  "environment": "Linux x86_64, zstd CLI v1.5.7, CPython, tarfile.PAX_FORMAT",
+  "method": "Independently transcribe the deterministic Shifted/Boundary generators and comparator from the frozen source; normalize mtime=315532800, mode=0644, uid=gid=0, TarInfo PAX, zstd -19. Verify both independently generated tree hashes before comparing exact physical .tar.zst bytes. This is a preliminary external-control reproduction, NOT frozen CMPCT court execution.",
+  "rows": [
+    {
+      "name": "01_shifted_versions",
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "tar_bytes": 33546240,
+      "tar_sha256": "2c77b16ee1b7812982bc3087931b322bf23d4b0997bf84f1d7cd6ff9d1fbb06e",
+      "zstd19_bytes": 1694674,
+      "zstd19_sha256": "6e093ac314c0e801f49fd802a5f2ee8a0032137291348271248cdf4aeff52f18",
+      "historical_control_bytes": 1694674
+    },
+    {
+      "name": "03_boundary_churn",
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+      "tar_bytes": 9758720,
+      "tar_sha256": "984831eeeeff9b16cdc6ef3066d87a5daf6fd62ec000c2423aac6166894e6494",
+      "zstd19_bytes": 73097,
+      "zstd19_sha256": "7220fee51be600ab8ff31c4ab6a761509c728b8a7d324aa1c20ae745c5df4eb5",
+      "historical_control_bytes": 73097
+    }
+  ],
+  "all_historical_comparator_byte_controls_match": true,
+  "scope": "local independent external comparator O0 evidence. Does not validate CMPCT candidate, complete court, hosted CI, product, release, or source archive identity; frozen sources unmodified.",
+  "next": "land already prepared fail-closed attestor and exact-head workflow; run frozen scientific court; preserve raw results regardless of sign"
+}
