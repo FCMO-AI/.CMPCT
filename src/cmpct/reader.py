@@ -324,7 +324,10 @@ class CMPCT:
         else:
             decoded=(self._blob(idx) for idx in ids)
 
-        parent=os.path.dirname(full) or '.';prefix=f'.{os.path.basename(full)}.cmpct-part-'
+        # The final basename can already consume the filesystem's full NAME_MAX budget.
+        # Keep the private O_EXCL stage name short and independent of untrusted path length.
+        # mkstemp's random suffix gives uniqueness without extending the source basename.
+        parent=os.path.dirname(full) or '.';prefix='.cmpct-part-'
         fd,tmp=tempfile.mkstemp(prefix=prefix,dir=parent);committed=False
         digest=hashlib.sha256();written=0
         try:
