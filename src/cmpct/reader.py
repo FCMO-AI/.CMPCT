@@ -428,7 +428,9 @@ class CMPCT:
                 except FileNotFoundError:pass
                 os.link(target,full);continue
             if k==K_SYMLINK:
-                target=self.read(rel).decode('utf-8','surrogateescape')
+                # Source link targets are physical bytes; decode using this filesystem's codec
+                # so os.symlink re-encodes the same octets even under non-UTF-8 locales.
+                target=os.fsdecode(self.read(rel))
                 if safe_symlinks:
                     tp=Path(target)
                     if tp.is_absolute() or any(x=='..' for x in tp.parts):raise IOError(f'unsafe symlink target in {rel!r}: {target!r}')
