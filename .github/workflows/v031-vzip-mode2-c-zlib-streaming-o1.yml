@@ -1,0 +1,75 @@
+# ci-lane: fast
+name: CMPCT v031 independent native libz Mode2 streaming O1
+on:
+  push:
+    branches:
+      - agent/phased3-v031-vzip-mode2-c-zlib-streaming-o1-20261023
+    paths:
+      - 'benchmarks/v031_vzip_mode2_c_zlib_stream_probe.c'
+      - 'benchmarks/v031_vzip_mode2_c_zlib_streaming_o1.py'
+      - 'benchmarks/v031_vzip_mode2_cross_provider_replay.py'
+      - 'benchmarks/v031_vzip_mode2_native_backend_probe.py'
+      - 'benchmarks/history/2026-10-23-v031-vzip-mode2-c-zlib-streaming-o1-prereg.md'
+      - 'tests/conformance/v24-virtual-zip-deflate-mode2.json'
+      - '.github/workflows/v031-vzip-mode2-c-zlib-streaming-o1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-libz-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Source-exact checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          persist-credentials: false
+      - name: Verify checkout and prior claims
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git hash-object benchmarks/history/2026-10-23-v031-vzip-mode2-c-zlib-streaming-o1-prereg.md
+          python -m py_compile benchmarks/v031_vzip_mode2_cross_provider_replay.py
+          git hash-object tests/conformance/v24-virtual-zip-deflate-mode2.json
+      - name: Set up fixed Python zlib comparator
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile isolated native C/libz streaming provider
+        run: |
+          set -euo pipefail
+          mkdir -p research-artifacts
+          cc --version | head -1 | tee research-artifacts/compiler.txt
+          pkg-config --modversion zlib | tee research-artifacts/libz-pkgconfig.txt
+          cc -O2 -std=c11 -Wall -Wextra -Werror benchmarks/v031_vzip_mode2_c_zlib_stream_probe.c -lz -o research-artifacts/vzip-mode2-native-libz-probe
+          ./research-artifacts/vzip-mode2-native-libz-probe --version | tee research-artifacts/libz-linked-version.txt
+          ldd research-artifacts/vzip-mode2-native-libz-probe > research-artifacts/native-linked-libraries.txt
+      - name: Check 84 exact-byte variants and source
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > research-artifacts/source-head.txt
+          git hash-object benchmarks/v031_vzip_mode2_c_zlib_stream_probe.c benchmarks/v031_vzip_mode2_c_zlib_streaming_o1.py benchmarks/v031_vzip_mode2_native_backend_probe.py benchmarks/v031_vzip_mode2_cross_provider_replay.py > research-artifacts/source-blobs.txt
+          python benchmarks/v031_vzip_mode2_c_zlib_streaming_o1.py --binary research-artifacts/vzip-mode2-native-libz-probe --out research-artifacts/o1-native-libz.json | tee research-artifacts/o1-summary.txt
+          python - <<'PY'
+          import json
+          r=json.load(open('research-artifacts/o1-native-libz.json'))
+          assert r['comparisons']==84 and len(r['cases'])==84
+          assert len(r['families'])==7 and len(r['levels'])==4 and len(r['chunks'])==3
+          assert r['byte_identical']+r['byte_different']==84
+          assert r['no_product_credit'] is True
+          assert all(x['native_len']>=1 and x['python_len']>=1 for x in r['cases'])
+          print('O1_SCIENTIFIC_COURT_VALID; no native Reader/format/product claim')
+          PY
+      - name: Preserve positive or negative complete experimental receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-vzip-native-libz-o1-${{ github.sha }}
+          path: |
+            research-artifacts/*
+            !research-artifacts/vzip-mode2-native-libz-probe
+          if-no-files-found: warn
