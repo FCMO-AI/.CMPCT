@@ -25,6 +25,15 @@ def compressed_python(data, level):
     z = zlib.compressobj(level, zlib.DEFLATED, -15)
     return z.compress(data) + z.flush()
 
+def compressed_python_chunked(data, level, chunk):
+    """Feed identical input segmentation to the same zlib runtime, with no intermediate flush."""
+    z = zlib.compressobj(level, zlib.DEFLATED, -15)
+    stream = bytearray()
+    for offset in range(0, len(data), chunk):
+        stream.extend(z.compress(data[offset:offset+chunk]))
+    stream.extend(z.flush())
+    return bytes(stream)
+
 def run_native(binary, data, level, chunk):
     p = subprocess.run([str(binary), str(level), str(chunk)], input=data, capture_output=True, check=True, timeout=30)
     if p.stderr:
@@ -53,6 +62,8 @@ def main():
             expected = compressed_python(data, level)
             assert zlib.decompress(expected, -15) == data
             for chunk in CHUNKS:
+                expected_feedmatched = compressed_python_chunked(data, level, chunk)
+                assert zlib.decompress(expected_feedmatched, -15) == data
                 t0 = time.perf_counter_ns()
                 actual = run_native(binary, data, level, chunk)
                 measured_process_ns = time.perf_counter_ns() - t0
@@ -62,6 +73,8 @@ def main():
                 if zlib.decompress(actual, -15) != data:
                     raise AssertionError(("native inflation mismatch", family, level, chunk))
                 equal = actual == expected
+                equal_feedmatched = actual == expected_feedmatched
+                python_feed_differs_from_onecall = expected_feedmatched != expected
                 first = None if equal else next((i for i, (a, b) in enumerate(zip(actual, expected)) if a != b), min(len(actual), len(expected)))
                 rows.append({
                     "family": family, "level": level, "chunk": chunk,
@@ -69,10 +82,16 @@ def main():
                     "python_len": len(expected), "native_len": len(actual),
                     "python_sha256": sha(expected), "native_sha256": sha(actual),
                     "byte_identical": equal, "first_difference_offset": first,
+                    "feedmatched_python_sha256": sha(expected_feedmatched),
+                    "native_equals_feedmatched_python": equal_feedmatched,
+                    "python_feed_differs_from_onecall": python_feed_differs_from_onecall,
+                    "feedmatched_first_native_diff": None if equal_feedmatched else next((i for i,(a,b) in enumerate(zip(actual,expected_feedmatched)) if a != b),min(len(actual),len(expected_feedmatched))),
                     "golden_native_hex": actual.hex() if family == "golden_75" and level == 6 else None,
                     "native_process_wall_ns": measured_process_ns
                 })
     different = [r for r in rows if not r["byte_identical"]]
+    provider_different = [r for r in rows if not r["native_equals_feedmatched_python"]]
+    feed_different = [r for r in rows if r["python_feed_differs_from_onecall"]]
     result = {
         "schema": "cmpct-vzip-mode2-c-libz-streaming-o1-v1",
         "episode": "VZIP-M2-LIBZ-STREAM-O1-001",
@@ -90,11 +109,18 @@ def main():
         "comparisons": len(rows), "byte_identical": len(rows)-len(different), "byte_different": len(different),
         "mismatch_coordinates": [[r["family"],r["level"],r["chunk"]] for r in different],
         "decision": "HOST_LIBZ_PARITY_IN_TESTED_REGIME" if not different else "C_LIBZ_OR_CHUNK_STREAM_PARITY_FALSIFIED",
+        "o1b_feedmatched_comparisons": len(rows),
+        "o1b_native_vs_feedmatched_different": len(provider_different),
+        "o1b_python_feed_vs_onecall_different": len(feed_different),
+        "o1b_provider_mismatch_coordinates": [[r["family"],r["level"],r["chunk"]] for r in provider_different],
+        "o1b_feed_effect_coordinates": [[r["family"],r["level"],r["chunk"]] for r in feed_different],
+        "o1b_decision": "FEED_BOUNDARY_CAUSE_SUPPORTED_TESTED_HOST" if not provider_different and len(feed_different)==len(different) and {(r["family"],r["level"],r["chunk"]) for r in feed_different}=={(r["family"],r["level"],r["chunk"]) for r in different} else "FEED_BOUNDARY_ALONE_NOT_SUFFICIENT",
         "no_product_credit": True, "cases": rows
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
-    print(json.dumps({k:result[k] for k in ("comparisons","byte_identical","byte_different","decision","mismatch_coordinates")},sort_keys=True))
+    print(json.dumps({k:result[k] for k in ("comparisons","byte_identical","byte_different","decision","mismatch_coordinates",
+                                  "o1b_native_vs_feedmatched_different","o1b_python_feed_vs_onecall_different","o1b_decision")},sort_keys=True))
 
 if __name__ == "__main__":
     main()
