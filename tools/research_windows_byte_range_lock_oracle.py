@@ -83,7 +83,7 @@ def _run_child(mode: str, path: Path, offset: int) -> dict:
 
 def _run_oracle() -> dict:
     assert os.name == "nt", "Windows-only oracle; no substitute platform allowed"
-    sample = b"CMPCT24\\0" + bytes(range(256)) * 64
+    sample = b"CMPCT24\0" + bytes(range(256)) * 64
     output = {
         "platform": platform.platform(),
         "python": sys.version,
