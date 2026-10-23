@@ -130,3 +130,32 @@ def test_fixed_mode2_regeneration_level_is_decision_changing(tmp_path: Path) -> 
         assert alternate != correct
         # A whole-member identity, not ZIP parser acceptance alone, is the conformance oracle.
         assert hashlib.sha256(nested).hexdigest() == record["logical_sha256"]
+
+
+def test_fixed_mode2_rejects_corrupted_raw_content_before_reconstruction(tmp_path: Path) -> None:
+    """A regenerated stream cannot authenticate tampered RAW source bytes by ZIP CRC alone.
+
+    Mutate the independently frozen mode-2 RAW blob, not the index or generated Deflate stream.
+    A malicious archive should fail at the physical content tier before returning nested ZIP bytes.
+    """
+    record = _record(
+        "v24-virtual-zip-deflate-mode2.json",
+        "cmpct-v24-golden-virtual-zip-deflate-mode2-v1",
+    )
+    original = base64.b64decode(record["archive_base64"], validate=True)
+    clean_path = tmp_path / "golden-mode2-clean.cmpct"
+    clean_path.write_bytes(original)
+    with CMPCT(clean_path) as ar:
+        nested = ar.read(record["name"])
+    with zipfile.ZipFile(io.BytesIO(nested)) as zf:
+        raw = zf.read(record["member"]["name"])
+    assert raw and original.count(raw) == 1
+    corrupted = bytearray(original)
+    corrupted[original.index(raw) + len(raw) // 2] ^= 0x01
+    corrupt_path = tmp_path / "golden-mode2-corrupt-raw.cmpct"
+    corrupt_path.write_bytes(corrupted)
+    with CMPCT(corrupt_path) as ar:
+        with pytest.raises((IOError, ValueError)):
+            ar.read(record["name"])
+        with pytest.raises((IOError, ValueError)):
+            ar.read_range(record["name"], record["ranges"][0]["offset"], record["ranges"][0]["length"])
