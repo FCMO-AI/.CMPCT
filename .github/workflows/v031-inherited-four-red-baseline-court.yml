@@ -31,7 +31,7 @@ jobs:
             source_sha: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
           - label: main
             source_ref: main
-            source_sha: 80c358f8824ec1b20d349c92ed94c898090969b
+            source_sha: 80c358f8824ec1b20d349c92ed94c898090969b0
     steps:
       - name: Checkout research court exact HEAD
         uses: actions/checkout@v4
