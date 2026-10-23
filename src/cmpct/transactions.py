@@ -146,8 +146,12 @@ def _iter_blob_header_candidates(archive:Path):
     buf=bytearray(window+overlap);carry_len=0;position=0
     with open(archive,'rb') as f:
         source_size=os.fstat(f.fileno()).st_size
-        while True:
-            got=f.readinto(memoryview(buf)[carry_len:carry_len+window])
+        # A concurrently growing source must not turn a forensic scan into an unbounded
+        # tail follower. The open inode is fixed; the initial size limits I/O, not content
+        # identity. This still makes no immutable-snapshot or authentication claim.
+        while position<source_size:
+            n=min(window,source_size-position)
+            got=f.readinto(memoryview(buf)[carry_len:carry_len+n])
             if not got:break
             active=carry_len+got;origin=position-carry_len;p=0
             while True:
