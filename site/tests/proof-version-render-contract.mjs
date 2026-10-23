@@ -50,7 +50,7 @@ async function runCase({ legacy, research = "0.29.0", researchFormat = 23 }) {
   assert.equal(frames, 0, "source-ready DOM must not wait on a different shipping version");
   assert.equal(marker.textContent, `v${research}`, "research label must show source version");
   assert.ok(receipt.innerHTML.includes("v0.30.0"), "receipt must show shipping project version");
-  assert.ok(receipt.innerHTML.includes(`v${research} · r${researchFormat}`),
+  assert.ok(receipt.innerHTML.includes(`v${research} · canonical r${researchFormat}`),
     "receipt must independently expose research source version and format");
 }
 
