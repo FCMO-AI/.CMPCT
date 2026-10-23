@@ -49,8 +49,16 @@ def inherited_scan(archive: Path):
     return out
 
 
-def _worker(mode: str, path: Path):
+def _worker(mode: str, path: Path, *, profile_heap: bool = False):
     from cmpct.transactions import recover_blob_records
+    # ru_maxrss is a *historical process high-water mark*, not current RSS.
+    # A large import-time allocation may make its before/after delta zero even
+    # when the old scanner later allocates an entire dense source. Keep the
+    # unprofiled process RSS/CPU/wall evidence, and take a separate, explicitly
+    # opt-in tracemalloc sample for the Python byte-allocation mechanism.
+    if profile_heap:
+        import tracemalloc
+        tracemalloc.start()
     before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     start_cpu = time.process_time_ns()
     start = time.perf_counter_ns()
@@ -58,19 +66,25 @@ def _worker(mode: str, path: Path):
     wall_ns = time.perf_counter_ns() - start
     cpu_ns = time.process_time_ns() - start_cpu
     after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if profile_heap:
+        _, peak_heap_bytes = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
     keys = [{k: row[k] for k in DECLARED_KEYS} for row in rows]
     encoded = json.dumps(keys, sort_keys=True, separators=(",", ":")).encode()
     if mode == "candidate":
         assert all(row["verification"] == "unverified" for row in rows)
         assert all(row["generation_membership"] == "unknown" for row in rows)
-    print(json.dumps({
+    record = {
         "mode": mode,
         "record_count": len(rows),
         "framing_sha256": hashlib.sha256(encoded).hexdigest(),
         "wall_ns": wall_ns, "cpu_ns": cpu_ns,
         "rss_before_kib": before, "rss_after_kib": after,
         "rss_increment_kib": max(0, after - before),
-    }, sort_keys=True))
+    }
+    if profile_heap:
+        record["python_peak_heap_kib"] = (peak_heap_bytes + 1023) // 1024
+    print(json.dumps(record, sort_keys=True))
 
 
 def _make_sparse(path: Path, size=64 * 1024 * 1024):
@@ -90,8 +104,12 @@ def _make_sparse(path: Path, size=64 * 1024 * 1024):
     return offsets
 
 
-def _observe(path: Path, mode: str):
-    p = subprocess.run([sys.executable, __file__, "--worker", mode, str(path)],
+def _observe(path: Path, mode: str, *, profile_heap: bool = False):
+    # Heap-instrumented subprocesses are deliberately excluded from CPU/wall
+    # claims: tracemalloc changes execution cost while providing an independent
+    # Python allocator peak that ru_maxrss deltas cannot always expose.
+    worker_flag = "--heap-worker" if profile_heap else "--worker"
+    p = subprocess.run([sys.executable, __file__, worker_flag, mode, str(path)],
                        text=True, capture_output=True, check=True)
     return json.loads(p.stdout)
 
@@ -138,7 +156,8 @@ def main():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--worker":
-        _worker(sys.argv[2], Path(sys.argv[3]))
+    if len(sys.argv) > 1 and sys.argv[1] in ("--worker", "--heap-worker"):
+        _worker(sys.argv[2], Path(sys.argv[3]),
+                profile_heap=sys.argv[1] == "--heap-worker")
     else:
         main()
