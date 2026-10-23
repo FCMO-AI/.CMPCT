@@ -170,6 +170,11 @@ def _exercise_explicitly_unsupported_vector(lib, root: Path, fixture_path: Path)
         assert status == CMPCT_UNSUPPORTED, status
         assert got_n == 0
         assert got == b""
+        # A rejected representation must not accidentally disclose a partial generated stream.
+        status, got_n, got = _read_range(lib, handle, 1, 4)
+        assert status == CMPCT_UNSUPPORTED, status
+        assert got_n == 0
+        assert got == b""
     finally:
         lib.cmpct_close(handle)
 
