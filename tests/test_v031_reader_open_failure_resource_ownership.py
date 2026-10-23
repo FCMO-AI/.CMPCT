@@ -44,7 +44,7 @@ def _fixed_valid_archive(tmp_path):
 
 def test_failed_header_closes_owned_file_without_gc(tmp_path, monkeypatch):
     p = tmp_path / "corrupted.cmpct"
-    p.write_bytes(b"\\0" * reader.HDR.size)
+    p.write_bytes(b"\0" * reader.HDR.size)
     files = _watch_files(monkeypatch)
     with pytest.raises((IOError, ValueError)) as exc:
         reader.CMPCT(p)
@@ -86,7 +86,7 @@ def test_canonical_collision_closes_owned_file_and_map(tmp_path, monkeypatch):
         return mm
 
     def fake_index(_self):
-        return {"files": [["tree/leaf"], ["tree\\\\leaf"]], "blobs": [], "recipes": []}, 0
+        return {"files": [["tree/leaf"], ["tree\\leaf"]], "blobs": [], "recipes": []}, 0
 
     monkeypatch.setattr(reader.CMPCT, "_load_index", fake_index)
     monkeypatch.setattr(reader.mmap, "mmap", watch_map)
