@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import zipfile
+import zlib
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,10 @@ VECTORS = (
     (
         "v24-virtual-zip-deflate-mode1.json",
         "cmpct-v24-golden-virtual-zip-deflate-mode1-v1",
+    ),
+    (
+        "v24-virtual-zip-deflate-mode2.json",
+        "cmpct-v24-golden-virtual-zip-deflate-mode2-v1",
     ),
 )
 
@@ -58,7 +63,7 @@ def test_fixed_virtual_zip_vector_is_byte_stable_and_structurally_valid(
     # Mode 0 deliberately reuses the codec-4 content blob's physical RFC-1951 payload, so unlike
     # retained mode 1 it needs no second opaque stream blob. Keeping this count explicit catches an
     # accidental permanent duplicate-stream representation before it becomes part of the format lore.
-    expected_blobs = 2 if record["member"]["method"] == 0 or stream_modes == [0] else 3
+    expected_blobs = 3 if stream_modes == [1] else 2
     assert summary["blobs"] == expected_blobs
 
     with CMPCT(archive) as ar:
@@ -95,3 +100,62 @@ def test_fixed_virtual_zip_vector_reconstructs_and_ranges_exactly(
         raw = zf.read(member["name"])
         assert len(raw) == member["logical_size"]
         assert hashlib.sha256(raw).hexdigest() == member["logical_sha256"]
+
+
+def test_fixed_mode2_regeneration_level_is_decision_changing(tmp_path: Path) -> None:
+    """Mode 2 is a recipe, not an implicitly retained byte stream.
+
+    The frozen member intentionally distinguishes level 6 from a simpler level-1 control;
+    a decoder that silently ignores the encoded level cannot claim exact reconstruction.
+    """
+    record = _record(
+        "v24-virtual-zip-deflate-mode2.json",
+        "cmpct-v24-golden-virtual-zip-deflate-mode2-v1",
+    )
+    archive = tmp_path / "golden-mode2.cmpct"
+    archive.write_bytes(base64.b64decode(record["archive_base64"], validate=True))
+    with CMPCT(archive) as ar:
+        nested = ar.read(record["name"])
+        member = record["member"]
+        with zipfile.ZipFile(io.BytesIO(nested)) as zf:
+            raw = zf.read(member["name"])
+        level = record["recipe"]["zlib_level"]
+        assert level == 6
+        co = zlib.compressobj(level, zlib.DEFLATED, -15)
+        correct = co.compress(raw) + co.flush()
+        weaker = zlib.compressobj(1, zlib.DEFLATED, -15)
+        alternate = weaker.compress(raw) + weaker.flush()
+        assert correct.hex() == member["exact_deflate_hex"]
+        assert alternate.hex() == member["control_level_1_deflate_hex"]
+        assert alternate != correct
+        # A whole-member identity, not ZIP parser acceptance alone, is the conformance oracle.
+        assert hashlib.sha256(nested).hexdigest() == record["logical_sha256"]
+
+
+def test_fixed_mode2_rejects_corrupted_raw_content_before_reconstruction(tmp_path: Path) -> None:
+    """A regenerated stream cannot authenticate tampered RAW source bytes by ZIP CRC alone.
+
+    Mutate the independently frozen mode-2 RAW blob, not the index or generated Deflate stream.
+    A malicious archive should fail at the physical content tier before returning nested ZIP bytes.
+    """
+    record = _record(
+        "v24-virtual-zip-deflate-mode2.json",
+        "cmpct-v24-golden-virtual-zip-deflate-mode2-v1",
+    )
+    original = base64.b64decode(record["archive_base64"], validate=True)
+    clean_path = tmp_path / "golden-mode2-clean.cmpct"
+    clean_path.write_bytes(original)
+    with CMPCT(clean_path) as ar:
+        nested = ar.read(record["name"])
+    with zipfile.ZipFile(io.BytesIO(nested)) as zf:
+        raw = zf.read(record["member"]["name"])
+    assert raw and original.count(raw) == 1
+    corrupted = bytearray(original)
+    corrupted[original.index(raw) + len(raw) // 2] ^= 0x01
+    corrupt_path = tmp_path / "golden-mode2-corrupt-raw.cmpct"
+    corrupt_path.write_bytes(corrupted)
+    with CMPCT(corrupt_path) as ar:
+        with pytest.raises((IOError, ValueError)):
+            ar.read(record["name"])
+        with pytest.raises((IOError, ValueError)):
+            ar.read_range(record["name"], record["ranges"][0]["offset"], record["ranges"][0]["length"])
