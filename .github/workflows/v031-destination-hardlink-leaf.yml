@@ -1,0 +1,43 @@
+# ci-lane: fast
+name: CMPCT v031 pre-existing hardlink destination alias court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-existing-leaf-hardlink-guard-20261023
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_v031_destination_hardlink_leaf_alias.py'
+      - '.github/workflows/v031-destination-hardlink-leaf.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  alias-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact source identity and POSIX premise
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          git hash-object src/cmpct/reader.py
+          test -z "$(git status --porcelain)"
+          python -c 'import os; assert os.name == "posix" and hasattr(os, "link")'
+      - name: Install real CMPCT package and native core
+        run: python -m pip install -e '.[test,audio]'
+      - name: Run preregistered outsider-inode adversaries and controls
+        run: python -m pytest -q tests/test_v031_destination_hardlink_leaf_alias.py
+      - name: Truth boundary
+        run: |
+          echo 'STATIC_POSIX_HARDLINK_LEAF_COURT_PASS; TOCTOU, platform parity and release gates UNMEASURED'
