@@ -1,0 +1,60 @@
+# ci-lane: fast
+name: CMPCT v031 salvage self-hash truth falsifier
+on:
+  push:
+    branches:
+      - agent/phased2-v031-recover-blobs-selfhash-falsifier-20261023
+    paths:
+      - 'benchmarks/v031_recover_blob_selfhash_court.py'
+      - '.github/workflows/v031-recover-blob-selfhash-court.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  recovery-selfhash-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind authenticated source and pre-result prediction
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object src/cmpct/transactions.py)" = "964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          test -f docs/v031-research/RECOVER_BLOB_SELFHASH_O0_PREREG.md
+          git rev-parse HEAD
+      - name: Install genuine CMPCT package
+        run: python -m pip install -e '.[test,audio]'
+      - name: Test real RAW salvage metadata versus corrupted/forged physical records
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_recover_blob_selfhash_court.py > "$RUNNER_TEMP/v031-salvage-selfhash.json"
+          cat "$RUNNER_TEMP/v031-salvage-selfhash.json"
+          python - "$RUNNER_TEMP/v031-salvage-selfhash.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding='utf-8') as f:
+              x=json.load(f)
+          assert x['decision']=='SALVAGE_RETURNS_UNVERIFIED_FRAMED_BLOBS'
+          assert x['corrupted_original']['reader_rejected']
+          assert x['corrupted_original']['reported_by_recovery']
+          assert x['forged_uncommitted_record']['record_returned']
+          assert not x['forged_uncommitted_record']['sha_matches']
+          print('SCIENTIFIC NEGATIVE: candidate framed blobs are not verified recovered content')
+          PY
+      - name: Retain O0 evidence, including negative/failure if encountered
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-salvage-selfhash-negative
+          path: ${{ runner.temp }}/v031-salvage-selfhash.json
+          if-no-files-found: warn
