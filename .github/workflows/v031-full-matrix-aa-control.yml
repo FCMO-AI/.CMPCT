@@ -1,3 +1,5 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 # A/A identical-engine reference court. Diagnose the official r24 performance gate,
 # never change its source, thresholds, comparators, semantics, or promotion authority.
 name: CMPCT v031 full-matrix identical-source control
@@ -5,10 +7,16 @@ on:
   push:
     branches:
       - agent/phased3-v031-binary-create-aa-ab-attribution-20261023
+    paths:
+      - '.github/workflows/v031-full-matrix-aa-control.yml'
   workflow_dispatch:
+concurrency:
+  group: cmpct-v031-exact-diagnostic-${{ github.sha }}
+  cancel-in-progress: false
 permissions:
   contents: read
 env:
+  EVIDENCE_HEAD: ${{ github.sha }}
   CMPCT_PARITY_REPS: "7"
   CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-v031-identical-aa-corpus
 jobs:
@@ -19,6 +27,7 @@ jobs:
       - name: Check out exact diagnostic head
         uses: actions/checkout@v6
         with:
+          ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 0
       - name: Bind source and workflow-only changes
         run: |
