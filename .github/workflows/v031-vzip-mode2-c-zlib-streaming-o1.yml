@@ -7,6 +7,7 @@ on:
     paths:
       - 'benchmarks/v031_vzip_mode2_c_zlib_stream_probe.c'
       - 'benchmarks/v031_vzip_mode2_c_zlib_streaming_o1.py'
+      - 'benchmarks/v031_vzip_mode2_cross_provider_replay.py'
       - 'benchmarks/v031_vzip_mode2_native_backend_probe.py'
       - 'benchmarks/history/2026-10-23-v031-vzip-mode2-c-zlib-streaming-o1-prereg.md'
       - 'tests/conformance/v24-virtual-zip-deflate-mode2.json'
@@ -32,6 +33,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git hash-object benchmarks/history/2026-10-23-v031-vzip-mode2-c-zlib-streaming-o1-prereg.md
+          python -m py_compile benchmarks/v031_vzip_mode2_cross_provider_replay.py
           git hash-object tests/conformance/v24-virtual-zip-deflate-mode2.json
       - name: Set up fixed Python zlib comparator
         uses: actions/setup-python@v5
@@ -50,7 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           git rev-parse HEAD > research-artifacts/source-head.txt
-          git hash-object benchmarks/v031_vzip_mode2_c_zlib_stream_probe.c benchmarks/v031_vzip_mode2_c_zlib_streaming_o1.py benchmarks/v031_vzip_mode2_native_backend_probe.py > research-artifacts/source-blobs.txt
+          git hash-object benchmarks/v031_vzip_mode2_c_zlib_stream_probe.c benchmarks/v031_vzip_mode2_c_zlib_streaming_o1.py benchmarks/v031_vzip_mode2_native_backend_probe.py benchmarks/v031_vzip_mode2_cross_provider_replay.py > research-artifacts/source-blobs.txt
           python benchmarks/v031_vzip_mode2_c_zlib_streaming_o1.py --binary research-artifacts/vzip-mode2-native-libz-probe --out research-artifacts/o1-native-libz.json | tee research-artifacts/o1-summary.txt
           python - <<'PY'
           import json
