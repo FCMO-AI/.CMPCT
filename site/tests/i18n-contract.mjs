@@ -105,7 +105,7 @@ for (const locale of SUPPORTED_LOCALES) {
   const label = MESSAGES.benchmarkEpochLabel?.[locale] || "";
   const format = MESSAGES.benchmarkSourceFormat?.[locale] || "";
   if (locale !== "en" && label === "Benchmark epoch") fail(`${locale} left proof epoch label in English`);
-  if (locale !== "en" && /\\bcanonical\\b/i.test(format)) fail(`${locale} left proof epoch connective in English`);
+  if (locale !== "en" && /\bcanonical\b/i.test(format)) fail(`${locale} left proof epoch connective in English`);
   const full = format.replace("{version}", "v0.29.0").replace("{revision}", "24");
   if (!full.includes("v0.29.0") || !full.includes("r24")) fail(`${locale} rewrote numeric benchmark custody`);
 }
