@@ -1,0 +1,61 @@
+# ci-lane: fast
+name: CMPCT v031 two-process stale-journal mutation court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-serialized-stale-journal-falsifier-20261023
+    paths:
+      - 'benchmarks/v031_multiprocess_stale_journal_court.py'
+      - '.github/workflows/v031-two-process-stale-journal-court.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  stale-journal-two-process:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind pristine Writer, Reader and prior prediction
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object src/cmpct/transactions.py)" = "964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c"
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test -f docs/v031-research/SERIALIZED_STALE_JOURNAL_O0_PREREG.md
+          test -f docs/v031-research/SERIALIZED_STALE_JOURNAL_O1_MULTIPROCESS_PREREG.md
+          git rev-parse HEAD
+      - name: Install exact source package with test dependencies
+        run: python -m pip install -e '.[test,audio]'
+      - name: Run independently scheduled two-process actual public mutations
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_multiprocess_stale_journal_court.py > "$RUNNER_TEMP/v031-two-process-stale-journal.json"
+          cat "$RUNNER_TEMP/v031-two-process-stale-journal.json"
+          python - "$RUNNER_TEMP/v031-two-process-stale-journal.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding='utf-8') as f:
+              result=json.load(f)
+          assert result['decision']=='TWO_PROCESS_SILENT_LOST_UPDATE_WITH_SERIALIZED_GENERATIONS'
+          assert result['successful_public_returns']==2
+          assert result['process_exit_codes']==[0,0]
+          assert len(result['lost_renames'])==1
+          assert result['physical_whole_generation_interleaving_allowed'] is False
+          print('NEGATIVE SCIENCE: independent OS processes can both report success while one journal rename is omitted')
+          PY
+      - name: Retain source-exact process-level research result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-two-process-stale-journal-negative
+          path: ${{ runner.temp }}/v031-two-process-stale-journal.json
+          if-no-files-found: warn
