@@ -1,0 +1,73 @@
+# ci-lane: fast
+name: CMPCT v031 bounded salvage candidate parity
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-salvage-stream-candidate-fidelity-r261-20261023
+    paths:
+      - 'src/cmpct/transactions.py'
+      - 'src/cmpct/cli.py'
+      - 'tests/test_recover_blob_candidates.py'
+      - 'benchmarks/v031_salvage_stream_product_court.py'
+      - '.github/workflows/v031-salvage-candidates.yml'
+  pull_request:
+    paths:
+      - 'src/cmpct/transactions.py'
+      - 'src/cmpct/cli.py'
+      - 'tests/test_recover_blob_candidates.py'
+      - 'benchmarks/v031_salvage_stream_product_court.py'
+      - '.github/workflows/v031-salvage-candidates.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-salvage-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  bounded-candidate-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind source and inherited codec identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          git diff --exit-code
+          git rev-parse HEAD
+      - name: Install shipping CMPCT implementation with test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Verify real physical candidate parity, hostile boundaries, CLI and RSS
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/test_recover_blob_candidates.py --junitxml="$RUNNER_TEMP/salvage-candidates-pytest.xml" 2>&1 | tee "$RUNNER_TEMP/salvage-candidates.log"
+      - name: Record real-package compare-and-cost court
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_salvage_stream_product_court.py > "$RUNNER_TEMP/salvage-candidates-economics.json"
+          cat "$RUNNER_TEMP/salvage-candidates-economics.json"
+      - name: Retain exact-head evidence even when court fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-salvage-candidate-product-court
+          path: |
+            ${{ runner.temp }}/salvage-candidates-pytest.xml
+            ${{ runner.temp }}/salvage-candidates.log
+            ${{ runner.temp }}/salvage-candidates-economics.json
+          if-no-files-found: warn
+          retention-days: 14
