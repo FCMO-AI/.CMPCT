@@ -33,6 +33,13 @@ def main() -> None:
     assert data["project"]["surface_revision"] == surface
     assert evidence.get("schema") == "cmpct-public-evidence-v1"
     assert evidence.get("project_version") == version
+    # Publication identity and historical research provenance are different axes. An old benchmark
+    # must not be rebranded as current; a current site must not inherit an old project version.
+    frontier = data.get("frontier") or {}
+    provenance = evidence.get("provenance") or {}
+    assert provenance.get("record") == frontier.get("file")
+    assert provenance.get("source_project_version") == frontier.get("project_version")
+    assert provenance.get("source_format_revision") == frontier.get("canonical_format_revision")
     assert (out / "surface-revision.txt").read_text(encoding="utf-8").strip() == surface
     assert (out / ".nojekyll").exists(), "static branch publication must bypass Jekyll"
 
