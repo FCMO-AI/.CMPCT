@@ -81,6 +81,9 @@ jobs:
       - name: Validate stable public evidence and required proof surfaces
         run: python site/tests/proof_surface_contract.py _site
 
+      - name: Prove separate release and research source identity
+        run: python site/tests/version_provenance_contract.py
+
       - name: Preserve release-level evidence invariants
         run: python site/tests/release_evidence_contract.py
 
