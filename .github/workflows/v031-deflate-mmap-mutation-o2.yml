@@ -35,6 +35,8 @@ jobs:
           python -m pip install -e '.[test]'
       - name: Execute preregistered real revision-24 mutable mmap court
         run: python benchmarks/v031_deflate_mmap_mutation_o2_court.py --output deflate-mutation-evidence/result.json
+      - name: Execute preregistered staged-output O3 under identical mutation
+        run: python benchmarks/v031_deflate_staged_output_o3_court.py --output deflate-mutation-evidence/o3-result.json
       - name: Record source SHA and file blob identities
         if: always()
         run: |
@@ -42,6 +44,8 @@ jobs:
           git rev-parse HEAD > deflate-mutation-evidence/source.sha
           git hash-object src/cmpct/reader.py > deflate-mutation-evidence/reader.blob
           git hash-object benchmarks/v031_deflate_mmap_mutation_o2_court.py > deflate-mutation-evidence/oracle.blob
+          git hash-object benchmarks/v031_deflate_staged_output_o3_court.py > deflate-mutation-evidence/o3-oracle.blob
+          git hash-object benchmarks/history/2026-10-23-v031-deflate-staged-output-o3-prereg.md > deflate-mutation-evidence/o3-prereg.blob
           git hash-object benchmarks/history/2026-10-23-v031-direct-deflate-mutable-source-o2-prereg.md > deflate-mutation-evidence/prereg.blob
       - name: Upload primary evidence even when expectation is falsified
         if: always()
