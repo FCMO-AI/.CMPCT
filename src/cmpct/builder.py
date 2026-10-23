@@ -85,7 +85,9 @@ class Builder:
                 rel=f'{prefix}/{e.name}' if prefix else e.name
                 st=e.stat(follow_symlinks=False);mode=stat.S_IMODE(st.st_mode);self._capture_fs_meta(e.path,rel,st)
                 if stat.S_ISLNK(st.st_mode):
-                    b=os.readlink(e.path).encode();ref=self.add_content(b,'.symlink')
+                    # POSIX link targets are byte sequences, not necessarily valid UTF-8.
+                    # Preserve surrogateescaped source bytes; ordinary Unicode output is unchanged.
+                    b=os.fsencode(os.readlink(e.path));ref=self.add_content(b,'.symlink')
                     self.files.append([rel,K_SYMLINK,mode,st.st_mtime_ns,len(b),sha(b),[S_BLOB,ref]]);continue
                 if stat.S_ISDIR(st.st_mode):
                     self.files.append([rel,K_DIR,mode,st.st_mtime_ns,0,b'',None]);walk(e.path,rel);continue
