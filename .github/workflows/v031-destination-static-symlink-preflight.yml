@@ -33,7 +33,7 @@ jobs:
           git rev-parse HEAD
           python -c 'import os; assert os.name == "posix"'
       - name: Install actual revision-24 package
-        run: python -m pip install -e . pytest
+        run: python -m pip install -e '.[test,audio]'
       - name: Execute source-exact static containment and legitimate reconstruction
         run: |
           set -euo pipefail
