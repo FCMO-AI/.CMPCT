@@ -58,7 +58,7 @@ jobs:
       - name: Run inherited hardlink-owner tests
         run: |
           set -euo pipefail
-          python -m pytest -q tests/test_transaction_hardlink_owner_guard.py \
+          python -m pytest -q tests/test_v031_hardlink_owner_mutation_guard.py \
             2>&1 | tee benchmark-artifacts/hardlink-owner-pytest.log
       - name: Retain evidence on green or red
         if: always()
