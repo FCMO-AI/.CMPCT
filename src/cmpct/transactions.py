@@ -78,7 +78,7 @@ def append_update(archive:Path,member:str,source:Path):
     # Every 64 deltas write a compact full checkpoint. This bounds open-time chain traversal while
     # amortizing checkpoint bytes to only a few hundred bytes per update.
     checkpoint=None
-    if depth>=63:
+    if prev==0 or depth>=63:
         index['blobs'].extend(newblobs)
         done=False
         for i,x in enumerate(index['files']):
@@ -112,7 +112,7 @@ def append_delete(archive:Path,member:str):
     with CMPCT(archive) as ar:
         if member not in ar.by:raise KeyError(member)
         prev=ar.latest_footer_pos;depth=ar.delta_depth;idx=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False)
-    op=['del',member];checkpoint=_index_after_op(idx,op) if depth>=63 else None
+    op=['del',member];checkpoint=_index_after_op(idx,op) if prev==0 or depth>=63 else None
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
 
 def append_rename(archive:Path,old:str,new:str):
@@ -128,7 +128,7 @@ def append_rename(archive:Path,old:str,new:str):
             prow=ar.by.get(parent)
             if prow is None or prow[1]!=K_DIR:raise FileNotFoundError(f'destination parent directory does not exist: {parent}')
         prev=ar.latest_footer_pos;depth=ar.delta_depth;idx=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False)
-    op=['ren',old,new];checkpoint=_index_after_op(idx,op) if depth>=63 else None
+    op=['ren',old,new];checkpoint=_index_after_op(idx,op) if prev==0 or depth>=63 else None
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
 
 def recover_blob_records(archive:Path):
