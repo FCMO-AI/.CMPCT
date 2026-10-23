@@ -165,3 +165,47 @@ def test_sparse_128mib_scan_stays_below_full_materialization_rss(tmp_path):
     measured = json.loads(run.stdout)
     assert measured["rows"] == 0
     assert measured["delta_kib"] < 24 * 1024, measured
+
+
+@pytest.mark.parametrize("max_read", [1, 2, 3, 7, 63, 64, 65, 127, 1024])
+def test_partial_readinto_short_reads_preserve_framing(tmp_path, monkeypatch, max_read):
+    # fread() is not guaranteed to fill the buffer on every file-like handle;
+    # a deterministic wrapper short-reads the *real installed scanner*.
+    import builtins
+    path = tmp_path / "shortreads.cmpct"
+    content = bytearray(bytes([0]) * 8192)
+    for offset in (62, 129, 4093, 8117):
+        frame = _record(b"crossed")
+        content[offset:offset + len(frame)] = frame
+    path.write_bytes(content)
+    expected = _legacy_scan(path.read_bytes())
+    real_open = builtins.open
+
+    class ShortReader:
+        def __init__(self, file):
+            self.file = file
+
+        def __enter__(self):
+            self.file.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.file.__exit__(*args)
+
+        def fileno(self):
+            return self.file.fileno()
+
+        def readinto(self, target):
+            return self.file.readinto(target[:max_read])
+
+    def limited_open(name, *args, **kwargs):
+        file = real_open(name, *args, **kwargs)
+        if Path(name) == path and args and args[0] == "rb":
+            return ShortReader(file)
+        return file
+
+    with monkeypatch.context() as m:
+        m.setattr(builtins, "open", limited_open)
+        actual = recover_blob_records(path)
+    assert [{key: row[key] for key in DECLARED_KEYS} for row in actual] == expected
+    assert all(row["verification"] == "unverified" for row in actual)
