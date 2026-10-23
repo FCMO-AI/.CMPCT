@@ -35,3 +35,40 @@ The test materialized <=1 MiB per input, executed detached binaries and **did no
 A single 75-byte level-6 source-locked anchor would have rejected this backend **before** a full native-dispatch implementation: 23 B vs 13 B. It was prospectively accessible from PR #278. This is a transferable probe-selection lesson, **not** enough evidence to mutate the Discovery Engine's normative policy or release thresholds.
 
 **Classification:** decisive O0 backend compatibility negative. **Format change: NONE. Native product support: NONE. Release credit: NONE.**
+
+## Compact 28-case exact-stream matrix (hosted evidence)
+
+The two 12-character SHA-256 prefixes below are **diagnostic abbreviations only**, not authentication receipts; full SHA-256 and per-case source IDs remain in the source-bound JSON artifact. Identical compressed sizes do **not** imply identical streams (e.g., zeros at level 6 or structured logs at level 9).
+
+| Family | Level | Python zlib bytes | Rust native bytes | Byte-equal | First differing offset | zlib SHA prefix | native SHA prefix |
+|---|---:|---:|---:|:---:|---:|---|---|
+| golden_75 | 0 | 80 | 80 | YES | - | 9e1ab83d0b3c | 9e1ab83d0b3c |
+| golden_75 | 1 | 16 | 23 | NO | 0 | 0ce199fccb92 | 81900be84eed |
+| golden_75 | 6 | 13 | 23 | NO | 0 | 803f9173e4fd | a1ec3339f9a2 |
+| golden_75 | 9 | 13 | 23 | NO | 0 | 803f9173e4fd | a1ec3339f9a2 |
+| zeros_8k | 0 | 8197 | 8197 | YES | - | eed86045d2f8 | eed86045d2f8 |
+| zeros_8k | 1 | 53 | 54 | NO | 7 | 13d937c82e1d | 0e4a77f28e99 |
+| zeros_8k | 6 | 25 | 25 | NO | 1 | f2535cbe7473 | 6fc25a7a6c54 |
+| zeros_8k | 9 | 25 | 25 | NO | 1 | f2535cbe7473 | 6fc25a7a6c54 |
+| high_entropy_32k | 0 | 32778 | 32778 | NO | 1 | 627e3f61213c | 6c5923184843 |
+| high_entropy_32k | 1 | 32778 | 32773 | NO | 0 | a0a5d81c0ec2 | 6b741168ff92 |
+| high_entropy_32k | 6 | 32778 | 32778 | NO | 2 | 2026faf41621 | 6c5923184843 |
+| high_entropy_32k | 9 | 32778 | 32778 | NO | 2 | 2026faf41621 | 6c5923184843 |
+| alternating_pattern_32k | 0 | 32778 | 32778 | NO | 1 | 9492c6ab044e | f34ab0bf400b |
+| alternating_pattern_32k | 1 | 181 | 189 | NO | 5 | 7b15237c12db | 9191f7d1b8c4 |
+| alternating_pattern_32k | 6 | 52 | 52 | NO | 2 | 830f08af7efb | 36e98da1f44c |
+| alternating_pattern_32k | 9 | 52 | 52 | NO | 2 | 830f08af7efb | 36e98da1f44c |
+| shifted_related_64k | 0 | 65546 | 65551 | NO | 1 | bd0244c3eff9 | 858a2f1dca4f |
+| shifted_related_64k | 1 | 65556 | 65595 | NO | 0 | 6914af154cad | 54cfdbbb9d46 |
+| shifted_related_64k | 6 | 65556 | 65551 | NO | 2 | e157931f3fa4 | 858a2f1dca4f |
+| shifted_related_64k | 9 | 65556 | 65551 | NO | 2 | e157931f3fa4 | 858a2f1dca4f |
+| structured_logs | 0 | 70666 | 70671 | NO | 1 | 2dfb098bfb02 | e7b760844ee2 |
+| structured_logs | 1 | 8480 | 9279 | NO | 1 | 1728cb69e502 | 5ab2e1debaed |
+| structured_logs | 6 | 7227 | 6561 | NO | 2 | 1178768fabd5 | bf4ca1a553b4 |
+| structured_logs | 9 | 6508 | 6508 | NO | 2 | 55b1b6f15b97 | 1eb987a2bf3d |
+| json_rows | 0 | 78522 | 78527 | NO | 1 | 6bda52599957 | 10b23c9326f3 |
+| json_rows | 1 | 10832 | 10553 | NO | 2 | 6d8b7e023719 | 5644fef62cf0 |
+| json_rows | 6 | 8382 | 8080 | NO | 2 | c51bfa53fa26 | 034e890414b5 |
+| json_rows | 9 | 8019 | 8067 | NO | 4 | fc46d2a24dc6 | 0e414824009f |
+
+**Sanity:** 28 cases, 26 differences; identical level-0 streams appear only in the golden-75 and zeros-8k rows. All other rows have fully decodable streams yet cannot substitute for the frozen output. This result provides an inexpensive falsifier for future native codec integration; it is not a compression-performance ranking.
