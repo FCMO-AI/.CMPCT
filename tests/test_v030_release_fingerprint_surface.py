@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tools import check_v030_release_lock as lock
+from tools import check_v031_candidate_fingerprint as lock
 
 
-def test_release_fingerprint_covers_r25_oracle_and_android_custody_inputs() -> None:
+def test_prospective_v031_fingerprint_covers_r25_oracle_and_android_custody_inputs() -> None:
     """Release-critical oracle/platform source must invalidate stale v0.30 receipts when it changes."""
     manifest = lock.load_manifest()
     _fingerprint, rows = lock.fingerprint(manifest)
