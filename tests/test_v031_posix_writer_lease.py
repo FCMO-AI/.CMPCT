@@ -289,3 +289,34 @@ def test_transient_rebind_cannot_poison_new_blob_offsets(tmp_path, monkeypatch):
         assert reader.read("alpha.txt") == new_source.read_bytes()
         assert reader.read("beta.txt") == b"beta payload\n" * 70
         assert reader.verify() >= 2
+
+
+def test_pre_footer_flush_failure_releases_lease_and_preserves_last_commit(tmp_path, monkeypatch):
+    """A failed first fsync leaves a noncommitted tail, not a visible rename."""
+    archive = _make_archive(tmp_path)
+    original_fsync = tx.os.fsync
+
+    def fail_first_fsync(fd):
+        raise OSError("injected pre-footer flush failure")
+
+    monkeypatch.setattr(tx.os, "fsync", fail_first_fsync)
+    try:
+        with pytest.raises(OSError, match="pre-footer"):
+            tx.append_rename(archive, "alpha.txt", "alpha-new.txt")
+    finally:
+        monkeypatch.setattr(tx.os, "fsync", original_fsync)
+
+    # The payload was physically appended but no new footer is committed.
+    # Reader must recover previous generation and after lock release a new
+    # transaction may succeed without discarding or fabricating old content.
+    with CMPCT(archive) as reader:
+        assert "alpha.txt" in reader.by
+        assert "alpha-new.txt" not in reader.by
+        assert reader.read("alpha.txt") == b"alpha payload\n" * 70
+        assert reader.verify() >= 2
+
+    tx.append_rename(archive, "alpha.txt", "alpha-new.txt")
+    with CMPCT(archive) as reader:
+        assert reader.read("alpha-new.txt") == b"alpha payload\n" * 70
+        assert reader.read("beta.txt") == b"beta payload\n" * 70
+        assert reader.verify() >= 2
