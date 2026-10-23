@@ -7,6 +7,7 @@ on:
     paths:
       - 'src/cmpct/reader.py'
       - 'tests/test_v031_atomic_shared_leaf_optin.py'
+      - 'benchmarks/v031_atomic_shared_leaf_abba.py'
       - 'tests/test_v031_destination_hardlink_leaf_alias.py'
       - 'benchmarks/history/2026-10-23-v031-atomic-shared-leaf-optin-prereg.md'
       - '.github/workflows/v031-shared-leaf-atomic-optin.yml'
@@ -42,6 +43,15 @@ jobs:
         run: python -m pytest -q tests/test_v031_destination_hardlink_leaf_alias.py
       - name: New independent atomic opt-in product court
         run: python -m pytest -q -s tests/test_v031_atomic_shared_leaf_optin.py
+      - name: Genuine CMPCT three-arm same-archive ABBA research economics
+        run: python benchmarks/v031_atomic_shared_leaf_abba.py
+      - name: Preserve raw repeated research measurements
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-shared-leaf-abba-${{ github.sha }}
+          path: benchmark-artifacts/atomic_shared_leaf_abba.json
+          if-no-files-found: error
+          retention-days: 90
       - name: Explicit boundary and nonpromotion
         run: |
           echo 'REAL_READER_STATIC_OPTIN_COURT_PASS; DEFAULT_REJECTION_UNCHANGED'
