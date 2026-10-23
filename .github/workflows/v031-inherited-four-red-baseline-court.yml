@@ -56,7 +56,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"
+          actual="$(git -C source rev-parse HEAD)"
+          printf "Source actual=%s expected=%s\\n" "$actual" "$SOURCE_SHA"
+          if [ "$actual" != "$SOURCE_SHA" ]; then
+            echo "Exact source head changed; no inherited assertion" >&2
+            exit 1
+          fi
           python - <<'PY'
           import json, subprocess
           from pathlib import Path
@@ -79,8 +84,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install pytest
-        run: python -m pip install 'pytest>=8,<10'
+      - name: Install original package and full test dependencies
+        run: python -m pip install -e './source[test,audio]'
 
       - name: Run four exact unchanged tests; independently classify failures
         working-directory: source
