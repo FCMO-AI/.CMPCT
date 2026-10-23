@@ -1,0 +1,55 @@
+{
+  "schema": "cmpct-v24-golden-virtual-zip-deflate-mode2-v1",
+  "format_revision": 24,
+  "generation_provenance": {
+    "method": "Builder-independent r24 framing and deterministic ZIP/RFC1951 assembly; no CMPCT Builder used",
+    "python": "3.13.5",
+    "msgpack": "1.1.2",
+    "zstd": "system libzstd",
+    "deflate": "Python zlib 1.3.1 raw RFC-1951 level 6",
+    "purpose": "fixed portable r24 S_VZIP regeneration mode-2 oracle; native unsupported status remains expected"
+  },
+  "vector": {
+    "name": "nested-deflate-mode2.zip",
+    "storage_kind": 2,
+    "logical_size": 129,
+    "logical_sha256": "5a5454250601cb695f35d8af60f0c4069d8ce4919e94bbefa87c905262c4a12a",
+    "archive_sha256": "febef1d1f1157066204c468d74e81e14c6f79d1490ab2e76e024beed3ce3fb81",
+    "archive_bytes": 861,
+    "recipe": {
+      "skeleton_blob": 1,
+      "literal_lengths": [
+        39,
+        77
+      ],
+      "payload_stream_modes": [
+        2
+      ],
+      "raw_blob": 0,
+      "stream_blob": 0,
+      "compressed_size": 13,
+      "zlib_level": 6
+    },
+    "member": {
+      "name": "hello.txt",
+      "method": 8,
+      "logical_size": 75,
+      "logical_sha256": "708bee4f14697a0938db8dffa4b2f2783db2b662bd279ea584e717daf70cb1fc",
+      "exact_deflate_hex": "4b4c4a4ec483929350105ec500",
+      "control_level_1_deflate_hex": "4b4c4a4ec48392931291111e9549c900"
+    },
+    "ranges": [
+      {
+        "offset": 36,
+        "length": 18,
+        "hex": "7478744b4c4a4ec483929350105ec500504b"
+      },
+      {
+        "offset": 51,
+        "length": 20,
+        "hex": "00504b0102140314000000080000002100c5de3d"
+      }
+    ],
+    "archive_base64": "Q01QQ1QyNAAYAAAAywAAAAAAAADCAAAAAAAAAD8BAAAAAAAArAcws0nQldIOWW2YDCK+6wc+5vS35Ahz7c9It/7Y6gUotS/9IMIRBgCHoXYYpWZpbGVzkZe4bmVzdGVkLWRlZmxhdGUtbW9kZTIuemlwAM0BpADMgcCSAgClYmxvYnOSlQBLSwAAlcyLdHQAAKdyZWNpcGVzkZYBkidNkZYACAIADQbEIFpUVCUGActpXzXYr2DwxAadjOSRnpS776h8kFJixKEqzIHOVp+Wc6lkaWN0X2Jsb2LApmZzbWV0YYOlb3duZXKSAACvb3duZXJfb3ZlcnJpZGVzkKZ4YXR0cnOQqGZlYXR1cmVzkENNQTQAAAAASwAAAAAAAABLAAAAAAAAAAAAAADF3j01cIvuTxRpegk4243/pLLyeD2ytmK9J56lhOcX2vcMsfxhYmNhYmNhYmNhYmNhYmNhYmNhYmNhYmNhYmNhY2JhY2JhY2JhY2JhY2JhYmNhYmNhYmNhYmNhYmNhYmNhYmNhYmNhYmNDTUE0AAAAAHQAAAAAAAAAdAAAAAAAAAAAAAAAiJiveVIey4kTfFoYWrTaybjBl+OBCmdj7SE3MwPGvWKgFNNDUEsDBBQAAAAIAAAAIQDF3j01DQAAAEsAAAAJAAAAaGVsbG8udHh0UEsBAhQDFAAAAAgAAAAhAMXePTUNAAAASwAAAAkAAAAAAAAAAAAAAKSBAAAAAGhlbGxvLnR4dFBLBQYAAAAAAQABADcAAAA0AAAAAAAotS/9IMIRBgCHoXYYpWZpbGVzkZe4bmVzdGVkLWRlZmxhdGUtbW9kZTIuemlwAM0BpADMgcCSAgClYmxvYnOSlQBLSwAAlcyLdHQAAKdyZWNpcGVzkZYBkidNkZYACAIADQbEIFpUVCUGActpXzXYr2DwxAadjOSRnpS776h8kFJixKEqzIHOVp+Wc6lkaWN0X2Jsb2LApmZzbWV0YYOlb3duZXKSAACvb3duZXJfb3ZlcnJpZGVzkKZ4YXR0cnOQqGZlYXR1cmVzkENNUFRGMjQAAAEAAMsAAAAAAAAAwgAAAAAAAAAAAAAAAAAAAKwHMLNJ0JXSDlltmAwivusHPub0t+QIc+3PSLf+2OoF"
+  }
+}
