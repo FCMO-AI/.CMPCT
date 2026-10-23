@@ -9,6 +9,7 @@ on:
       - 'tests/test_v031_atomic_shared_leaf_optin.py'
       - 'benchmarks/v031_atomic_shared_leaf_abba.py'
       - 'benchmarks/v031_atomic_shared_leaf_parent_pivot_negative.py'
+      - 'benchmarks/v031_atomic_shared_leaf_metadata_oracle.py'
       - 'tests/test_v031_destination_hardlink_leaf_alias.py'
       - 'benchmarks/history/2026-10-23-v031-atomic-shared-leaf-optin-prereg.md'
       - '.github/workflows/v031-shared-leaf-atomic-optin.yml'
@@ -50,9 +51,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cmpct-shared-leaf-abba-${{ github.sha }}
-          path: benchmark-artifacts/atomic_shared_leaf_abba.json
+          path: |
+            benchmark-artifacts/atomic_shared_leaf_abba.json
+            benchmark-artifacts/atomic_shared_leaf_metadata.json
           if-no-files-found: error
           retention-days: 90
+      - name: Archive-vs-inherited destination xattr semantics on actual Reader
+        run: python benchmarks/v031_atomic_shared_leaf_metadata_oracle.py
       - name: Negative security falsifier, real Reader parent-pivot after preflight
         run: python benchmarks/v031_atomic_shared_leaf_parent_pivot_negative.py
       - name: Explicit boundary and nonpromotion
