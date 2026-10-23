@@ -7,6 +7,7 @@ on:
     paths:
       - 'src/cmpct/reader.py'
       - 'tests/test_v031_raw_range_digest_optin.py'
+      - 'docs/HARDENING.md'
       - 'benchmarks/v031_raw_digest_range_optin_cost.py'
       - '.github/workflows/v031-raw-digest-range-optin.yml'
   workflow_dispatch:
