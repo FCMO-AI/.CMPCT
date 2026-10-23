@@ -1,0 +1,59 @@
+# ci-lane: research
+name: v031 ZIP64 exact-count compatibility court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-zip64-count-export-r254-20261023
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v031-zip64-count-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  zip64-count:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+      - name: Check exact checkout fingerprint
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install genuine package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Run count transition, exact Deflate and offset-bound courts
+        run: python -m pytest -vv tests/test_v031_zip64_export_count.py
+      - name: Cross-reader validation with Info-ZIP
+        run: |
+          mkdir -p zip64-artifacts
+          python - <<'PY'
+          from pathlib import Path
+          from runpy import run_path
+          from cmpct.reader import CMPCT
+          f=run_path("tests/test_v031_zip64_export_count.py")["make_r24"]
+          f(Path("zip64-artifacts/input.cmpct"),65536,with_deflate=True)
+          with CMPCT(Path("zip64-artifacts/input.cmpct")) as r:
+              assert r.verify()==1
+              r.export_zip(Path("zip64-artifacts/output.zip"))
+          PY
+          unzip -t zip64-artifacts/output.zip > zip64-artifacts/infozip-test.log
+          tail -n 2 zip64-artifacts/infozip-test.log
+      - name: Preserve source-bound conformance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zip64-count-${{ github.sha }}
+          path: zip64-artifacts/
+          if-no-files-found: warn
