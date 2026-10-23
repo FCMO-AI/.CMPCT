@@ -1,0 +1,58 @@
+# ci-lane: fast
+name: CMPCT v031 RAW selective integrity scientific court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-raw-range-integrity-court-20261023
+    paths:
+      - 'benchmarks/v031_raw_selective_integrity_court.py'
+      - '.github/workflows/v031-raw-selective-integrity-court.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  frozen-raw-range-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pin exact canonical reader/builder source identity
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          git rev-parse HEAD
+          git hash-object benchmarks/v031_raw_selective_integrity_court.py
+      - name: Install real package (not detached mock)
+        run: python -m pip install -e .
+      - name: Execute unchanged scientific prediction
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_raw_selective_integrity_court.py > "$RUNNER_TEMP/raw-range-court.json"
+          python - "$RUNNER_TEMP/raw-range-court.json" <<'PY'
+          import json,sys
+          j=json.load(open(sys.argv[1]))
+          assert j['decision']=='RAW_RANGE_BYPASSES_CRC_AND_SHA'
+          cases=[x for group in j['cases'] for x in group['cases']]
+          assert len(cases)==18
+          assert all(x['range']=='ACCEPT_TAMPERED' and x['verify']=='REJECT' for x in cases)
+          assert all(x['structural_preflight']=='ACCEPT' for x in cases)
+          assert len(j['cost_micro_ABBA'])==3
+          print('SCIENTIFIC_NEGATIVE_CONFIRMED:',len(cases),'tamper cases; CRC price measured, not promoted')
+          PY
+      - name: Preserve raw and negative evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-selective-integrity-scientific-only
+          path: ${{ runner.temp }}/raw-range-court.json
+          if-no-files-found: warn
