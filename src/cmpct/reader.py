@@ -358,6 +358,58 @@ class CMPCT:
                 try:os.unlink(tmp)
                 except FileNotFoundError:pass
 
+    def _extract_shared_leaf_atomic(self,row,full):
+        """Optional static hardlink-alias fallback: publish a fresh inode.
+
+        The old inode may have other names outside the destination. Never open
+        it with O_TRUNC. Keep the staging basename short for POSIX NAME_MAX,
+        retain original mode when metadata restoration is disabled, and leave
+        the old inode untouched if decoding/writing fails. This is *not* a
+        race-proof directory-capability implementation: parent pathnames can
+        still be swapped by concurrent actors.
+        """
+        rel,k,mode,mt,size,h,storage=row
+        old=os.lstat(full)
+        # A previous archive member can already have replaced another link
+        # to this inode, legitimately reducing st_nlink to one after preflight.
+        # The preflight claim selects atomic publication; requiring nlink>1 a
+        # second time would reject a valid two-member extraction without any
+        # concurrent actor. The leaf still must be a regular file.
+        if not stat.S_ISREG(old.st_mode):
+            raise IOError(f'atomic shared destination leaf is no longer regular: {full!r}')
+        fd,tmp=tempfile.mkstemp(prefix='.cmpct-part-',dir=os.path.dirname(full))
+        try:
+            # Without metadata restoration, pre-existing destination mode is
+            # retained by in-place writes. Match that as closely as possible.
+            if hasattr(os,'fchmod'):os.fchmod(fd,stat.S_IMODE(old.st_mode))
+            if storage and storage[0]==S_SPARSE:
+                os.ftruncate(fd,size)
+                for off,ln,ids in storage[1]:
+                    q=off
+                    for idx in ids:
+                        b=self._blob(idx);view=memoryview(b)
+                        while view:
+                            if hasattr(os,'pwrite'):
+                                n=os.pwrite(fd,view,q)
+                            else:
+                                os.lseek(fd,q,os.SEEK_SET);n=os.write(fd,view)
+                            if n<=0:raise IOError('short sparse staging write')
+                            view=view[n:];q+=n
+            else:
+                raw=self.read(rel);view=memoryview(raw)
+                while view:
+                    n=os.write(fd,view)
+                    if n<=0:raise IOError('short staging write')
+                    view=view[n:]
+            os.close(fd);fd=-1
+            # The replacement never truncates the prior inode. An outside
+            # hardlink sibling consequently retains its exact old contents.
+            os.replace(tmp,full)
+        finally:
+            if fd>=0:os.close(fd)
+            try:os.unlink(tmp)
+            except FileNotFoundError:pass
+
     def _restore_extra_metadata(self,clean):
         """Restore sparse ownership overrides and xattrs after file materialization.
 
@@ -379,7 +431,7 @@ class CMPCT:
                     except OSError:pass
 
     @staticmethod
-    def _preflight_existing_destination_links(dest_s, clean):
+    def _preflight_existing_destination_links(dest_s, clean, allow_atomic_shared=False):
         """Reject pre-existing destination symlink pivots before extracting any member.
 
         This deliberately closes the *static* trust-boundary defect in issue #265.
@@ -391,6 +443,7 @@ class CMPCT:
         """
         root=os.path.realpath(dest_s)
         verified_dirs=set()
+        atomic_shared=set()
 
         def check_path(parts, allow_leaf_link=False, reject_hardlink_leaf=False):
             for depth in range(1,len(parts)+1):
@@ -408,7 +461,10 @@ class CMPCT:
                 # outside inode even with O_NOFOLLOW. Fail closed before any archive
                 # member is written; atomic chunked publication is exempt.
                 if leaf and reject_hardlink_leaf and stat.S_ISREG(mode) and existing.st_nlink>1:
-                    raise IOError(f'pre-existing destination hardlink alias: {path!r}')
+                    if allow_atomic_shared:
+                        atomic_shared.add(tuple(parts))
+                    else:
+                        raise IOError(f'pre-existing destination hardlink alias: {path!r}')
                 if not leaf:
                     if not stat.S_ISDIR(mode):
                         raise IOError(f'non-directory destination parent: {path!r}')
@@ -431,8 +487,9 @@ class CMPCT:
                 # Unlike the alias leaf, the source of os.link must never be
                 # resolved through an inherited symlink to outside the root.
                 check_path(target_parts)
+        return atomic_shared
 
-    def extractall(self,dest:Path,metadata=True,max_bytes:int|None=None,safe_symlinks=True):
+    def extractall(self,dest:Path,metadata=True,max_bytes:int|None=None,safe_symlinks=True,atomic_shared_leaf=False):
         """Extract the logical tree with a low-syscall fast path.
 
         Footnote: v0.14 called ``mkdir(..., exist_ok=True)`` for nearly every member and built
@@ -462,10 +519,13 @@ class CMPCT:
                     if '/'.join(parts[:i]) in syms:raise IOError(f'archive symlink used as parent path: {rel!r}')
             clean.append((row,parts,os.path.join(dest_s,*parts)))
 
+        atomic_shared=set()
         if safe_symlinks:
             # Preflight the selected destination namespace *before* any archive
-            # materialization. This is static defense, not a TOCTOU guarantee.
-            self._preflight_existing_destination_links(dest_s,clean)
+            # materialization. Static safety only; opt-in shared leaves use a
+            # new inode rather than truncating a physically aliased inode.
+            atomic_shared=self._preflight_existing_destination_links(
+                dest_s,clean,allow_atomic_shared=atomic_shared_leaf)
 
         # Build all directories first. Parents are guaranteed to exist before regular-file writes,
         # eliminating hundreds of redundant stat/mkdir calls on large source trees.
@@ -498,7 +558,9 @@ class CMPCT:
                     try:os.utime(full,ns=(mt,mt),follow_symlinks=False)
                     except OSError:pass
                 continue
-            if storage and storage[0] in (S_CHUNKS,S_CDC):
+            if tuple(parts) in atomic_shared:
+                self._extract_shared_leaf_atomic(row,full)
+            elif storage and storage[0] in (S_CHUNKS,S_CDC):
                 self._extract_chunked_verified(row,full)
             elif storage and storage[0]==S_SPARSE:
                 # Create the logical length first, then write only allocated data extents. The gaps
