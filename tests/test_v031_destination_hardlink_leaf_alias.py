@@ -27,9 +27,11 @@ pytestmark = pytest.mark.skipif(
 def _make_archive(tmp_path: Path, *, kind: str) -> tuple[Path, str, int]:
     src = tmp_path / "source"
     src.mkdir()
-    rel = "z-last.zip" if kind in ("pack", "vzip") else "z-last.bin"
+    rel = ("nested/z-last.bin" if kind == "nested_blob" else
+           "z-last.zip" if kind in ("pack", "vzip") else "z-last.bin")
     member = src / rel
-    if kind == "blob":
+    member.parent.mkdir(parents=True, exist_ok=True)
+    if kind in ("blob", "nested_blob"):
         member.write_bytes(b"CMPCT-ARCHIVE-BYTES-" * 4096)
         expected = S_BLOB
     elif kind == "sparse":
@@ -74,6 +76,7 @@ def _outside_alias(tmp_path: Path, rel: str) -> tuple[Path, Path, Path, tuple[in
     initial = (s.st_ino, s.st_size, hashlib.sha256(victim.read_bytes()).digest())
     dest = tmp_path / "dest"
     dest.mkdir()
+    (dest / rel).parent.mkdir(parents=True, exist_ok=True)
     os.link(victim, dest / rel)
     assert victim.stat().st_nlink == 2
     return victim, dest, dest / rel, initial
@@ -84,7 +87,7 @@ def _assert_outside_unchanged(victim: Path, initial: tuple[int, int, bytes]) -> 
     assert (s.st_ino, s.st_size, hashlib.sha256(victim.read_bytes()).digest()) == initial
 
 
-@pytest.mark.parametrize("kind", ["blob", "sparse", "pack", "vzip"])
+@pytest.mark.parametrize("kind", ["blob", "nested_blob", "sparse", "pack", "vzip"])
 def test_safe_extract_fails_before_partial_publication_on_preexisting_hardlink_leaf(
     tmp_path: Path, kind: str
 ) -> None:
