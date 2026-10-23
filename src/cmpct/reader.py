@@ -39,10 +39,12 @@ class CMPCT:
             raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
         self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
     def close(self):
+        # Internal decode futures still own the mmap and native codec contexts.
+        # Finish active tasks (and cancel queued ones) before freeing their dependencies.
+        if self._executor:self._executor.shutdown(wait=True,cancel_futures=True);self._executor=None
         if getattr(self,'mm',None):self.mm.close();self.mm=None
         if self._zdict_decoder:self._zdict_decoder.close();self._zdict_decoder=None
         if self._inflater and _ld is not None:_ld.libdeflate_free_decompressor(self._inflater);self._inflater=None
-        if self._executor:self._executor.shutdown(wait=True);self._executor=None
         self.f.close()
     def __enter__(self):return self
     def __exit__(self,*a):self.close()
