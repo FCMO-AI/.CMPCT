@@ -244,3 +244,48 @@ def test_kernel_releases_writer_lock_after_crashed_owner(tmp_path):
         if worker.is_alive():
             worker.terminate()
             worker.join(timeout=5)
+
+
+def test_transient_rebind_cannot_poison_new_blob_offsets(tmp_path, monkeypatch):
+    """Even a short-lived different pathname inode cannot supply blob offsets."""
+    import hashlib
+
+    archive = _make_archive(tmp_path)
+    control = tmp_path / "control.cmpct"
+    shutil.copyfile(archive, control)
+    foreign_tree = tmp_path / "foreign-source"
+    foreign_tree.mkdir()
+    (foreign_tree / "other.dat").write_bytes(os.urandom(8192))
+    foreign = tmp_path / "foreign.cmpct"
+    Builder(foreign_tree).build(foreign)
+    assert foreign.stat().st_size != archive.stat().st_size
+    foreign_sha = hashlib.sha256(foreign.read_bytes()).digest()
+    new_source = tmp_path / "new-data.bin"
+    new_source.write_bytes(b"CHANGED CONTENT\n" * 300)
+
+    original = tx._locked_archive_size
+    parked = tmp_path / "parked-original.cmpct"
+    rebinding_count = []
+
+    def swap_just_while_sizing(path):
+        os.replace(archive, parked)
+        os.replace(foreign, archive)
+        try:
+            assert os.stat(archive).st_ino != os.stat(parked).st_ino
+            rebinding_count.append(True)
+            return original(path)
+        finally:
+            os.replace(archive, foreign)
+            os.replace(parked, archive)
+
+    control_result = tx.append_update(control, "alpha.txt", new_source)
+    monkeypatch.setattr(tx, "_locked_archive_size", swap_just_while_sizing)
+    candidate_result = tx.append_update(archive, "alpha.txt", new_source)
+    assert rebinding_count, "adversary must have actually substituted an inode"
+    assert candidate_result == control_result
+    assert archive.read_bytes() == control.read_bytes()
+    assert hashlib.sha256(foreign.read_bytes()).digest() == foreign_sha
+    with CMPCT(archive) as reader:
+        assert reader.read("alpha.txt") == new_source.read_bytes()
+        assert reader.read("beta.txt") == b"beta payload\n" * 70
+        assert reader.verify() >= 2
