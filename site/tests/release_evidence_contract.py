@@ -33,6 +33,7 @@ def main() -> None:
     assert data["project"]["surface_revision"] == surface
     assert evidence.get("schema") == "cmpct-public-evidence-v1"
     assert evidence.get("project_version") == version
+    assert evidence.get("canonical_format_revision") == data["project"]["format_revision"]
     # Publication identity and historical research provenance are different axes. An old benchmark
     # must not be rebranded as current; a current site must not inherit an old project version.
     frontier = data.get("frontier") or {}
