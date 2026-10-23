@@ -136,3 +136,32 @@ def test_explicit_unsafe_optout_keeps_legacy_hardlink_overwrite(tmp_path: Path) 
         assert victim.read_bytes() == reader.read(rel)
     assert alias.stat().st_ino == initial[0]
     assert victim.stat().st_size != initial[1]
+
+
+def test_conservative_guard_rejects_even_benign_inside_root_hardlink_reuse(
+    tmp_path: Path,
+) -> None:
+    """Preserve the compatibility loss: nlink alone cannot locate *all* aliases.
+
+    Both hardlink names are within the selected destination, so this is a
+    static false positive of a deliberately conservative nlink>1 policy.
+    Rejecting it is safer than modifying an unobserved external alias, but
+    the full new-inode publisher could recover this legitimate use case.
+    """
+    archive, rel, expected_storage = _make_archive(tmp_path, kind="blob")
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    primary = dest / rel
+    primary.write_bytes(b"IN-ROOT-REUSE-IS-BENIGN")
+    sibling = dest / "inside-sibling.bin"
+    os.link(primary, sibling)
+    inode = primary.stat().st_ino
+    assert primary.stat().st_nlink == 2
+    with CMPCT(archive) as reader:
+        assert reader.by[rel][6][0] == expected_storage
+        with pytest.raises(OSError, match="pre-existing destination hardlink alias"):
+            reader.extractall(dest, safe_symlinks=True)
+    assert primary.read_bytes() == b"IN-ROOT-REUSE-IS-BENIGN"
+    assert sibling.read_bytes() == b"IN-ROOT-REUSE-IS-BENIGN"
+    assert primary.stat().st_ino == sibling.stat().st_ino == inode
+    assert not (dest / "a-first.bin").exists()
