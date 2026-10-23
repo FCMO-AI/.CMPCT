@@ -244,7 +244,7 @@ function renderReceipt(e) {
   const cells = [
     ["Project", `v${e.project_version || "—"}`],
     ["Format", `r${e.canonical_format_revision ?? "—"}`],
-    ["Research source", `v${e.provenance?.source_project_version || "—"} · r${e.provenance?.source_format_revision ?? "—"}`],
+    ["Benchmark epoch", `v${e.provenance?.source_project_version || "—"} · canonical r${e.provenance?.source_format_revision ?? "—"}`],
     ["Tree", shortenHash(tree)],
     ["Files", Number(e.structural?.files || 0).toLocaleString()],
     ["Record", e.provenance?.record || "—"],
