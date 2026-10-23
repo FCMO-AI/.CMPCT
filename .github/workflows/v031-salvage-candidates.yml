@@ -10,6 +10,7 @@ on:
       - 'src/cmpct/cli.py'
       - 'tests/test_recover_blob_candidates.py'
       - 'benchmarks/v031_salvage_stream_product_court.py'
+      - 'benchmarks/v031_salvage_dense_stream_court.py'
       - '.github/workflows/v031-salvage-candidates.yml'
   pull_request:
     paths:
@@ -17,6 +18,7 @@ on:
       - 'src/cmpct/cli.py'
       - 'tests/test_recover_blob_candidates.py'
       - 'benchmarks/v031_salvage_stream_product_court.py'
+      - 'benchmarks/v031_salvage_dense_stream_court.py'
       - '.github/workflows/v031-salvage-candidates.yml'
   workflow_dispatch:
 
@@ -60,6 +62,11 @@ jobs:
           set -euo pipefail
           python benchmarks/v031_salvage_stream_product_court.py > "$RUNNER_TEMP/salvage-candidates-economics.json"
           cat "$RUNNER_TEMP/salvage-candidates-economics.json"
+      - name: Held-out real installed-package dense-source ABBA court
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_salvage_dense_stream_court.py > "$RUNNER_TEMP/salvage-dense-economics.json"
+          cat "$RUNNER_TEMP/salvage-dense-economics.json"
       - name: Retain exact-head evidence even when court fails
         if: always()
         uses: actions/upload-artifact@v4
@@ -69,5 +76,6 @@ jobs:
             ${{ runner.temp }}/salvage-candidates-pytest.xml
             ${{ runner.temp }}/salvage-candidates.log
             ${{ runner.temp }}/salvage-candidates-economics.json
+            ${{ runner.temp }}/salvage-dense-economics.json
           if-no-files-found: warn
           retention-days: 14
