@@ -143,9 +143,13 @@ def _iter_blob_header_candidates(archive:Path):
     # redundant block copies; the overlap preserves full headers across window boundaries.
     # Framing/offset behavior stays equivalent to the permissive historical candidate scan.
     window=1024*1024;overlap=BHDR.size-1
-    buf=bytearray(window+overlap);carry_len=0;position=0
+    carry_len=0;position=0
     with open(archive,'rb') as f:
         source_size=os.fstat(f.fileno()).st_size
+        # Avoid charging a 1 MiB buffer to tiny forensic inputs. The initial file
+        # extent is the I/O budget; neither buffer capacity nor bytes read can grow
+        # with concurrent append operations.
+        buf=bytearray(min(window,source_size)+overlap)
         # A concurrently growing source must not turn a forensic scan into an unbounded
         # tail follower. The open inode is fixed; the initial size limits I/O, not content
         # identity. This still makes no immutable-snapshot or authentication claim.
