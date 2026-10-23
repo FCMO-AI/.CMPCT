@@ -41,12 +41,12 @@ jobs:
           python - <<'PY'
           import pathlib, subprocess
           actual=subprocess.check_output(['git','hash-object','src/cmpct/transactions.py'],text=True).strip()
-          assert actual=='a249f2824121e86c2d06c1ded6ce73944afb2feb', actual
+          assert actual=='f031e144f954b3f50305ef228c705a587619bdd1', actual
           src=pathlib.Path('src/cmpct/transactions.py').read_text()
           for marker in ('_require_valid_update_member(ar.index, member)',
                          '_reject_hardlink_owner_mutation(ar.index,old,',
                          '_reject_nonempty_directory_mutation(ar.index,old,',
-                         '_require_valid_rename_destination(ar.index, new)'):
+                         '_require_valid_rename_destination(ar.index, old, new)'):
               assert marker in src, marker
           print('EXACT_SOURCE_ALL_OWNER_GUARDS_PASS', actual)
           PY
