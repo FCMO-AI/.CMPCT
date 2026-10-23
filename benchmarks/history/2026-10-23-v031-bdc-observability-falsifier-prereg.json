@@ -1,0 +1,21 @@
+{
+  "schema": "cmpct-v031-bdc-observability-falsifier-prereg-v1",
+  "created_at": "2026-10-23",
+  "chronology": "Separate follow-up after first selector hosted result, before observing this adversarial construction. Original admission prereg immutable.",
+  "question": "Can a prospective sample-window shingle detector distinguish complete-file structural affinity from adversarial files that preserve identical sampled windows but diverge everywhere else?",
+  "construction": "Six 72KiB regular files per tree. Both trees share identical three 4KiB probe windows in every file. Family A consists of near-identical sources with one tiny change outside samples; family B substitutes independent high-entropy bytes outside the sampled windows, preserving all sampled bytes. Same modes/mtime/names/count/sizes. No corpus labels supplied to selector.",
+  "prediction": "Both yield identical positive screen observations despite different unsampled relations, demonstrating sampling alone cannot prove total stored-byte benefit; source-exact full BDC and authentic r24 comparisons price consequences without weakening the original selector.",
+  "falsification": "Differences in sampled observations, different exact input tree shapes or invalid canonical r24 byte reconstruction invalidate the comparison; canonical size may still win either way, and full-materialized result must control decision.",
+  "scope": "research-only information-bound falsifier of detector sufficiency. No change to existing selector constants, no new codec/reader grammar, no product credit.",
+  "alternative_explanation": "Common sampled windows might remain enough to compress even fully independent unsampled regions, in which case classification indistinguishability remains established but adverse size effect is not.",
+  "controls": [
+    "exact same sampled bytes",
+    "same logical file sizes and POSIX metadata",
+    "same fixed random seed",
+    "full canonical r24 archive and Reader verification",
+    "complete BDC sibling length with unchanged source",
+    "observed BDC code exact Git SHA"
+  ],
+  "product_credit": false,
+  "release_credit": false
+}
