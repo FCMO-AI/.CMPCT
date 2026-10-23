@@ -1,0 +1,66 @@
+# ci-lane: fast
+name: v031 explicit VZIP fallback transaction court
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-vzip-fallback-rollback-20261023
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v031-vzip-rollback-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  rollback-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact branch commit, not a synthetic merge
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+
+      - name: Bind immutable source, preregistration and tests
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object src/cmpct/builder.py)" = "745b05ded92bbf84a681a4b159ac7a3c341858c5"
+          test "$(git hash-object tests/test_v031_explicit_vzip_fallback_transaction.py)" = "5c9b43385a565e6afc22f081afc05489760da7e9"
+          git ls-files --error-unmatch benchmarks/history/2026-10-23-v031-explicit-vzip-fallback-prereg.md
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install authentic native-backed CMPCT package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Run immutable VZIP negative/positive product court
+        run: |
+          set -o pipefail
+          mkdir -p vzip-evidence
+          python -m pytest -vv tests/test_v031_explicit_vzip_fallback_transaction.py 2>&1 | tee vzip-evidence/pytest.txt
+
+      - name: Record exact source and artifact provenance
+        if: always()
+        run: |
+          mkdir -p vzip-evidence
+          git rev-parse HEAD > vzip-evidence/source.sha
+          git hash-object src/cmpct/builder.py > vzip-evidence/builder.blob
+          git hash-object tests/test_v031_explicit_vzip_fallback_transaction.py > vzip-evidence/test.blob
+          git hash-object benchmarks/history/2026-10-23-v031-explicit-vzip-fallback-prereg.md > vzip-evidence/prereg.blob
+
+      - name: Preserve branch-bound failure and success evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-vzip-fallback-${{ github.sha }}
+          path: vzip-evidence/
+          if-no-files-found: error

@@ -167,3 +167,58 @@ def test_eight_explicit_containers_preserve_pack_admission(tmp_path: Path, monke
     assert not b.recipes
     assert len(b.files) == 8
     assert all(row[6][0] == S_PACK for row in b.files)
+
+
+def test_real_late_deflate_variant_does_not_reencode_preexisting_loose_file(tmp_path: Path, monkeypatch):
+    """Mark-and-sweep of orphan hashes alone cannot repair a reachable hash.
+
+    The first successful ZIP member is an alias of a *preexisting* loose file.
+    Its large exact Deflate variant would change the physical codec used for the
+    loose file on failed VZIP if the original candidate's metadata were not
+    rolled back. This validates the stronger transactional ownership invariant.
+    """
+    source = tmp_path / "input"
+    source.mkdir()
+    raw = hashlib.shake_256(b"cmpct-206-aliased-deflate").digest(128 * 1024)
+    (source / "common.bin").write_bytes(raw)
+    nested = source / "nested.zip"
+    original_compressor = zipfile._get_compressor
+
+    def fixed(compression, level=None):
+        if compression == zipfile.ZIP_DEFLATED:
+            return zlib.compressobj(6, zlib.DEFLATED, -15, zlib.DEF_MEM_LEVEL, zlib.Z_FIXED)
+        return original_compressor(compression, level)
+
+    with zipfile.ZipFile(nested, "w") as zf:
+        zf.writestr("first.dat", raw, compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
+        with monkeypatch.context() as p:
+            p.setattr(zipfile, "_get_compressor", fixed)
+            zf.writestr("second.txt", SECOND, compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
+
+    with zipfile.ZipFile(nested) as zf:
+        first, second = zf.infolist()
+        assert zf.read(first.filename) == raw
+        assert zf.read(second.filename) == SECOND
+        first_stream = _compressed_payload(nested, first)
+        assert len(first_stream) >= 65536
+        assert deflate_level_for(raw, first_stream) is not None
+        assert deflate_level_for(SECOND, _compressed_payload(nested, second)) is None
+
+    observed = Builder(source, workers=1, reproducible=True)
+    observed.scan()
+    opaque = Builder(source, workers=1, reproducible=True)
+    _forced_opaque(opaque, source, monkeypatch)
+    assert _snapshot(observed) == _snapshot(opaque)
+    assert observed.files == opaque.files
+
+    actual = tmp_path / "actual.cmpct"
+    control = tmp_path / "control.cmpct"
+    Builder(source, workers=1, reproducible=True).build(actual)
+    with monkeypatch.context() as p:
+        p.setattr(builder_module, "make_vzip_recipe", lambda _ap, _cb: None)
+        Builder(source, workers=1, reproducible=True).build(control)
+    assert actual.read_bytes() == control.read_bytes()
+    with CMPCT(actual) as ar:
+        assert ar.read("common.bin") == raw
+        assert ar.read("nested.zip") == nested.read_bytes()
+        assert ar.verify()
