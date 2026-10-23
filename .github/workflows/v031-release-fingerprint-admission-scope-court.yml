@@ -1,0 +1,47 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# Research-only negative evidence; never a release promotion gate.
+name: CMPCT v0.31 release fingerprint admission scope falsifier
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-fingerprint-event-classifier-gap-court-20261023
+    paths:
+      - 'benchmarks/v031_release_fingerprint_admission_scope_court.py'
+      - '.github/workflows/v031-release-fingerprint-admission-scope-court.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v031-fingerprint-scope-court-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  falsifier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python3 -m py_compile benchmarks/v031_release_fingerprint_admission_scope_court.py
+      - name: Run exact-source event and classifier false-skip court
+        run: python3 benchmarks/v031_release_fingerprint_admission_scope_court.py
+      - name: Store negative evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v031-release-fingerprint-scope-${{ env.EVIDENCE_HEAD }}
+          path: fingerprint-scope-court.json
+          if-no-files-found: warn
+          retention-days: 90
