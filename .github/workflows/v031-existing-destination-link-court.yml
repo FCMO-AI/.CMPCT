@@ -1,0 +1,57 @@
+# ci-lane: fast
+name: CMPCT v031 existing-destination symlink boundary scientific court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-preexisting-destination-symlink-court-20261023
+    paths:
+      - 'benchmarks/v031_existing_destination_link_court.py'
+      - '.github/workflows/v031-existing-destination-link-court.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  exact-source-destination-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind current canonical Builder and Reader source
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          git rev-parse HEAD
+          git hash-object benchmarks/v031_existing_destination_link_court.py
+      - name: Install actual CMPCT package
+        run: python -m pip install -e .
+      - name: Run isolated no-system-file boundary court
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_existing_destination_link_court.py > "$RUNNER_TEMP/destination-link-court.json"
+          python - "$RUNNER_TEMP/destination-link-court.json" <<'PY'
+          import json,sys
+          j=json.load(open(sys.argv[1]))
+          assert j["result"]=="BASELINE_BOUNDARY_REPRODUCED_NOT_FIXED"
+          x=j["cases"]
+          assert len(x)==3 and all(z["extraction_status"]=="RETURNED" for z in x)
+          assert [z["outside_changed_to_source"] for z in x]==[False,True,True]
+          assert all(not z["archive_has_symlink"] for z in x)
+          print("SCIENTIFIC_BOUNDARY_NEGATIVE_REPRODUCED; no product fix claimed")
+          PY
+      - name: Preserve scientific evidence even if result differs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: existing-destination-symlink-scientific-court
+          path: ${{ runner.temp }}/destination-link-court.json
+          if-no-files-found: warn
