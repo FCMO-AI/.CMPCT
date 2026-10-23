@@ -1,0 +1,61 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# Evidence-only: execute the unmodified development tree, not this workflow branch.
+name: CMPCT v0.31 unmodified development baseline four-red court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-development-baseline-four-red-court-20261023
+    paths:
+      - '.github/workflows/v031-development-baseline-four-red-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v031-inherited-baseline-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  FROZEN_DEVELOPMENT_HEAD: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
+jobs:
+  four-red-baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact unmodified development source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FROZEN_DEVELOPMENT_HEAD }}
+          clean: true
+      - name: Prove source tree and test blob custody
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FROZEN_DEVELOPMENT_HEAD"
+          test "$(git hash-object docs/V030_RELEASE_LOCK.json)" = 988a7b05ad4e0833fac0453de74133b38f890f87
+          test "$(git hash-object tests/test_performance_base_native_release_custody.py)" = e0c92e3a986b58e9693d9c51fb0dabad2a8a54ca
+          test "$(git hash-object tests/test_public_attribution.py)" = 37a9b54eb32d4921cfecae9b7abd3daf289fba48
+          test "$(git hash-object tests/test_v030_ci_topology_split_receipts.py)" = c378d8e2dbad2e0c7b037124a9d9fedecdc14601
+          test "$(git hash-object tests/test_v030_release_fingerprint_surface.py)" = a23cc8126ad8f76374af9c6538ca73d6f59966fe
+          printf 'FROZEN_SOURCE=%s\n' "$FROZEN_DEVELOPMENT_HEAD"
+      - name: Install same package and dependencies as ordinary Tests
+        run: |
+          set -euo pipefail
+          python -V
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Run exact four previously reported failing tests without xfail or waiver
+        run: |
+          set -o pipefail
+          mkdir -p test-artifacts
+          python -m pytest -vv --tb=short \
+            tests/test_performance_base_native_release_custody.py::test_historical_native_materializer_is_release_fingerprinted \
+            tests/test_public_attribution.py::test_surface_revision_records_attribution_campaign \
+            tests/test_v030_ci_topology_split_receipts.py::test_authoritative_v2_classifier_is_release_fingerprint_driven \
+            tests/test_v030_release_fingerprint_surface.py::test_release_fingerprint_covers_r25_oracle_and_android_custody_inputs \
+            2>&1 | tee test-artifacts/pytest-exact-development.txt
+      - name: Preserve actual failing evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unmodified-development-four-red-${{ env.FROZEN_DEVELOPMENT_HEAD }}
+          path: test-artifacts/pytest-exact-development.txt
+          if-no-files-found: warn
