@@ -94,6 +94,22 @@ for (const [key, group] of Object.entries(MESSAGES)) {
   }
 }
 
+// Footnote: version numbers and r24 must be preserved while *both* dynamically rendered
+// evidence-receipt strings remain genuine curated copy in every supported locale.
+// This cheaper static court catches source drift before the 57 Chromium viewport checks.
+if (MESSAGES.benchmarkEpochLabel?.en !== "Benchmark epoch") fail("proof epoch label lost its English source");
+if (MESSAGES.benchmarkSourceFormat?.en !== "{version} · canonical r{revision}") {
+  fail("proof source/version template lost its exact historical identity grammar");
+}
+for (const locale of SUPPORTED_LOCALES) {
+  const label = MESSAGES.benchmarkEpochLabel?.[locale] || "";
+  const format = MESSAGES.benchmarkSourceFormat?.[locale] || "";
+  if (locale !== "en" && label === "Benchmark epoch") fail(`${locale} left proof epoch label in English`);
+  if (locale !== "en" && /\bcanonical\b/i.test(format)) fail(`${locale} left proof epoch connective in English`);
+  const full = format.replace("{version}", "v0.29.0").replace("{revision}", "24");
+  if (!full.includes("v0.29.0") || !full.includes("r24")) fail(`${locale} rewrote numeric benchmark custody`);
+}
+
 const runtime = fs.readFileSync(path.join(root, "site/src/assets/i18n.js"), "utf8");
 for (const forbidden of ["translate.googleapis.com", "google-translate", "api.deepl.com", "api.cognitive.microsofttranslator.com"]) {
   if (runtime.toLowerCase().includes(forbidden)) fail(`runtime translation provider forbidden: ${forbidden}`);

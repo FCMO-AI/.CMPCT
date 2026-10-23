@@ -83,6 +83,10 @@ function preserveWhitespace(source, replacement) {
 
 function translatePattern(source, targetLocale) {
   let match;
+  // Source-version proof must preserve version identifiers while localizing authored glue.
+  if ((match = source.match(/^(v\d+(?:\.\d+){1,3}) · canonical r(\d+)$/))) {
+    return message("benchmarkSourceFormat", { version: match[1], revision: match[2] }, targetLocale);
+  }
   if ((match = source.match(/^(\d[\d,.]*) files?$/i))) {
     const n = match[1];
     return message(source.toLowerCase().endsWith(" file") ? "file" : "files", { n }, targetLocale);
