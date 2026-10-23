@@ -1,0 +1,59 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# An independent negative test on PR #250 source; a RED pytest is substantive.
+name: CMPCT v0.31 held-out single-backslash rename alias falsifier
+on:
+  push:
+    branches:
+      - agent/phased2-v031-rename-single-backslash-alias-court-20261023
+    paths:
+      - 'tests/test_v031_rename_single_backslash_alias_court.py'
+      - '.github/workflows/v031-rename-single-backslash-alias-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v031-backslash-alias-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+jobs:
+  alias-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Assert held-out test overlays unchanged PR250 Writer source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/transactions.py)" = f031e144f954b3f50305ef228c705a587619bdd1
+          python - <<'PY'
+          import subprocess
+          diff=subprocess.check_output(['git','diff','--name-only','fbb8c33defc81b93139cb74a3ee30dbb9c54a215','HEAD'],text=True).splitlines()
+          allowed={'.github/workflows/v031-rename-single-backslash-alias-court.yml','tests/test_v031_rename_single_backslash_alias_court.py'}
+          assert set(diff)==allowed, diff
+          print('writer exact PR250 source; only independent test/workflow added')
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install canonical package with test extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Execute two positive controls and one falsifier without waiver
+        run: |
+          set -o pipefail
+          mkdir -p court
+          python -m pytest -vv --tb=short tests/test_v031_rename_single_backslash_alias_court.py 2>&1 | tee court/pytest.txt
+      - name: Preserve raw negative or positive evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rename-alias-negative-${{ env.EVIDENCE_HEAD }}
+          path: court/pytest.txt
+          if-no-files-found: warn
