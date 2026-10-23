@@ -51,3 +51,9 @@ authority. Historical fingerprint reds under Issue #246 are not waived.
 The test boundaries 65,534 / 65,535 / 65,536 / 70,000 are deliberately
 fixed. Next stage: review PR #260 exact-head hosted proof and reconcile
 with Reader and ZIP portability owners. No format change, merge or release.
+
+## Falsification boundary and quality ratchet
+
+**disproof:** reject this candidate if 65,536/70,000-member ZIPs fail any independent ZIP reader, if 65,534/65,535 previously valid ZIP bytes change, if the raw Deflate stream is recompressed, if a malformed central offset is accepted, or if complete equivalent release measurements reveal an unrehabilitated regression. ZIP64 EOCD correctness must be established from its actual byte fields, not merely a permissive ZIP reader.
+
+**quality-ratchet:** source r24 archives and prior ZIP32 export are kept semantically/physically unchanged; the new ZIP64 count support must improve interoperability without changing writer integrity, inherited file semantics or release criteria. Full package/ABI, portability and performance promotion remain pending.
