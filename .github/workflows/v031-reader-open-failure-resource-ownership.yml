@@ -23,6 +23,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           clean: true
+          fetch-depth: 0  # exact committed baseline blob is required for same-runner negative control
       - name: Verify source identity
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -36,6 +37,25 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
+      - name: Prove original Reader leaks a held file against the exact immutable source
+        shell: bash
+        run: |
+          set -o pipefail
+          cp src/cmpct/reader.py /tmp/cmpct-reader-candidate.py
+          git show 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/reader.py > src/cmpct/reader.py
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          set +e
+          python -m pytest -q tests/test_v031_reader_open_failure_resource_ownership.py -k failed_header_closes_owned_file_without_gc > reader-open-ownership-baseline-negative.txt 2>&1
+          baseline_status=$?
+          set -e
+          cp /tmp/cmpct-reader-candidate.py src/cmpct/reader.py
+          test "$(git hash-object src/cmpct/reader.py)" = "$(git rev-parse HEAD:src/cmpct/reader.py)"
+          if [ "$baseline_status" -ne 1 ] || ! grep -q 'failed open leaked file' reader-open-ownership-baseline-negative.txt; then
+            cat reader-open-ownership-baseline-negative.txt
+            echo "Baseline did not reproduce the preregistered resource-leak discriminator"
+            exit 1
+          fi
+          echo "Exact original Reader baseline leak: CONFIRMED (expected failed assertion)"
       - name: Run real-reader open-failure ownership court
         shell: bash
         run: |
@@ -46,5 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: reader-open-ownership-${{ github.sha }}
-          path: reader-open-ownership-pytest.txt
+          path: |
+            reader-open-ownership-pytest.txt
+            reader-open-ownership-baseline-negative.txt
           if-no-files-found: warn
