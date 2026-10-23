@@ -175,6 +175,27 @@ def _reject_nonempty_directory_mutation(index:dict, member:str, operation:str):
                 f"surviving descendant {row[0]!r} requires a subtree transaction"
             )
 
+def _require_valid_rename_destination(index:dict, new:str):
+    # Footnote: rename is a one-row committed generation. The Reader's
+    # canonical path policy must be enforced *before* appending the footer:
+    # pathlib parent parsing and literal dict lookup miss slash aliases,
+    # double separators and absolute/dot spellings (scientific PR #249).
+    logical, _ = canonical_logical_path(new)
+    if logical != new:
+        raise ValueError(f"rename destination must use canonical slash spelling: {new!r}")
+    parent = logical.rpartition('/')[0]
+    parent_kind = None
+    for row in index['files']:
+        # Canonical-open Reader already admitted these legacy spellings.
+        key, _ = canonical_logical_path(row[0])
+        if key == logical:
+            raise FileExistsError(f"canonical rename destination exists: {row[0]!r}")
+        if parent and key == parent:
+            parent_kind = row[1]
+    if parent and parent_kind != K_DIR:
+        raise FileNotFoundError(f"destination parent is not an explicit directory: {parent!r}")
+
+
 def append_delete(archive:Path,member:str):
     archive=Path(archive)
     with CMPCT(archive) as ar:
@@ -192,13 +213,7 @@ def append_rename(archive:Path,old:str,new:str):
         if new in ar.by:raise FileExistsError(new)
         _reject_hardlink_owner_mutation(ar.index,old,'rename')
         _reject_nonempty_directory_mutation(ar.index,old,'rename')
-        # Footnote: rename follows real filesystem semantics. A destination parent must already
-        # exist as a logical directory; otherwise compaction/extraction could silently invent a
-        # directory entry and its metadata. Root-level destinations remain valid.
-        parent=Path(new).parent.as_posix()
-        if parent not in ('','.','/'):
-            prow=ar.by.get(parent)
-            if prow is None or prow[1]!=K_DIR:raise FileNotFoundError(f'destination parent directory does not exist: {parent}')
+        _require_valid_rename_destination(ar.index, new)
         prev=ar.latest_footer_pos;depth=ar.delta_depth;idx=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False)
     op=['ren',old,new];checkpoint=_index_after_op(idx,op) if depth>=63 else None
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
