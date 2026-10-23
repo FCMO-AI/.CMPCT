@@ -96,5 +96,36 @@ class RenameTargetFailClosed(unittest.TestCase):
         self.assertEqual((dest / "dir" / "child.txt").read_bytes(), b"child" * 81)
 
 
+    def test_checkpoint_boundary_rejection_and_valid_recovery(self):
+        # 63 safe transactions make the next mutation the full-checkpoint
+        # transition. An invalid target must not publish any footer there.
+        source = "root.txt"
+        for i in range(63):
+            next_name = f"temporary_{i}.txt"
+            append_rename(self.archive, source, next_name)
+            source = next_name
+        preflight_archive(self.archive)
+        with CMPCT(self.archive) as reader:
+            self.assertEqual(reader.delta_depth, 63)
+            self.assertEqual(reader.read(source), b"root" * 117)
+            reader.verify()
+        before = self.archive.read_bytes()
+        with self.assertRaises(ValueError):
+            append_rename(self.archive, source, "./invalid-checkpoint")
+        self.assertEqual(self.archive.read_bytes(), before)
+        preflight_archive(self.archive)
+        with CMPCT(self.archive) as reader:
+            reader.verify()
+            self.assertEqual(reader.read(source), b"root" * 117)
+        # The supported valid action must still publish a correct checkpoint.
+        append_rename(self.archive, source, "dir/checkpoint.txt")
+        preflight_archive(self.archive)
+        with CMPCT(self.archive) as reader:
+            reader.verify()
+            self.assertEqual(reader.read("dir/checkpoint.txt"), b"root" * 117)
+            self.assertEqual(reader.read("dir/child.txt"), b"child" * 81)
+            self.assertEqual(reader.delta_depth, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
