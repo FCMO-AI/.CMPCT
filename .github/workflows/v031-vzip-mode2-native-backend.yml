@@ -1,0 +1,82 @@
+# ci-lane: fast
+name: CMPCT v031 VZIP mode2 native backend exact-byte research court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-independent-vzip-mode2-golden-r259-20261023
+    paths:
+      - 'native/cmpct-core/src/bin/vzip_mode2_backend_probe.rs'
+      - 'native/cmpct-core/Cargo.toml'
+      - 'native/cmpct-core/Cargo.lock'
+      - 'benchmarks/v031_vzip_mode2_native_backend_probe.py'
+      - 'benchmarks/history/2026-10-23-v031-vzip-mode2-native-backend-parity-prereg.md'
+      - '.github/workflows/v031-vzip-mode2-native-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v031-vzip-mode2-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mode2-backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact evidence source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          persist-credentials: false
+      - name: Verify exact checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Set up Python reference runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Select native compiler
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build current package-owned flate2 rust_backend probe
+        run: |
+          set -euo pipefail
+          cargo --version
+          cargo build --locked --release --manifest-path native/cmpct-core/Cargo.toml --bin vzip_mode2_backend_probe
+      - name: Record compiler/dependency and Python zlib identities
+        run: |
+          set -euo pipefail
+          mkdir -p research-artifacts
+          rustc --version > research-artifacts/runtime.txt
+          cargo --version >> research-artifacts/runtime.txt
+          cargo tree --manifest-path native/cmpct-core/Cargo.toml -i miniz_oxide >> research-artifacts/runtime.txt
+          python -c 'import sys,zlib; print(sys.version, zlib.ZLIB_VERSION, zlib.ZLIB_RUNTIME_VERSION)' >> research-artifacts/runtime.txt
+          git rev-parse HEAD > research-artifacts/source-head.txt
+          git hash-object native/cmpct-core/src/bin/vzip_mode2_backend_probe.rs benchmarks/v031_vzip_mode2_native_backend_probe.py >> research-artifacts/source-blobs.txt
+      - name: Execute same-input exact-byte and independent inflate court
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_vzip_mode2_native_backend_probe.py \
+            --binary native/cmpct-core/target/release/vzip_mode2_backend_probe \
+            --out research-artifacts/mode2-native-backend-court.json \
+            | tee research-artifacts/summary.txt
+          python - <<'PY'
+          import json
+          d=json.load(open("research-artifacts/mode2-native-backend-court.json"))
+          assert d["samples"] == 7 and d["comparisons"] == 28
+          assert all(c["exact_inflate_both"] and c["native_deterministic_repeated"] for c in d["cases"])
+          assert d["byte_equal"] + d["byte_different"] == d["comparisons"]
+          assert d["decision"] in ("CURRENT_RUST_BACKEND_NOT_DROPIN_BYTE_EXACT_MODE2",
+                                  "NO_DIFFERENCE_FOUND_NOT_UNIVERSAL_PARITY")
+          assert d["no_product_credit"] is True
+          print("O0_NATIVE_BACKEND_EVIDENCE_VALID; no Native Core support inferred")
+          PY
+      - name: Preserve authentic evidence including a negative outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-vzip-mode2-backend-${{ github.sha }}
+          path: research-artifacts/
+          if-no-files-found: warn
