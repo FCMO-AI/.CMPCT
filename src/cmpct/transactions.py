@@ -39,8 +39,10 @@ def _cooperative_writer_lease(archive: Path):
     # Read and append permissions are both required by the public Writer.
     # O_APPEND is carried by every dup of this open-file-description.
     fd = os.open(archive, os.O_RDWR | os.O_APPEND | getattr(os, "O_CLOEXEC", 0))
+    locked = False
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
+        locked = True
         original = os.fstat(fd)
         if not stat.S_ISREG(original.st_mode):
             raise OSError("CMPCT transactional archive must be a regular file")
@@ -61,7 +63,11 @@ def _cooperative_writer_lease(archive: Path):
             _CURRENT_TRANSACTION_OWNER.reset(token)
     finally:
         try:
-            fcntl.flock(fd, fcntl.LOCK_UN)
+            # A denied LOCK_EX may be followed by an equally failing LOCK_UN.
+            # Never overwrite the actionable acquisition error with a spurious
+            # unlock exception when no lease was ever acquired.
+            if locked:
+                fcntl.flock(fd, fcntl.LOCK_UN)
         finally:
             os.close(fd)
 
