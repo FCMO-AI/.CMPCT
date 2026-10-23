@@ -1,0 +1,44 @@
+# ci-lane: fast
+name: CMPCT v031 static destination symlink product preflight court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-destination-symlink-static-preflight-r256-20261023
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_v031_destination_static_symlink_preflight.py'
+      - '.github/workflows/v031-destination-static-symlink-preflight.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  static-destination-pivot-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind actual Reader source and platform
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/cmpct/reader.py)" = "43fd462535495b0c3c80c95751a20d9c261b94ed"
+          git rev-parse HEAD
+          python -c 'import os; assert os.name == "posix"'
+      - name: Install actual revision-24 package
+        run: python -m pip install -e '.[test,audio]'
+      - name: Execute source-exact static containment and legitimate reconstruction
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/test_v031_destination_static_symlink_preflight.py
+      - name: Declare boundary of focused pass
+        run: |
+          echo "FOCUSED_STATIC_LINK_PREFLIGHT_PASS if previous step passed."
+          echo "Non-concurrent tests only. TOCTOU and portability NOT established. No release claim."
