@@ -6,7 +6,7 @@ on:
     branches:
       - agent/phased3-v031-independent-vzip-mode2-golden-r259-20261023
     paths:
-      - 'native/cmpct-core/src/bin/vzip_mode2_backend_probe.rs'
+      - 'native/cmpct-core/examples/vzip_mode2_backend_probe.rs'
       - 'native/cmpct-core/Cargo.toml'
       - 'native/cmpct-core/Cargo.lock'
       - 'tests/conformance/v24-virtual-zip-deflate-mode2.json'
@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo --version
-          cargo build --locked --release --manifest-path native/cmpct-core/Cargo.toml --bin vzip_mode2_backend_probe
+          cargo build --locked --release --manifest-path native/cmpct-core/Cargo.toml --example vzip_mode2_backend_probe
       - name: Record compiler/dependency and Python zlib identities
         run: |
           set -euo pipefail
@@ -55,12 +55,12 @@ jobs:
           cargo tree --manifest-path native/cmpct-core/Cargo.toml -i miniz_oxide >> research-artifacts/runtime.txt
           python -c 'import sys,zlib; print(sys.version, zlib.ZLIB_VERSION, zlib.ZLIB_RUNTIME_VERSION)' >> research-artifacts/runtime.txt
           git rev-parse HEAD > research-artifacts/source-head.txt
-          git hash-object native/cmpct-core/src/bin/vzip_mode2_backend_probe.rs benchmarks/v031_vzip_mode2_native_backend_probe.py >> research-artifacts/source-blobs.txt
+          git hash-object native/cmpct-core/examples/vzip_mode2_backend_probe.rs benchmarks/v031_vzip_mode2_native_backend_probe.py >> research-artifacts/source-blobs.txt
       - name: Execute same-input exact-byte and independent inflate court
         run: |
           set -euo pipefail
           python benchmarks/v031_vzip_mode2_native_backend_probe.py \
-            --binary native/cmpct-core/target/release/vzip_mode2_backend_probe \
+            --binary native/cmpct-core/target/release/examples/vzip_mode2_backend_probe \
             --out research-artifacts/mode2-native-backend-court.json \
             | tee research-artifacts/summary.txt
           python - <<'PY'
