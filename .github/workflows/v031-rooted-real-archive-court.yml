@@ -1,0 +1,57 @@
+# ci-lane: fast
+name: CMPCT v031 real-r24 capability-root extraction scientific court
+on:
+  pull_request:
+    branches:
+      - agent/v031-development
+    paths:
+      - 'src/cmpct/_rooted_extract_research.py'
+      - 'tests/test_v031_rooted_real_archive_research.py'
+      - '.github/workflows/v031-rooted-real-archive-court.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  rooted-real-archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind candidate, inherited Reader, and POSIX syscall affordances
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/cmpct/_rooted_extract_research.py)" = "368e58373c70a500c7bb3f66783ce71a89b29316"
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          python - <<'PY'
+          import os
+          assert os.name == "posix"
+          assert hasattr(os,"O_NOFOLLOW")
+          assert os.open in os.supports_dir_fd
+          PY
+          git rev-parse HEAD
+      - name: Install authentic CMPCT revision-24 Builder and Reader
+        run: python -m pip install -e '.[test,audio]'
+      - name: Execute exact-source tree, pivot, integrity and moved-inode negative
+        run: |
+          set -euo pipefail
+          python -m pytest -vv tests/test_v031_rooted_real_archive_research.py | tee "$RUNNER_TEMP/rooted-real-archive-pytest.txt"
+      - name: Preserve independent source-bound test log including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooted-real-r24-scientific-court
+          path: ${{ runner.temp }}/rooted-real-archive-pytest.txt
+          if-no-files-found: warn
+      - name: Declare scoped meaning
+        run: |
+          echo "All source-bound real archive tests passed. Note moved-open-inode test is a NEGATIVE for lexical containment."
+          echo "This is research-only, not a product release or a race-safe pathname security proof."
