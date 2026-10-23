@@ -1,0 +1,60 @@
+# ci-lane: fast
+name: CMPCT v031 direct-Deflate ZIP export corruption falsifier
+on:
+  push:
+    branches:
+      - agent/phased2-v031-deflate-export-integrity-falsifier-20261023
+    paths:
+      - 'benchmarks/v031_direct_deflate_export_integrity_court.py'
+      - '.github/workflows/v031-deflate-export-integrity-court.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  deflate-export-integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind original Reader and independent golden evidence to the source
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          test "$(git hash-object tests/conformance/v24-direct-codecs.json)" = "d10b7dab9126d39e819a74279c186363a163f2ef"
+          test -f benchmarks/history/2026-10-23-v031-deflate-export-integrity-falsifier-prereg.md
+          git rev-parse HEAD
+          git hash-object benchmarks/v031_direct_deflate_export_integrity_court.py
+      - name: Install authentic CMPCT package
+        run: python -m pip install -e '.[test,audio]'
+      - name: Run unchanged falsifier and retain actual observations
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_direct_deflate_export_integrity_court.py > "$RUNNER_TEMP/v031-deflate-export-integrity.json"
+          cat "$RUNNER_TEMP/v031-deflate-export-integrity.json"
+          python - "$RUNNER_TEMP/v031-deflate-export-integrity.json" <<'PY'
+          import json, sys
+          r=json.load(open(sys.argv[1]))
+          assert r['cases']['clean']['cmpct_read']=='ACCEPT'
+          assert r['cases']['clean']['independent_zip']=='ACCEPT'
+          assert r['cases']['clean']['export']=='ACCEPT'
+          assert r['decision']=='BOTH_CORRUPTIONS_EXPORTED_UNVERIFIED', r['decision']
+          assert len(r['bypass_cases'])==2
+          print('NEGATIVE_SCIENTIFIC_RESULT: 2 archive corruptions accepted by exporter, rejected by independent ZIP reader')
+          PY
+      - name: Preserve complete research evidence including negative/failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-deflate-export-integrity-negative
+          path: ${{ runner.temp }}/v031-deflate-export-integrity.json
+          if-no-files-found: warn
