@@ -27,8 +27,10 @@ jobs:
       matrix:
         include:
           - label: v031-development
+            source_ref: agent/v031-development
             source_sha: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
           - label: main
+            source_ref: main
             source_sha: 80c358f8824ec1b20d349c92ed94c898090969b
     steps:
       - name: Checkout research court exact HEAD
@@ -44,7 +46,7 @@ jobs:
       - name: Checkout immutable test source
         uses: actions/checkout@v4
         with:
-          ref: ${{ matrix.source_sha }}
+          ref: ${{ matrix.source_ref }}
           path: "source"
           persist-credentials: false
 
@@ -91,6 +93,7 @@ jobs:
           mkdir -p court-results
           python -m pytest -q --junitxml=court-results/results.xml             tests/test_performance_base_native_release_custody.py::test_historical_native_materializer_is_release_fingerprinted             tests/test_public_attribution.py::test_surface_revision_records_attribution_campaign             tests/test_v030_ci_topology_split_receipts.py::test_authoritative_v2_classifier_is_release_fingerprint_driven             tests/test_v030_release_fingerprint_surface.py::test_release_fingerprint_covers_r25_oracle_and_android_custody_inputs             > court-results/pytest.txt 2>&1
           rc=$?
+          set -e
           printf '%s\n' "$rc" > court-results/pytest-exit-code.txt
           cat court-results/pytest.txt
           python - <<'PY'
