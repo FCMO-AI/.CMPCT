@@ -51,7 +51,7 @@ def _cooperative_writer_lease(archive: Path):
         check_identity()
         # Bind the owned inode to this execution context. A second opened
         # pathname may point at a different inode after a concurrent replace.
-        token = _CURRENT_TRANSACTION_OWNER.set((original.st_dev, original.st_ino))
+        token = _CURRENT_TRANSACTION_OWNER.set((original.st_dev, original.st_ino, fd))
         try:
             yield
             check_identity()
@@ -81,7 +81,7 @@ def _checked_writer_reader(archive: Path):
     expected = _CURRENT_TRANSACTION_OWNER.get()
     if expected is not None:
         actual = os.fstat(reader.f.fileno())
-        if (actual.st_dev, actual.st_ino) != expected:
+        if (actual.st_dev, actual.st_ino) != expected[:2]:
             reader.close()
             raise RuntimeError("CMPCT transactional archive Reader descriptor changed during writer lease")
     return reader
@@ -95,12 +95,23 @@ def _checked_append(archive: Path):
         expected = _CURRENT_TRANSACTION_OWNER.get()
         if expected is not None:
             actual = os.fstat(fd)
-            if (actual.st_dev, actual.st_ino) != expected:
+            if (actual.st_dev, actual.st_ino) != expected[:2]:
                 raise RuntimeError("CMPCT transactional archive append descriptor changed during writer lease")
         return os.fdopen(fd, "wb", buffering=0)
     except BaseException:
         os.close(fd)
         raise
+
+
+
+def _locked_archive_size(archive: Path) -> int:
+    # New blob offsets must describe the very inode that was locked and
+    # verified. A path stat here could capture a foreign inode temporarily
+    # substituted after the Reader snapshot (even if later restored).
+    owner = _CURRENT_TRANSACTION_OWNER.get()
+    if owner is not None:
+        return os.fstat(owner[2]).st_size
+    return Path(archive).stat().st_size
 
 
 def _encode_update_blob(raw:bytes,hint:str,dictionary:bytes|None):
@@ -145,7 +156,7 @@ def append_update(archive:Path,member:str,source:Path):
             off=b[0];rrh=bytes(BHDR.unpack_from(ar.mm,record_base+off)[-1]);blob_by_hash.setdefault(rrh,i)
         dictionary=ar._blob(ar.dict_idx) if ar.dict_idx is not None else None
 
-    records=[];newblobs=[];archive_end=archive.stat().st_size;next_off=archive_end-record_base
+    records=[];newblobs=[];archive_end=_locked_archive_size(archive);next_off=archive_end-record_base
     def ensure_blob(part:bytes):
         nonlocal next_off
         h=sha(part);existing=blob_by_hash.get(h)
