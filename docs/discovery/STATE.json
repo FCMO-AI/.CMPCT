@@ -24,7 +24,8 @@
     "evidence": [
       "Frozen-source BDC hosted run 39925132930 at 0ccc6aea6b0061cab771648cdc56c9ebb36ba10d; artifact 12489775120; Shifted 1,687,989 B vs pinned Zstd-19 1,694,674 B (-6,685 B), Boundary 72,841 B vs 73,097 B (-256 B), scientific POSITIVE and product/release credit false.",
       "PR #239 canonical stronger control hosted run 39929731385 at df6920b5a2e72df3d4cae81c6d17d6f457ce6e63; artifact 12490384808; authentic r24 Builder/Reader: Shifted 30,275,353 B and Boundary 902,960 B, versus frozen sibling 1,687,989 B and 72,841 B; exact tree/manifest positive in scoped research court; no generic product admission.",
-      "Owners: PR #236 frozen scientific execution; PR #239 stronger current canonical control. No duplicate owner source edits."
+      "Owners: PR #236 frozen scientific execution; PR #239 stronger current canonical control. No duplicate owner source edits.",
+      "Negative creation-cost warning from PR #239 run 39929731385: single-run coordered sibling ~1.60x Shifted and ~2.44x Boundary canonical r24 wall; not matched ABBA or product credit."
     ]
   },
   "frontier_candidates": [
@@ -83,7 +84,8 @@
     "external_frontier": "Historical external scoreboard remains 15/15 ZIP size wins, 7/15 Zstd-19 size wins, 4/15 ZIP create wins, 5/15 Zstd-19 create wins, 4/15 strict joint wins; historical fingerprint only, not current release credit.",
     "a15": "NARROWED / DO NOT CHARTER: internal nonserialized projection/helper factoring is the stronger simpler control; serialized IR carrying-cost advantage is not established. Durable coordination: docs/v031-coordination/2026-10-06-foundry-reconciliation-a15-a07.json.",
     "a07": "NARROWED / NOT CHARTERED: exact-head C25CC02 run 33296257896 recovered from Actions artifact 9727565317; projected complete 10,220,043 B versus Zstd-19 10,199,302 B, margin -20,741 B, exact semantics/locality green, promotion_signal=false. Two earlier artifacts reproduce the ~20.7 KiB loss.",
-    "binary_create_parity_attribution": "2026-10-23 diagnostic contradiction: PR #238 exact-source FULL-HARNESS A/A run 39928521518 (source c765ba47..., artifact 12490992462) executes identical PR #234 source twice and triggers original strict checker: binary/library/create 137.795 -> 149.484 ms (+8.48%, +11.689 ms). Focused A/A vs A/B run 39929292878 shows AA +0.48% and AB -0.70% on identical full archive bytes. Thus gate-scale chronology/cache/source-independent effects are proven possible; prior PR #233/#234/#235 official reds remain true release blockers, not verified code-caused regressions. Attribution belongs to PR #238 owner; never weaken threshold."
+    "binary_create_parity_attribution": "2026-10-23 diagnostic contradiction: PR #238 exact-source FULL-HARNESS A/A run 39928521518 (source c765ba47..., artifact 12490992462) executes identical PR #234 source twice and triggers original strict checker: binary/library/create 137.795 -> 149.484 ms (+8.48%, +11.689 ms). Focused A/A vs A/B run 39929292878 shows AA +0.48% and AB -0.70% on identical full archive bytes. Thus gate-scale chronology/cache/source-independent effects are proven possible; prior PR #233/#234/#235 official reds remain true release blockers, not verified code-caused regressions. Attribution belongs to PR #238 owner; never weaken threshold.",
+    "bdc_creation_cost": "PR #239 exact-head scientific-only stronger control run 39929731385 at df6920b5: frozen BDC sibling create wall 0.4354 s vs canonical r24 0.2716 s (Shifted, ~1.60x), and 0.1039 s vs 0.0427 s (Boundary, ~2.44x). These are separate one-off diagnostic timings, not matched ABBA; they expose substantial unrehabilitated creation-cost risk alongside stored-byte headroom. Complete CPU/RSS/temp I/O/reader/decode+generic admission remain open; no release-speed regression classification from this unmatched timing."
   },
   "process_lessons": [
     {
