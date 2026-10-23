@@ -2,7 +2,7 @@
 
 A late, valid but non-reproducible Z_FIXED Deflate member forces opaque fallback
 *after* a first ZIP member aliases an earlier loose file candidate. The ZIP
-also has an on-disk hardlink whose index row precedes its deferred owner.
+also has an on-disk hardlink whose row is deliberately moved before its owner at extraction time.
 The reference uses the same Builder/Reader with virtualization disabled, so
 the full archive bytes — not only reconstructed payloads — must match.
 """
@@ -76,7 +76,13 @@ def test_late_vzip_fallback_preserves_complete_archive_and_out_of_order_hardlink
         assert ar.by["20-alias.zip"][6][0] == "10-nested.zip"
         assert ar.by["10-nested.zip"][6][0] != S_VZIP
         names = [row[0] for row in ar.files]
-        assert names.index("20-alias.zip") < names.index("10-nested.zip")
+        # Builder canonicalizes row order by path, so the deferred-owner
+        # scan chronology is NOT an index-order oracle. This independently
+        # perturbs the in-memory extraction order to exercise the Reader's
+        # owner-first invariant while preserving all authentic row contents.
+        assert names.index("10-nested.zip") < names.index("20-alias.zip")
+        ar.files = [ar.by["20-alias.zip"], ar.by["10-nested.zip"], ar.by["00-common.bin"]]
+        assert ar.files[0] is ar.by["20-alias.zip"]
         ar.extractall(dest)
 
     assert (dest / "00-common.bin").read_bytes() == FIRST
