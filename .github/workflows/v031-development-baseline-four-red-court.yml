@@ -36,6 +36,11 @@ jobs:
           test "$(git hash-object tests/test_v030_ci_topology_split_receipts.py)" = c378d8e2dbad2e0c7b037124a9d9fedecdc14601
           test "$(git hash-object tests/test_v030_release_fingerprint_surface.py)" = a23cc8126ad8f76374af9c6538ca73d6f59966fe
           printf 'FROZEN_SOURCE=%s\n' "$FROZEN_DEVELOPMENT_HEAD"
+      - name: Set up exact Python version used by ordinary Tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
       - name: Install same package and dependencies as ordinary Tests
         run: |
           set -euo pipefail
