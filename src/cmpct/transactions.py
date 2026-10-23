@@ -132,18 +132,38 @@ def append_rename(archive:Path,old:str,new:str):
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
 
 def recover_blob_records(archive:Path):
-    # Last-resort content salvage independent of either index. It returns valid self-hashed blobs;
-    # names require an index, but content remains recoverable even after severe metadata damage.
-    data=Path(archive).read_bytes();out=[];p=0
-    while True:
-        i=data.find(BMAGIC,p)
-        if i<0:break
-        if i+BHDR.size<=len(data):
-            try:
-                m,c,fl,res,us,cs,ml,rcrc,rh=BHDR.unpack_from(data,i);end=i+BHDR.size+ml+cs
-                if end<=len(data):out.append({'offset':i,'codec':c,'usize':us,'csize':cs,'crc32':rcrc,'sha256':bytes(rh).hex()})
-            except Exception:pass
-        p=i+1
+    """Enumerate *unverified* framed blob-header candidates, even if indexes are damaged.
+
+    This is forensic discovery, not content recovery or authentication. Header CRC/SHA fields are
+    *claims*, not checks; candidates need not belong to any committed generation. Full Reader
+    verification and any future authenticated salvage remain separate operations.
+    """
+    # Footnote: the old read_bytes() loaded the entire archive into RAM, including sparse holes.
+    # Carry BHDR.size-1 bytes between fixed-size reads so even headers straddling scan windows
+    # are visited exactly once. Keep byte offsets and permissive framing semantics compatible.
+    out=[];carry=b'';position=0;window=1024*1024
+    with open(archive,'rb') as f:
+        source_size=os.fstat(f.fileno()).st_size
+        while True:
+            block=f.read(window)
+            if not block:break
+            buf=carry+block;origin=position-len(carry);p=0
+            while True:
+                i=buf.find(BMAGIC,p)
+                if i<0 or i+BHDR.size>len(buf):break
+                try:
+                    m,c,fl,res,us,cs,ml,rcrc,rh=BHDR.unpack_from(buf,i)
+                    offset=origin+i;end=offset+BHDR.size+ml+cs
+                    if end<=source_size:
+                        out.append({'offset':offset,'codec':c,'usize':us,'csize':cs,
+                                    'crc32':rcrc,'sha256':bytes(rh).hex(),
+                                    'verification':'unverified',
+                                    'generation_membership':'unknown'})
+                except (struct.error,ValueError,OverflowError):
+                    pass
+                p=i+1
+            carry=buf[-(BHDR.size-1):]
+            position+=len(block)
     return out
 
 def compact_archive(src:Path,dst:Path):
