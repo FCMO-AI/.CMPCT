@@ -9,7 +9,7 @@ permissions:
   contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   hardlink-sort-science:
     runs-on: ubuntu-24.04
