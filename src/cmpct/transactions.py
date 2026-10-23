@@ -39,18 +39,23 @@ def _append_generation(archive:Path,delta:dict,prev_footer:int,checkpoint_index:
     return footer_pos,len(enc)+FTR.size
 
 def _require_valid_update_member(index:dict, member:str):
-    # Footnote: r24's put operation mutates only one index row. A nonexistent
-    # directory parent, canonical spelling alias, non-file replacement, or
-    # hardlink-owner metadata divergence can commit an authenticated yet
-    # non-reconstructible tree. Refuse before writing any blob or footer.
+    # Footnote: CMPCT Reader rejects unsafe/alias-colliding logical paths
+    # before exposing this index. A put only needs the relevant path/parent
+    # rows: scan once with constant extra memory, not a second O(N) dict.
     logical, _ = canonical_logical_path(member)
-    rows = {}
+    parent = logical.rpartition('/')[0]
+    previous = None
+    parent_row = None
+    alias_references_owner = False
     for row in index['files']:
-        key, _ = canonical_logical_path(row[0])
-        if key in rows:
-            raise ValueError(f"duplicate existing canonical path {key!r}")
-        rows[key] = row
-    previous = rows.get(logical)
+        # Reader already canonical-validated each stored row on open.
+        key = row[0].replace('\\', '/')
+        if key == logical:
+            previous = row
+        if parent and key == parent:
+            parent_row = row
+        if row[1] == K_HARDLINK and row[6][0].replace('\\', '/') == logical:
+            alias_references_owner = True
     if logical != member and (previous is None or previous[0] != member):
         raise ValueError(f"new update member must use canonical slash spelling: {member!r}")
     if previous is not None:
@@ -58,17 +63,13 @@ def _require_valid_update_member(index:dict, member:str):
             raise FileExistsError(f"canonical member path already exists: {previous[0]!r}")
         if previous[1] != K_FILE:
             raise OSError(f"cannot replace non-regular member {member!r} with a file")
-        # Hardlink alias mode/mtime must equal its owner. The current one-row
-        # put updates owner metadata alone; repairing every alias needs a
-        # separate atomic multi-row transaction and explicit recovery proof.
-        if any(row[1] == K_HARDLINK and canonical_logical_path(row[6][0])[0] == logical
-               for row in index['files']):
+        # One-row put changes owner metadata without syncing hardlink aliases.
+        if alias_references_owner:
             raise ValueError(
                 f"cannot update hardlink owner {member!r}: "
-                "all surviving aliases require atomic metadata synchronization"
+                "surviving aliases require atomic metadata synchronization"
             )
-    parent = logical.rpartition('/')[0]
-    if parent and (parent not in rows or rows[parent][1] != K_DIR):
+    if parent and (parent_row is None or parent_row[1] != K_DIR):
         raise FileNotFoundError(f"update destination parent is not an explicit directory: {parent!r}")
 
 def append_update(archive:Path,member:str,source:Path):
