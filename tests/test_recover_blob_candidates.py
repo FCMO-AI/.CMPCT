@@ -302,3 +302,20 @@ def test_source_growth_after_open_is_not_unbounded_tail_follow(tmp_path, monkeyp
     assert seen["read_bytes"] == len(initial), seen
     assert len(rows) == 1 and rows[0]["offset"] == 0
     assert rows[0]["verification"] == "unverified"
+
+
+def test_tiny_physical_candidate_scan_does_not_allocate_full_window(tmp_path):
+    # A fixed 1 MiB scanner buffer would export unnecessary RAM to tiny inputs.
+    # tracemalloc starts after cmpct imports, isolating the scan itself.
+    import tracemalloc
+    path = tmp_path / "tiny.cmpct"
+    path.write_bytes(_record(b"tiny file") + bytes(200))
+    tracemalloc.start()
+    try:
+        rows = recover_blob_records(path)
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert len(rows) == 1
+    assert rows[0]["verification"] == "unverified"
+    assert peak < 128 * 1024, peak
