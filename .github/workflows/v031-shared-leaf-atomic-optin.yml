@@ -12,6 +12,7 @@ on:
       - 'benchmarks/v031_atomic_shared_leaf_metadata_oracle.py'
       - 'tests/test_v031_destination_hardlink_leaf_alias.py'
       - 'benchmarks/history/2026-10-23-v031-atomic-shared-leaf-optin-prereg.md'
+      - 'benchmarks/history/2026-10-23-v031-atomic-shared-leaf-optin-result.md'
       - '.github/workflows/v031-shared-leaf-atomic-optin.yml'
   workflow_dispatch:
 concurrency:
