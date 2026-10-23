@@ -87,6 +87,9 @@ jobs:
       - name: Preserve release-level evidence invariants
         run: python site/tests/release_evidence_contract.py
 
+      - name: Verify shipping/research labels and renderer ready-state
+        run: node site/tests/proof-version-render-contract.mjs
+
       - name: Check browser code
         run: |
           node --check site/src/assets/app.js
