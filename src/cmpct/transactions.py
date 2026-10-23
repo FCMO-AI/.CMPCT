@@ -138,19 +138,21 @@ def recover_blob_records(archive:Path):
     *claims*, not checks; candidates need not belong to any committed generation. Full Reader
     verification and any future authenticated salvage remain separate operations.
     """
-    # Footnote: the old read_bytes() loaded the entire archive into RAM, including sparse holes.
-    # Carry BHDR.size-1 bytes between fixed-size reads so even headers straddling scan windows
-    # are visited exactly once. Keep byte offsets and permissive framing semantics compatible.
-    out=[];carry=b'';position=0;window=1024*1024
+    # Footnote: read_bytes() allocated the entire archive, including sparse holes. A single
+    # reusable readinto buffer of 1 MiB + BHDR.size-1 keeps scan memory bounded without
+    # redundant block copies; the overlap preserves full headers across window boundaries.
+    # Framing/offset behavior stays equivalent to the permissive historical candidate scan.
+    out=[];window=1024*1024;overlap=BHDR.size-1
+    buf=bytearray(window+overlap);carry_len=0;position=0
     with open(archive,'rb') as f:
         source_size=os.fstat(f.fileno()).st_size
         while True:
-            block=f.read(window)
-            if not block:break
-            buf=carry+block;origin=position-len(carry);p=0
+            got=f.readinto(memoryview(buf)[carry_len:carry_len+window])
+            if not got:break
+            active=carry_len+got;origin=position-carry_len;p=0
             while True:
-                i=buf.find(BMAGIC,p)
-                if i<0 or i+BHDR.size>len(buf):break
+                i=buf.find(BMAGIC,p,active)
+                if i<0 or i+BHDR.size>active:break
                 try:
                     m,c,fl,res,us,cs,ml,rcrc,rh=BHDR.unpack_from(buf,i)
                     offset=origin+i;end=offset+BHDR.size+ml+cs
@@ -162,8 +164,9 @@ def recover_blob_records(archive:Path):
                 except (struct.error,ValueError,OverflowError):
                     pass
                 p=i+1
-            carry=buf[-(BHDR.size-1):]
-            position+=len(block)
+            carry_len=min(overlap,active)
+            buf[:carry_len]=buf[active-carry_len:active]
+            position+=got
     return out
 
 def compact_archive(src:Path,dst:Path):
