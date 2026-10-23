@@ -1,0 +1,74 @@
+{
+  "schema": "cmpct-v031-bounded-drift-frozen-hosted-evidence-v1",
+  "observed_at_utc": "2026-10-23T08:32:21Z",
+  "scientific_status": "FROZEN_COURT_POSITIVE",
+  "decision": "ADVANCE_ONE_PRODUCTIZATION_RESEARCH_RUNG_NOT_RELEASE",
+  "frozen_owner_head": "a34b050933b2f946fcf5fb1a4a7d02f58f777c0f",
+  "executed_exact_source_head": "0ccc6aea6b0061cab771648cdc56c9ebb36ba10d",
+  "workflow_run_id": 39925132930,
+  "workflow_url": "https://github.com/FCMO-AI/.CMPCT/actions/runs/39925132930",
+  "workflow_run_conclusion": "success",
+  "artifact_id": 12489775120,
+  "artifact_url": "https://github.com/FCMO-AI/.CMPCT/actions/runs/39925132930/artifacts/12489775120",
+  "artifact_zip_sha256": "1a75a7e1e67f004956edea52cf9c41e953c6f2f3dff7b7f0157c4bb500d5fa48",
+  "immutable_source_blobs": {
+    "benchmarks/v031_bounded_drift_coordered_court.py": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+    "benchmarks/history/2026-10-04-v031-bounded-drift-coordered-court-prereg.json": "f8e53f058a1c123ea4665b730c45f5619eb93d5f",
+    "benchmarks/resemblance_hostile_corpus_v1.py": "335169bd6eb336b6d444cfbd34c291101262c3a9",
+    "experiments/entropygraph_v030_bounded_drift_container_v1.py": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "experiments/entropygraph_v030_bounded_drift_v1.py": "d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73",
+    "experiments/entropygraph_v030_product_fs.py": "72404386775be4576365cc687784f4e4f752d9de",
+    "experiments/entropygraph_v030_canonical_final.py": "caeaa2fb277481c500600af75eb13470f767d911"
+  },
+  "zstd_cli_version": "1.5.7",
+  "zstd_source_tarball_sha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
+  "rows": [
+    {
+      "name": "01_shifted_versions",
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "candidate_complete_bytes": 1687989,
+      "zstd19_complete_bytes": 1694674,
+      "delta_bytes": -6685,
+      "physical_sha256": "6f15c582a4c448524f112e5a74d832401004895c30a3e53723684d3d921b2b30",
+      "max_member_read_amplification": 2.012813477561917,
+      "max_decode_unit_bytes": 1862620,
+      "candidate_create_seconds_diagnostic": 0.4353546069999936,
+      "zstd19_create_seconds_diagnostic": 0.7595035699999926,
+      "manifest_recapture_exact": true,
+      "strict_size_win": true,
+      "historical_comparator_fingerprint_exact": true
+    },
+    {
+      "name": "03_boundary_churn",
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+      "candidate_complete_bytes": 72841,
+      "zstd19_complete_bytes": 73097,
+      "delta_bytes": -256,
+      "physical_sha256": "da20e529c5acd391e1ea26ab3101e1d6a1960c8216f5438e998cbc27489c78ae",
+      "max_member_read_amplification": 2.002506120599203,
+      "max_decode_unit_bytes": 812012,
+      "candidate_create_seconds_diagnostic": 0.10391387000001373,
+      "zstd19_create_seconds_diagnostic": 0.27681709300000534,
+      "manifest_recapture_exact": true,
+      "strict_size_win": true,
+      "historical_comparator_fingerprint_exact": true
+    }
+  ],
+  "inherited_bounds": {
+    "max_amplification": 8,
+    "max_decode_unit_bytes": 8388608
+  },
+  "hostile_fs_semantics": {
+    "manifest_recapture_exact": true,
+    "duplicate_content_distinct_inode": true,
+    "hardlink_relation_preserved": true,
+    "symlink_target_preserved": true,
+    "passed": true
+  },
+  "corruption_rejection": "PASS (frozen unchanged benchmark)",
+  "independent_receipt_judge": "PASS at exact source head; validates source and comparator, byte accounting, semantics, limits and no product/release credit",
+  "negative_debt": "Only 256-byte Boundary margin; noncanonical sibling and single-run timing. Generic admission, full product/native/recovery/platform and resource economics remain unmeasured.",
+  "next": "Research productization rung: generic prospective admission vs stronger simpler controls with charged source and decoder costs; no automatic promotion.",
+  "product_credit": false,
+  "release_credit": false
+}
