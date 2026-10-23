@@ -218,28 +218,27 @@ def test_replace_archive_path_between_snapshot_and_append_cannot_mutate_replacem
     assert hashlib.sha256(archive.read_bytes()).digest() == hashlib.sha256(expected_bytes).digest()
 
 
-def _lock_then_os_exit(archive, q):
+def _lock_then_os_exit(archive, ready):
     """Bypass Python finally deliberately: kernel must release the advisory lock."""
     with tx._cooperative_writer_lease(Path(archive)):
-        q.put(os.getpid())
+        ready.set()
         os._exit(17)
 
 
 def test_kernel_releases_writer_lock_after_crashed_owner(tmp_path):
     ctx = mp.get_context("fork")
     archive = _make_archive(tmp_path)
-    q = ctx.Queue()
-    worker = ctx.Process(target=_lock_then_os_exit, args=(str(archive), q))
+    ready = ctx.Event()
+    worker = ctx.Process(target=_lock_then_os_exit, args=(str(archive), ready))
     worker.start()
     try:
-        owner_pid = q.get(timeout=15)
-        assert owner_pid == worker.pid
+        assert ready.wait(timeout=15), "child never acquired the archive lease"
         worker.join(timeout=15)
         assert worker.exitcode == 17
         # A fresh public operation must not deadlock on an orphaned lease.
         tx.append_rename(archive, "alpha.txt", "alpha-new.txt")
         with CMPCT(archive) as reader:
-            assert reader.read("alpha-new.txt") == b"alpha payload\\n" * 70
+            assert reader.read("alpha-new.txt") == b"alpha payload\n" * 70
             assert reader.verify() >= 2
     finally:
         if worker.is_alive():
