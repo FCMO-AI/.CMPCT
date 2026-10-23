@@ -1,0 +1,78 @@
+# ci-lane: fast
+name: CMPCT v031 salvage x candidate-identity exact-owner composition
+on:
+  push:
+    branches:
+      - agent/phased3-v031-salvage-v031-fingerprint-source-composition-20261023
+    paths:
+      - 'docs/v031-research/SALVAGE_V031_FINGERPRINT_COMPOSITION_PROSPECTIVE.md'
+      - '.github/workflows/v031-salvage-identity-compose.yml'
+      - 'src/cmpct/transactions.py'
+      - 'src/cmpct/cli.py'
+      - '.github/workflows/tests.yml'
+      - 'docs/V031_CANDIDATE_FINGERPRINT.json'
+      - 'tests/**/*.py'
+      - 'tools/check_v031_candidate_fingerprint.py'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  source-locked-owner-union:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind exact owner source and immutable historical release lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object docs/v031-research/SALVAGE_V031_FINGERPRINT_COMPOSITION_PROSPECTIVE.md)" = "d60b0dd86b84acda2aad665f9e21495b8afaf199"
+          test "$(git hash-object src/cmpct/transactions.py)" = "94c25029fdd167c00871aabbe8fe90fbe7490026"
+          test "$(git hash-object src/cmpct/cli.py)" = "94bcd91af4ec8fa8282e3b1900d3c1d07a7a3235"
+          test "$(git hash-object docs/V030_RELEASE_LOCK.json)" = "988a7b05ad4e0833fac0453de74133b38f890f87"
+          test "$(git hash-object .github/workflows/tests.yml)" = "7c8eff1885a3d4bf13d1d1100679de65138018c1"
+          test "$(git hash-object docs/V031_CANDIDATE_FINGERPRINT.json)" = "f806d96dba4750dead6746e078e596e848e6f201"
+          test "$(git hash-object tests/test_performance_base_native_release_custody.py)" = "ee030beb056ded21b16fe04f0e6e6427af3d62c0"
+          test "$(git hash-object tests/test_public_attribution.py)" = "4cf80b7559fdb0d260501819083f54255c80db1e"
+          test "$(git hash-object tests/test_v030_ci_topology_split_receipts.py)" = "90ae3a44bf08122f1e4b237868b3d07bb55c76e6"
+          test "$(git hash-object tests/test_v030_release_fingerprint_surface.py)" = "5594b7a3a6ff072054688c3d8f2d2a96651603fa"
+          test "$(git hash-object tests/test_v031_candidate_fingerprint.py)" = "636aab739c2a19c127cab6568008f019f0f95215"
+          test "$(git hash-object tools/check_v031_candidate_fingerprint.py)" = "4a8c0748b03f621add78810057d9f708f8050e06"
+          git status --short
+      - name: Install authentic combined CMPCT package
+        run: python -m pip install -e '.[test,audio]'
+      - name: Capture prospective exact-head source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cmpct-union"
+          python tools/check_v031_candidate_fingerprint.py --output "$RUNNER_TEMP/cmpct-union/identity.json"
+      - name: Focused real package owner-composition regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q \
+            tests/test_recover_blob_candidates.py \
+            tests/test_v031_candidate_fingerprint.py \
+            tests/test_performance_base_native_release_custody.py \
+            tests/test_public_attribution.py \
+            tests/test_v030_ci_topology_split_receipts.py \
+            tests/test_v030_release_fingerprint_surface.py \
+            2>&1 | tee "$RUNNER_TEMP/cmpct-union/focused-pytest.txt"
+      - name: Preserve identity and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-salvage-prospective-identity-owner-union
+          path: ${{ runner.temp }}/cmpct-union/
+          if-no-files-found: warn
