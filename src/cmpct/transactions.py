@@ -175,7 +175,7 @@ def _reject_nonempty_directory_mutation(index:dict, member:str, operation:str):
                 f"surviving descendant {row[0]!r} requires a subtree transaction"
             )
 
-def _require_valid_rename_destination(index:dict, new:str):
+def _require_valid_rename_destination(index:dict, old:str, new:str):
     # Footnote: rename is a one-row committed generation. The Reader's
     # canonical path policy must be enforced *before* appending the footer:
     # pathlib parent parsing and literal dict lookup miss slash aliases,
@@ -185,15 +185,23 @@ def _require_valid_rename_destination(index:dict, new:str):
         raise ValueError(f"rename destination must use canonical slash spelling: {new!r}")
     parent = logical.rpartition('/')[0]
     parent_kind = None
+    source_directory_key = None
     for row in index['files']:
         # Reader.__init__ has already validated every source row using
         # canonical_logical_path. Reusing its exact slash normalization avoids
         # rechecking UTF-8 and path components O(files) times per rename.
         key = row[0].replace('\\\\', '/')
+        if row[0] == old and row[1] == K_DIR:
+            source_directory_key = key
         if key == logical:
             raise FileExistsError(f"canonical rename destination exists: {row[0]!r}")
         if parent and key == parent:
             parent_kind = row[1]
+    # A one-row rename cannot move a directory into its own child: it
+    # removes the very parent path required by the new row. Fail closed
+    # even for an empty source directory (scientific PR #249).
+    if source_directory_key is not None and logical.startswith(source_directory_key + '/'):
+        raise OSError(f"cannot rename directory {old!r} into its own descendant {new!r}")
     if parent and parent_kind != K_DIR:
         raise FileNotFoundError(f"destination parent is not an explicit directory: {parent!r}")
 
@@ -215,7 +223,7 @@ def append_rename(archive:Path,old:str,new:str):
         if new in ar.by:raise FileExistsError(new)
         _reject_hardlink_owner_mutation(ar.index,old,'rename')
         _reject_nonempty_directory_mutation(ar.index,old,'rename')
-        _require_valid_rename_destination(ar.index, new)
+        _require_valid_rename_destination(ar.index, old, new)
         prev=ar.latest_footer_pos;depth=ar.delta_depth;idx=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False)
     op=['ren',old,new];checkpoint=_index_after_op(idx,op) if depth>=63 else None
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
