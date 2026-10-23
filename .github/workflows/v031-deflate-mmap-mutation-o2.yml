@@ -39,6 +39,8 @@ jobs:
         run: python benchmarks/v031_deflate_staged_output_o3_court.py --output deflate-mutation-evidence/o3-result.json
       - name: Execute preregistered verifier-fed compressed wire identity O4
         run: python benchmarks/v031_deflate_wire_identity_o4_court.py --output deflate-mutation-evidence/o4-result.json
+      - name: Execute preregistered equal-plaintext alternate-wire O5
+        run: python benchmarks/v031_deflate_equivalent_wire_o5_court.py --output deflate-mutation-evidence/o5-result.json
       - name: Record source SHA and file blob identities
         if: always()
         run: |
@@ -48,6 +50,8 @@ jobs:
           git hash-object benchmarks/v031_deflate_mmap_mutation_o2_court.py > deflate-mutation-evidence/oracle.blob
           git hash-object benchmarks/v031_deflate_staged_output_o3_court.py > deflate-mutation-evidence/o3-oracle.blob
           git hash-object benchmarks/v031_deflate_wire_identity_o4_court.py > deflate-mutation-evidence/o4-oracle.blob
+          git hash-object benchmarks/v031_deflate_equivalent_wire_o5_court.py > deflate-mutation-evidence/o5-oracle.blob
+          git hash-object benchmarks/history/2026-10-23-v031-deflate-equivalent-wire-o5-prereg.md > deflate-mutation-evidence/o5-prereg.blob
           git hash-object benchmarks/history/2026-10-23-v031-deflate-wire-identity-o4-prereg.md > deflate-mutation-evidence/o4-prereg.blob
           git hash-object benchmarks/history/2026-10-23-v031-deflate-staged-output-o3-prereg.md > deflate-mutation-evidence/o3-prereg.blob
           git hash-object benchmarks/history/2026-10-23-v031-direct-deflate-mutable-source-o2-prereg.md > deflate-mutation-evidence/prereg.blob
