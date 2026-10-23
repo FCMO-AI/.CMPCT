@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Independent negative court: nonadjacent SEEK_DATA extents are not byte-contiguous.
+"""Independent regression court: source-exact SEEK_DATA extent boundaries.
 
 Scientific-only: preserves PR296 oracle and PR293 product scanner unchanged.
-This script EXPECTS the unpatched PR296 oracle to emit a phantom header candidate.
+Original O1 phantom hypothesis was FALSIFIED by hosted source-exact evidence.
+This successor court preserves its three layouts as held-out parity controls.
 """
 from __future__ import annotations
 
@@ -98,10 +99,11 @@ def _run_variant(root: Path, a_suffix: bytes, b_prefix: bytes) -> dict:
         direct_metrics, admission_metrics
     )
     assert admitted == alternate, ("admission changed scientific behavior", admission_metrics)
-    assert alternate_offsets == [expected_ghost, control_pos], (
-        "falsifier not reproduced or parent oracle changed",
-        alternate_offsets, baseline_offsets
+    # Retain the falsified O1 layout as a positive regression control.
+    assert alternate_offsets == baseline_offsets, (
+        "disjoint-extent parity regression", alternate_offsets, baseline_offsets
     )
+    assert expected_ghost not in alternate_offsets, "phantom offset was admitted"
 
     with path.open("rb") as src:
         src.seek(expected_ghost)
@@ -116,19 +118,21 @@ def _run_variant(root: Path, a_suffix: bytes, b_prefix: bytes) -> dict:
         "reported_data_extents": extents,
         "baseline_offsets": baseline_offsets,
         "sparse_offsets": alternate_offsets,
-        "ghost_offset": expected_ghost,
+        "hypothesized_phantom_offset": expected_ghost,
         "actual_ghost_magic_hex": actual_magic.hex(),
-        "physical_candidate_requires_magic_check": actual_magic != BMAGIC,
+        "on_disk_magic_is_not_real_header": actual_magic != BMAGIC,
+        "phantom_was_returned": expected_ghost in alternate_offsets,
         "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "fallback_route": fallback_metrics["route"],
         "admission_route": admission_metrics["route"],
-        "decision": "FALSE_POSITIVE_CONFIRMED_FOR_GAPPED_CARRY",
+        "decision": "EXACT_PARITY_PRESERVED_OVER_DISJOINT_EXTENT_MAGIC_SPLIT",
     }
 
 
 def main() -> None:
     report = {
-        "question": "Does carrying magic suffix bytes over a logical hole fabricate candidate offsets?",
+        "question": "Does the authentic oracle already reject physical split-magic across sparse holes?",
+        "original_hypothesis": "FALSIFIED_IN_EARLIER_EXACT_SOURCE_RUN_40040863477",
         "evidence_tier": "exact-source hosted scientific negative; not a product change",
         "source_oracle_git_blob": "94fc2234df0035938be3151dfaa5eef7bc317598",
         "source_scanner_git_blob": "94c25029fdd167c00871aabbe8fe90fbe7490026",
@@ -138,7 +142,7 @@ def main() -> None:
         root = Path(d)
         for a_suffix, b_prefix in ((b"CMA", b"4"), (b"CM", b"A4"), (b"C", b"MA4")):
             report["variants"].append(_run_variant(root, a_suffix, b_prefix))
-    report["decision"] = "SPARSE_SEEK_EXACT_PARITY_FALSIFIED_ON_NONCONTIGUOUS_EXTENTS"
+    report["decision"] = "DISJOINT_EXTENT_SPLIT_MAGIC_REGRESSION_PARITY_PASS"
     report["limits"] = [
         "no product repair or migration",
         "source filesystem may not support coherent SEEK_DATA/SEEK_HOLE",
@@ -147,7 +151,7 @@ def main() -> None:
         "no timing, size, or compression product credit",
     ]
     print(json.dumps(report, sort_keys=True, indent=2))
-    print("SCIENTIFIC_DISCONTIGUOUS_EXTENT_FALSE_POSITIVE_REPRODUCED")
+    print("SCIENTIFIC_DISCONTIGUOUS_EXTENT_PARITY_CONFIRMED")
 
 
 if __name__ == "__main__":
