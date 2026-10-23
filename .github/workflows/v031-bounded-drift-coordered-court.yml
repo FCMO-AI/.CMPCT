@@ -1,0 +1,113 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.31 frozen bounded-drift exact-source court
+on:
+  push:
+    branches: [agent/phased2-v031-bdc-exact-source-hosted-court-20261023]
+    paths:
+      - '.github/workflows/v031-bounded-drift-coordered-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v031-bdc-frozen-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+  PYTHONPATH: ${{ github.workspace }}
+jobs:
+  frozen-coordered-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind all frozen direct source identities
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import json,os,platform,subprocess
+          from pathlib import Path
+          expected={
+            'benchmarks/v031_bounded_drift_coordered_court.py':'2fd04bacd64c14b45678b8575ba8ae7c692aa2df',
+            'benchmarks/history/2026-10-04-v031-bounded-drift-coordered-court-prereg.json':'f8e53f058a1c123ea4665b730c45f5619eb93d5f',
+            'benchmarks/resemblance_hostile_corpus_v1.py':'335169bd6eb336b6d444cfbd34c291101262c3a9',
+            'experiments/entropygraph_v030_bounded_drift_container_v1.py':'ed3165ce7fea3021e12220e409d972dd3cffd5b9',
+            'experiments/entropygraph_v030_bounded_drift_v1.py':'d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73',
+            'experiments/entropygraph_v030_product_fs.py':'72404386775be4576365cc687784f4e4f752d9de',
+            'experiments/entropygraph_v030_canonical_final.py':'caeaa2fb277481c500600af75eb13470f767d911'
+          }
+          observed={p:subprocess.check_output(['git','hash-object',p],text=True).strip() for p in expected}
+          Path('benchmark-artifacts/source-identity.json').write_text(json.dumps({'head':os.environ['EVIDENCE_HEAD'],'expected':expected,'observed':observed,'platform':platform.platform()},indent=2,sort_keys=True)+'\n')
+          if observed!=expected:raise SystemExit('UNMEASURED: frozen source changed')
+          PY
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install full research environment and checksum-pinned Zstd 1.5.7 CLI
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[test]'
+          curl -fsSL --retry 3 https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz -o "$RUNNER_TEMP/zstd-1.5.7.tar.gz"
+          echo "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3  $RUNNER_TEMP/zstd-1.5.7.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/zstd-1.5.7.tar.gz" -C "$RUNNER_TEMP"
+          make -C "$RUNNER_TEMP/zstd-1.5.7/programs" -j2
+          echo "$RUNNER_TEMP/zstd-1.5.7/programs" >> "$GITHUB_PATH"
+      - name: Record runner and comparator
+        run: |
+          set -euo pipefail
+          zstd --version | tee benchmark-artifacts/zstd-version.txt
+          grep -q 'v1.5.7' benchmark-artifacts/zstd-version.txt
+          python - <<'PY'
+          import json,platform,msgpack,zstandard
+          from pathlib import Path
+          Path('benchmark-artifacts/runtime.json').write_text(json.dumps({'python':platform.python_version(),'python_zstandard':zstandard.__version__,'libzstd':zstandard.ZSTD_VERSION,'msgpack':msgpack.__version__},indent=2)+'\n')
+          PY
+      - name: Execute immutable frozen scientific court
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_bounded_drift_coordered_court.py --work-root "$RUNNER_TEMP/v031-bdc-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v031-bd-coordered.json" 2>&1 | tee benchmark-artifacts/court.log
+      - name: Independent fail-closed scientific verdict
+        if: always()
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v031-bd-coordered.json')
+          if not p.exists():raise SystemExit('UNMEASURED: no complete result receipt; inspect court.log')
+          d=json.loads(p.read_text())
+          if d.get('schema')!='cmpct-v031-bounded-drift-coordered-court-v1':raise SystemExit('invalid result schema')
+          expected={
+            '01_shifted_versions':('d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd',1694674),
+            '03_boundary_churn':('3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d',73097)}
+          rows=d.get('rows',[])
+          if len(rows)!=2 or {r.get('name') for r in rows}!=set(expected):raise SystemExit('unexpected target set')
+          for r in rows:
+            tree,n=expected[r['name']];z=r['solid_zstd19'];c=r['candidate']
+            if r['tree_sha256']!=tree or z['tree_sha256']!=tree:raise SystemExit('tree identity mismatch')
+            if z['archive_bytes']!=n or z['historical_current_fingerprint_bytes']!=n or z['matches_historical_current_fingerprint_bytes'] is not True:raise SystemExit('INDETERMINATE: pinned external comparator drift')
+            if c['physical_filesystem_semantics_exact'] is not True or c['passed'] is not True:raise SystemExit('semantic or locality failure')
+            if c['max_decode_unit_bytes']>8*1024*1024 or c['max_member_read_amplification']>8:raise SystemExit('resource bound exceeded')
+            if c['archive_bytes']-n!=r['delta_bytes_vs_zstd19'] or r['strict_size_win']!=(c['archive_bytes']<n):raise SystemExit('physical byte accounting false green')
+          h=d['generic_filesystem_hostile']
+          if not all(h[k] is True for k in ['passed','manifest_recapture_exact','duplicate_content_distinct_inode','hardlink_relation_preserved','symlink_target_preserved']):raise SystemExit('hostile filesystem semantics failed')
+          won=all(r['strict_size_win'] for r in rows)
+          if d['passed'] is not won or d['product_credit'] is not False or d['release_credit'] is not False:raise SystemExit('invalid scientific credit or decision')
+          print('Scientific decision:', 'POSITIVE: advance one research rung' if won else 'NEGATIVE: retire/narrow this representation')
+          if not won:raise SystemExit('FROZEN SCIENTIFIC CLAIM FALSIFIED')
+          PY
+      - name: Retain raw positive, negative or incomplete evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-bdc-frozen-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/
+          if-no-files-found: error
+          retention-days: 90
