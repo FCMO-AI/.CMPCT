@@ -7,6 +7,7 @@ on:
     paths:
       - 'benchmarks/v031_existing_destination_link_court.py'
       - 'benchmarks/v031_destination_dirfd_control.py'
+      - 'benchmarks/v031_destination_symlink_storage_court.py'
       - '.github/workflows/v031-existing-destination-link-court.yml'
   workflow_dispatch:
 concurrency:
@@ -60,6 +61,17 @@ jobs:
           assert len(j["cases"])==3 and all(c["outside_unchanged"] for c in j["cases"])
           print("POSIX_DIRFD_CONTROL_PASS; no product fix claimed")
           PY
+      - name: Run separately preregistered CDC versus symlink-row storage contrast
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_destination_symlink_storage_court.py > "$RUNNER_TEMP/storage-contrast.json"
+          python - "$RUNNER_TEMP/storage-contrast.json" <<'PY'
+          import json,sys
+          j=json.load(open(sys.argv[1]))
+          assert j["result"]=="ATOMIC_LEAF_PROTECTION_DOES_NOT_CONTAIN_PARENT_SYMLINK"
+          assert [x["outside_modified"] for x in j["cases"]]==[True,False,False]
+          print("CDC_PARENT_BOUNDARY_CONFIRMED; CDC_LEAF_AND_SYMLINK_ROW_CONTROLS_PASS")
+          PY
       - name: Preserve scientific evidence even if result differs
         if: always()
         uses: actions/upload-artifact@v4
@@ -68,4 +80,5 @@ jobs:
           path: |
             ${{ runner.temp }}/destination-link-court.json
             ${{ runner.temp }}/dirfd-control.json
+            ${{ runner.temp }}/storage-contrast.json
           if-no-files-found: warn
