@@ -36,7 +36,7 @@ jobs:
           set -euo pipefail
           echo "SOURCE_HEAD=$(git rev-parse HEAD)"
           echo "READER_BLOB=$(git hash-object src/cmpct/reader.py)"
-          test "$(git hash-object src/cmpct/reader.py)" = "562b6af136c252ddc8ff25f968c5c1d4d3760408"
+          test "$(git hash-object src/cmpct/reader.py)" = "d1fdf5839c5ead102b7dd5787bb99215c8fbff3b"
           test -z "$(git status --porcelain)"
           python -c 'import os; assert os.name == "posix" and hasattr(os, "fchmod")'
       - name: Install genuine CMPCT package and native Rust component
