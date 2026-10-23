@@ -17,7 +17,7 @@ Core ideas:
   * A normal Deflate ZIP can be exported on demand for legacy compatibility. Compatibility is
     therefore an endpoint, not permanent storage overhead in every CMPCT archive.
 """
-import argparse, base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, os, shutil, stat, struct, sys, tempfile, time, zipfile, zlib, threading, subprocess, mmap
+import argparse, base64, binascii, errno, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, os, shutil, stat, struct, sys, tempfile, time, zipfile, zlib, threading, subprocess, mmap
 from dataclasses import dataclass
 from pathlib import Path
 import msgpack
@@ -231,21 +231,27 @@ def _sparse_data_extents(path:Path, size:int):
     if size < 1024*1024 or not hasattr(os,'SEEK_DATA') or not hasattr(os,'SEEK_HOLE'):return None
     st=path.stat()
     allocated=getattr(st,'st_blocks',0)*512
-    if not allocated or allocated >= size*0.75:return None
+    if allocated >= size*0.75:return None
     fd=os.open(path,os.O_RDONLY);ext=[];pos=0
     try:
         while pos<size:
             try:data_off=os.lseek(fd,pos,os.SEEK_DATA)
             except OSError as e:
-                if e.errno in (6,19,22,95):break  # ENXIO/ENODEV/EINVAL/ENOTSUP-ish portability fallback.
+                # ENXIO proves no subsequent data. An unsupported seek is not evidence
+                # that the remaining logical bytes are zeros: use ordinary encoding.
+                if e.errno == errno.ENXIO:break
+                if e.errno in (errno.ENODEV,errno.EINVAL,errno.ENOTSUP,errno.EOPNOTSUPP):return None
                 raise
-            if data_off>=size:break
+            # Seek offsets are observations, not proof of holes unless monotone and in-range.
+            # Malformed FUSE/driver responses must not silently turn source bytes into zeros.
+            if not pos <= data_off < size:return None
             try:hole=os.lseek(fd,data_off,os.SEEK_HOLE)
             except OSError:return None
-            hole=min(hole,size);left=hole-data_off;buf=[];q=data_off
+            if not data_off < hole <= size:return None
+            left=hole-data_off;buf=[];q=data_off
             while left:
                 n=min(left,4*1024*1024);b=os.pread(fd,n,q)
-                if not b:break
+                if not b:return None  # A changed/truncated data extent cannot be zero-filled safely.
                 buf.append(b);q+=len(b);left-=len(b)
             ext.append((data_off,b''.join(buf)));pos=max(hole,data_off+1)
     finally:os.close(fd)
