@@ -39,10 +39,12 @@ class CMPCT:
             raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
         self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
     def close(self):
+        # Internal decode futures still own the mmap and native codec contexts.
+        # Finish active tasks (and cancel queued ones) before freeing their dependencies.
+        if self._executor:self._executor.shutdown(wait=True,cancel_futures=True);self._executor=None
         if getattr(self,'mm',None):self.mm.close();self.mm=None
         if self._zdict_decoder:self._zdict_decoder.close();self._zdict_decoder=None
         if self._inflater and _ld is not None:_ld.libdeflate_free_decompressor(self._inflater);self._inflater=None
-        if self._executor:self._executor.shutdown(wait=True);self._executor=None
         self.f.close()
     def __enter__(self):return self
     def __exit__(self,*a):self.close()
@@ -504,9 +506,22 @@ class CMPCT:
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
                 except OSError:pass
     def verify(self):
-        n=0
+        n=0;verified_packs=set()
         for row in self.files:
             if row[1]==K_DIR:continue
+            # PACK members deliberately omit per-slice hashes: their only durable SHA-256
+            # commitment is the *physical pack blob*. file_sha256(S_PACK) computes the
+            # same bytes being verified and is otherwise a tautology. Authenticate each
+            # shared pack once against the original physical header before accepting it.
+            storage=row[6]
+            if row[1]==K_FILE and storage and storage[0]==S_PACK:
+                idx=storage[1]
+                if idx not in verified_packs:
+                    pos=self.record_base+self.blobs[idx][0]
+                    expected=bytes(BHDR.unpack_from(self.mm,pos)[-1])
+                    if sha(self._blob(idx))!=expected:
+                        raise IOError(f'physical PACK SHA-256 verification failure: {row[0]}')
+                    verified_packs.add(idx)
             raw=self.read(row[0]);want=self.file_sha256(row[0])
             if sha(raw)!=want:raise IOError(f'SHA-256 verification failure: {row[0]}')
             n+=1
