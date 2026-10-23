@@ -1,4 +1,4 @@
-# ci-lane: research
+# ci-lane: fast
 name: v031 ZIP64 exact-count compatibility court
 
 on:
@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: v031-zip64-count-${{ github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   zip64-count:
