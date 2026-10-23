@@ -131,7 +131,7 @@ def compare(binary):
         "source": {
             "head": git_output("rev-parse", "HEAD"),
             "preregistered_episode": "VZIP-M2-BACKEND-001",
-            "rust_probe_blob": git_output("hash-object", "native/cmpct-core/src/bin/vzip_mode2_backend_probe.rs"),
+            "rust_probe_blob": git_output("hash-object", "native/cmpct-core/examples/vzip_mode2_backend_probe.rs"),
             "python_probe_blob": git_output("hash-object", "benchmarks/v031_vzip_mode2_native_backend_probe.py"),
             "cargo_manifest_blob": git_output("hash-object", "native/cmpct-core/Cargo.toml"),
         },
