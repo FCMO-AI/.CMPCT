@@ -370,8 +370,13 @@ class CMPCT:
         """
         rel,k,mode,mt,size,h,storage=row
         old=os.lstat(full)
-        if not stat.S_ISREG(old.st_mode) or old.st_nlink<=1:
-            raise IOError(f'atomic shared destination leaf changed since preflight: {full!r}')
+        # A previous archive member can already have replaced another link
+        # to this inode, legitimately reducing st_nlink to one after preflight.
+        # The preflight claim selects atomic publication; requiring nlink>1 a
+        # second time would reject a valid two-member extraction without any
+        # concurrent actor. The leaf still must be a regular file.
+        if not stat.S_ISREG(old.st_mode):
+            raise IOError(f'atomic shared destination leaf is no longer regular: {full!r}')
         fd,tmp=tempfile.mkstemp(prefix='.cmpct-part-',dir=os.path.dirname(full))
         try:
             # Without metadata restoration, pre-existing destination mode is
