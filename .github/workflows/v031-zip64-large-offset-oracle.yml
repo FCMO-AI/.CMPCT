@@ -71,5 +71,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zip64-large-offset-${{ github.sha }}
-          path: zip64-offset-artifacts/result.json
+          path: zip64-offset-artifacts/*.json
           if-no-files-found: error
