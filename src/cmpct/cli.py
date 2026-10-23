@@ -100,10 +100,10 @@ def main():
             # The streamed pretty JSON preserves the complete legacy array's exact text shape.
             found=False
             for row in _iter_blob_header_candidates(Path(a.archive)):
-                sys.stdout.write("[\\n" if not found else ",\\n")
-                sys.stdout.write("\\n".join("  "+line for line in json.dumps(row,indent=2).splitlines()))
+                sys.stdout.write("[\n" if not found else ",\n")
+                sys.stdout.write("\n".join("  "+line for line in json.dumps(row,indent=2).splitlines()))
                 found=True
-            sys.stdout.write("\\n]\\n" if found else "[]\\n")
+            sys.stdout.write("\n]\n" if found else "[]\n")
         else:
             print(json.dumps(compact_archive(Path(a.archive), Path(a.output)), indent=2))
         return
