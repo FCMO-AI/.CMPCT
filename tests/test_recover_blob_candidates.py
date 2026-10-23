@@ -80,15 +80,15 @@ def test_adjacent_nested_and_truncated_header_candidates(tmp_path):
     # incomplete near-EOF data all retain the old source scanner's permissive truth.
     inner = _record(b"inner")
     outer = _record(inner + b"suffix")
-    forged = _record(b"forged", declared_sha=b"\\x42" * 32, declared_crc=0)
+    forged = _record(b"forged", declared_sha=bytes([0x42]) * 32, declared_crc=0)
     path = tmp_path / "hostile.cmpct"
     path.write_bytes(
         b"before" + outer + _record(b"adjacent") + forged
-        + b"padding" * 3 + BMAGIC + b"\\x00" * (BHDR.size - len(BMAGIC) - 1)
+        + b"padding" * 3 + BMAGIC + bytes([0]) * (BHDR.size - len(BMAGIC) - 1)
     )
     rows = _check_parity(path)
     assert len(rows) >= 3
-    assert any(r["sha256"] == (b"\\x42" * 32).hex() for r in rows)
+    assert any(r["sha256"] == (bytes([0x42]) * 32).hex() for r in rows)
     assert all(r["verification"] == "unverified" for r in rows)
 
 
@@ -117,7 +117,7 @@ def test_real_revision24_corrupt_raw_and_forged_uncommitted_tail(tmp_path):
     bad = bytearray(archive.read_bytes())
     off = raw["offset"] + BHDR.size
     bad[off + 53] ^= 0x01
-    forged = _record(b"uncommitted", declared_sha=b"\\x42" * 32, declared_crc=0)
+    forged = _record(b"uncommitted", declared_sha=bytes([0x42]) * 32, declared_crc=0)
     corrupt = tmp_path / "corrupt.cmpct"
     corrupt.write_bytes(bytes(bad) + forged)
     with CMPCT(corrupt) as reader:
@@ -125,7 +125,7 @@ def test_real_revision24_corrupt_raw_and_forged_uncommitted_tail(tmp_path):
             reader.read("source.bin")
     scan = _check_parity(corrupt)
     assert raw["sha256"] in {row["sha256"] for row in scan}
-    assert (b"\\x42" * 32).hex() in {row["sha256"] for row in scan}
+    assert (bytes([0x42]) * 32).hex() in {row["sha256"] for row in scan}
     # The scanner makes no claim that either physically framed candidate has verified data.
     assert all(row["verification"] == "unverified" for row in scan)
 
@@ -151,7 +151,7 @@ def test_sparse_128mib_scan_stays_below_full_materialization_rss(tmp_path):
     path = tmp_path / "sparse.cmpct"
     with path.open("wb") as out:
         out.seek(128 * 1024 * 1024 - 1)
-        out.write(b"\\x00")
+        out.write(bytes([0]))
     code = (
         "import resource,sys,json;"
         "from cmpct.transactions import recover_blob_records;"
