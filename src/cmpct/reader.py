@@ -270,6 +270,49 @@ class CMPCT:
         if storage[0]==S_VZIP:return range_vzip(self.recipes[storage[1]],self._blob,self._stream,start,length)
         return self.read(name)[start:end]
 
+    def read_raw_range_verified(self,name:str,start:int,length:int,*,max_scan_bytes:int=64*1024*1024)->bytes:
+        """Return a digest-verified RAW member range without copying the entire blob.
+
+        This explicit opt-in is intentionally distinct from range-local ``read_range``:
+        revision-24 RAW blobs carry one SHA-256 commitment for the *whole* physical payload,
+        not independently authenticated subranges. SHA verification therefore reads every
+        payload byte even for a one-byte range. The caller-supplied scan budget makes that
+        amplification visible and bounded; no scan-success cache is kept across calls.
+        SHA-256 detects corruption against the archive's committed digest, but is not a MAC
+        or signature of origin, nor a guarantee against concurrent mutation of the mmap.
+        """
+        row=self.by[name]
+        if row[1]==K_HARDLINK:
+            return self.read_raw_range_verified(row[6][0],start,length,max_scan_bytes=max_scan_bytes)
+        if row[1]!=K_FILE or not row[6] or row[6][0]!=S_BLOB:
+            raise ValueError('digest-verified RAW ranges require a regular direct-blob member')
+        size=row[4]
+        if start<0 or length<0 or start+length>size:
+            raise ValueError('range outside member')
+        if (not isinstance(max_scan_bytes,int) or isinstance(max_scan_bytes,bool)
+                or max_scan_bytes<0):
+            raise ValueError('max_scan_bytes must be a nonnegative integer')
+        idx=row[6][1];off,us,cs,codec,ml=self.blobs[idx]
+        if codec!=CODEC_RAW or us!=size:
+            raise ValueError('digest-verified RAW ranges require one exact RAW blob')
+        if size>max_scan_bytes:
+            raise ValueError('RAW range verification exceeds max_scan_bytes')
+        view=self._raw_blob_view_for_extract(idx)
+        try:
+            # The helper checked frame shape, declared lengths and physical mmap bounds.
+            pos=self.record_base+off
+            m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+            if (binascii.crc32(view)&0xffffffff)!=rcrc:
+                raise IOError('RAW blob CRC32 failure')
+            want=bytes(rh)
+            if hashlib.sha256(view).digest()!=want:
+                raise IOError('RAW blob SHA-256 failure')
+            if row[5] is not None and bytes(row[5])!=want:
+                raise IOError('RAW logical SHA-256 mismatch')
+            return bytes(view[start:start+length])
+        finally:
+            view.release()
+
     def _raw_blob_view_for_extract(self,idx:int):
         """Return a zero-copy mmap view for a RAW chunk used by verified extraction.
 
