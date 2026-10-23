@@ -71,14 +71,16 @@ def _wait_event(q, kind, member, seconds=25):
     raise AssertionError(f"missing {(kind, member)!r}; earlier={held!r}")
 
 
-@pytest.mark.parametrize("via_hardlink", [False, True])
-def test_independent_writers_snapshot_serialized_through_footer(tmp_path, via_hardlink):
+@pytest.mark.parametrize("alias_kind", ["same", "hardlink", "symlink"])
+def test_independent_writers_snapshot_serialized_through_footer(tmp_path, alias_kind):
     """Second writer cannot snapshot the same footer while first writer is paused."""
     ctx = mp.get_context("fork")
     archive = _make_archive(tmp_path)
     alias = tmp_path / "hardlink-alias.cmpct"
-    if via_hardlink:
+    if alias_kind == "hardlink":
         os.link(archive, alias)
+    elif alias_kind == "symlink":
+        alias.symlink_to(archive)
 
     q = ctx.Queue()
     release = ctx.Event()
@@ -88,7 +90,7 @@ def test_independent_writers_snapshot_serialized_through_footer(tmp_path, via_ha
     )
     b = ctx.Process(
         target=_rename_worker,
-        args=(str(alias if via_hardlink else archive), "beta.txt", "beta-new.txt", q),
+        args=(str(alias if alias_kind != "same" else archive), "beta.txt", "beta-new.txt", q),
     )
     a.start()
     try:
@@ -140,7 +142,7 @@ def test_independent_writers_snapshot_serialized_through_footer(tmp_path, via_ha
         assert reader.read("alpha-new.txt") == b"alpha payload\n" * 70
         assert reader.read("beta-new.txt") == b"beta payload\n" * 70
         assert reader.verify() >= 2
-    if via_hardlink:
+    if alias_kind != "same":
         assert os.stat(alias).st_ino == os.stat(archive).st_ino
 
 
@@ -214,3 +216,32 @@ def test_replace_archive_path_between_snapshot_and_append_cannot_mutate_replacem
     assert archive.stat().st_ino == original_inode
     assert archive.read_bytes() == expected_bytes
     assert hashlib.sha256(archive.read_bytes()).digest() == hashlib.sha256(expected_bytes).digest()
+
+
+def _lock_then_os_exit(archive, q):
+    """Bypass Python finally deliberately: kernel must release the advisory lock."""
+    with tx._cooperative_writer_lease(Path(archive)):
+        q.put(os.getpid())
+        os._exit(17)
+
+
+def test_kernel_releases_writer_lock_after_crashed_owner(tmp_path):
+    ctx = mp.get_context("fork")
+    archive = _make_archive(tmp_path)
+    q = ctx.Queue()
+    worker = ctx.Process(target=_lock_then_os_exit, args=(str(archive), q))
+    worker.start()
+    try:
+        owner_pid = q.get(timeout=15)
+        assert owner_pid == worker.pid
+        worker.join(timeout=15)
+        assert worker.exitcode == 17
+        # A fresh public operation must not deadlock on an orphaned lease.
+        tx.append_rename(archive, "alpha.txt", "alpha-new.txt")
+        with CMPCT(archive) as reader:
+            assert reader.read("alpha-new.txt") == b"alpha payload\\n" * 70
+            assert reader.verify() >= 2
+    finally:
+        if worker.is_alive():
+            worker.terminate()
+            worker.join(timeout=5)
