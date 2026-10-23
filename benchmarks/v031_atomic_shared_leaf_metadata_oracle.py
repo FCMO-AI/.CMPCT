@@ -41,7 +41,10 @@ def main():
             print(f"XATTR_PREMISE_UNAVAILABLE_ERRNO={e.errno}")
             return
         archive=t/"actual.cmpct"
-        Builder(src,workers=1,reproducible=True).build(archive)
+        # Fidelity mode is mandatory for the SOURCE xattr court.
+        # Builder(reproducible=True) intentionally strips host xattrs by
+        # contract; that control cannot test Reader metadata restoration.
+        Builder(src,workers=1,reproducible=False).build(archive)
         result={}
         for variant in ("default_single_meta_off","atomic_shared_meta_off","atomic_shared_meta_on"):
             dest=t/variant;dest.mkdir()
