@@ -1,0 +1,146 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# Scientific negative-evidence court for issue #246. This is not a fix or release gate.
+name: CMPCT v031 inherited four-red baseline court
+
+on:
+  push:
+    branches:
+      - "agent/phased2-v031-inherited-four-red-baseline-aabb-20261023"
+    paths:
+      - ".github/workflows/v031-inherited-four-red-baseline-court.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-four-red-baseline-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  pinned-baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: v031-development
+            source_ref: agent/v031-development
+            source_sha: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
+          - label: main
+            source_ref: main
+            source_sha: 80c358f8824ec1b20d349c92ed94c898090969b0
+    steps:
+      - name: Checkout research court exact HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+
+      - name: Guard exact research HEAD
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - name: Checkout immutable test source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.source_ref }}
+          path: "source"
+          persist-credentials: false
+
+      - name: Establish source custody before executing
+        env:
+          SOURCE_SHA: ${{ matrix.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git -C source rev-parse HEAD)"
+          printf "Source actual=%s expected=%s\\n" "$actual" "$SOURCE_SHA"
+          if [ "$actual" != "$SOURCE_SHA" ]; then
+            echo "Exact source head changed; no inherited assertion" >&2
+            exit 1
+          fi
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          expected = {
+              "docs/V030_RELEASE_LOCK.json": "988a7b05ad4e0833fac0453de74133b38f890f87",
+              "tests/test_performance_base_native_release_custody.py": "e0c92e3a986b58e9693d9c51fb0dabad2a8a54ca",
+              "tests/test_public_attribution.py": "37a9b54eb32d4921cfecae9b7abd3daf289fba48",
+              "tests/test_v030_ci_topology_split_receipts.py": "c378d8e2dbad2e0c7b037124a9d9fedecdc14601",
+              "tests/test_v030_release_fingerprint_surface.py": "a23cc8126ad8f76374af9c6538ca73d6f59966fe",
+              "SURFACE_REVISION": "d439b4070b9aa2e076cceb4b0486c702b74d932d",
+          }
+          observed = {p: subprocess.check_output(["git", "-C", "source", "hash-object", p], text=True).strip() for p in expected}
+          Path("source/court-source-blobs.json").write_text(json.dumps(observed, indent=2, sort_keys=True) + "\n")
+          assert observed == expected, "historical/source drift: baseline court cannot classify inherited errors"
+          print("Six original Git blobs match published source custody")
+          PY
+
+      - name: Install minimal test runner (no engine rebuild)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install original package and full test dependencies
+        run: python -m pip install -e './source[test,audio]'
+
+      - name: Run four exact unchanged tests; independently classify failures
+        working-directory: source
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ matrix.source_sha }}
+          BASELINE_LABEL: ${{ matrix.label }}
+        run: |
+          set -uo pipefail
+          mkdir -p court-results
+          set +e
+          python -m pytest -q --junitxml=court-results/results.xml             tests/test_performance_base_native_release_custody.py::test_historical_native_materializer_is_release_fingerprinted             tests/test_public_attribution.py::test_surface_revision_records_attribution_campaign             tests/test_v030_ci_topology_split_receipts.py::test_authoritative_v2_classifier_is_release_fingerprint_driven             tests/test_v030_release_fingerprint_surface.py::test_release_fingerprint_covers_r25_oracle_and_android_custody_inputs             > court-results/pytest.txt 2>&1
+          rc=$?
+          set -e
+          printf '%s\n' "$rc" > court-results/pytest-exit-code.txt
+          cat court-results/pytest.txt
+          python - <<'PY'
+          import json, os, sys, xml.etree.ElementTree as ET
+          from pathlib import Path
+          results = Path("court-results")
+          root = ET.parse(results / "results.xml").getroot()
+          expected = {
+              "test_historical_native_materializer_is_release_fingerprinted",
+              "test_surface_revision_records_attribution_campaign",
+              "test_authoritative_v2_classifier_is_release_fingerprint_driven",
+              "test_release_fingerprint_covers_r25_oracle_and_android_custody_inputs",
+          }
+          cases = list(root.iter("testcase"))
+          observed_names = [c.get("name") for c in cases]
+          failures = {c.get("name") for c in cases if c.find("failure") is not None}
+          errors = [c.get("name") for c in cases if c.find("error") is not None]
+          skips = [c.get("name") for c in cases if c.find("skipped") is not None]
+          rc = int((results / "pytest-exit-code.txt").read_text().strip())
+          reproduced = len(cases) == 4 and set(observed_names) == expected and failures == expected and not errors and not skips and rc == 1
+          report = {"head": os.environ["SOURCE_SHA"], "label": os.environ["BASELINE_LABEL"],
+                    "pytest_exit_code": rc, "cases": observed_names, "failed": sorted(failures),
+                    "errors": errors, "skips": skips, "expected_four_failures_reproduced": reproduced,
+                    "claim": "INHERITED_TEST_FAILURE_REPRODUCED" if reproduced else "DIFFERENT_RESULT_INVESTIGATE"}
+          (results / "decision.json").write_text(json.dumps(report, indent=2, sort_keys=True)+"\n")
+          print(json.dumps(report, indent=2))
+          sys.exit(0 if reproduced else 1)
+          PY
+
+      - name: Preserve independent raw baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inherited-four-red-${{ matrix.label }}-${{ matrix.source_sha }}
+          path: |
+            source/court-source-blobs.json
+            source/court-results/
+          if-no-files-found: warn
+
+# Footnote: green here means the ORIGINAL negatives reproduce at both immutable source SHAs.
+# No assertions, thresholds, release locks, manifests, comparators, format, or shipping code are changed.
+# This court cannot classify independent full-suite/system-dependent failures or approve any v0.31 PR.
