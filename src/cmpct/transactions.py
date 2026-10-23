@@ -38,6 +38,40 @@ def _append_generation(archive:Path,delta:dict,prev_footer:int,checkpoint_index:
         f.write(enc);os.fsync(f.fileno());footer_pos=f.tell();f.write(footer);os.fsync(f.fileno())
     return footer_pos,len(enc)+FTR.size
 
+def _require_valid_update_member(index:dict, member:str):
+    # Footnote: CMPCT Reader rejects unsafe/alias-colliding logical paths
+    # before exposing this index. A put only needs the relevant path/parent
+    # rows: scan once with constant extra memory, not a second O(N) dict.
+    logical, _ = canonical_logical_path(member)
+    parent = logical.rpartition('/')[0]
+    previous = None
+    parent_row = None
+    alias_references_owner = False
+    for row in index['files']:
+        # Reader already canonical-validated each stored row on open.
+        key = row[0].replace('\\', '/')
+        if key == logical:
+            previous = row
+        if parent and key == parent:
+            parent_row = row
+        if row[1] == K_HARDLINK and row[6][0].replace('\\', '/') == logical:
+            alias_references_owner = True
+    if logical != member and (previous is None or previous[0] != member):
+        raise ValueError(f"new update member must use canonical slash spelling: {member!r}")
+    if previous is not None:
+        if previous[0] != member:
+            raise FileExistsError(f"canonical member path already exists: {previous[0]!r}")
+        if previous[1] != K_FILE:
+            raise OSError(f"cannot replace non-regular member {member!r} with a file")
+        # One-row put changes owner metadata without syncing hardlink aliases.
+        if alias_references_owner:
+            raise ValueError(
+                f"cannot update hardlink owner {member!r}: "
+                "surviving aliases require atomic metadata synchronization"
+            )
+    if parent and (parent_row is None or parent_row[1] != K_DIR):
+        raise FileNotFoundError(f"update destination parent is not an explicit directory: {parent!r}")
+
 def append_update(archive:Path,member:str,source:Path):
     """Crash-safely append/replace one logical member, reusing CDC chunks when possible.
 
@@ -48,6 +82,7 @@ def append_update(archive:Path,member:str,source:Path):
     """
     archive=Path(archive);source=Path(source);raw=source.read_bytes();rh=sha(raw);st=source.stat();hint=source.suffix.lower()
     with CMPCT(archive) as ar:
+        _require_valid_update_member(ar.index, member)
         index=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False);record_base=ar.record_base;prev=ar.latest_footer_pos;depth=ar.delta_depth
         blob_by_hash={}
         for i,b in enumerate(ar.blobs):
