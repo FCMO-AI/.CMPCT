@@ -66,6 +66,8 @@ jobs:
         run: python benchmarks/v031_deflate_zip_integrity_cost.py
       - name: Price prospective authenticated wire-digest index against exact physical export cost
         run: python benchmarks/v031_deflate_wire_commitment_o0.py
+      - name: Preserve distinction between logical SHA and retained RFC1951 wire identity
+        run: python benchmarks/v031_deflate_wire_identity_negative.py
       - name: Record source identity and exit status
         if: always()
         run: |
