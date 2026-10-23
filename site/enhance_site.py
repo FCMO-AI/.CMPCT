@@ -95,7 +95,9 @@ def build_public_evidence(payload: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "schema": PUBLIC_EVIDENCE_SCHEMA,
-        "project_version": frontier.get("project_version") or project.get("project_version"),
+        # Publication version describes the shipping project; the selected research result may be older.
+        # Keep that historical measurement identity separately in provenance rather than relabeling it.
+        "project_version": project.get("project_version"),
         "canonical_format_revision": frontier.get("canonical_format_revision") or project.get("format_revision"),
         "frontier_name": (frontier.get("candidate") or {}).get("name") or "CMPCT research frontier",
         "frontier_status": (frontier.get("candidate") or {}).get("status") or frontier.get("kind") or "research frontier",
@@ -130,6 +132,8 @@ def build_public_evidence(payload: dict[str, Any]) -> dict[str, Any]:
         "provenance": {
             "record": frontier.get("file"),
             "date": frontier.get("date"),
+            "source_project_version": frontier.get("project_version"),
+            "source_format_revision": frontier.get("canonical_format_revision"),
             "tree_sha256": structural_source.get("tree_sha256"),
             "suite": structural_source.get("suite"),
             "source_artifact": (structural_source.get("method") or {}).get("source_artifact_digest"),
