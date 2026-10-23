@@ -103,3 +103,42 @@ def test_valid_sparse_seek_preserves_original_data_and_holes(tmp_path: Path):
     with CMPCT(archive) as reader:
         assert reader.verify() == 1
         assert reader.read("sparse.bin") == source.read_bytes()
+
+
+@REQUIRES_SPARSE
+def test_all_hole_file_roundtrips_source(tmp_path: Path):
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    p = source_root / "empty-sparse.bin"
+    with p.open("wb") as f:
+        f.truncate(2 << 20)
+    os.utime(p, ns=(EPOCH, EPOCH))
+    archive = tmp_path / "empty.cmpct"
+    Builder(source_root, workers=1, reproducible=True, reproducible_epoch_ns=EPOCH).build(archive)
+    with CMPCT(archive) as reader:
+        assert reader.verify() == 1
+        assert reader.read("empty-sparse.bin") == p.read_bytes()
+
+
+@REQUIRES_SPARSE
+def test_short_source_pread_falls_back_instead_of_omitting_bytes(tmp_path: Path):
+    source = _source_file(tmp_path / "source")
+    original_sha = hashlib.sha256(source.read_bytes()).digest()
+    archive = tmp_path / "short-read.cmpct"
+    real_pread = os.pread
+    injected = 0
+
+    def short_read(fd, n, offset):
+        nonlocal injected
+        if not injected and offset >= (1 << 20):
+            injected += 1
+            return b""
+        return real_pread(fd, n, offset)
+
+    with mock.patch("os.pread", side_effect=short_read):
+        Builder(source.parent, workers=1, reproducible=True,
+                reproducible_epoch_ns=EPOCH).build(archive)
+    assert injected == 1
+    with CMPCT(archive) as reader:
+        assert reader.verify() == 1
+        assert hashlib.sha256(reader.read("sparse.bin")).digest() == original_sha
