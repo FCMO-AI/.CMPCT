@@ -1,0 +1,72 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.31 Directory subtree mutation scientific court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-directory-subtree-independent-court-20261023
+    paths:
+      - 'benchmarks/v031_directory_subtree_mutation_court.py'
+      - 'benchmarks/history/2026-10-23-v031-directory-subtree-independent-prereg.json'
+      - '.github/workflows/v031-directory-subtree-mutation-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v031-dir-subtree-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+jobs:
+  directory-subtree-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install real archive runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y libsndfile1
+          python -m pip install -e '.[audio,test]'
+      - name: Assert product source custody and preregistration
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          reg=json.loads(Path("benchmarks/history/2026-10-23-v031-directory-subtree-independent-prereg.json").read_text())
+          want={
+            "src/cmpct/transactions.py":reg["source"]["transactions_blob"],
+            "src/cmpct/reader.py":reg["source"]["reader_blob"],
+            "src/cmpct/builder.py":reg["source"]["builder_blob"],
+            "src/cmpct/validation.py":reg["source"]["validation_blob"],
+          }
+          got={p:subprocess.check_output(["git","hash-object",p],text=True).strip() for p in want}
+          if want != got:
+            raise SystemExit("SOURCE_FINGERPRINT_MISMATCH "+str(got))
+          assert reg["product_credit"] is False and reg["release_credit"] is False
+          print("EXACT_HEAD_SOURCE_CUSTODY_PASS", got)
+          PY
+      - name: Compare directory mutations to POSIX references
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v031_directory_subtree_mutation_court \
+            --output benchmark-artifacts/v031-directory-subtree-mutation-court.json \
+            | tee benchmark-artifacts/v031-directory-subtree-mutation-court.log
+      - name: Retain complete evidence even after failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-directory-subtree-court-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
