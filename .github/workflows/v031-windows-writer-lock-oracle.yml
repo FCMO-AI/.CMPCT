@@ -1,0 +1,47 @@
+# ci-lane: fast
+name: CMPCT v031 Windows writer lock feasibility oracle
+on:
+  push:
+    branches:
+      - agent/phased2-v031-posix-writer-reader-composition-20261023
+    paths:
+      - 'tools/research_windows_byte_range_lock_oracle.py'
+      - 'docs/v031-research/2026-10-23-windows-writer-lock-primitive-prereg.md'
+      - '.github/workflows/v031-windows-writer-lock-oracle.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows-msvcrt-oracle:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind exact candidate and immutable preregistration
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw 'checkout sha differs from event' }
+          if ((git hash-object tools/research_windows_byte_range_lock_oracle.py) -ne '642e22092fdf39dc45782d2fd388f880bbd6c644') { throw 'research script changed' }
+          if (-not (Test-Path 'docs/v031-research/2026-10-23-windows-writer-lock-primitive-prereg.md')) { throw 'missing prereg' }
+      - name: Run independent Windows local-file lock oracle
+        shell: pwsh
+        run: |
+          python -VV
+          python tools/research_windows_byte_range_lock_oracle.py --output "$env:RUNNER_TEMP/windows-lock-oracle.json"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows O0 falsified; inspect negative evidence artifact' }
+      - name: Preserve full outcome including scientific red
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-windows-byte-range-lock-o0
+          path: ${{ runner.temp }}/windows-lock-oracle.json
+          if-no-files-found: warn

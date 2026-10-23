@@ -1,0 +1,47 @@
+# ci-lane: fast
+name: CMPCT v031 POSIX cooperative inode transaction lease court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-posix-inode-transaction-lease-20261023
+    paths:
+      - 'src/cmpct/transactions.py'
+      - 'tests/test_v031_posix_writer_lease.py'
+      - '.github/workflows/v031-posix-writer-lease-court.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  inode-writer-lease:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind exact source and preregistration
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object src/cmpct/transactions.py)" = "8fa50d50fe186195e60d2e7db51f17cd3125b1e0"
+          test -f docs/v031-research/POSIX_COOPERATIVE_WRITER_LEASE_PREREG.md
+      - name: Install actual package with test and native dependencies
+        run: python -m pip install -e '.[test,audio]'
+      - name: Exercise POSIX cross-process alias and transaction semantics
+        run: |
+          set -euo pipefail
+          python -m pytest -q -ra tests/test_v031_posix_writer_lease.py 2>&1 | tee "$RUNNER_TEMP/v031-writer-lease-pytest.txt"
+      - name: Retain exact-head test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-posix-cooperative-writer-lease-court
+          path: ${{ runner.temp }}/v031-writer-lease-pytest.txt
+          if-no-files-found: warn
