@@ -131,7 +131,7 @@ def append_rename(archive:Path,old:str,new:str):
     op=['ren',old,new];checkpoint=_index_after_op(idx,op) if depth>=63 else None
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
 
-def recover_blob_records(archive:Path):
+def _iter_blob_header_candidates(archive:Path):
     """Enumerate *unverified* framed blob-header candidates, even if indexes are damaged.
 
     This is forensic discovery, not content recovery or authentication. Header CRC/SHA fields are
@@ -142,7 +142,7 @@ def recover_blob_records(archive:Path):
     # reusable readinto buffer of 1 MiB + BHDR.size-1 keeps scan memory bounded without
     # redundant block copies; the overlap preserves full headers across window boundaries.
     # Framing/offset behavior stays equivalent to the permissive historical candidate scan.
-    out=[];window=1024*1024;overlap=BHDR.size-1
+    window=1024*1024;overlap=BHDR.size-1
     buf=bytearray(window+overlap);carry_len=0;position=0
     with open(archive,'rb') as f:
         source_size=os.fstat(f.fileno()).st_size
@@ -157,17 +157,25 @@ def recover_blob_records(archive:Path):
                     m,c,fl,res,us,cs,ml,rcrc,rh=BHDR.unpack_from(buf,i)
                     offset=origin+i;end=offset+BHDR.size+ml+cs
                     if end<=source_size:
-                        out.append({'offset':offset,'codec':c,'usize':us,'csize':cs,
+                        yield {'offset':offset,'codec':c,'usize':us,'csize':cs,
                                     'crc32':rcrc,'sha256':bytes(rh).hex(),
                                     'verification':'unverified',
-                                    'generation_membership':'unknown'})
+                                    'generation_membership':'unknown'}
                 except (struct.error,ValueError,OverflowError):
                     pass
                 p=i+1
             carry_len=min(overlap,active)
             buf[:carry_len]=buf[active-carry_len:active]
             position+=got
-    return out
+
+
+def recover_blob_records(archive:Path):
+    """Return legacy list-shaped forensic header candidates (never authenticated content).
+
+    For arbitrarily many framed candidates, consume _iter_blob_header_candidates instead;
+    materializing a Python list necessarily uses memory proportional to result count.
+    """
+    return list(_iter_blob_header_candidates(archive))
 
 def compact_archive(src:Path,dst:Path):
     # Compaction is deliberately simple and conservative in the prototype: reconstruct the exact
