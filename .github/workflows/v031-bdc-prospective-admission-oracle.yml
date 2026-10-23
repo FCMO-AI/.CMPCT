@@ -1,0 +1,73 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.31 BDC prospective admission oracle
+on:
+  push:
+    branches:
+      - agent/phased3-v031-bdc-prospective-admission-oracle-20261023
+    paths:
+      - 'benchmarks/v031_bdc_prospective_admission_oracle.py'
+      - 'benchmarks/history/2026-10-23-v031-bdc-prospective-admission-prereg.json'
+      - '.github/workflows/v031-bdc-prospective-admission-oracle.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v031-bdc-prospective-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+jobs:
+  prospective-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate HEAD
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install portable Python dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y libsndfile1
+          python -m pip install -e '.[audio,test]'
+      - name: Assert research source/format custody
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          expected = {
+            "benchmarks/v031_bounded_drift_coordered_court.py": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+            "experiments/entropygraph_v030_bounded_drift_container_v1.py": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+            "experiments/entropygraph_v030_bounded_drift_v1.py": "d210b0d69e9f470aa5cfa59ce59a4ce73",
+            "experiments/entropygraph_v030_product_fs.py": "72404386775be4576365cc687784f4e4f752d9de",
+            "src/cmpct/builder.py": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+            "src/cmpct/reader.py": "e716233403dabd0966863c45635e18fa5ac6afb8",
+          }
+          got={p:subprocess.check_output(["git","hash-object",p],text=True).strip() for p in expected}
+          if got != expected:
+            raise SystemExit("frozen source or canonical product custody mismatch: "+str(got))
+          prereg=json.loads(Path("benchmarks/history/2026-10-23-v031-bdc-prospective-admission-prereg.json").read_text())
+          assert prereg["product_credit"] is False and prereg["release_credit"] is False
+          print("EXACT_SOURCE_CUSTODY_PASS",json.dumps(got,sort_keys=True))
+          PY
+      - name: Execute held-out prospective selector + canonical fallback court
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v031_bdc_prospective_admission_oracle --output benchmark-artifacts/v031-bdc-prospective-admission.json \
+            | tee benchmark-artifacts/v031-bdc-prospective-admission.log
+      - name: Retain evidence including adverse results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-bdc-prospective-admission-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
