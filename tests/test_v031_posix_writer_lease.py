@@ -320,3 +320,31 @@ def test_pre_footer_flush_failure_releases_lease_and_preserves_last_commit(tmp_p
         assert reader.read("alpha-new.txt") == b"alpha payload\n" * 70
         assert reader.read("beta.txt") == b"beta payload\n" * 70
         assert reader.verify() >= 2
+
+
+def test_generation_append_uses_locked_description_not_archive_path(tmp_path, monkeypatch):
+    """No second pathname open is allowed after the transaction snapshot."""
+    archive = _make_archive(tmp_path)
+    old_generation = tx._append_generation
+    called = []
+
+    def disallow_archive_path_reopen(*args, **kwargs):
+        called.append(True)
+        original_open = tx.os.open
+
+        def refuse_archive_open(path, flags, *a, **kw):
+            if os.fspath(path) == os.fspath(archive):
+                raise AssertionError("generation tried to reopen mutable archive pathname")
+            return original_open(path, flags, *a, **kw)
+
+        with monkeypatch.context() as local:
+            local.setattr(tx.os, "open", refuse_archive_open)
+            return old_generation(*args, **kwargs)
+
+    monkeypatch.setattr(tx, "_append_generation", disallow_archive_path_reopen)
+    tx.append_rename(archive, "alpha.txt", "alpha-new.txt")
+    assert called, "must reach real physical generation writer"
+    with CMPCT(archive) as reader:
+        assert reader.read("alpha-new.txt") == b"alpha payload\n" * 70
+        assert reader.read("beta.txt") == b"beta payload\n" * 70
+        assert reader.verify() >= 2
