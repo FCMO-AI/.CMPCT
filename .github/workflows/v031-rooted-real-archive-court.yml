@@ -1,9 +1,9 @@
 # ci-lane: fast
 name: CMPCT v031 real-r24 capability-root extraction scientific court
 on:
-  push:
+  pull_request:
     branches:
-      - agent/phased3-v031-capability-root-real-archive-court-20261023
+      - agent/v031-development
     paths:
       - 'src/cmpct/_rooted_extract_research.py'
       - 'tests/test_v031_rooted_real_archive_research.py'
