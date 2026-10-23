@@ -1,0 +1,43 @@
+# ci-lane: fast
+name: CMPCT v031 hardlink-owner-order scientific court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-hardlink-sort-order-court-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: true
+jobs:
+  hardlink-sort-science:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install canonical product with native core
+        run: python -m pip install -e .
+      - name: Run exact-head hardlink order court
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          mkdir -p benchmark-artifacts
+          python benchmarks/v031_hardlink_owner_order_court.py --expect-order-bug | tee benchmark-artifacts/hardlink-science.json
+          python -m json.tool benchmark-artifacts/hardlink-science.json >/dev/null
+      - name: Verify CI topology
+        run: python tools/check_ci_topology.py .github/workflows/v031-hardlink-owner-order-court.yml
+      - name: Preserve exact-head science receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-hardlink-owner-order-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
