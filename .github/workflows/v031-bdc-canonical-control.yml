@@ -1,0 +1,73 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.31 BDC canonical stronger-control court
+on:
+  push:
+    branches: [agent/phased1-v031-bdc-canonical-control-20261023]
+    paths:
+      - '.github/workflows/v031-bdc-canonical-control.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v031-bdc-canonical-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+  PYTHONPATH: ${{ github.workspace }}
+jobs:
+  canonical-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Enforce frozen and canonical source identities
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import json,os,platform,subprocess
+          from pathlib import Path
+          expected={
+            'benchmarks/v031_bounded_drift_coordered_court.py':'2fd04bacd64c14b45678b8575ba8ae7c692aa2df',
+            'benchmarks/history/2026-10-04-v031-bounded-drift-coordered-court-prereg.json':'f8e53f058a1c123ea4665b730c45f5619eb93d5f',
+            'benchmarks/resemblance_hostile_corpus_v1.py':'335169bd6eb336b6d444cfbd34c291101262c3a9',
+            'experiments/entropygraph_v030_bounded_drift_container_v1.py':'ed3165ce7fea3021e12220e409d972dd3cffd5b9',
+            'experiments/entropygraph_v030_bounded_drift_v1.py':'d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73',
+            'experiments/entropygraph_v030_product_fs.py':'72404386775be4576365cc687784f4e4f752d9de',
+            'experiments/entropygraph_v030_canonical_final.py':'caeaa2fb277481c500600af75eb13470f767d911',
+            'src/cmpct/builder.py':'663ef0922992b1fbb8f19e6eea88d55c10a56044',
+            'src/cmpct/reader.py':'e716233403dabd0966863c45635e18fa5ac6afb8'}
+          observed={p:subprocess.check_output(['git','hash-object',p],text=True).strip() for p in expected}
+          Path('benchmark-artifacts/source-identity.json').write_text(json.dumps({'head':os.environ['EVIDENCE_HEAD'],'expected':expected,'observed':observed,'platform':platform.platform()},indent=2,sort_keys=True)+'\n')
+          if observed!=expected:raise SystemExit('UNMEASURED: source custody drift')
+          PY
+      - name: Install Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install same CMPCT research dependencies
+        run: |
+          python -m pip install -e '.[test]'
+          python - <<'PY'
+          import json,platform,msgpack,zstandard
+          from pathlib import Path
+          Path('benchmark-artifacts/runtime.json').write_text(json.dumps({'python':platform.python_version(),'zstandard':zstandard.__version__,'libzstd':zstandard.ZSTD_VERSION,'msgpack':msgpack.__version__},indent=2,default=str)+'\n')
+          PY
+      - name: Compare authentic canonical Builder and Reader with pinned sibling
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_bounded_drift_product_floor_court.py --output benchmark-artifacts/canonical-control.json 2>&1 | tee benchmark-artifacts/court.log
+      - name: Preserve measured, negative, or incomplete receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-bdc-canonical-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/
+          if-no-files-found: error
+          retention-days: 90
