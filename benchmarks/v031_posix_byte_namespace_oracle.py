@@ -70,7 +70,7 @@ def bytes_wire(raw,kind="segment"):
 
 def bytes_unwire(wire,kind="segment"):
     if isinstance(wire,str): raw=wire.encode("utf-8")
-    elif isinstance(wire,list) and len(wire)==2 and wire[0]==1 and isinstance(wire[1],bytes):
+    elif isinstance(wire,list) and len(wire)==2 and type(wire[0]) is int and wire[0]==1 and isinstance(wire[1],bytes):
         raw=wire[1]
     else: raise ValueError("unknown binary variant")
     admissible(raw,kind)
@@ -124,7 +124,7 @@ def court():
         try: text_unwire(wire)
         except ValueError: rejected+=1
         else: raise AssertionError("bad spelling accepted "+repr(wire))
-    for wire in ([1,b"plain"],[1,b"~Z"],[2,b"raw"],[],[1,b"/"],[1,b".."]):
+    for wire in ([1,b"plain"],[1,b"~Z"],[2,b"raw"],[],[1,b"/"],[1,b".."],[True,b"\xff"],[1.0,b"\xff"]):
         try: bytes_unwire(wire)
         except ValueError: rejected+=1
         else: raise AssertionError("bad binary variant accepted "+repr(wire))
