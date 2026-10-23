@@ -1,0 +1,72 @@
+# ci-lane: fast
+name: CMPCT v031 O1 collapsed sparse Merkle cold-proof court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-collapsed-merkle-o1-20261023
+    paths:
+      - 'benchmarks/v031_sparse_merkle_collapsed_o1.py'
+      - 'benchmarks/history/2026-10-23-v031-sparse-merkle-collapsed-o1-prereg.md'
+      - '.github/workflows/v031-sparse-merkle-collapsed-o1.yml'
+  pull_request:
+    branches:
+      - agent/v031-development
+    paths:
+      - 'benchmarks/v031_sparse_merkle_collapsed_o1.py'
+      - 'benchmarks/history/2026-10-23-v031-sparse-merkle-collapsed-o1-prereg.md'
+      - '.github/workflows/v031-sparse-merkle-collapsed-o1.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  bounded-memory-cold-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Preserve frozen prereg and exact scientific source
+        run: |
+          set -euo pipefail
+          test "$(git hash-object benchmarks/history/2026-10-23-v031-sparse-merkle-collapsed-o1-prereg.md)" = "e461d74805358bdcf9729ec7863afcaf77cf8ca5"
+          test "$(git hash-object benchmarks/v031_sparse_merkle_collapsed_o1.py)" = "6e4ae0e5e04a741d7cfdc6b43d0cac5abc9ed5b0"
+          test "$(git hash-object benchmarks/v031_sparse_merkle_independent_falsifier.py)" = "0a411e7ba1785564ed87b1b9f190818d5dfbd2ba"
+          git rev-parse HEAD | tee source-head.txt
+      - name: Run independent dense roots, cold sparse proof, hostile wire and memory court
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_sparse_merkle_collapsed_o1.py | tee collapsed-o1.json
+          python - <<'PY'
+          import json
+          x=json.load(open('collapsed-o1.json'))
+          assert x['status']=='PASS'
+          assert x['reference_differentials']==640
+          assert x['logical_1tib_bytes']==1099511627776
+          assert x['descriptor_bytes']==128
+          assert x['tracemalloc_peak_bytes'] < 5242880
+          assert x['cold_visited_nodes'] < 300
+          assert x['creator_visited_nodes'] < 300
+          assert x['one_tib_wall_s'] < 2
+          PY
+          sha256sum collapsed-o1.json | tee scientific-sha256.txt
+      - name: Preserve raw decision evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparse-merkle-collapsed-o1-exacthead
+          path: |
+            source-head.txt
+            collapsed-o1.json
+            scientific-sha256.txt
+          if-no-files-found: warn
+      - name: Scope limitation
+        run: |
+          echo "O1 research only; not a CMPCT archive, released Reader, SHA-r24 equivalent, or product speed."
