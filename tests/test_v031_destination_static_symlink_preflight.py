@@ -115,13 +115,18 @@ def test_hardlink_source_symlink_is_rejected_without_touching_outside(tmp_path):
     outside.write_bytes(b"SENTINEL")
     root = tmp_path / "dest"
     root.mkdir()
-    (root / "owner.bin").symlink_to(outside)
     with CMPCT(archive) as reader:
         assert reader.verify() == 2
+        # The Builder chooses its physical hardlink owner independently of
+        # the source creation order. Attack the *actual* link-target row.
+        link_rows = [row for row in reader.files if row[1] == 3]
+        assert len(link_rows) == 1
+        owner_rel = link_rows[0][6][0]
+        (root / owner_rel).symlink_to(outside)
         with pytest.raises(OSError, match="pre-existing destination symlink"):
             reader.extractall(root, safe_symlinks=True)
     assert outside.read_bytes() == b"SENTINEL"
-    assert not (root / "alias.bin").exists()
+    assert not (root / "owner.bin").is_file() or (root / "owner.bin").is_symlink()
 
 
 def test_symlinked_caller_selected_root_is_explicitly_trusted(tmp_path):
