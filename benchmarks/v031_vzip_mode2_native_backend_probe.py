@@ -5,6 +5,7 @@ Deliberately never claims native VZIP mode-2 support. A standards-valid but byte
 Deflate stream is an exact-reconstruction FAILURE for that mode, not a codec failure.
 """
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -27,6 +28,16 @@ def digest(raw):
 
 def fixed_samples():
     # Independent fixed-vector content: do not regenerate an archive through CMPCT's Builder.
+    # Cross-check the immutable builder-independent full archive, not merely hardcoded probe data.
+    # A silent fixture edit must invalidate the scientific interpretation of this backend comparison.
+    vector_path = Path(__file__).resolve().parents[1] / "tests/conformance/v24-virtual-zip-deflate-mode2.json"
+    vector = json.loads(vector_path.read_text(encoding="utf-8"))["vector"]
+    archive = base64.b64decode(vector["archive_base64"], validate=True)
+    assert len(archive) == 861
+    assert digest(archive) == "febef1d1f1157066204c468d74e81e14c6f79d1490ab2e76e024beed3ce3fb81"
+    assert digest(archive) == vector["archive_sha256"]
+    assert vector["member"]["exact_deflate_hex"] == GOLDEN_DEFLATE.hex()
+    assert vector["member"]["logical_sha256"] == GOLDEN_MEMBER_SHA256
     golden = zlib.decompress(GOLDEN_DEFLATE, -15)
     assert len(golden) == 75 and digest(golden) == GOLDEN_MEMBER_SHA256
     rng = random.Random(0xCF2026)
