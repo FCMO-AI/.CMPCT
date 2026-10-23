@@ -123,7 +123,7 @@ class UpdateNamespaceFailClosed(unittest.TestCase):
         self.assert_no_write("dir\\newfile.txt", ValueError)
 
     def test_nul_path_rejected_before_any_write(self) -> None:
-        self.assert_no_write("nul\\x00value", ValueError)
+        self.assert_no_write("nul" + chr(0) + "value", ValueError)
 
 
 if __name__ == "__main__":
