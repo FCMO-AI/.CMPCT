@@ -1,0 +1,52 @@
+# ci-lane: fast
+name: CMPCT v031 sparse disjoint-extent O1 negative court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-sparse-disjoint-extent-continuity-o1-20261023
+    paths:
+      - 'benchmarks/v031_sparse_seek_disjoint_extents_o1.py'
+      - 'docs/v031-research/SPARSE_SALVAGE_GAP_CONTINUITY_O1_PROSPECTIVE.md'
+      - '.github/workflows/v031-sparse-disjoint-extents-o1.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  falsify-extent-continuity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prove exact-head old-oracle and prospective evidence identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object src/cmpct/transactions.py)" = "94c25029fdd167c00871aabbe8fe90fbe7490026"
+          test "$(git hash-object benchmarks/v031_sparse_seek_salvage_court.py)" = "94fc2234df0035938be3151dfaa5eef7bc317598"
+          test "$(git hash-object docs/v031-research/SPARSE_SALVAGE_GAP_CONTINUITY_O1_PROSPECTIVE.md)" = "13dcf29258cb09c73d89f3bdfb5cbd3ed9446e5d"
+          test "$(git hash-object benchmarks/v031_sparse_seek_disjoint_extents_o1.py)" = "3f43c00d6667901dd6294cc64bb48a8c088ba3a8"
+          python -m py_compile benchmarks/v031_sparse_seek_disjoint_extents_o1.py
+      - name: Install parent CMPCT unchanged
+        run: python -m pip install -e '.[test,audio]'
+      - name: Execute independent exact-source sparse-hole discontinuity falsifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_sparse_seek_disjoint_extents_o1.py | tee "$RUNNER_TEMP/v031-sparse-extent-o1-result.jsonl"
+      - name: Preserve even negative or blocked findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-sparse-disjoint-extent-o1
+          path: ${{ runner.temp }}/v031-sparse-extent-o1-result.jsonl
+          if-no-files-found: warn
