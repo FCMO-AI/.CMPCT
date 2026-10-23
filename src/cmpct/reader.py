@@ -414,19 +414,21 @@ class CMPCT:
         for row,parts,full in clean:
             if row[1]==K_DIR:
                 os.makedirs(full,exist_ok=True);dirs.append((full,row[2],row[3]))
+        # Index lexical order is not filesystem ownership order: a hardlink alias like 'a!.bin'
+        # sorts before its inode owner 'a/owner.bin' even though Builder visited the owner first.
+        # Materialize contents before aliases; keep all archive/index bytes and name order unchanged.
+        deferred_hardlinks={}
+        materialized={}
+        for row,parts,full in clean:
+            if row[1]==K_HARDLINK:
+                deferred_hardlinks[row[0]]=(row,parts,full)
+            else:
+                materialized[row[0]]=(row,parts,full)
         for row,parts,full in clean:
             rel,k,mode,mt,size,h,storage=row
-            if k==K_DIR:continue
+            if k in (K_DIR,K_HARDLINK):continue
             parent=os.path.dirname(full)
             if parent and not os.path.isdir(parent):os.makedirs(parent,exist_ok=True)
-            if k==K_HARDLINK:
-                try:_,target_parts=canonical_logical_path(storage[0])
-                except ValueError as exc:raise IOError(f'unsafe hardlink target: {storage[0]!r}: {exc}') from exc
-                target=os.path.join(dest_s,*target_parts)
-                if not os.path.exists(target):raise IOError(f'hardlink target not yet extracted: {storage[0]}')
-                try:os.unlink(full)
-                except FileNotFoundError:pass
-                os.link(target,full);continue
             if k==K_SYMLINK:
                 target=self.read(rel).decode('utf-8','surrogateescape')
                 if safe_symlinks:
@@ -473,6 +475,27 @@ class CMPCT:
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
                 except OSError:pass
+        # Resolve each link through its in-archive dependency graph. Explicit iterative resolution
+        # avoids recursion limits and quadratic retry loops on long alias chains. Hardlinks may only
+        # terminate at real regular files, never directories or symlinks.
+        owner_cache={}
+        for alias,(row,parts,full) in deferred_hardlinks.items():
+            node=alias;chain=[];active=set()
+            while node in deferred_hardlinks and node not in owner_cache:
+                if node in active:raise IOError(f'cyclic hardlink target: {node}')
+                active.add(node);chain.append(node)
+                node=deferred_hardlinks[node][0][6][0]
+            owner=owner_cache.get(node,node)
+            source=materialized.get(owner)
+            if source is None or source[0][1]!=K_FILE:
+                raise IOError(f'hardlink has no materialized regular owner: {alias!r} -> {owner!r}')
+            for name in chain:owner_cache[name]=owner
+            target=source[2]
+            if not os.path.isfile(target) or os.path.islink(target):
+                raise IOError(f'hardlink owner not materialized safely: {owner!r}')
+            try:os.unlink(full)
+            except FileNotFoundError:pass
+            os.link(target,full)
         if metadata:
             self._restore_extra_metadata(clean)
             for full,mode,mt in sorted(dirs,key=lambda x:x[0].count(os.sep),reverse=True):
