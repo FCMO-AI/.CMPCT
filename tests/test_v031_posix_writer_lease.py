@@ -424,3 +424,25 @@ def test_two_process_disjoint_public_update_preserves_both_blobs(tmp_path):
             if child.is_alive():
                 child.terminate()
                 child.join(timeout=5)
+
+
+def test_failed_lock_acquisition_preserves_causal_error_and_never_unlocks(tmp_path, monkeypatch):
+    archive = _make_archive(tmp_path)
+    baseline = archive.read_bytes()
+    calls = []
+    exclusive = tx.fcntl.LOCK_EX
+    unlock = tx.fcntl.LOCK_UN
+
+    def injected_flock(fd, mode):
+        calls.append(mode)
+        if mode == exclusive:
+            raise OSError("injected acquisition failure")
+        if mode == unlock:
+            raise OSError("unexpected unlock after failed acquisition")
+        raise AssertionError(f"unknown lock mode {mode}")
+
+    monkeypatch.setattr(tx.fcntl, "flock", injected_flock)
+    with pytest.raises(OSError, match="injected acquisition failure"):
+        tx.append_rename(archive, "alpha.txt", "alpha-new.txt")
+    assert calls == [exclusive]
+    assert archive.read_bytes() == baseline
