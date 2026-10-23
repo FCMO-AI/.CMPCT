@@ -8,6 +8,7 @@ on:
       - 'src/cmpct/reader.py'
       - 'tests/test_v031_atomic_shared_leaf_optin.py'
       - 'benchmarks/v031_atomic_shared_leaf_abba.py'
+      - 'benchmarks/v031_atomic_shared_leaf_parent_pivot_negative.py'
       - 'tests/test_v031_destination_hardlink_leaf_alias.py'
       - 'benchmarks/history/2026-10-23-v031-atomic-shared-leaf-optin-prereg.md'
       - '.github/workflows/v031-shared-leaf-atomic-optin.yml'
@@ -52,6 +53,8 @@ jobs:
           path: benchmark-artifacts/atomic_shared_leaf_abba.json
           if-no-files-found: error
           retention-days: 90
+      - name: Negative security falsifier, real Reader parent-pivot after preflight
+        run: python benchmarks/v031_atomic_shared_leaf_parent_pivot_negative.py
       - name: Explicit boundary and nonpromotion
         run: |
           echo 'REAL_READER_STATIC_OPTIN_COURT_PASS; DEFAULT_REJECTION_UNCHANGED'
