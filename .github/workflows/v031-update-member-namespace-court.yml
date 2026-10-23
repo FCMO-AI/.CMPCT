@@ -41,7 +41,7 @@ jobs:
           python - <<'PY'
           import pathlib, subprocess
           actual=subprocess.check_output(['git','hash-object','src/cmpct/transactions.py'],text=True).strip()
-          assert actual=='40e2057382347f91af5d9f321d6c3c8bec797c3e',actual
+          assert actual=='006f630d5fa5edddc4ac65ffa089992915069949',actual
           source=pathlib.Path('src/cmpct/transactions.py').read_text()
           for guard in ('_reject_hardlink_owner_mutation(ar.index,member,',
                         '_reject_hardlink_owner_mutation(ar.index,old,',
