@@ -1,0 +1,72 @@
+# ci-lane: fast
+name: CMPCT v031 O0 charged sparse Merkle proof economy
+on:
+  pull_request:
+    branches:
+      - agent/v031-development
+    paths:
+      - 'benchmarks/v031_sparse_merkle_proof_economics_o0.py'
+      - 'benchmarks/v031_sparse_merkle_independent_falsifier.py'
+      - 'benchmarks/history/2026-10-23-v031-sparse-merkle-proof-economics-o0-prereg.md'
+      - '.github/workflows/v031-sparse-merkle-proof-economics-o0.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  charged-sparse-merkle-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fail closed on preregistration and research source identity drift
+        run: |
+          set -euo pipefail
+          test "$(git hash-object benchmarks/history/2026-10-23-v031-sparse-merkle-proof-economics-o0-prereg.md)" = "68af7b6b390a704f8f2670adcd6713abdb13ea9f"
+          test "$(git hash-object benchmarks/v031_sparse_merkle_proof_economics_o0.py)" = "9938ac962611b41a20f32f8179d51e5a0e249aa5"
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git hash-object benchmarks/v031_sparse_merkle_independent_falsifier.py)" = "0a411e7ba1785564ed87b1b9f190818d5dfbd2ba"
+          git rev-parse HEAD | tee source-head.txt
+          git status --porcelain
+      - name: Execute preregistered alternated O0 and hostile proof checks
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_sparse_merkle_proof_economics_o0.py | tee sparse-merkle-o0.json
+          python -m json.tool sparse-merkle-o0.json >/dev/null
+          python - <<'PY'
+          import json
+          x=json.load(open('sparse-merkle-o0.json'))
+          assert len(x['cases'])==6
+          assert all(len(r['raw'])==5 for r in x['cases'])
+          assert all(r['merkle_root'] != r['flat_sha256'] for r in x['cases'])
+          assert all(r['fully_charged_extra_index_bytes'] == 48 + 40*r['data_touched_leaves'] for r in x['cases'])
+          for r in x['cases']:
+              ratio=r['median_merkle_wall_ms']/r['median_flat_wall_ms']
+              print(r['case'], 'ratio=',round(ratio,3),
+                    'charged_index=',r['fully_charged_extra_index_bytes'])
+          PY
+          python benchmarks/v031_sparse_merkle_independent_falsifier.py | tee sparse-merkle-independent.json
+          sha256sum sparse-merkle-o0.json sparse-merkle-independent.json | tee scientific-result-sha256.txt
+      - name: Preserve raw samples and source provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparse-merkle-proof-economics-o0-raw
+          path: |
+            sparse-merkle-o0.json
+            sparse-merkle-independent.json
+            scientific-result-sha256.txt
+            source-head.txt
+          if-no-files-found: warn
+      - name: Limit conclusion to research evidence
+        run: |
+          echo "Research O0 only. Alternative Merkle root is not r24 flat SHA-256."
+          echo "No product archive, Reader, Builder, release, selective I/O or portability claim."
