@@ -29,7 +29,28 @@ The additive `cmpct.validation` layer provides:
 - adversarial regression tests covering oversized index/generation declarations, corrupt blob framing, truncated archives and latest-generation fallback;
 - a direct structural mutation matrix covering unknown codecs, blob policy limits, pack bounds, fixed/CDC chunk accounting, sparse extent accounting, missing virtual-ZIP recipes, duplicate paths, unsafe paths, hardlink targets/cycles and filesystem-metadata references.
 
-### Default limits
+### v0.31 candidate: constructor failure owns and releases its resources
+
+The opt-in preflight is not automatically run by an ordinary Reader open. A distinct
+failure path matters even before any payload decode: `CMPCT.__init__` acquires a file
+descriptor, and then sometimes a read-only mmap, before it has validated its index and
+canonical logical paths. If this constructor raises, the caller has no Reader instance
+to close. Retained exception tracebacks (or delayed garbage collection) must not hold
+the open archive descriptor or mmap alive indefinitely.
+
+The candidate on PR #283 releases already-acquired resources on every constructor
+failure, including malformed headers, a failing mmap acquisition and late canonical
+path-collision rejection. It deliberately does not insert structural preflight into
+successful opens or modify the Reader close order for successfully constructed objects.
+
+The exact-head focused test uses observed file/mmap objects with retained exception
+tracebacks and an independent frozen revision-24 valid archive control. This is scoped
+resource-lifetime defense; it is **not** a claim that every malformed archive is bounded
+against hostile decompression, that the native ABI behaves identically, or that all
+parser/reference validation obligations are completed. Further exact-head CI and
+multi-platform validation are required before integration/promotion.
+
+## Default limits
 
 The initial defaults are intentionally generous for legitimate pre-1.0 archives while still placing finite ceilings on hostile declarations. They are policy, not format constants, and can be overridden with `CMPCT_MAX_*` environment variables or a `ParserLimits` instance.
 
