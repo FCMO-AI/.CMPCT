@@ -8,6 +8,7 @@ on:
       - 'src/cmpct/reader.py'
       - 'tests/test_v031_destination_hardlink_leaf_alias.py'
       - 'benchmarks/v031_destination_inode_boundary_microcourt.py'
+      - 'docs/HARDENING.md'
       - '.github/workflows/v031-destination-hardlink-leaf.yml'
   workflow_dispatch:
 concurrency:
@@ -33,6 +34,7 @@ jobs:
           set -euo pipefail
           git rev-parse HEAD
           git hash-object src/cmpct/reader.py
+          test "$(git hash-object src/cmpct/reader.py)" = "66b1f84d849cc2a8470467e75e478f6dc5927c75"
           test -z "$(git status --porcelain)"
           python -c 'import os; assert os.name == "posix" and hasattr(os, "link")'
       - name: Install real CMPCT package and native core
