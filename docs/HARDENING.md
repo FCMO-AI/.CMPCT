@@ -118,8 +118,12 @@ and is conservatively rejected. The leaf's local `st_nlink` does not tell
 the Reader where its other names live. This is a safe *static policy tradeoff*,
 not a claim of fully preserved nonempty-destination compatibility.
 
-**Unsolved boundary:** `lstat` can be raced; an adversary can substitute an
-outside inode after preflight. Even an already-open no-follow directory FD
+**Unsolved boundary:** `lstat` can be raced. The independent POSIX
+microcourt deterministically observes a leaf with `st_nlink==1`, replaces
+that leaf with a hardlink to an external inode *after the check*, then
+demonstrates that even `O_NOFOLLOW|O_TRUNC` mutates the external inode.
+This is a counterexample to any concurrent-safety claim, not a product
+regression measurement. Even an already-open no-follow directory FD
 continues naming its directory inode after an ancestor is renamed outside
 the root's **current pathname**. Define whether protection means fixed
 capability/inode descendants or confinement to the root's current path before
