@@ -1,0 +1,143 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# A/A identical-engine reference court. Diagnose the official r24 performance gate,
+# never change its source, thresholds, comparators, semantics, or promotion authority.
+name: CMPCT v031 full-matrix identical-source control
+on:
+  push:
+    branches:
+      - agent/phased3-v031-binary-create-aa-ab-attribution-20261023
+    paths:
+      - '.github/workflows/v031-full-matrix-aa-control.yml'
+  workflow_dispatch:
+concurrency:
+  group: cmpct-v031-exact-diagnostic-${{ github.sha }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+  CMPCT_PARITY_REPS: "7"
+  CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-v031-identical-aa-corpus
+jobs:
+  full-aa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact diagnostic head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Bind source and workflow-only changes
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 8e25363c7bdcafb5a3bd2074b18ec29b84a91799 HEAD
+          git diff --name-only 8e25363c7bdcafb5a3bd2074b18ec29b84a91799 HEAD
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Match release gate dependency semantics
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd xz-utils libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Materialize two distinct worktrees with byte-identical engine source and native payload
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          git worktree add --detach /tmp/cmpct-aa-one 88cf80d7f1f2f3ece7e83eefa78beece0bd4cc22
+          git worktree add --detach /tmp/cmpct-aa-two 88cf80d7f1f2f3ece7e83eefa78beece0bd4cc22
+          python tools/materialize_performance_base_native.py /tmp/cmpct-aa-one \
+            --receipt benchmark-artifacts/native-one.json | tee benchmark-artifacts/native-one.log
+          python tools/materialize_performance_base_native.py /tmp/cmpct-aa-two \
+            --receipt benchmark-artifacts/native-two.json | tee benchmark-artifacts/native-two.log
+          test "$(git -C /tmp/cmpct-aa-one rev-parse HEAD)" = 88cf80d7f1f2f3ece7e83eefa78beece0bd4cc22
+          test "$(git -C /tmp/cmpct-aa-two rev-parse HEAD)" = 88cf80d7f1f2f3ece7e83eefa78beece0bd4cc22
+          sha256sum /tmp/cmpct-aa-one/src/cmpct/builder.py /tmp/cmpct-aa-two/src/cmpct/builder.py \
+            /tmp/cmpct-aa-one/src/cmpct/codec.py /tmp/cmpct-aa-two/src/cmpct/codec.py | tee benchmark-artifacts/source-digests.txt
+          PYTHONPATH=/tmp/cmpct-aa-one/src python -c 'import cmpct; print("A1",cmpct.__file__)'
+          PYTHONPATH=/tmp/cmpct-aa-two/src python -c 'import cmpct; print("A2",cmpct.__file__)'
+      - name: Generate exactly one immutable official release-parity corpus
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,os,shutil,sys
+          from pathlib import Path
+          root=Path.cwd()
+          sys.path.insert(0,str(root/'benchmarks'))
+          import universal_bench as u
+          corpus=Path(os.environ['CMPCT_PARITY_CORPUS_ROOT'])
+          shutil.rmtree(corpus,ignore_errors=True);corpus.mkdir(parents=True)
+          u.CORP=corpus;u.reset_rng();u.make_corpora()
+          ns=1767225600*1_000_000_000
+          for path in sorted(corpus.rglob('*'),key=lambda p:(len(p.parts),p.as_posix()),reverse=True):
+              try:os.utime(path,ns=(ns,ns),follow_symlinks=False)
+              except (NotImplementedError,OSError):
+                  if not path.is_symlink():raise
+          os.utime(corpus,ns=(ns,ns))
+          h=hashlib.sha256();files=0;logical=0
+          for path in sorted(corpus.rglob('*')):
+              rel=path.relative_to(corpus).as_posix().encode();st=path.lstat()
+              h.update(len(rel).to_bytes(4,'little'));h.update(rel)
+              h.update((st.st_mode&0o177777).to_bytes(4,'little'))
+              h.update(st.st_mtime_ns.to_bytes(8,'little',signed=True))
+              if path.is_symlink():
+                  target=os.readlink(path).encode();h.update(b'L')
+                  h.update(len(target).to_bytes(4,'little'));h.update(target)
+              elif path.is_file():
+                  data=path.read_bytes();files+=1;logical+=len(data);h.update(b'F')
+                  h.update(len(data).to_bytes(8,'little'));h.update(data)
+              elif path.is_dir():h.update(b'D')
+          m={'tree_sha256':h.hexdigest(),'files':files,'logical_bytes':logical,'fixed_mtime_ns':ns}
+          (root/'benchmark-artifacts/corpus.json').write_text(json.dumps(m,indent=2)+'\n')
+          print(m)
+          PY
+      - name: A1 — direct identical base
+        run: |
+          set -euo pipefail
+          (cd benchmarks && PYTHONPATH=/tmp/cmpct-aa-one/src python zip_parity_bench.py > ../benchmark-artifacts/a1-first.stdout.txt)
+          cp benchmarks/_parity_work/out/zip-parity.json benchmark-artifacts/a1-first.json
+      - name: A2 — identical-source second worktree
+        run: |
+          set -euo pipefail
+          (cd benchmarks && PYTHONPATH=/tmp/cmpct-aa-two/src python zip_parity_bench.py > ../benchmark-artifacts/a2-first.stdout.txt)
+          cp benchmarks/_parity_work/out/zip-parity.json benchmark-artifacts/a2-first.json
+      - name: A2 — identical-source second worktree repeat
+        run: |
+          set -euo pipefail
+          (cd benchmarks && PYTHONPATH=/tmp/cmpct-aa-two/src python zip_parity_bench.py > ../benchmark-artifacts/a2-second.stdout.txt)
+          cp benchmarks/_parity_work/out/zip-parity.json benchmark-artifacts/a2-second.json
+      - name: A1 — direct identical base repeat
+        run: |
+          set -euo pipefail
+          (cd benchmarks && PYTHONPATH=/tmp/cmpct-aa-one/src python zip_parity_bench.py > ../benchmark-artifacts/a1-second.stdout.txt)
+          cp benchmarks/_parity_work/out/zip-parity.json benchmark-artifacts/a1-second.json
+      - name: Aggregate authentic full-matrix AA sham
+        run: |
+          set -euo pipefail
+          python tools/aggregate_parity_runs.py --out benchmark-artifacts/base.json \
+            benchmark-artifacts/a1-first.json benchmark-artifacts/a1-second.json
+          python tools/aggregate_parity_runs.py --out benchmark-artifacts/candidate.json \
+            benchmark-artifacts/a2-first.json benchmark-artifacts/a2-second.json
+      - name: Apply UNCHANGED strict release regression evaluator to identical-source sham
+        run: |
+          set -euo pipefail
+          python tools/check_performance_regression.py \
+            --base benchmark-artifacts/base.json \
+            --candidate benchmark-artifacts/candidate.json \
+            --max-time-regression 0.05 \
+            --max-size-regression 0.01 \
+            2>&1 | tee benchmark-artifacts/strict-aa-diagnostic.log
+      - name: Retain complete A/A positive and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-identical-source-full-aa
+          path: benchmark-artifacts/
+          if-no-files-found: warn
+          retention-days: 90

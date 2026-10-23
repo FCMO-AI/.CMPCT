@@ -1,0 +1,100 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# Research-only diagnostic. Not a release gate, comparator, or threshold change.
+# Single producer: SHA-bound A/A sham and A/B binary/library/create attribution.
+name: CMPCT v031 binary create attribution court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-binary-create-aa-ab-attribution-20261023
+    paths:
+      - '.github/workflows/v031-binary-create-attribution.yml'
+      - 'benchmarks/v031_binary_create_aa_ab_attribution.py'
+  workflow_dispatch:
+concurrency:
+  group: cmpct-v031-exact-diagnostic-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+permissions:
+  contents: read
+jobs:
+  aa-ab-binary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact evidence branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Verify source boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 8e25363c7bdcafb5a3bd2074b18ec29b84a91799 HEAD
+          git diff --stat 8e25363c7bdcafb5a3bd2074b18ec29b84a91799 HEAD
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install same candidate packaging and native dependencies as parity gate
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd xz-utils libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Materialize exact PR234 base and native payload
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          git worktree add --detach /tmp/cmpct-performance-base 88cf80d7f1f2f3ece7e83eefa78beece0bd4cc22
+          python tools/materialize_performance_base_native.py /tmp/cmpct-performance-base --receipt benchmark-artifacts/base-native.json \
+            | tee benchmark-artifacts/native-ownership.txt
+          git -C /tmp/cmpct-performance-base rev-parse HEAD
+      - name: Generate immutable canonical parity source tree
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, shutil, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()/'benchmarks'))
+          import universal_bench as universal
+          corpus=Path('/tmp/cmpct-binary-attribution-corpus')
+          shutil.rmtree(corpus,ignore_errors=True)
+          corpus.mkdir()
+          universal.CORP=corpus
+          universal.reset_rng()
+          universal.make_corpora()
+          fixed_ns=1767225600*1_000_000_000
+          for path in sorted(corpus.rglob('*'),key=lambda p:(len(p.parts),p.as_posix()),reverse=True):
+              try:os.utime(path,ns=(fixed_ns,fixed_ns),follow_symlinks=False)
+              except (NotImplementedError,OSError):
+                  if not path.is_symlink():raise
+          os.utime(corpus,ns=(fixed_ns,fixed_ns))
+          binary=corpus/'binary'
+          manifest={}
+          for path in sorted(binary.iterdir()):
+              manifest[path.name]={'bytes':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'mtime_ns':path.stat().st_mtime_ns}
+          Path('benchmark-artifacts/corpus.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          print(json.dumps(manifest,indent=2))
+          PY
+      - name: Execute separately sampled A/A and A/B identical-input control
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_binary_create_aa_ab_attribution.py \
+            --base-root /tmp/cmpct-performance-base \
+            --candidate-root "$GITHUB_WORKSPACE" \
+            --corpus-root /tmp/cmpct-binary-attribution-corpus \
+            --reps 7 \
+            --output benchmark-artifacts/aa-ab-results.json \
+            2>&1 | tee benchmark-artifacts/aa-ab-court.log
+      - name: Preserve scientific result irrespective of sign
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-binary-create-attribution
+          path: benchmark-artifacts/
+          if-no-files-found: warn
+          retention-days: 90
