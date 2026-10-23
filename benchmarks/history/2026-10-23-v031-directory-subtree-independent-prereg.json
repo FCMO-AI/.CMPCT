@@ -1,0 +1,43 @@
+{
+  "schema": "cmpct-v031-directory-subtree-custody-prereg-v1",
+  "date": "2026-10-23",
+  "scope": "Independent evidence-only replication; no product mutation; deliberately separate from dormant directory-subtree-failclosed branch and active hardlink owner PR #241.",
+  "source": {
+    "development_head": "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "transactions_blob": "964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c",
+    "reader_blob": "e716233403dabd0966863c45635e18fa5ac6afb8",
+    "builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "validation_blob": "51c2849061f99a4afeddb7666956b24566ce7de0"
+  },
+  "primary_question": "Does append_rename(nonempty_directory) preserve descendants, and does append_delete(nonempty_directory) avoid committing a non-equivalent namespace?",
+  "prediction": "The source-level delta op implementation edits only a single directory row. A nonempty directory rename will leave old-prefix descendants and move only the directory row; nonempty directory deletion will remove only its row. Both may commit a namespace that no longer matches a real atomic POSIX operation.",
+  "independent_control": "POSIX os.rename of the same source tree, POSIX os.rmdir rejection of a nonempty directory, plus empty-directory and single-file mutation controls.",
+  "observables": [
+    "original/committed complete archive sha256 and bytes",
+    "physical and logical index row names before/after",
+    "canonical preflight and Reader.verify outcomes",
+    "extracted tree path/kind/content/mode/mtime signatures",
+    "identity against POSIX control on the same source tree",
+    "whether writer mutated archive despite rejected operation expectation"
+  ],
+  "kill_or_narrow": [
+    "If writer refuses nonempty directory modifications before commit and archive bytes remain identical, predicted hazard falsified",
+    "If rename recursively updates descendant paths and hardlink owners with exact POSIX semantics, predicted hazard falsified",
+    "If reproduction cannot build/source-check genuine product, result remains infrastructure-blocked and gets no product credit"
+  ],
+  "scope_boundaries": [
+    "No claims about unrelated symlink/hardlink fixes",
+    "No format/release changes",
+    "No tests weakened and no product promotion",
+    "No concurrent writer/cross-platform guarantee"
+  ],
+  "owner_coordination": {
+    "related_branches": [
+      "agent/phased2-v031-directory-subtree-failclosed-20261020 (unchanged base at orientation)",
+      "agent/phased2-v031-directory-namespace-custody-20261014 (unchanged base at orientation)"
+    ],
+    "active_pr": "#241 hardlink owner guard; different semantic question but same transactions module; this court changes no implementation"
+  },
+  "product_credit": false,
+  "release_credit": false
+}
