@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import os
 import random
+import sys
 
 import pytest
 
@@ -18,8 +19,15 @@ from cmpct.reader import CMPCT
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX NAME_MAX filesystem court")
-@pytest.mark.parametrize("component_bytes", [234, 235, 255])
-def test_verified_chunked_extract_accepts_max_length_component(tmp_path, component_bytes):
+@pytest.mark.parametrize("member", [
+    "n" * 230 + ".bin",  # 234 encoded bytes: inherited control that already passed.
+    "n" * 231 + ".bin",  # 235 bytes: first rejected by old stage name.
+    "n" * 251 + ".bin",  # 255-byte POSIX boundary.
+    pytest.param("é" * 125 + ".bin", marks=pytest.mark.skipif(
+        not sys.platform.startswith("linux"), reason="raw UTF-8 POSIX component court")),
+])
+def test_verified_chunked_extract_accepts_max_length_component(tmp_path, member):
+    component_bytes = len(os.fsencode(member))
     try:
         max_component = os.pathconf(tmp_path, "PC_NAME_MAX")
     except (OSError, ValueError):
@@ -27,8 +35,7 @@ def test_verified_chunked_extract_accepts_max_length_component(tmp_path, compone
     if max_component < component_bytes:
         pytest.skip("filesystem cannot admit this source component")
 
-    member = "n" * (component_bytes - len(".bin")) + ".bin"
-    assert len(os.fsencode(member)) == component_bytes
+    assert component_bytes in (234, 235, 254, 255)
     source_tree = tmp_path / "source"
     source_tree.mkdir()
     original = random.Random(0xC0FFEE).randbytes(4 * 256 * 1024 + 8192)
