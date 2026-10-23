@@ -186,8 +186,10 @@ def _require_valid_rename_destination(index:dict, new:str):
     parent = logical.rpartition('/')[0]
     parent_kind = None
     for row in index['files']:
-        # Canonical-open Reader already admitted these legacy spellings.
-        key, _ = canonical_logical_path(row[0])
+        # Reader.__init__ has already validated every source row using
+        # canonical_logical_path. Reusing its exact slash normalization avoids
+        # rechecking UTF-8 and path components O(files) times per rename.
+        key = row[0].replace('\\\\', '/')
         if key == logical:
             raise FileExistsError(f"canonical rename destination exists: {row[0]!r}")
         if parent and key == parent:
