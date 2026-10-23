@@ -53,5 +53,5 @@ jobs:
           if-no-files-found: warn
       - name: Declare scoped meaning
         run: |
-          echo "All eight real archive tests passed. Note moved-open-inode test is a NEGATIVE for lexical containment."
+          echo "All source-bound real archive tests passed. Note moved-open-inode test is a NEGATIVE for lexical containment."
           echo "This is research-only, not a product release or a race-safe pathname security proof."
