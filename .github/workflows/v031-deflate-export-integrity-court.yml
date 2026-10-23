@@ -37,6 +37,29 @@ jobs:
         run: python -m pytest -vv tests/test_v031_deflate_export_verified.py
       - name: Re-run inherited ZIP64 exact-count and stream-preservation court
         run: python -m pytest -vv tests/test_v031_zip64_export_count.py
+      - name: Re-run immutable PR280 scientific falsifier on the fixed installed package
+        run: |
+          # PR280 authored the independent source-exact negative court. Load it by
+          # frozen commit and blob SHA; do not rewrite its original prediction.
+          curl --fail --silent --show-error --location \
+            https://raw.githubusercontent.com/FCMO-AI/.CMPCT/9bd6473c04c7f43c66b59dfd48af82cbb9790dcf/benchmarks/v031_direct_deflate_export_integrity_court.py \
+            -o benchmarks/v031_direct_deflate_export_integrity_court.py
+          test "$(git hash-object benchmarks/v031_direct_deflate_export_integrity_court.py)" = "325c1fe0f13e16a672d54557edbb9d719e606c69"
+          test "$(git hash-object tests/conformance/v24-direct-codecs.json)" = "d10b7dab9126d39e819a74279c186363a163f2ef"
+          python - <<'PY'
+          from runpy import run_path
+          result = run_path("benchmarks/v031_direct_deflate_export_integrity_court.py")["run"]()
+          cases = result["cases"]
+          assert cases["clean"]["cmpct_read"] == "ACCEPT"
+          assert cases["clean"]["export"] == "ACCEPT"
+          assert cases["clean"]["independent_zip"] == "ACCEPT"
+          for name in ("corrupt_header_crc", "corrupt_deflate_payload"):
+              assert cases[name]["cmpct_read"] == "REJECT", (name, cases[name])
+              assert cases[name]["export"] == "REJECT", (name, cases[name])
+              assert cases[name]["independent_zip"] == "ABSENT", (name, cases[name])
+          assert result["decision"] == "PREDICTION_FALSIFIED", result["decision"]
+          print("ORIGINAL_SOURCE_NEGATIVE_INVERTED_ON_FIXED_READER")
+          PY
       - name: Independently stress actual bounded verifier against stdlib zlib
         run: python benchmarks/v031_deflate_stream_property_court.py
       - name: Attribute guard cost separately from correctness gates
