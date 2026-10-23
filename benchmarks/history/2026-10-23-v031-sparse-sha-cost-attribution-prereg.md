@@ -1,0 +1,19 @@
+# R564 — Sparse logical SHA extraction-cost attribution preregistration
+
+Date UTC: 2026-10-23. Base is owner PR #270 exact candidate `5a5909d6a902e22778463eb2ea11b3e732c988d2` against PR #268 `34ca9c34fd313fff21d92577d711f82a561f75a4`. This is **scientific attribution only**; product implementation/format/release/evaluator/benchmarks are not changed. The official same-runner ABBA on run `39984731549` observed `sparse/library/extract` 3.249→104.885 ms and `sparse/cli/extract` 86.261→188.103 ms, with the same +101.6 ms absolute delta.
+
+## Primary question and predicted causal mechanism
+Is almost all of the ~102 ms sparse extraction regression explained by newly required whole-logical-file SHA-256 of the holes, rather than stage I/O, Reader startup, data-extent decoding or generic host timing? The present helper does `hashlib.sha256.update(memoryview(_ZERO)[:n])` for each logical gap and `update(chunk)` for data. Under Linux/OpenSSL SHA-256, 124 MiB of holes should require an order of 75–110 ms on similar hosted CPU, and almost the same cost appears in library and CLI despite different startup.
+
+**Prediction:** a source-bound real Builder/Reader 128 MiB sparse image with 4×1 MiB physical extents, instrumented without changing any bytes hashed, will show logical-hole hashing as the majority (>50%) of total measured extraction CPU/wall and account for at least half of the +101.636 ms gate delta; the measured hole bytes must be exactly 124 MiB and data bytes 4 MiB, with full independent reconstructed SHA and filesystem sparseness preserved. A 16 MiB and a structurally perturbed 128 MiB case test scaling/position invariance.
+
+**Falsify/narrow:** if hole hash is <50 ms in the gate-shaped 128 MiB host case; if staging, decoding, or host overhead instead dominates; if archived storage isn't S_SPARSE; if identical output SHA/physical sparseness isn't retained; if repeated measurements are unstable/noncausal; or if instrumentation changes bytes hashed. Host CPU differs from gate runner, so this court can localize but cannot overrule or replace gate 39984731549.
+
+## Controls and scope
+1. Stronger simple control: instrument the **unchanged** candidate `sparse_extract.write_sparse_verified` at its `hashlib.sha256` interface via a module-local shim. Forward every real `update` to the original OpenSSL digest; split update wall/process CPU by zero-slab identity versus real blob; independently count and validate every byte. Preserve the returned digest without interpolation or precomputed replacement. Uninstrumented extraction runs separately as comparator; distinguish overhead.
+2. Independent file byte oracle: Python SHA-256 directly over source and fully extracted file outside timed boundaries; identical length/mode, genuine Builder-produced r24 archive and Reader storage S_SPARSE; inspect `st_blocks` when available.
+3. Sample/repeat several interleaved warm measurements with source hash, stage/nonstage total CPU+wall, process RSS high-water, path identity and artifact fingerprint. 16 MiB, 128 MiB and shifted-extent 128 MiB; no threshold tuning after observations.
+4. Do NOT touch owner PR #270 source or PR #255/256 branches, existing performance gate, frozen corpora, or Discovery cache. A positive explanation isn't a performance pass. A failure produces retained negative evidence. Distinct from PR #255's already-completed slab-size A/B (which falsified that easy improvement).
+
+## Cost and decision
+Reconstruct full sparse member repeatedly; expect 128 MiB of **logical SHA** work per 128 MiB case but only 4 MiB of written data and bounded ~1 MiB zero slab. Hosted court itself uses moderate synthetic data (<1 GiB total logical per loop) and enforces a 15-min job limit. On evidence, either localize gate debt to SHA-hole proof and seek materially different proof/execution representation, or reopen alternate runtime hypothesis. No merge/release credit and no policy changes.

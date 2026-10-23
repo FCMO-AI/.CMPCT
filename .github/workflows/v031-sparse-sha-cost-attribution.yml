@@ -1,0 +1,62 @@
+# ci-lane: fast
+name: CMPCT v031 sparse SHA authentic extraction attribution
+on:
+  pull_request:
+    branches:
+      - agent/phased1-v031-reader-sparse-namemax-composition-20261023
+    paths:
+      - 'benchmarks/v031_sparse_sha_cost_attribution.py'
+      - 'benchmarks/history/2026-10-23-v031-sparse-sha-cost-attribution-prereg.md'
+      - '.github/workflows/v031-sparse-sha-cost-attribution.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  sparse-sha-attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind real Reader, sparse owner and scientific instrument blobs
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/cmpct/reader.py)" = "231fc44f8cfb0b1d8c5776a48267e28bc07258c4"
+          test "$(git hash-object src/cmpct/sparse_extract.py)" = "ec20b16ddab7624db21dca35d29f5f73a579c9db"
+          test "$(git hash-object benchmarks/v031_sparse_sha_cost_attribution.py)" = "92ca1539fc3d3248c6bb5e40be9d10bc13658a20"
+          test "$(git hash-object benchmarks/history/2026-10-23-v031-sparse-sha-cost-attribution-prereg.md)" = "1851c480e3e5d566b273c5978a72aa5e02937612"
+          python - <<'PY'
+          import os
+          assert os.name == 'posix' and hasattr(os, 'SEEK_HOLE') and hasattr(os, 'SEEK_DATA')
+          PY
+          git rev-parse HEAD
+      - name: Install authentic CMPCT revision-24 package
+        run: python -m pip install -e '.[test,audio]'
+      - name: Execute matched SHA-update and real filesystem extraction court
+        env:
+          CMPCT_COURT_HEAD: ${{ github.sha }}
+          CMPCT_COURT_OUTPUT: sparse-sha-attribution.json
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_sparse_sha_cost_attribution.py | tee sparse-sha-attribution.stdout.txt
+      - name: Preserve complete raw repetitions and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparse-sha-attribution-scientific-raw
+          path: |
+            sparse-sha-attribution.json
+            sparse-sha-attribution.stdout.txt
+          if-no-files-found: warn
+      - name: Declare scoped scientific result
+        run: |
+          echo "Same SHA bytes and real Reader extraction measured. Scientific attribution only."
+          echo "Existing r24/ZIP gate failure remains a promotion blocker."
