@@ -1,0 +1,50 @@
+# ci-lane: fast
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v031 VZIP journal genuine Builder O1
+on:
+  push:
+    branches: [agent/phased2-v031-vzip-journal-zip-heavy-cost-o1-20261023]
+    paths:
+      - 'benchmarks/v031_vzip_journal_product_cost_court.py'
+      - '.github/workflows/v031-vzip-journal-zip-heavy-o1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-vzip-journal-zip-heavy-o1-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  genuine-zip-heavy-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify owners and create immutable base
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/cmpct/builder.py)" = "745b05ded92bbf84a681a4b159ac7a3c341858c5"
+          test "$(git hash-object src/cmpct/reader.py)" = "c548a2ae4d650e928eb46ed1c2431423e49765b5"
+          git worktree add --detach /tmp/cmpct-vzip-cost-base 369255f63aaa6a9c5c5c03eae2d57f8d1776662e
+          test "$(git -C /tmp/cmpct-vzip-cost-base hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+      - name: Install installed-source dependencies and historical native payload
+        run: |
+          python -m pip install -e '.[test,audio]'
+          mkdir -p benchmark-artifacts
+          python tools/materialize_performance_base_native.py /tmp/cmpct-vzip-cost-base --receipt benchmark-artifacts/base-native.json
+      - name: Execute held-out same-input genuine product ABBA
+        run: |
+          python benchmarks/v031_vzip_journal_product_cost_court.py --base /tmp/cmpct-vzip-cost-base --output benchmark-artifacts --repeats 3
+      - name: Publish raw evidence and provenance (research only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vzip-journal-product-o1-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
