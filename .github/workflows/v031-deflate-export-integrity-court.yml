@@ -1,0 +1,53 @@
+# ci-lane: fast
+name: v031 verified direct Deflate ZIP export court
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-direct-deflate-verified-zip-export-20261023
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v031-deflate-export-integrity-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  direct-deflate-integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+      - name: Bind all tests to actual source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install real package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Run physical direct Deflate integrity court
+        run: python -m pytest -vv tests/test_v031_deflate_export_verified.py
+      - name: Re-run inherited ZIP64 exact-count and stream-preservation court
+        run: python -m pytest -vv tests/test_v031_zip64_export_count.py
+      - name: Record source identity and exit status
+        if: always()
+        run: |
+          mkdir -p deflate-evidence
+          git rev-parse HEAD > deflate-evidence/source.sha
+          git hash-object src/cmpct/reader.py > deflate-evidence/reader.blob
+          git hash-object tests/test_v031_deflate_export_verified.py > deflate-evidence/test.blob
+      - name: Preserve source-bound evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-deflate-zip-${{ github.sha }}
+          path: deflate-evidence/
+          if-no-files-found: error
