@@ -5,27 +5,26 @@
     "canonical_release": "v0.30.0 rolling pre-1.0 checkpoint",
     "v031_development": "agent/v031-development (live head; read repository before trusting this staleable cache)",
     "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
-    "bounded_drift_owner": "agent/v031-bounded-drift-coordered-court@dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf",
+    "bounded_drift_owner": "agent/v031-bounded-drift-coordered-court@a34b050933b2f946fcf5fb1a4a7d02f58f777c0f",
     "issue194_owner": "agent/v031-issue194-source-stat-falsifier@91c35b03cd815b850b078d5083684f3e8587475d",
     "issue206_owner": "agent/v031-issue206-transactional-vzip@a4e74034b8d6af79877360864f59ef0d2af69575",
     "note": "Repository heads, frozen preregistrations and exact result-bearing evidence outrank this staleable index. docs/V030_EFFICIENCY_RECOVERY.md is CLOSED as a v0.30 release gate; technical debt carries into v0.31. ACTIVE_RESEARCH_THESIS still contains older allocation prose and must not reopen closed v0.30 release gating."
   },
   "active_product_bottleneck": {
-    "id": "v031-result-custody-and-execution-ownership",
-    "observation": "The highest-value v0.31 mechanisms are decision-complete or product-landed, but their decisive courts are unexecuted: bounded drift lacks an exact-source hosted route; Issue194 has a frozen integrated A/B whose landed v1 evaluator is diagnostic-only; Issue206 has a landed transactional VZIP fix whose exact package/native product court remains unexecuted.",
-    "next_discriminator": "Use the first legitimate exact-source/runtime route to execute one already-frozen court. Do not invent nearby mechanism variants merely because execution custody is blocked."
+    "id": "v031-bdc-productization-and-parity-attribution",
+    "observation": "The formerly BLOCKED exact-source coordered BDC court has now executed successfully: pinned Zstd-19 is beaten in two frozen scientific targets with physical semantics/locality/hostile checks, and an independent current r24 Builder/Reader incumbent court leaves large apparent representation headroom. Product admission, bounded generic discovery and entire-system economics remain unmeasured. Separately three official composition release-parity gates are red on binary/library/create, and a full-harness identical-source A/A run itself generated a >5%-and->3ms red. Treat those as authentic red receipts but not causally attributable to a code change without paired controls.",
+    "next_discriminator": "For BDC, scope the smallest bounded generic on-disk admission against the authentic canonical r24 incumbent and strong Zstd control with exact filesystem reconstruction and charged reader/creator costs; preserve owner PR #236/#239 work. For CI parity, use PR #238 owner to attribute full-harness A/A temporal bias before changing code or threshold; official release gates remain binding."
   },
   "primary_question": {
-    "id": "v031-bounded-drift-coordered-court",
-    "family": "representation-execution",
-    "hypothesis": "The frozen coordered bounded-drift court can improve the exact Shifted/Boundary representation frontier under unchanged filesystem, integrity, locality, comparator and release semantics.",
-    "kill": "Any frozen-court byte/locality/equality failure retires or narrows the current bounded-drift promotion claim; do not rescue it by changing thresholds, fixtures, mappings or comparators.",
-    "status": "BLOCKED",
+    "id": "v031-bounded-drift-productization-viability",
+    "family": "representation-productization",
+    "hypothesis": "The source-exact positive coordered BDC scientific sibling can be translated into bounded, generically discoverable canonical r24 portfolio representation while retaining complete archive identity, hostile filesystem fidelity, integrity, locality, memory and decoding costs and without losing the measured byte headroom to additional format/admission overhead.",
+    "kill": "If a fully charged, same-semantics canonical product admission with bounded generic detector and fallback cannot retain material byte headroom over the strongest simple canonical/Zstd controls, or fails exact physical semantics, safety/resource or release-parity floors, narrow/retire the proposed product route. Do not change frozen scientific courts or invent a product win from their research-only result.",
+    "status": "READY",
     "evidence": [
-      "docs/v031-coordination/2026-10-05-bounded-drift-execution-custody.json@156d2902d01462b17d242a1d0897ea46493ff6ec",
-      "frozen benchmark blob 2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
-      "frozen prereg blob f8e53f058a1c123ea4665b730c45f5619eb93d5f",
-      "owner head dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf has zero exact-head Actions runs/statuses and the dedicated workflow is absent"
+      "Frozen-source BDC hosted run 39925132930 at 0ccc6aea6b0061cab771648cdc56c9ebb36ba10d; artifact 12489775120; Shifted 1,687,989 B vs pinned Zstd-19 1,694,674 B (-6,685 B), Boundary 72,841 B vs 73,097 B (-256 B), scientific POSITIVE and product/release credit false.",
+      "PR #239 canonical stronger control hosted run 39929731385 at df6920b5a2e72df3d4cae81c6d17d6f457ce6e63; artifact 12490384808; authentic r24 Builder/Reader: Shifted 30,275,353 B and Boundary 902,960 B, versus frozen sibling 1,687,989 B and 72,841 B; exact tree/manifest positive in scoped research court; no generic product admission.",
+      "Owners: PR #236 frozen scientific execution; PR #239 stronger current canonical control. No duplicate owner source edits."
     ]
   },
   "frontier_candidates": [
@@ -42,6 +41,13 @@
       "question": "Does the landed transactional VZIP repair preserve complete product bytes/tree while removing speculative state leakage without create/RSS/I-O regression on the exact package/native runtime?",
       "status": "BLOCKED",
       "evidence": "Owner head a4e74034b8d6af79877360864f59ef0d2af69575; product landing b00f9a2bc59142dc526a0ee1eba335e1d28d83c4; evaluator-control v8 blob 82eb21628b17b38a4b449e679ee429001454e016. Exact package/native custody, focused tests and six-court product A/B remain unexecuted."
+    },
+    {
+      "id": "v031-binary-create-release-parity-attribution",
+      "family": "measurement-attribution",
+      "question": "Which full-matrix runner/order/cache mechanism yields a release-threshold-sized binary/library/create red even when both engines have identical exact source and native materialization? Determine and rectify the evidence/measurement mechanism without loosening the published gate or erasing authentic A/B failures.",
+      "status": "READY",
+      "evidence": "PR #238 push-triggered identical-engine full-harness A/A run 39928521518 at c765ba47eaf55987efd4aa483c805b01bcb36dd5: binary/library/create 137.795 -> 149.484 ms (+8.48%, +11.689ms), one genuine evaluator red with same source. Focused AA/AB run 39929292878 at c6b6b9c07d1f33291ce65266de547a9535a36cbc: AA +0.48%; AB -0.70%; differing harness/cache history limits transfer. Historical #233/#234/#235 full gates red remain promotion blockers."
     }
   ],
   "saturated_families": [
@@ -71,12 +77,13 @@
     }
   ],
   "decision_evidence": {
-    "bounded_drift": "Frozen court/source custody intact; scientific result UNEXECUTED because the exact workflow/result route is absent.",
+    "bounded_drift": "2026-10-23 FROZEN RESEARCH POSITIVE: PR #236 hosted run 39925132930, source 0ccc6aea..., artifact 12489775120: Shifted complete 1,687,989 B < pinned Zstd-19 1,694,674 B; Boundary 72,841 B < 73,097 B. Original frozen source/benchmarks and checksum-pinned comparator verified, hostile filesystem/locality gates passed. No product/release credit. Stronger r24 incumbent PR #239 run 39929731385 at df6920b5..., artifact 12490384808: current canonical Builder/Reader 30,275,353 B and 902,960 B vs sibling 1,687,989 B and 72,841 B on same trees. This is research headroom, not an integrated archive format or generalized admission.",
     "issue194": "Shifted preserved lower-rung evidence: 972 candidate edges / 80 bases, 892 redundant weak-index builds, historical delta-audition wall 28.5108s -> 17.1527s. Boundary 180/25 -> 7.6096s -> 4.7981s. False Neighbors 15/5 -> 0.5550s -> 0.5235s. Current v0.31 microcourts preserve 5,500 parity cases and 100,000 downstream-order cases.",
     "issue206": "Transactional Builder source is landed; v8 control explicitly binds fresh-child source custody and requires candidate-neutrality before product timing credit.",
     "external_frontier": "Historical external scoreboard remains 15/15 ZIP size wins, 7/15 Zstd-19 size wins, 4/15 ZIP create wins, 5/15 Zstd-19 create wins, 4/15 strict joint wins; historical fingerprint only, not current release credit.",
     "a15": "NARROWED / DO NOT CHARTER: internal nonserialized projection/helper factoring is the stronger simpler control; serialized IR carrying-cost advantage is not established. Durable coordination: docs/v031-coordination/2026-10-06-foundry-reconciliation-a15-a07.json.",
-    "a07": "NARROWED / NOT CHARTERED: exact-head C25CC02 run 33296257896 recovered from Actions artifact 9727565317; projected complete 10,220,043 B versus Zstd-19 10,199,302 B, margin -20,741 B, exact semantics/locality green, promotion_signal=false. Two earlier artifacts reproduce the ~20.7 KiB loss."
+    "a07": "NARROWED / NOT CHARTERED: exact-head C25CC02 run 33296257896 recovered from Actions artifact 9727565317; projected complete 10,220,043 B versus Zstd-19 10,199,302 B, margin -20,741 B, exact semantics/locality green, promotion_signal=false. Two earlier artifacts reproduce the ~20.7 KiB loss.",
+    "binary_create_parity_attribution": "2026-10-23 diagnostic contradiction: PR #238 exact-source FULL-HARNESS A/A run 39928521518 (source c765ba47..., artifact 12490992462) executes identical PR #234 source twice and triggers original strict checker: binary/library/create 137.795 -> 149.484 ms (+8.48%, +11.689 ms). Focused A/A vs A/B run 39929292878 shows AA +0.48% and AB -0.70% on identical full archive bytes. Thus gate-scale chronology/cache/source-independent effects are proven possible; prior PR #233/#234/#235 official reds remain true release blockers, not verified code-caused regressions. Attribution belongs to PR #238 owner; never weaken threshold."
   },
   "process_lessons": [
     {
@@ -98,10 +105,14 @@
     {
       "lesson": "Absence of a committed result file is not absence of scientific evidence when CI artifacts are an explicit custody surface.",
       "evidence": "Exact-head historical Actions/artifact search recovered C25CC02 run 33296257896 and resolved A07 from UNKNOWN to a replicated negative."
+    },
+    {
+      "lesson": "Same-runner and same-source do not, by themselves, make an unpaired full-harness timing delta causal; a sham A/A run must challenge a source-attribution claim before lowering or gaming any release criterion.",
+      "evidence": "PR #238 unmodified full-harness exact-source A/A run 39928521518 generated +8.48% / +11.689 ms binary/library/create red while focused same-source A/A and A/B were near zero in run 39929292878. Three genuine earlier composition reds remain blocked."
     }
   ],
   "pending_jobs": [],
-  "next_action": "Run the frozen bounded-drift court exactly once through the first legitimate exact-source route. If unavailable, execute the converged Issue194 integrated A/B when hardened source/runtime custody becomes available; otherwise execute Issue206 v8 on the exact package/native runtime. Foundry currently has no chartered primary thesis; A15 and A07 are narrowed, so do not reopen them without changed evidence.",
+  "next_action": "Primary: reconcile owners #236/#239 and build the cheapest genuinely bounded canonical r24 BDC admission/size/work oracle with generic detector and exact semantics. Use the research wins solely as a productization hypothesis, charging additional reader/metadata/index costs; preserve all upstream frozen source and benchmarks. Independent ready frontier: PR #238 own full-harness sham attribution of a source-identical binary create red without changing release gates. Issue194/Issue206 stay in their separate owner lanes.",
   "release_policy": {
     "effective_date": "2026-10-04",
     "pre1_mode": "rolling material checkpoints",
