@@ -15,6 +15,7 @@ VECTORS = (
 )
 UNSUPPORTED_VECTORS = (
     ROOT / "tests/conformance/v24-virtual-zip-deflate-mode0.json",
+    ROOT / "tests/conformance/v24-virtual-zip-deflate-mode2.json",
 )
 
 CMPCT_OK = 0
@@ -149,7 +150,7 @@ def _exercise_explicitly_unsupported_vector(lib, root: Path, fixture_path: Path)
 
     Footnote: a valid revision-24 archive containing an as-yet ungated native representation should
     still open and enumerate. The member read must return the typed unsupported status, never a format
-    error or guessed reconstruction. This turns the remaining mode-0 wiring gap into an executable
+    error or guessed reconstruction. This turns the remaining mode-0/mode-2 wiring gaps into an executable
     contract instead of leaving it outside the native test surface.
     """
     vector = json.loads(fixture_path.read_text())["vector"]
