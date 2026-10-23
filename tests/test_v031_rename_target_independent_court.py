@@ -34,6 +34,7 @@ class RenameTargetScientificCourt(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.src = self.root / "source"
         (self.src / "dir").mkdir(parents=True)
+        (self.src / "empty").mkdir()
         (self.src / "dir" / "child.txt").write_bytes(b"child" * 81)
         (self.src / "root.txt").write_bytes(b"root" * 117)
         self.archive = self.root / "test.cmpct"
@@ -69,6 +70,19 @@ class RenameTargetScientificCourt(unittest.TestCase):
     def test_backslash_alias_collision_commits_unreadable_archive(self):
         # A separate live entry already owns the same canonical key.
         self.assert_bad_rename_commits_unreadable("dir\\child.txt")
+
+    def test_empty_directory_rename_into_own_descendant_reports_false_success(self):
+        # POSIX cannot relocate a directory underneath itself; the one-row
+        # generation removes the parent and manufactures an orphaned child.
+        before = self.archive.read_bytes()
+        with self.assertRaises(OSError):
+            (self.src / "empty").rename(self.src / "empty" / "child")
+        self.assertIsNone(append_rename(self.archive, "empty", "empty/child"))
+        self.assertNotEqual(self.archive.read_bytes(), before)
+        with CMPCT(self.archive) as reader:
+            names = {r[0] for r in reader.index["files"]}
+            self.assertNotIn("empty", names)
+            self.assertIn("empty/child", names)
 
     def test_valid_rename_preserves_exact_bytes(self):
         self.assertIsNone(append_rename(self.archive, "root.txt", "dir/renamed.txt"))
