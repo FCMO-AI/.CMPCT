@@ -29,7 +29,11 @@ The additive `cmpct.validation` layer provides:
 - adversarial regression tests covering oversized index/generation declarations, corrupt blob framing, truncated archives and latest-generation fallback;
 - a direct structural mutation matrix covering unknown codecs, blob policy limits, pack bounds, fixed/CDC chunk accounting, sparse extent accounting, missing virtual-ZIP recipes, duplicate paths, unsafe paths, hardlink targets/cycles and filesystem-metadata references.
 
-### Default limits
+### v0.31 scoped candidate: failed Reader opens do not retain file or mmap resources
+
+The Reader constructor owns the file descriptor from the moment `open()` succeeds. If index loading, `mmap()`, or canonical namespace checks fail, no usable Reader escapes and `close()` is unreachable. The isolated [PR #283](https://github.com/FCMO-AI/.CMPCT/pull/283) established a retained-exception baseline leak on the original revision-24 Reader and passed four adversarial tests after deterministic exception-path cleanup. This stacked composition carries **only that unchanged constructor** into the three-owner Reader/Public Proof/optional RAW-range candidate of PR #277, without restoring the older close order or altering other Reader operations. The source-bound control and negative outcome remain owned by PR #283; composed full-product CI and portability must be evaluated independently. No new parser-preflight, native-ABI, format or release claim follows from the constructor fix.
+
+## Default limits
 
 The initial defaults are intentionally generous for legitimate pre-1.0 archives while still placing finite ceilings on hostile declarations. They are policy, not format constants, and can be overridden with `CMPCT_MAX_*` environment variables or a `ParserLimits` instance.
 
