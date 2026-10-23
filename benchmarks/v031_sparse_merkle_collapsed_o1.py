@@ -25,7 +25,7 @@ ROW = struct.Struct('>Q32s')    # 40 bytes: leaf ordinal and its digest
 
 class Collapsed:
     def __init__(self, size, leaf, digests):
-        if type(size) is not int or type(leaf) is not int or not (0 <= size < 2**64) or not (1 <= leaf < 2**32):
+        if type(size) is not int or type(leaf) is not int or not (0 <= size < 2**64) or not (1 <= leaf <= (1 << 20)):
             raise ValueError('bad length or leaf size')
         self.size, self.leaf = size, leaf
         self.n = (size + leaf - 1) // leaf
@@ -153,7 +153,7 @@ def disprove_bad_wire(wire):
 
 
 def main():
-    rng = random.Random(20261023)
+    # A hostile serialized descriptor must not allocate an attacker-selected giant zero leaf.\n    for unsafe_leaf in ((1 << 20) + 1, (1 << 32) - 1):\n        hostile = HEAD.pack(b'SMO1', 1, unsafe_leaf, bytes(32))\n        try:\n            Collapsed.reopen(hostile)\n        except ValueError:\n            pass\n        else:\n            raise AssertionError('oversized leaf accepted before resource bounds')\n    rng = random.Random(20261023)
     checks = 0
     for trial in range(320):
         size = [0, 1, 4095, 4096, 4097, 8192, 8193, 200001][trial % 8] if trial < 64 else rng.randrange(0, 220000)
