@@ -171,3 +171,33 @@ def test_reject_unsafe_archive_symlink_target_before_materializing_it(tmp_path):
         with pytest.raises(IOError, match="unsafe archived symlink"):
             extract_rooted_research(reader, dest)
     assert not (dest / "unsafe.lnk").exists()
+
+
+def test_existing_hardlink_leaf_cannot_truncate_external_inode(tmp_path):
+    """Distinct from symlink leaf: O_NOFOLLOW alone cannot protect an external hardlink."""
+    arc = _make_archive(tmp_path, {"member.bin": b"NEW CONTENT"})
+    outside = tmp_path / "outside.bin"
+    outside.write_bytes(b"EXTERNAL-HARDLINK-SENTINEL")
+    ino = outside.stat().st_ino
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    os.link(outside, dest / "member.bin")
+    assert (dest / "member.bin").stat().st_ino == ino
+    with CMPCT(arc) as reader:
+        extract_rooted_research(reader, dest)
+    assert outside.read_bytes() == b"EXTERNAL-HARDLINK-SENTINEL"
+    assert outside.stat().st_ino == ino
+    assert (dest / "member.bin").read_bytes() == b"NEW CONTENT"
+    assert (dest / "member.bin").stat().st_ino != ino
+
+
+def test_max_name_component_uses_short_private_staging(tmp_path):
+    """NAME_MAX belongs to the archived leaf, not to a prefixed staging name."""
+    name = "n" * 255
+    arc = _make_archive(tmp_path, {name: b"FULL-LENGTH-POSIX-COMPONENT"})
+    dest = tmp_path / "dest"
+    with CMPCT(arc) as reader:
+        extract_rooted_research(reader, dest)
+    assert (dest / name).read_bytes() == b"FULL-LENGTH-POSIX-COMPONENT"
+    assert len(os.fsencode(name)) == 255
+    assert sorted(x.name for x in dest.iterdir()) == [name]
