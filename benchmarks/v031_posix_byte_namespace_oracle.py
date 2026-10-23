@@ -109,7 +109,7 @@ def court():
     fixed=[b"file-\xff",b"file-\xfe",b"caf\xc3\xa9",b"caf\xe9",b"~Z1__w",b"~z1__w",b"~Z",b"~Z0_cA",b"a\\b",b"A",b"a",b"CON",b"con",b"a:b"]
     for _ in range(5000):
         raw=bytes(rng.randint(1,255) for i in range(rng.randint(1,80)))
-        if b"/" not in raw and b"\0" not in raw: fixed.append(raw)
+        if b"/" not in raw and b"\0" not in raw and raw not in (b".",b".."): fixed.append(raw)
     corpus=sorted(set(fixed))
     escaped=[text_wire(name) for name in corpus]
     binary=[bytes_wire(name) for name in corpus]
