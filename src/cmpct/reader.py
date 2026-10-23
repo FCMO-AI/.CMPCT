@@ -392,16 +392,23 @@ class CMPCT:
         root=os.path.realpath(dest_s)
         verified_dirs=set()
 
-        def check_path(parts, allow_leaf_link=False):
+        def check_path(parts, allow_leaf_link=False, reject_hardlink_leaf=False):
             for depth in range(1,len(parts)+1):
                 path=os.path.join(root,*parts[:depth])
                 leaf=(depth==len(parts))
                 if not leaf and path in verified_dirs:continue
-                try:mode=os.lstat(path).st_mode
+                try:existing=os.lstat(path)
                 except FileNotFoundError:break
+                mode=existing.st_mode
                 if stat.S_ISLNK(mode):
                     if leaf and allow_leaf_link:continue
                     raise IOError(f'pre-existing destination symlink: {path!r}')
+                # A regular leaf with multiple hardlink names can share an inode with a
+                # file *outside* this destination. The direct O_TRUNC writer mutates that
+                # outside inode even with O_NOFOLLOW. Fail closed before any archive
+                # member is written; atomic chunked publication is exempt.
+                if leaf and reject_hardlink_leaf and stat.S_ISREG(mode) and existing.st_nlink>1:
+                    raise IOError(f'pre-existing destination hardlink alias: {path!r}')
                 if not leaf:
                     if not stat.S_ISDIR(mode):
                         raise IOError(f'non-directory destination parent: {path!r}')
@@ -413,7 +420,10 @@ class CMPCT:
             # following its prior symlink. Their parents must still be checked.
             replace_leaf=(k in (K_SYMLINK,K_HARDLINK) or (
                 k==K_FILE and storage and storage[0] in (S_CHUNKS,S_CDC)))
-            check_path(parts,allow_leaf_link=replace_leaf)
+            # Only direct in-place K_FILE writers can mutate an existing inode.
+            # S_CHUNKS/S_CDC already publish a new inode with os.replace.
+            direct_truncate=(k==K_FILE and not replace_leaf)
+            check_path(parts,allow_leaf_link=replace_leaf,reject_hardlink_leaf=direct_truncate)
             if k==K_HARDLINK:
                 try:_,target_parts=canonical_logical_path(storage[0])
                 except ValueError as exc:
