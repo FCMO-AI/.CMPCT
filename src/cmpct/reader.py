@@ -506,6 +506,61 @@ class CMPCT:
         p=pos+BHDR.size+rml
         return self.mm[p:p+rcs],rcrc,rus
 
+    def _verify_direct_deflate_blob(self, idx: int):
+        """Authenticate a retained raw-Deflate member without materializing its logical bytes.
+
+        Stored CRC and SHA belong to *inflated* data, not the RFC-1951 stream. Copying
+        the physical stream directly into ZIP without decoding bypasses ordinary read()
+        integrity checks. Inspect at most 64 KiB input/output at once; an invalid blob
+        must be rejected before we open or replace the requested ZIP destination.
+        """
+        off, us, cs, codec, ml = self.blobs[idx]
+        if codec != CODEC_DEFLATE:
+            raise IOError('not a direct Deflate blob')
+        pos = self.record_base + off
+        if pos < 0 or pos + BHDR.size > len(self.mm):
+            raise IOError('Deflate blob header outside archive')
+        m, c, flags, res, rus, rcs, rml, rcrc, rh = BHDR.unpack_from(self.mm, pos)
+        if m != BMAGIC or c != CODEC_DEFLATE or (rus, rcs, rml) != (us, cs, ml):
+            raise IOError('Deflate blob framing mismatch')
+        p = pos + BHDR.size + rml
+        end = p + rcs
+        if end > len(self.mm):
+            raise IOError('Deflate blob payload outside archive')
+        inflater = zlib.decompressobj(-15)
+        checksum = 0
+        strong = hashlib.sha256()
+        total = 0
+        while p < end:
+            incoming = self.mm[p:min(end, p + 65536)]
+            p += len(incoming)
+            while True:
+                old_len = len(incoming)
+                block = inflater.decompress(incoming, 65536)
+                incoming = inflater.unconsumed_tail
+                total += len(block)
+                if total > rus:
+                    raise IOError('Deflate inflated length exceeds committed size')
+                checksum = binascii.crc32(block, checksum)
+                strong.update(block)
+                if inflater.eof:
+                    if incoming or inflater.unused_data or p != end:
+                        raise IOError('trailing data in retained Deflate stream')
+                    break
+                if incoming:
+                    if not block and len(incoming) >= old_len:
+                        raise IOError('Deflate decoder stalled')
+                    continue
+                # Even with all compressed input consumed, zlib can have pending output
+                # after reaching the 64KiB decode cap. Empty-input calls drain it.
+                if len(block) == 65536:
+                    incoming = b''
+                    continue
+                break
+        if (not inflater.eof or total != rus or
+                (checksum & 0xffffffff) != rcrc or strong.digest() != rh):
+            raise IOError('retained Deflate physical integrity failure')
+
     def _zip64_offset_fallback_required(self):
         """Conservatively bound ZIP32 member sizes and cumulative offsets before output.
 
@@ -536,6 +591,22 @@ class CMPCT:
         them, STORE is selected instead. ZIP64-sized members fall back to ZipFile in this prototype.
         """
         out=Path(out);entries=[];offset=0
+        # Authenticate each unique physical Deflate blob before opening the ZIP.
+        # The fast path must not turn a source rejected by read() into a successful
+        # but corrupt exported ZIP; validate once even for multiply referenced data.
+        verified_deflate = set()
+        for row in self.files:
+            storage = row[6]
+            if row[1] not in (K_FILE, K_SYMLINK) or not storage or storage[0] != S_BLOB:
+                continue
+            idx = storage[1]
+            if self.blobs[idx][3] != CODEC_DEFLATE:
+                continue
+            if row[4] != self.blobs[idx][1]:
+                raise IOError('direct Deflate member logical size mismatch')
+            if idx not in verified_deflate:
+                self._verify_direct_deflate_blob(idx)
+                verified_deflate.add(idx)
         # Large payload/offset ZIP64 still uses the stdlib writer. Large *counts* stay on the
         # zero-recompression fast path and receive native ZIP64 end records below.
         if self._zip64_offset_fallback_required():
