@@ -1,0 +1,58 @@
+# ci-lane: fast
+name: CMPCT v031 Writer Reader exact composition court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-posix-writer-reader-composition-20261023
+    paths:
+      - 'src/cmpct/transactions.py'
+      - 'src/cmpct/reader.py'
+      - 'tests/test_v031_writer_reader_snapshot_composition.py'
+      - '.github/workflows/v031-writer-reader-exact-composition.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  writer-reader-exact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind immutable owner sources and exact head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object src/cmpct/transactions.py)" = "8fa50d50fe186195e60d2e7db51f17cd3125b1e0"
+          test "$(git hash-object src/cmpct/reader.py)" = "c548a2ae4d650e928eb46ed1c2431423e49765b5"
+          test "$(git hash-object tests/test_v031_posix_writer_lease.py)" = "40e356a4022f04cd650af42642f686bb58bbb794"
+          test "$(git hash-object docs/V030_RELEASE_LOCK.json)" = "988a7b05ad4e0833fac0453de74133b38f890f87"
+      - name: Install full test/native dependencies
+        run: python -m pip install -e '.[test,audio]'
+      - name: Execute unmodified owner courts plus joint snapshot
+        run: |
+          set -euo pipefail
+          python -m pytest -q -ra \
+            tests/test_v031_posix_writer_lease.py \
+            tests/test_v031_writer_reader_snapshot_composition.py \
+            tests/test_v031_reader_open_failure_resource_ownership.py \
+            tests/test_reader_close_worker_lifetime.py \
+            tests/test_v031_pack_sha_integrity.py \
+            tests/test_v031_reader_composed_interactions.py \
+            tests/test_v031_raw_range_digest_optin.py \
+            2>&1 | tee "$RUNNER_TEMP/v031-writer-reader-composed-pytest.txt"
+      - name: Retain exact-head original test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-writer-reader-exact-court
+          path: ${{ runner.temp }}/v031-writer-reader-composed-pytest.txt
+          if-no-files-found: warn
