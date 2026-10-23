@@ -25,6 +25,7 @@ class RenameTargetFailClosed(unittest.TestCase):
         root = Path(self.temp.name)
         self.src = root / "src"
         (self.src / "dir").mkdir(parents=True)
+        (self.src / "empty").mkdir()
         (self.src / "dir" / "child.txt").write_bytes(b"child" * 81)
         (self.src / "root.txt").write_bytes(b"root" * 117)
         self.archive = root / "archive.cmpct"
@@ -34,9 +35,9 @@ class RenameTargetFailClosed(unittest.TestCase):
         self.pristine_digest = hashlib.sha256(self.pristine).hexdigest()
         self.root = root
 
-    def assert_no_write(self, dest, expected_error):
+    def assert_no_write(self, dest, expected_error, source="root.txt"):
         with self.assertRaises(expected_error, msg=repr(dest)):
-            append_rename(self.archive, "root.txt", dest)
+            append_rename(self.archive, source, dest)
         self.assertEqual(self.archive.read_bytes(), self.pristine, dest)
         self.assertEqual(hashlib.sha256(self.archive.read_bytes()).hexdigest(),
                          self.pristine_digest, dest)
@@ -75,6 +76,13 @@ class RenameTargetFailClosed(unittest.TestCase):
 
     def test_parent_regular_file_rejected_before_append(self):
         self.assert_no_write("dir/child.txt/new.txt", FileNotFoundError)
+
+    def test_empty_directory_cannot_be_renamed_into_own_descendant(self):
+        # POSIX rejects directory movement underneath itself; a one-row
+        # delta must not commit an orphan and silently recreate its parent.
+        with self.assertRaises(OSError):
+            (self.src / "empty").rename(self.src / "empty" / "child")
+        self.assert_no_write("empty/child", OSError, source="empty")
 
     def test_root_destination_is_valid(self):
         append_rename(self.archive, "root.txt", "root-renamed.txt")
