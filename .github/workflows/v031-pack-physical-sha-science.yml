@@ -25,12 +25,12 @@ jobs:
           python-version: '3.11'
       - name: Install real CMPCT package with native codec
         run: python -m pip install -e '.[test]'
-      - name: Reproduce baseline physical PACK verification bypass
+      - name: Verify physical PACK SHA candidate with unchanged independent oracle
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           mkdir -p benchmark-artifacts
-          python benchmarks/v031_pack_physical_sha_court.py --expected-pack accept | tee benchmark-artifacts/pack-baseline.json
+          python benchmarks/v031_pack_physical_sha_court.py --expected-pack reject | tee benchmark-artifacts/pack-candidate.json
       - name: Audit CI topology
         run: python tools/check_ci_topology.py .github/workflows/v031-pack-physical-sha-science.yml
       - name: Preserve experiment receipt
