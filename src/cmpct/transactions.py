@@ -107,10 +107,23 @@ def _index_after_op(index:dict,op:list):
             if x[0]==op[1]:x[0]=op[2];break
     index['files'].sort(key=lambda x:x[0]);return index
 
+def _reject_hardlink_owner_mutation(index:dict, member:str, operation:str):
+    # Footnote: a K_HARDLINK references its owner by logical path. Dropping or renaming that
+    # owner without reparenting every alias would write a committed generation that fails
+    # structural preflight. Until atomic reparenting is implemented, fail *before* the
+    # append-only footer (or any archive mutation), never publish a dangling reference.
+    for row in index['files']:
+        if row[1] == K_HARDLINK and row[6] == [member]:
+            raise ValueError(
+                f"cannot {operation} hardlink owner {member!r}: "
+                f"surviving alias {row[0]!r} would dangle"
+            )
+
 def append_delete(archive:Path,member:str):
     archive=Path(archive)
     with CMPCT(archive) as ar:
         if member not in ar.by:raise KeyError(member)
+        _reject_hardlink_owner_mutation(ar.index,member,'delete')
         prev=ar.latest_footer_pos;depth=ar.delta_depth;idx=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False)
     op=['del',member];checkpoint=_index_after_op(idx,op) if depth>=63 else None
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
@@ -120,6 +133,7 @@ def append_rename(archive:Path,old:str,new:str):
     with CMPCT(archive) as ar:
         if old not in ar.by:raise KeyError(old)
         if new in ar.by:raise FileExistsError(new)
+        _reject_hardlink_owner_mutation(ar.index,old,'rename')
         # Footnote: rename follows real filesystem semantics. A destination parent must already
         # exist as a logical directory; otherwise compaction/extraction could silently invent a
         # directory entry and its metadata. Root-level destinations remain valid.
