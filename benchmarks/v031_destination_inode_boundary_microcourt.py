@@ -67,6 +67,26 @@ def court() -> dict[str, bool]:
                 and (nested / "member").read_bytes() == b"NEW-PRIVATE-INODE"
                 and victim.stat().st_ino != (nested / "member").stat().st_ino
             )
+            # A prospective lstat(nlink==1) is stale the instant another
+            # writable actor replaces that leaf with a hardlink to the
+            # outside inode. No symlink is introduced. The subsequent
+            # no-follow truncate still modifies the outside inode.
+            late_leaf = nested / "late-leaf"
+            late_leaf.write_bytes(b"INITIALLY-ONE-LINK")
+            before = os.lstat(late_leaf)
+            late_alias = outside / "late-alias"
+            os.link(victim, late_alias)
+            os.replace(late_alias, late_leaf)
+            changed = b"POST-CHECK-OUTSIDE-MUTATION"
+            fd = os.open("late-leaf", os.O_WRONLY | os.O_TRUNC | nofollow, dir_fd=nested_fd)
+            os.write(fd, changed)
+            os.close(fd)
+            result["lstat_one_link_then_leaf_swap_bypasses_static_guard"] = (
+                before.st_nlink == 1
+                and os.lstat(late_leaf).st_nlink > 1
+                and os.lstat(late_leaf).st_ino == os.lstat(victim).st_ino
+                and victim.read_bytes() == changed
+            )
         finally:
             os.close(nested_fd)
 
