@@ -348,3 +348,79 @@ def test_generation_append_uses_locked_description_not_archive_path(tmp_path, mo
         assert reader.read("alpha-new.txt") == b"alpha payload\n" * 70
         assert reader.read("beta.txt") == b"beta payload\n" * 70
         assert reader.verify() >= 2
+
+
+def test_reader_snapshot_cannot_be_redirected_after_lock(tmp_path, monkeypatch):
+    """A replacement Reader inode is rejected before any generation is appended."""
+    archive = _make_archive(tmp_path)
+    new_archive = tmp_path / "replacement.cmpct"
+    shutil.copyfile(archive, new_archive)
+    expected = new_archive.read_bytes()
+    previous = tmp_path / "previous-original.cmpct"
+    real_checked_reader = tx._checked_writer_reader
+
+    def switched_reader(path):
+        os.replace(archive, previous)
+        os.replace(new_archive, archive)
+        return real_checked_reader(path)
+
+    monkeypatch.setattr(tx, "_checked_writer_reader", switched_reader)
+    with pytest.raises(RuntimeError, match="Reader descriptor changed"):
+        tx.append_rename(archive, "alpha.txt", "alpha-new.txt")
+    assert archive.read_bytes() == expected
+    assert previous.exists()
+    with CMPCT(archive) as reader:
+        assert "alpha.txt" in reader.by
+        assert "alpha-new.txt" not in reader.by
+
+
+def _update_worker(archive, member, source, release, results):
+    try:
+        if not release.wait(timeout=15):
+            raise TimeoutError("did not receive update barrier")
+        result = tx.append_update(Path(archive), member, Path(source))
+        results.put(("ok", member, result["new_chunks"]))
+    except BaseException as exc:
+        results.put(("error", member, repr(exc)))
+        raise
+
+
+def test_two_process_disjoint_public_update_preserves_both_blobs(tmp_path):
+    """Reader, physical blob offsets and commit ancestry survive multiwriter updates."""
+    ctx = mp.get_context("fork")
+    archive = _make_archive(tmp_path)
+    payloads = {
+        "alpha.txt": b"ALPHA REVISION " * 32000,
+        "beta.txt": b"BETA REVISION " * 32000,
+    }
+    sources = {}
+    for member, raw in payloads.items():
+        source = tmp_path / (member + ".source")
+        source.write_bytes(raw)
+        sources[member] = source
+    release = ctx.Event()
+    results = ctx.Queue()
+    children = [
+        ctx.Process(target=_update_worker, args=(str(archive), member, str(source), release, results))
+        for member, source in sources.items()
+    ]
+    for child in children:
+        child.start()
+    try:
+        release.set()
+        for child in children:
+            child.join(timeout=50)
+        for child in children:
+            assert child.exitcode == 0, f"worker exit={child.exitcode}"
+        events = [results.get(timeout=10) for _ in children]
+        assert all(e[0] == "ok" for e in events), events
+        assert {e[1] for e in events} == set(payloads)
+        with CMPCT(archive) as reader:
+            for member, raw in payloads.items():
+                assert reader.read(member) == raw
+            assert reader.verify() >= 2
+    finally:
+        for child in children:
+            if child.is_alive():
+                child.terminate()
+                child.join(timeout=5)
