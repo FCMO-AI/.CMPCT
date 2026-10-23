@@ -30,7 +30,7 @@ jobs:
           git rev-parse HEAD
           python -m pip install msgpack==1.1.2
           python benchmarks/v031_posix_byte_namespace_oracle.py | tee /tmp/posix-byte-utf8.json
-          python -c 'import json; r=json.load(open("/tmp/posix-byte-utf8.json")); assert r["status"]=="PASS" and r["noncanonical_rejected"]==18 and r["near_limit_escaped_wire_bytes"]>r["near_limit_raw_path_bytes"]'
+          python -c 'import json; r=json.load(open("/tmp/posix-byte-utf8.json")); assert r["status"]=="PASS" and r["noncanonical_rejected"]==20 and r["near_limit_escaped_wire_bytes"]>r["near_limit_raw_path_bytes"]'
       - name: Execute ASCII-filesystem-encoding adversarial court
         env:
           LC_ALL: C
