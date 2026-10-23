@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git hash-object benchmarks/history/2026-10-23-v031-sparse-merkle-collapsed-o1-prereg.md)" = "e461d74805358bdcf9729ec7863afcaf77cf8ca5"
-          test "$(git hash-object benchmarks/v031_sparse_merkle_collapsed_o1.py)" = "d83f1bbf77a5cf3dcb6cdc48793d3734e3636278"
+          test "$(git hash-object benchmarks/v031_sparse_merkle_collapsed_o1.py)" = "3ea63c3f6fe36975e88bf7fc48bc2ccc8c0d45d2"
           test "$(git hash-object benchmarks/v031_sparse_merkle_independent_falsifier.py)" = "0a411e7ba1785564ed87b1b9f190818d5dfbd2ba"
           git rev-parse HEAD | tee source-head.txt
       - name: Run independent dense roots, cold sparse proof, hostile wire and memory court
