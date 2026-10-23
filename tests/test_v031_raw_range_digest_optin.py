@@ -147,3 +147,20 @@ def test_logical_member_sha_mismatch_is_refused(tmp_path):
         row[5]=bytes([0])*32
         with pytest.raises(IOError,match='logical SHA-256'):
             reader.read_raw_range_verified('original.bin',0,1)
+
+
+def test_recomputed_crc_and_sha_is_not_origin_authentication(tmp_path):
+    # Research-negative: an attacker able to rewrite both physical payload and checksum
+    # can present a self-consistent archive. Digest equality is NOT a MAC/signature.
+    path,raw,pos,payload_off=_archive(tmp_path)
+    data=bytearray(path.read_bytes());data[payload_off+123]^=0x1a
+    hdr=list(BHDR.unpack_from(data,pos));n=hdr[4]
+    modified=bytes(data[payload_off:payload_off+n])
+    import hashlib
+    hdr[7]=binascii.crc32(modified)&0xffffffff
+    hdr[8]=hashlib.sha256(modified).digest()
+    data[pos:pos+BHDR.size]=BHDR.pack(*hdr)
+    forged=tmp_path/'recomputed.cmpct';forged.write_bytes(data)
+    with CMPCT(forged) as reader:
+        assert reader.read_raw_range_verified('original.bin',123,1)==modified[123:124]
+        assert modified!=raw
