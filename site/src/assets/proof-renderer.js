@@ -62,8 +62,8 @@ function normalizeLegacy(data) {
   const seriousShort = overall.serious_comparator_short || "tar / Zstd solid";
   return {
     schema: "cmpct-public-evidence-v1",
-    project_version: f.project_version || data?.project?.project_version,
-    canonical_format_revision: f.canonical_format_revision ?? data?.project?.format_revision,
+    project_version: data?.project?.project_version,
+    canonical_format_revision: data?.project?.format_revision,
     frontier_status: f.candidate?.status || "research frontier",
     frontier_name: f.candidate?.name || "CMPCT research frontier",
     structural: {
@@ -89,6 +89,8 @@ function normalizeLegacy(data) {
     release_delta: f.release_delta || {},
     known_losses: f.known_losses || [],
     provenance: {
+      source_project_version: f.project_version,
+      source_format_revision: f.canonical_format_revision,
       record: f.file || "—",
       date: f.date || "—",
       tree_sha256: overall.method?.tree_sha256 || f.structural_competitor_contract?.tree_sha256 || null,
@@ -221,7 +223,8 @@ function renderLosses(e) {
 
 function renderAuthority(e) {
   const version = $("#frontier-version");
-  if (version) version.textContent = `v${e.project_version || "—"}`;
+  // This label identifies the measured research frontier, not the shipping product release.
+  if (version) version.textContent = `v${e.provenance?.source_project_version || "—"}`;
   const label = $("#frontier-label");
   if (label) label.textContent = e.frontier_status || "research frontier";
 }
@@ -241,6 +244,7 @@ function renderReceipt(e) {
   const cells = [
     ["Project", `v${e.project_version || "—"}`],
     ["Format", `r${e.canonical_format_revision ?? "—"}`],
+    ["Research source", `v${e.provenance?.source_project_version || "—"} · r${e.provenance?.source_format_revision ?? "—"}`],
     ["Tree", shortenHash(tree)],
     ["Files", Number(e.structural?.files || 0).toLocaleString()],
     ["Record", e.provenance?.record || "—"],
@@ -265,7 +269,9 @@ function renderAfterBaseUI(evidence, attempt = 0) {
   // to overwrite proof-surface values afterward. Waiting for app.js to stamp the current frontier marker
   // makes ordering deterministic without coupling the stable renderer to a release-specific script.
   const marker = $("#frontier-version");
-  const expected = String(evidence.project_version || "");
+  // app.js initially labels the *research* frontier. Match that source version to avoid
+  // delaying proof rendering or overwriting the release identity with benchmark identity.
+  const expected = String(evidence.provenance?.source_project_version || "");
   const baseReady = expected && marker?.textContent?.includes(expected);
   if (baseReady || attempt >= 180) {
     render(evidence);
