@@ -54,6 +54,18 @@ Required conceptual groups are:
 - provenance and benchmark contract;
 - claim policy.
 
+**Publication identity versus measurement provenance:** `public_evidence.project_version` and
+`public_evidence.canonical_format_revision` describe the current released project manifest and
+shipping reader/format. The selected frontier may be an older, newer or noncanonical research
+representation. Preserve its original `project_version` and `canonical_format_revision` separately
+under `public_evidence.provenance.source_project_version` and
+`public_evidence.provenance.source_format_revision`. The latter is the **canonical baseline format
+revision named by the historical research record**, not proof that a noncanonical research sibling
+uses that archive grammar. The browser receipt labels it as the benchmark epoch and explicitly calls
+it "canonical rN". Never present a historical research version
+as the shipping release or relabel its measurements with the shipping version. Both identities are
+independently validated by CI; this does not authorize any new benchmark claim or format revision.
+
 Missing evidence must render as unavailable or suppress the affected claim. Never reuse an old headline
 number merely to avoid an empty card.
 
