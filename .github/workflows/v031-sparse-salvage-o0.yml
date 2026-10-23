@@ -1,0 +1,50 @@
+# ci-lane: fast
+name: CMPCT v031 sparse physical salvage research court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-salvage-sparse-seek-oracle-20261023
+    paths:
+      - 'benchmarks/v031_sparse_seek_salvage_court.py'
+      - 'docs/v031-research/SPARSE_SALVAGE_SEEK_O0_PROSPECTIVE.md'
+      - '.github/workflows/v031-sparse-salvage-o0.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  scientific-sparse-seek:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind prospective court to exact source and freeze
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object src/cmpct/transactions.py)" = "94c25029fdd167c00871aabbe8fe90fbe7490026"
+          test "$(git hash-object benchmarks/v031_sparse_seek_salvage_court.py)" = "94fc2234df0035938be3151dfaa5eef7bc317598"
+          test "$(git hash-object docs/v031-research/SPARSE_SALVAGE_SEEK_O0_PROSPECTIVE.md)" = "3d152e7071a3a4ca7e415ea7e8048e437d7d7eeb"
+          python -m py_compile benchmarks/v031_sparse_seek_salvage_court.py
+          git status --short
+      - name: Install authentic installed CMPCT package
+        run: python -m pip install -e '.[test,audio]'
+      - name: Run held-out sparse, boundary and dense true-product comparator
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_sparse_seek_salvage_court.py --large-repeats 2 | tee "$RUNNER_TEMP/v031-sparse-salvage-economics.json"
+      - name: Retain all raw evidence and negative outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-sparse-seek-salvage-scientific-court
+          path: ${{ runner.temp }}/v031-sparse-salvage-economics.json
+          if-no-files-found: warn
