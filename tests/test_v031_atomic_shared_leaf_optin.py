@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from cmpct.builder import Builder
-from cmpct.codec import S_BLOB, S_CDC, S_PACK, S_SPARSE, S_VZIP
+from cmpct.codec import K_HARDLINK, S_BLOB, S_CDC, S_PACK, S_SPARSE, S_VZIP
 from cmpct.reader import CMPCT
 
 pytestmark = pytest.mark.skipif(
@@ -233,3 +233,61 @@ def test_two_distinct_archive_members_preexisting_as_one_inroot_inode(
         assert b_leaf.read_bytes() == reader.read("b.bin")
     assert a_leaf.stat().st_ino != b_leaf.stat().st_ino
     assert not list(dest.glob(".cmpct-part-*"))
+
+
+def test_archive_declared_hardlink_reconstructs_after_optin_owner_publication(
+    tmp_path: Path,
+) -> None:
+    """The new owner inode, not the outsider's old inode, must own CMPCT links."""
+    src = tmp_path / "src"
+    src.mkdir()
+    owner = src / "a-owner.bin"
+    owner.write_bytes(b"ARCHIVE-OWNER-CONTENTS" * 4096)
+    os.link(owner, src / "z-link.bin")
+    archive = tmp_path / "hardlinked.cmpct"
+    Builder(src, workers=1, reproducible=True).build(archive)
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    outside = tmp_path / "external-old-inode"
+    outside.write_bytes(b"OUTSIDE-OLD-INODE")
+    os.link(outside, dest / "a-owner.bin")
+    old = (outside.stat().st_ino, hashlib.sha256(outside.read_bytes()).digest())
+    with CMPCT(archive) as reader:
+        assert reader.by["a-owner.bin"][6][0] == S_BLOB
+        assert reader.by["z-link.bin"][1] == K_HARDLINK
+        reader.extractall(dest, atomic_shared_leaf=True)
+        assert (dest / "a-owner.bin").read_bytes() == reader.read("a-owner.bin")
+        assert (dest / "z-link.bin").read_bytes() == reader.read("a-owner.bin")
+    assert (dest / "a-owner.bin").stat().st_ino == (dest / "z-link.bin").stat().st_ino
+    assert (dest / "a-owner.bin").stat().st_ino != old[0]
+    assert outside.stat().st_ino == old[0]
+    assert hashlib.sha256(outside.read_bytes()).digest() == old[1]
+
+
+def test_sparse_second_extent_failure_preserves_old_alias_but_not_prior_members(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Per-leaf atomicity must survive a late sparse decode failure.
+
+    The archive as a whole is not transactional: an earlier independent member
+    may already have been written. Preserve this negative boundary explicitly.
+    """
+    archive, rel, expected = _archive(tmp_path, "sparse")
+    dest, leaf, outsider, baseline = _shared_destination(tmp_path, rel)
+    with CMPCT(archive) as reader:
+        assert reader.by[rel][6][0] == expected == S_SPARSE
+        extents = reader.by[rel][6][1]
+        assert len(extents) >= 2
+        second_id = extents[-1][2][-1]
+        original_blob = reader._blob
+        def fail_last_extent(blob_id):
+            if blob_id == second_id:
+                raise IOError("synthetic second extent corruption")
+            return original_blob(blob_id)
+        monkeypatch.setattr(reader, "_blob", fail_last_extent)
+        with pytest.raises(OSError, match="synthetic second extent corruption"):
+            reader.extractall(dest, atomic_shared_leaf=True)
+    _assert_untouched(outsider, baseline)
+    assert leaf.stat().st_ino == baseline[1]
+    assert not list(dest.glob(".cmpct-part-*"))
+    assert (dest / "a-first.bin").exists(), "whole extraction is not a global transaction"
