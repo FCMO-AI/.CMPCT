@@ -93,6 +93,46 @@ Supported virtual ZIP validates recipe shape, skeleton/payload alternation, blob
 
 This is a representation-specific safety increment, not a replacement for full native preflight parity. Pack has native regression coverage but still needs independent fixed-byte conformance; virtual-ZIP Deflate modes 0/2 at the archive-dispatch level and journal structures remain incomplete before the shared handler is representation-complete.
 
+## v0.31 draft: static destination hardlink leaf identity (PR #294, stacked on #269)
+
+This is a **branch-local draft security boundary**, not a capability of shipping v0.30.0.
+The authentic revision-24 Reader's selected destination may contain pre-existing
+regular files whose inodes are also linked outside the selected root. The original
+`S_BLOB` / `S_SPARSE` / `S_PACK` / `S_VZIP` extraction paths use `O_TRUNC`
+on the existing leaf. Following no symlink at all does **not** prevent outside
+modification: a hardlink is another name for the **same inode**.
+
+The stacked PR #294 guard extends PR #269's one-time pre-write `lstat` pass:
+a regular leaf with `st_nlink > 1` is rejected for directly truncated `K_FILE`
+members. `S_CDC` and `S_CHUNKS` already atomically replace the leaf with a
+new inode and stay eligible; ordinary single-link leaves and the explicit
+`safe_symlinks=False` opt-out keep their existing behavior. The failed
+baseline is [run 40030991505](https://github.com/FCMO-AI/.CMPCT/actions/runs/40030991505):
+both genuinely Builder-selected direct BLOB and sparse storage failed to reject
+the external alias, while three controls passed. The independent POSIX
+microcourt also confirms that `O_NOFOLLOW` does not cure hardlink identity.
+
+**Intentional negative / compatibility debt:** a benign hardlinked file with
+*all* known paths already inside the destination also has `st_nlink > 1`
+and is conservatively rejected. The leaf's local `st_nlink` does not tell
+the Reader where its other names live. This is a safe *static policy tradeoff*,
+not a claim of fully preserved nonempty-destination compatibility.
+
+**Unsolved boundary:** `lstat` can be raced. The independent POSIX
+microcourt deterministically observes a leaf with `st_nlink==1`, replaces
+that leaf with a hardlink to an external inode *after the check*, then
+demonstrates that even `O_NOFOLLOW|O_TRUNC` mutates the external inode.
+This is a counterexample to any concurrent-safety claim, not a product
+regression measurement. Even an already-open no-follow directory FD
+continues naming its directory inode after an ancestor is renamed outside
+the root's **current pathname**. Define whether protection means fixed
+capability/inode descendants or confinement to the root's current path before
+making a race-safe guarantee. A full solution needs an anchored ownership/
+publication model covering directory traversal, all storage variants,
+hardlinks, symlinks and metadata, with explicit platform fallbacks and parity
+benchmarks. Issue #265 remains open. Focused research cannot authorize
+merge/release or change the revision-24 flat SHA, physical format, or gates.
+
 ## Next hardening sequence
 
 1. Wire the already-frozen virtual-ZIP Deflate mode 0 through archive dispatch by adding an explicit physical-codec-payload projection source and routing it through the authenticated `deflate_physical` primitive; then freeze and gate Deflate mode 2. Freeze an independent pack archive alongside links/metadata and committed-generation shapes.
