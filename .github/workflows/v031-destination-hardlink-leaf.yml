@@ -9,6 +9,7 @@ on:
       - 'tests/test_v031_destination_hardlink_leaf_alias.py'
       - 'benchmarks/v031_destination_inode_boundary_microcourt.py'
       - 'docs/HARDENING.md'
+      - 'benchmarks/history/2026-10-23-v031-preexisting-hardlink-leaf-static-result.md'
       - '.github/workflows/v031-destination-hardlink-leaf.yml'
   workflow_dispatch:
 concurrency:
