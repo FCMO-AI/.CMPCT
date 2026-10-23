@@ -139,6 +139,7 @@ def test_cli_output_preserves_legacy_keys_and_explicit_trust_tier(tmp_path):
     )
     rows = json.loads(run.stdout)
     assert rows == recover_blob_records(path)
+    assert run.stdout == json.dumps(rows, indent=2) + chr(10)
     assert set(DECLARED_KEYS).issubset(rows[0])
     assert rows[0]["verification"] == "unverified"
     assert rows[0]["generation_membership"] == "unknown"
@@ -209,3 +210,20 @@ def test_partial_readinto_short_reads_preserve_framing(tmp_path, monkeypatch, ma
         actual = recover_blob_records(path)
     assert [{key: row[key] for key in DECLARED_KEYS} for row in actual] == expected
     assert all(row["verification"] == "unverified" for row in actual)
+
+
+def test_cli_empty_candidate_array_preserves_legacy_json_text(tmp_path):
+    path = tmp_path / "empty.cmpct"
+    path.write_bytes(b"no physical blob headers")
+    run = subprocess.run(
+        [sys.executable, "-m", "cmpct.cli", "recover-blobs", str(path)],
+        capture_output=True, text=True, check=True,
+    )
+    assert run.stdout == "[]" + chr(10)
+
+
+def test_library_iterator_and_list_keep_identical_candidate_order(tmp_path):
+    from cmpct.transactions import _iter_blob_header_candidates
+    path = tmp_path / "forensic.cmpct"
+    path.write_bytes(_record(b"first") + _record(b"second"))
+    assert list(_iter_blob_header_candidates(path)) == recover_blob_records(path)
