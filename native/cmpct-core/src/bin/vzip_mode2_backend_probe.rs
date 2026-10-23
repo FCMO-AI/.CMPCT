@@ -20,7 +20,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Deliberately bounded because this is an oracle, not a streaming product implementation.
     let mut input = Vec::new();
-    io::stdin().take((MAX_PROBE_BYTES + 1) as u64).read_to_end(&mut input)?;
+    io::stdin()
+        .take((MAX_PROBE_BYTES + 1) as u64)
+        .read_to_end(&mut input)?;
     if input.len() > MAX_PROBE_BYTES {
         return Err("probe input exceeds 1 MiB scientific budget".into());
     }
