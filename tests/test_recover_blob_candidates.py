@@ -145,7 +145,7 @@ def test_cli_output_preserves_legacy_keys_and_explicit_trust_tier(tmp_path):
     assert rows[0]["generation_membership"] == "unknown"
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX child process ru_maxrss semantics")
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux child process ru_maxrss reports KiB")
 def test_sparse_128mib_scan_stays_below_full_materialization_rss(tmp_path):
     # This checks the installed real scanner, not a duplicated synthetic implementation.
     # Results measure additional peak RSS after all package imports in a fresh child.
@@ -227,3 +227,28 @@ def test_library_iterator_and_list_keep_identical_candidate_order(tmp_path):
     path = tmp_path / "forensic.cmpct"
     path.write_bytes(_record(b"first") + _record(b"second"))
     assert list(_iter_blob_header_candidates(path)) == recover_blob_records(path)
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux child process ru_maxrss reports KiB")
+def test_cli_streaming_many_candidates_has_bounded_result_memory(tmp_path):
+    # The list-returning library API is preserved, but CLI must not accumulate
+    # forged records while writing its incremental pretty JSON array.
+    path = tmp_path / "many-headers.cmpct"
+    frame = BHDR.pack(BMAGIC, CODEC_RAW, 0, 0, 0, 0, 0, 0, bytes([0x42]) * 32)
+    with path.open("wb") as f:
+        for _ in range(80_000):
+            f.write(frame)
+    code = (
+        "import os,sys,resource;"
+        "from cmpct.transactions import _iter_blob_header_candidates;"
+        "from cmpct.cli import main;"
+        "before=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss;"
+        "sink=open(os.devnull,'w');sys.stdout=sink;"
+        "sys.argv=['cmpct','recover-blobs',sys.argv[1]];"
+        "main();sink.flush();"
+        "after=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss;"
+        "sys.stderr.write(str(after-before))"
+    )
+    run = subprocess.run([sys.executable, "-c", code, str(path)],
+                         capture_output=True, text=True, check=True)
+    assert int(run.stderr.strip()) < 16 * 1024, run.stderr
