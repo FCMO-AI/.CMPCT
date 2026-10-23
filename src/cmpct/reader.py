@@ -442,22 +442,10 @@ class CMPCT:
             if storage and storage[0] in (S_CHUNKS,S_CDC):
                 self._extract_chunked_verified(row,full)
             elif storage and storage[0]==S_SPARSE:
-                # Create the logical length first, then write only allocated data extents. The gaps
-                # remain filesystem holes instead of consuming disk blocks full of zeros.
-                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_BINARY',0),mode or 0o666)
-                try:
-                    os.ftruncate(fd,size)
-                    for off,ln,ids in storage[1]:
-                        q=off
-                        for idx in ids:
-                            b=self._blob(idx);view=memoryview(b)
-                            while view:
-                                if hasattr(os,'pwrite'):
-                                    n=os.pwrite(fd,view,q)
-                                else:
-                                    os.lseek(fd,q,os.SEEK_SET);n=os.write(fd,view)
-                                view=view[n:];q+=n
-                finally:os.close(fd)
+                # Verify the logical sparse stream (including zero holes) before replacing any
+                # existing destination; physical blob hashes alone do not prove extent placement.
+                from .sparse_extract import write_sparse_verified
+                write_sparse_verified(self,row,full)
             else:
                 raw=self.read(rel)
                 fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_BINARY',0),mode or 0o666)
