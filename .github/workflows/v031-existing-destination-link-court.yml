@@ -6,6 +6,7 @@ on:
       - agent/phased3-v031-preexisting-destination-symlink-court-20261023
     paths:
       - 'benchmarks/v031_existing_destination_link_court.py'
+      - 'benchmarks/v031_destination_dirfd_control.py'
       - '.github/workflows/v031-existing-destination-link-court.yml'
   workflow_dispatch:
 concurrency:
@@ -48,10 +49,23 @@ jobs:
           assert all(not z["archive_has_symlink"] for z in x)
           print("SCIENTIFIC_BOUNDARY_NEGATIVE_REPRODUCED; no product fix claimed")
           PY
+      - name: Run independent POSIX directory-handle stronger control
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_destination_dirfd_control.py > "$RUNNER_TEMP/dirfd-control.json"
+          python - "$RUNNER_TEMP/dirfd-control.json" <<'PY'
+          import json,sys
+          j=json.load(open(sys.argv[1]))
+          assert j["outcome"]=="STATIC_AND_ONESHOT_PIVOTS_CONTAINED_IN_MICROCONTROL"
+          assert len(j["cases"])==3 and all(c["outside_unchanged"] for c in j["cases"])
+          print("POSIX_DIRFD_CONTROL_PASS; no product fix claimed")
+          PY
       - name: Preserve scientific evidence even if result differs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: existing-destination-symlink-scientific-court
-          path: ${{ runner.temp }}/destination-link-court.json
+          path: |
+            ${{ runner.temp }}/destination-link-court.json
+            ${{ runner.temp }}/dirfd-control.json
           if-no-files-found: warn
