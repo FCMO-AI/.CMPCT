@@ -1,0 +1,78 @@
+# ci-lane: fast
+name: CMPCT v031 O2 real sparse source acquisition court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-sparse-real-extent-o2-20261023
+    paths:
+      - 'benchmarks/v031_sparse_real_extent_o2.py'
+      - 'benchmarks/history/2026-10-23-v031-sparse-real-extents-o2-prereg.md'
+      - '.github/workflows/v031-sparse-real-extent-o2.yml'
+  pull_request:
+    branches:
+      - agent/phased1-v031-collapsed-merkle-o1-20261023
+    paths:
+      - 'benchmarks/v031_sparse_real_extent_o2.py'
+      - 'benchmarks/history/2026-10-23-v031-sparse-real-extents-o2-prereg.md'
+      - '.github/workflows/v031-sparse-real-extent-o2.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  source-real-extents:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify preregistered and inherited source identities
+        run: |
+          set -euo pipefail
+          test "$(git hash-object benchmarks/history/2026-10-23-v031-sparse-real-extents-o2-prereg.md)" = "cfee6cc171ff4592c689270078e74bc9e3279882"
+          test "$(git hash-object benchmarks/v031_sparse_real_extent_o2.py)" = "091b973b5d7ac573b7e6978d2edb11959c90c64b"
+          test "$(git hash-object benchmarks/v031_sparse_merkle_collapsed_o1.py)" = "3ea63c3f6fe36975e88bf7fc48bc2ccc8c0d45d2"
+          test "$(git hash-object benchmarks/v031_sparse_merkle_independent_falsifier.py)" = "0a411e7ba1785564ed87b1b9f190818d5dfbd2ba"
+          git rev-parse HEAD | tee source-head.txt
+      - name: Discover real file extents and independently verify all roots
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_sparse_real_extent_o2.py | tee sparse-real-o2.json
+          python - <<'PY'
+          import json
+          x=json.load(open('sparse-real-o2.json'))
+          assert x['status']=='PASS'
+          assert x['hostile_controls']==5
+          assert len(x['cases'])==7
+          assert all(r['independent_root_matches'] and r['flat_sha_matches'] for r in x['cases'])
+          assert all(r['descriptor_bytes']==48+40*r['committed_nonzero_leaves'] for r in x['cases'])
+          assert all(len(r['raw'])==3 for r in x['cases'])
+          assert x['scope']=='research_O2_real_POSIX_not_CMPCT_product'
+          for r in x['cases']:
+              print(r['case'], 'logical',r['logical_bytes'],
+                    'pread',r['source_bytes_pread'],'index',r['descriptor_bytes'],
+                    'acquire_ms',round(r['median_candidate_wall_ms'],3),
+                    'flat_ms',round(r['median_flat_wall_ms'],3))
+          PY
+          sha256sum sparse-real-o2.json | tee scientific-sha256.txt
+      - name: Preserve actual raw timings and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparse-real-o2-source-exact
+          path: |
+            source-head.txt
+            sparse-real-o2.json
+            scientific-sha256.txt
+          if-no-files-found: warn
+      - name: Research-only product boundary
+        run: |
+          echo "No change to CMPCT Builder/Reader, format r24, flat logical SHA, or release."
+          echo "No support claimed for immutable filesystem source snapshots or authenticating sparse allocation."
