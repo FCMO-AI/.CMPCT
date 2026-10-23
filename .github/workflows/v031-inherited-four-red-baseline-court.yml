@@ -91,6 +91,7 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p court-results
+          set +e
           python -m pytest -q --junitxml=court-results/results.xml             tests/test_performance_base_native_release_custody.py::test_historical_native_materializer_is_release_fingerprinted             tests/test_public_attribution.py::test_surface_revision_records_attribution_campaign             tests/test_v030_ci_topology_split_receipts.py::test_authoritative_v2_classifier_is_release_fingerprint_driven             tests/test_v030_release_fingerprint_surface.py::test_release_fingerprint_covers_r25_oracle_and_android_custody_inputs             > court-results/pytest.txt 2>&1
           rc=$?
           set -e
