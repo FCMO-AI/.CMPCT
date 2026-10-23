@@ -138,10 +138,10 @@ def _make_case(root: Path, family: str) -> Path:
         for i in range(6):
             if family == "related_shift":
                 k = 1000 + i * 59
-                raw = base[:k] + (b"x" * (i + 7)) + base[k + i + 7:]
+                raw = base[:k] + (b"x" * (i + 7)) + base[k:]
             else:
                 k = len(base) - 1024 - i * 57
-                raw = base[:k] + (b"z" * (11 + i)) + base[k + 11 + i:]
+                raw = base[:k] + (b"z" * (11 + i)) + base[k:]
             (source / f"part{i:02d}.bin").write_bytes(raw)
     elif family == "independent_entropy":
         for i in range(6):
@@ -175,9 +175,35 @@ def _make_case(root: Path, family: str) -> Path:
     return source
 
 
+
+def _tree_signature(root: Path) -> dict:
+    """Independent POSIX-level source/restore signature, no BDC/FS decoder."""
+    rows = {}
+    inode_groups = {}
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root).as_posix()
+        st = os.lstat(path)
+        base = {"mode": stat.S_IMODE(st.st_mode), "mtime_ns": st.st_mtime_ns}
+        if stat.S_ISLNK(st.st_mode):
+            base["kind"] = "symlink"
+            base["target"] = os.readlink(path)
+        elif stat.S_ISDIR(st.st_mode):
+            base["kind"] = "directory"
+        elif stat.S_ISREG(st.st_mode):
+            base["kind"] = "file"
+            base["size"] = st.st_size
+            base["sha256"] = sha(path.read_bytes())
+            inode_groups.setdefault((st.st_dev, st.st_ino), []).append(rel)
+        else:
+            raise AssertionError("unsupported source object in test")
+        rows[rel] = base
+    shared = sorted(sorted(g) for g in inode_groups.values() if len(g) > 1)
+    return {"rows": rows, "hardlink_groups": shared}
+
+
 def run_one(root: Path, family: str) -> dict:
     source = _make_case(root, family)
-    manifest, regular, _ = FROZEN._capture(source)
+    source_signature = _tree_signature(source)
     t0 = time.perf_counter()
     probe = screen(source)
     probe["wall_s"] = time.perf_counter() - t0
@@ -191,9 +217,8 @@ def run_one(root: Path, family: str) -> dict:
     with CMPCT(archive) as reader:
         reader.verify()
         reader.extractall(restored, metadata=True)
-    restored_manifest, _, _ = FROZEN._capture(restored)
-    if restored_manifest != manifest:
-        raise AssertionError(f"{family}: canonical r24 filesystem manifest mismatch")
+    if _tree_signature(restored) != source_signature:
+        raise AssertionError(f"{family}: canonical r24 physical filesystem signature mismatch")
     row = {"family": family, "screen": probe, "canonical": {
         "complete_bytes": archive.stat().st_size,
         "physical_sha256": sha(archive.read_bytes()),
@@ -203,6 +228,7 @@ def run_one(root: Path, family: str) -> dict:
         row["candidate"] = None
         row["decision"] = "GENUINE_R24_FALLBACK_NO_CANDIDATE"
         return row
+    manifest, regular, _ = FROZEN._capture(source)
     t0 = time.perf_counter()
     cpu0 = time.process_time()
     sibling, measurements = FROZEN._encode_sibling(manifest, regular)
