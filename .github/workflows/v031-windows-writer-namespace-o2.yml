@@ -1,0 +1,47 @@
+# ci-lane: fast
+name: CMPCT v031 Windows writer namespace identity O2
+on:
+  push:
+    branches:
+      - agent/phased2-v031-windows-lease-namespace-o2-20261023
+    paths:
+      - 'tools/research_windows_writer_namespace_o2.py'
+      - 'docs/v031-research/2026-10-23-windows-writer-namespace-o2-prereg.md'
+      - '.github/workflows/v031-windows-writer-namespace-o2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows-namespace-o2:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind actual preregistered instrument
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw 'exact head mismatch' }
+          if ((git hash-object tools/research_windows_writer_namespace_o2.py) -ne 'a6bc9a1d93deffc86bcc15149d0d77b36f6738f5') { throw 'O2 source changed' }
+          if ((git hash-object tools/research_windows_byte_range_lock_oracle.py) -ne '642e22092fdf39dc45782d2fd388f880bbd6c644') { throw 'O0 control source changed' }
+          if (-not (Test-Path 'docs/v031-research/2026-10-23-windows-writer-namespace-o2-prereg.md')) { throw 'O2 prereg missing' }
+      - name: Run fresh Windows path-rebind controlled experiment
+        shell: pwsh
+        run: |
+          python tools/research_windows_writer_namespace_o2.py --output "$env:RUNNER_TEMP/windows-writer-namespace-o2.json"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows O2 failure; inspect retained artifact' }
+      - name: Retain negative or positive subprocess identity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-windows-writer-namespace-o2
+          path: ${{ runner.temp }}/windows-writer-namespace-o2.json
+          if-no-files-found: warn
