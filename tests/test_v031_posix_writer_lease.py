@@ -188,3 +188,29 @@ def test_update_then_rename_then_delete_under_leases(tmp_path):
         assert reader.read("alpha-new.txt") == new_source.read_bytes()
         assert "beta.txt" not in reader.by
         assert reader.verify() >= 1
+
+
+def test_replace_archive_path_between_snapshot_and_append_cannot_mutate_replacement(tmp_path, monkeypatch):
+    """An exception alone is insufficient: outside/replacement bytes must survive."""
+    import hashlib
+
+    archive = _make_archive(tmp_path)
+    replacement = tmp_path / "fresh.cmpct"
+    shutil.copyfile(archive, replacement)
+    expected_bytes = replacement.read_bytes()
+    original_inode = replacement.stat().st_ino
+    original = tx._append_generation
+
+    def swap_after_snapshot(*args, **kwargs):
+        os.replace(replacement, archive)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(tx, "_append_generation", swap_after_snapshot)
+    with pytest.raises(RuntimeError, match="archive"):
+        tx.append_rename(archive, "alpha.txt", "alpha-new.txt")
+    # On the first locking-only candidate this stronger assertion FAILS:
+    # the post-commit check observes an inode swap, but only after mutating
+    # the replacement's contents. The next candidate must reject pre-write.
+    assert archive.stat().st_ino == original_inode
+    assert archive.read_bytes() == expected_bytes
+    assert hashlib.sha256(archive.read_bytes()).digest() == hashlib.sha256(expected_bytes).digest()
