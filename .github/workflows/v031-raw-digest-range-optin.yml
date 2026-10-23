@@ -1,0 +1,55 @@
+# ci-lane: fast
+name: CMPCT v031 opt-in RAW digest range court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-raw-range-digest-verified-20261023
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_v031_raw_range_digest_optin.py'
+      - 'docs/HARDENING.md'
+      - 'benchmarks/v031_raw_digest_range_optin_cost.py'
+      - '.github/workflows/v031-raw-digest-range-optin.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  raw-range-verified:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Source and fork identity
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/cmpct/reader.py)" = "3efcedca285298f4e085a6e06f19b73b6efbaa3c"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          git rev-parse HEAD
+          git hash-object tests/test_v031_raw_range_digest_optin.py
+      - name: Install authentic package
+        run: python -m pip install -e '.[test,audio]'
+      - name: Test positive, tampered, alias and heap/budget cases
+        run: |
+          set -euo pipefail
+          python -m pytest tests/test_v031_raw_range_digest_optin.py -q --junitxml="$RUNNER_TEMP/raw-digest-junit.xml" | tee "$RUNNER_TEMP/raw-digest-pytest.log"
+      - name: Research-only charged CPU/wall/heap A-B
+        run: python benchmarks/v031_raw_digest_range_optin_cost.py > "$RUNNER_TEMP/raw-digest-economics.json"
+      - name: Preserve complete diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-digest-range-verified-evidence
+          path: |
+            ${{ runner.temp }}/raw-digest-junit.xml
+            ${{ runner.temp }}/raw-digest-pytest.log
+            ${{ runner.temp }}/raw-digest-economics.json
+          if-no-files-found: warn
