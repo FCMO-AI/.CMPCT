@@ -47,8 +47,15 @@ def test_verified_chunked_extract_accepts_max_length_component(tmp_path, member)
         assert reader.by[member][6][0] == S_CDC, "court must exercise streaming extraction"
         destination = tmp_path / "out"
         reader.extractall(destination, metadata=False)
+        output = destination / member
+        expected_digest = hashlib.sha256(original).digest()
+        assert hashlib.sha256(output.read_bytes()).digest() == expected_digest
+        original_inode = output.stat().st_ino
+        # A valid long filename must not sacrifice the atomic corruption boundary.
+        reader.by[member][5] = hashlib.sha256(b"forged logical commitment").digest()
+        with pytest.raises(OSError, match="file integrity failure"):
+            reader.extractall(destination, metadata=False)
+        assert output.stat().st_ino == original_inode
+        assert hashlib.sha256(output.read_bytes()).digest() == expected_digest
 
-    restored = (destination / member).read_bytes()
-    assert hashlib.sha256(restored).digest() == hashlib.sha256(original).digest()
-    assert len(restored) == len(original)
     assert not list(destination.glob(".cmpct-part-*"))
