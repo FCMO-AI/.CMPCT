@@ -32,10 +32,13 @@ class TrackingExecutor:
         return self.pool.shutdown(*args, **kwargs)
 
 
-@pytest.mark.parametrize("codec", [0, 1, 4], ids=["raw", "zstd", "deflate"])
+@pytest.mark.parametrize("codec", [0, 1, 3, 4], ids=["raw", "zstd", "zstd-dict", "deflate"])
 def test_close_joins_decoder_worker_before_mmap_release(tmp_path: Path, codec: int):
-    vectors = json.loads(GOLDEN.read_text())["vectors"]
-    v = next(v for v in vectors if v["codec"] == codec)
+    if codec == 3:
+        v = json.loads((GOLDEN.parent / "v24-zstd-dictionary.json").read_text())["vector"]
+    else:
+        vectors = json.loads(GOLDEN.read_text())["vectors"]
+        v = next(v for v in vectors if v["codec"] == codec)
     archive = tmp_path / "source.cmpct"
     archive.write_bytes(base64.b64decode(v["archive_base64"]))
     reader = CMPCT(archive)
