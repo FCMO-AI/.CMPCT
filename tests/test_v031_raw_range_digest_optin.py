@@ -116,3 +116,34 @@ def test_hardlink_alias_and_no_whole_payload_allocation(tmp_path):
             tracemalloc.stop()
         # A 512KiB whole-blob copy would exceed this conservative Python heap budget.
         assert peak<256*1024,peak
+
+
+def test_rejects_corruption_outside_requested_one_byte(tmp_path):
+    path,raw,pos,payload_off=_archive(tmp_path)
+    bad=_tamper(path,pos,payload_off,0,repair_crc=True)
+    with CMPCT(bad) as reader:
+        assert reader.read_range('original.bin',len(raw)-1,1)==raw[-1:]
+        with pytest.raises(IOError,match='SHA-256'):
+            reader.read_raw_range_verified('original.bin',len(raw)-1,1)
+
+
+def test_non_raw_direct_blob_is_explicitly_unsupported(tmp_path):
+    source=tmp_path/'input';source.mkdir()
+    (source/'repeat.bin').write_bytes(b'ABCD'*128*1024)
+    archive=tmp_path/'compressed.cmpct'
+    Builder(source,workers=1).build(archive)
+    with CMPCT(archive) as reader:
+        row=reader.by['repeat.bin']
+        assert row[6][0]==S_BLOB
+        assert reader.blobs[row[6][1]][3]!=CODEC_RAW
+        with pytest.raises(ValueError,match='one exact RAW blob'):
+            reader.read_raw_range_verified('repeat.bin',10,1)
+
+
+def test_logical_member_sha_mismatch_is_refused(tmp_path):
+    path,raw,_,_=_archive(tmp_path)
+    with CMPCT(path) as reader:
+        row=reader.by['original.bin']
+        row[5]=bytes([0])*32
+        with pytest.raises(IOError,match='logical SHA-256'):
+            reader.read_raw_range_verified('original.bin',0,1)
