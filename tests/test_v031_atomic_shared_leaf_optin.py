@@ -202,3 +202,34 @@ def test_cdc_existing_atomic_path_still_works_without_optin(tmp_path: Path) -> N
         reader.extractall(dest, atomic_shared_leaf=True)
         assert leaf.read_bytes() == reader.read(rel)
     _assert_untouched(other, baseline)
+
+
+def test_two_distinct_archive_members_preexisting_as_one_inroot_inode(
+    tmp_path: Path,
+) -> None:
+    """The first atomic replace lowers nlink for the next shared leaf.
+
+    This is a causal same-archive multi-entry ownership test, not an outside-
+    alias fixture. A preflight-only count cannot be assumed stable throughout
+    the archive extraction even without a concurrent actor.
+    """
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "a.bin").write_bytes(b"archive-A-" * 8192)
+    (source / "b.bin").write_bytes(b"archive-B-" * 8192)
+    archive = tmp_path / "double.cmpct"
+    Builder(source, workers=1, reproducible=True).build(archive)
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    a_leaf, b_leaf = dest / "a.bin", dest / "b.bin"
+    a_leaf.write_bytes(b"BENIGN-SHARED-OLD-INODE")
+    os.link(a_leaf, b_leaf)
+    assert a_leaf.stat().st_nlink == b_leaf.stat().st_nlink == 2
+    with CMPCT(archive) as reader:
+        assert reader.by["a.bin"][6][0] == S_BLOB
+        assert reader.by["b.bin"][6][0] == S_BLOB
+        reader.extractall(dest, atomic_shared_leaf=True)
+        assert a_leaf.read_bytes() == reader.read("a.bin")
+        assert b_leaf.read_bytes() == reader.read("b.bin")
+    assert a_leaf.stat().st_ino != b_leaf.stat().st_ino
+    assert not list(dest.glob(".cmpct-part-*"))
