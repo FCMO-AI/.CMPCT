@@ -1,0 +1,9 @@
+# O2 — append_update physical offset ownership under pathname rebind
+
+Date: 2026-10-23. Status: **preregistered before source modification**. The source at hypothesis time is Writer Git blob `27a567bc42f4693e80fc2131bf58f1352c735453` (descriptor identity mitigation); archived published r24 wire is unchanged.
+
+Question: In `append_update`, after the authenticated Reader snapshot but before new `CMA4` record offsets are assigned, does reading `archive.stat().st_size` by pathname still permit a concurrent replacement inode to poison the recorded physical offsets even when the subsequent append descriptor correctly matches the locked original inode?
+
+Prediction/control: an adversary can temporarily bind the name to another valid CMPCT archive of different byte size **only while the physical size is obtained**, restore the actual locked name before the append and preserve all original inode bytes. The initial candidate's pathname-based `stat` should yield a foreign offset and fail ordinary Reader/verify/read after update; the mitigation must use `os.fstat(locked_fd).st_size` and match the unperturbed operation's logical output exactly. Strong control: same source and archive without rebinding. Any digest/surviving-tree mismatch or surviving external mutation falsifies the improved claim.
+
+Minimal repair: keep the already-acquired lease FD in the scoped owner context, derive the append base offset from its `fstat`, and compare actual reader/append descriptors to the same inode identity. This is not a general path-race-safe architecture: a noncooperating writer can modify the same inode, and provider-specific NFS/Windows semantics remain unknown. No benchmark or release credit from synthetic timing. Keep the original negative experiment PR #289 and latest changed-root negative run 40033668963 intact.
