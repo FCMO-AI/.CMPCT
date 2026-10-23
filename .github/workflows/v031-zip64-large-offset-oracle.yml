@@ -1,0 +1,60 @@
+# ci-lane: fast
+name: v031 ZIP64 sparse large-offset metadata oracle
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-zip64-large-offset-oracle-20261023
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v031-zip64-offset-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  zip64-offset-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+      - name: Check exact checkout SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check external Info-ZIP control
+        run: command -v unzip && unzip -v | head -n 2
+      - name: Execute 4GiB sparse offset/count and corrupted-reference oracle
+        run: |
+          mkdir -p zip64-offset-artifacts
+          python benchmarks/v031_zip64_large_offset_oracle.py > zip64-offset-artifacts/result.json
+          python - <<'PY'
+          import json
+          d=json.load(open('zip64-offset-artifacts/result.json'))
+          assert d['decision']=='ZIP64_OFFSET_WIRE_ORACLE_PASS'
+          assert d['tamper']['result']=='REJECTED'
+          for key in ('offset_only','count_plus_offset'):
+              c=d['cases'][key]
+              assert c['small_header_offset'] > 0xffffffff
+              assert c['central_directory_offset'] > 0xffffffff
+              assert c['cpython_zipfile']=='PASS'
+              assert c['info_zip']=='PASS'
+              assert c['allocated_zip_bytes'] < 32*(1<<20)
+          assert d['cases']['count_plus_offset']['entries']==65536
+          print('ZIP64_METADATA_ORACLE_PASS: 2 valid sparse >4GiB courts, Info-ZIP+zipfile, tamper rejected')
+          print('Source SHA256:',d['source_sha256'])
+          PY
+      - name: Preserve exact-head scientific evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zip64-large-offset-${{ github.sha }}
+          path: zip64-offset-artifacts/result.json
+          if-no-files-found: error
