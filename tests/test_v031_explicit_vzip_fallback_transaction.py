@@ -101,7 +101,7 @@ def test_late_fallback_is_complete_archive_byte_identical_to_opaque_control(tmp_
 def test_late_fallback_does_not_mutate_preexisting_member_alias(tmp_path: Path, monkeypatch):
     source = tmp_path / "input"
     source.mkdir()
-    (source / "common.txt").write_bytes(FIRST)
+    (source / "common.bin").write_bytes(FIRST)
     _make_zip(source / "nested.zip", monkeypatch, fixed_last=True)
 
     baseline = Builder(source, workers=1, reproducible=True)
@@ -116,11 +116,8 @@ def test_late_fallback_does_not_mutate_preexisting_member_alias(tmp_path: Path, 
 def test_late_probe_exception_rolls_back_before_reraising(tmp_path: Path, monkeypatch):
     source = tmp_path / "input"
     source.mkdir()
-    (source / "common.txt").write_bytes(FIRST)
+    (source / "common.bin").write_bytes(FIRST)
     (source / "nested.zip").write_bytes(b"opaque control, replacement mock raises")
-    baseline = Builder(source, workers=1, reproducible=True)
-    _forced_opaque(baseline, source, monkeypatch)
-
     def fail_after_two_adds(_path, add):
         add(FIRST, ".other", b"sample deflate")
         add(b"unreferenced-new-blob", ".junk")
@@ -131,8 +128,11 @@ def test_late_probe_exception_rolls_back_before_reraising(tmp_path: Path, monkey
         p.setattr(builder_module, "make_vzip_recipe", fail_after_two_adds)
         with pytest.raises(RuntimeError, match="late recipe"):
             b.scan()
-    # Unrelated scan work remains, speculative old/new candidate mutations do not.
-    assert _snapshot(b) == _snapshot(baseline)
+    # The already-scanned ordinary file remains; the ZIP has not reached its
+    # opaque fallback because the original parse error must propagate.
+    original_hash = hashlib.sha256(FIRST).digest()
+    assert _snapshot(b) == {original_hash: (FIRST, frozenset({".bin"}), ())}
+    assert isinstance(b.cands, dict)
 
 
 def test_successful_vzip_preserves_original_candidate_and_recipe_semantics(tmp_path: Path, monkeypatch):

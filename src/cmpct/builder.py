@@ -5,6 +5,7 @@ from __future__ import annotations
 # archives. Keep representation-selection policy here rather than teaching the reader heuristics.
 
 import base64, binascii, ctypes, ctypes.util, hashlib, io, json, os, shutil, stat, struct, subprocess, tempfile, time, zipfile, zlib
+from collections.abc import MutableMapping
 from dataclasses import dataclass
 from pathlib import Path
 import msgpack
@@ -16,6 +17,59 @@ from ._ordered_pull import ordered_worker_pull
 @dataclass
 class Candidate:
     raw:bytes; hints:set; deflates:dict
+
+
+class _CandidateMutationJournal(MutableMapping):
+    """Undo only speculative VZIP candidate mutations; do not buffer inflated members.
+
+    Footnote: VZIP parsing calls the canonical add_content method *before* it knows
+    every Deflate stream is reconstructible. A late None/exception must not leak
+    tentative candidates, hints, or Deflate multiplicities into the physical plan.
+    This view records the pre-mutation object/metadata lazily on the dictionary
+    lookup performed by add_content, without hashing large inputs a second time.
+    """
+    def __init__(self, base:dict):
+        self.base=base
+        self.before={}
+
+    def _remember(self,key):
+        if key in self.before:return
+        prior=self.base.get(key)
+        self.before[key]=(None if prior is None else
+                          (prior,set(prior.hints),
+                           {sh:(stream,count) for sh,(stream,count) in prior.deflates.items()}))
+
+    def get(self,key,default=None):
+        self._remember(key)
+        return self.base.get(key,default)
+
+    def __getitem__(self,key):
+        self._remember(key)
+        return self.base[key]
+
+    def __setitem__(self,key,value):
+        self._remember(key)
+        self.base[key]=value
+
+    def __delitem__(self,key):
+        self._remember(key)
+        del self.base[key]
+
+    def __iter__(self):return iter(self.base)
+    def __len__(self):return len(self.base)
+
+    def rollback(self):
+        for h,old in self.before.items():
+            if old is None:
+                self.base.pop(h,None)
+            else:
+                candidate,hints,deflates=old
+                # Restore in place, including candidates aliased by other files.
+                candidate.hints.clear();candidate.hints.update(hints)
+                candidate.deflates.clear()
+                candidate.deflates.update({sh:[stream,count] for sh,(stream,count) in deflates.items()})
+                self.base[h]=candidate
+
 
 class Builder:
     def __init__(self,root:Path, deflate_reuse_min:int|None=None, *, workers:int|None=None, reproducible:bool=False, reproducible_epoch_ns:int|None=None):
@@ -42,6 +96,25 @@ class Builder:
             if slot is None:c.deflates[sh]=[deflate_stream,1]
             else:slot[1]+=1
         return h
+
+    def _transactional_vzip_recipe(self,path:Path):
+        """Keep failed ZIP virtualization probes outside the final storage plan.
+
+        The original add_content callback and its single SHA pass remain unchanged.
+        Only mutation metadata is journaled; a successful recipe commits exactly
+        the previous path, while None and exceptions restore the original dict.
+        """
+        originals=self.cands
+        journal=_CandidateMutationJournal(originals)
+        self.cands=journal
+        committed=False
+        try:
+            recipe=make_vzip_recipe(path,self.add_content)
+            committed=recipe is not None
+            return recipe
+        finally:
+            self.cands=originals
+            if not committed:journal.rollback()
 
     def _capture_fs_meta(self,path:str,rel:str,st):
         """Capture ownership and xattrs without bloating every file row.
@@ -129,7 +202,7 @@ class Builder:
                 self.files.append([rel,K_FILE,mode,st.st_mtime_ns,ln,rh,[S_PACK,ph,off,ln]])
         else:
             for p,rel,st,mode in deferred:
-                recipe=make_vzip_recipe(p,self.add_content)
+                recipe=self._transactional_vzip_recipe(p)
                 if recipe is None:
                     raw=p.read_bytes();ref=self.add_content(raw,p.suffix.lower());storage=[S_BLOB,ref]
                 else:
