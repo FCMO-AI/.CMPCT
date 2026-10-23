@@ -506,6 +506,26 @@ class CMPCT:
         p=pos+BHDR.size+rml
         return self.mm[p:p+rcs],rcrc,rus
 
+    def _zip64_offset_fallback_required(self):
+        """Conservatively bound ZIP32 member sizes and cumulative offsets before output.
+
+        The fast writer handles ZIP64 *entry counts* natively, but not ZIP64-sized local entries
+        or 64-bit central offsets. Its ordinary STORE/Deflate selection never exceeds the raw
+        size; copied exact Deflate streams are bounded by their actual compressed blob sizes.
+        A conservative fallback may forgo stream reuse for exceptionally compressible huge trees.
+        """
+        upper=ZEOCD.size
+        for rel,k,mode,mt,size,h,storage in self.files:
+            name=(rel.rstrip('/')+'/' if k==K_DIR else rel).encode('utf-8')
+            payload=0 if k==K_DIR else size
+            if storage and storage[0]==S_BLOB:
+                ref=storage[1]
+                if self.blobs[ref][3]==CODEC_DEFLATE:
+                    payload=max(payload,self.blobs[ref][2])
+            upper+=LFH.size+ZCDH.size+2*len(name)+payload
+            if upper>=0xffffffff:return True
+        return False
+
     def export_zip(self,out:Path,level=6):
         """Export a conventional Deflate ZIP while reusing CMPCT's existing compressed streams.
 
@@ -516,8 +536,9 @@ class CMPCT:
         them, STORE is selected instead. ZIP64-sized members fall back to ZipFile in this prototype.
         """
         out=Path(out);entries=[];offset=0
-        # Keep the compatibility writer intentionally conservative until its ZIP64 branch is native.
-        if any(x[4]>=0xffffffff for x in self.files):
+        # Large payload/offset ZIP64 still uses the stdlib writer. Large *counts* stay on the
+        # zero-recompression fast path and receive native ZIP64 end records below.
+        if self._zip64_offset_fallback_required():
             with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=level,allowZip64=True) as z:
                 for rel,k,mode,mt,size,h,storage in self.files:
                     zi=zipfile.ZipInfo(rel.rstrip('/')+'/' if k==K_DIR else rel)
@@ -555,6 +576,15 @@ class CMPCT:
                 cdh=ZCDH.pack(0x02014b50,(3<<8)|20,20,flags,method,ztime,zdate,crc,csize,usize,len(name),0,0,0,0,ext,local_off)
                 f.write(cdh);f.write(name);offset+=len(cdh)+len(name)
             cd_size=offset-cd_start;n=len(entries)
-            if n>0xffff or cd_start>0xffffffff or cd_size>0xffffffff:raise OverflowError('ZIP64 central directory not implemented in fast endpoint')
-            eocd=ZEOCD.pack(0x06054b50,0,0,n,n,cd_size,cd_start,0);f.write(eocd)
+            if cd_start>0xffffffff or cd_size>0xffffffff:raise OverflowError('ZIP64 offset projection failure')
+            if n>0xffff:
+                # ZIP64 EOCD + locator represent the complete 64-bit count. Local entries and
+                # copied Deflate streams remain exactly ZIP32-compatible; no decompress/recompress
+                # pass or extra per-entry bytes are required for this count-only transition.
+                f.write(struct.pack('<IQHHIIQQQQ',0x06064b50,44,45,45,0,0,n,n,cd_size,cd_start))
+                f.write(struct.pack('<IIQI',0x07064b50,0,offset,1))
+                eocd=ZEOCD.pack(0x06054b50,0,0,0xffff,0xffff,0xffffffff,0xffffffff,0)
+            else:
+                eocd=ZEOCD.pack(0x06054b50,0,0,n,n,cd_size,cd_start,0)
+            f.write(eocd)
         return out
