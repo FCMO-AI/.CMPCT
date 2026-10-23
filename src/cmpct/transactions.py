@@ -36,7 +36,9 @@ def _cooperative_writer_lease(archive: Path):
         # Failing closed is preferable to claiming cross-process write safety on
         # platforms where the archive-inode lease has not yet been implemented.
         raise NotImplementedError("transactional writes require a POSIX inode lock on this candidate")
-    fd = os.open(archive, os.O_RDONLY | getattr(os, "O_CLOEXEC", 0))
+    # Read and append permissions are both required by the public Writer.
+    # O_APPEND is carried by every dup of this open-file-description.
+    fd = os.open(archive, os.O_RDWR | os.O_APPEND | getattr(os, "O_CLOEXEC", 0))
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         original = os.fstat(fd)
@@ -88,20 +90,25 @@ def _checked_writer_reader(archive: Path):
 
 
 def _checked_append(archive: Path):
-    # Do not create a replacement archive. The lock is on an existing inode;
-    # match the actual append descriptor BEFORE writing physical bytes.
-    fd = os.open(archive, os.O_WRONLY | os.O_APPEND | getattr(os, "O_CLOEXEC", 0))
+    # Public transactional writers reuse the SAME locked open-file-description.
+    # A fresh pathname open creates a race window between a successful inode
+    # check and the kernel's actual write. dup() retains O_APPEND, the open-file
+    # description, and its inode independently of pathname replacement.
+    expected = _CURRENT_TRANSACTION_OWNER.get()
+    if expected is not None:
+        fd = os.dup(expected[2])
+    else:
+        # Internal non-public callers do not inherit a lease by accident.
+        fd = os.open(archive, os.O_WRONLY | os.O_APPEND | getattr(os, "O_CLOEXEC", 0))
     try:
-        expected = _CURRENT_TRANSACTION_OWNER.get()
         if expected is not None:
             actual = os.fstat(fd)
             if (actual.st_dev, actual.st_ino) != expected[:2]:
-                raise RuntimeError("CMPCT transactional archive append descriptor changed during writer lease")
+                raise RuntimeError("CMPCT transactional append descriptor diverged from writer lease")
         return os.fdopen(fd, "wb", buffering=0)
     except BaseException:
         os.close(fd)
         raise
-
 
 
 def _locked_archive_size(archive: Path) -> int:
