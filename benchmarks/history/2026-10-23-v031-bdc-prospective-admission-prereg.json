@@ -1,0 +1,60 @@
+{
+  "schema": "cmpct-v031-bdc-prospective-admission-prereg-v1",
+  "created_at": "2026-10-23",
+  "claim_boundary": "RESEARCH-ONLY. No shipped or canonical r24/r25 BDC record. Complete noncanonical sibling byte costs measured; additional canonical grammar/reader costs uncharged, not free.",
+  "source_authority": {
+    "development": "agent/v031-development",
+    "owner": "agent/v031-bounded-drift-coordered-court",
+    "owner_base": "a34b050933b2f946fcf5fb1a4a7d02f58f777c0f",
+    "frozen_bdc_benchmark_blob": "2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
+    "frozen_container_blob": "ed3165ce7fea3021e12220e409d972dd3cffd5b9",
+    "canonical_builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "canonical_reader_blob": "e716233403dabd0966863c45635e18fa5ac6afb8"
+  },
+  "primary_question": "Can a cheap prospective generic byte-anchor screen decline non-affine and difficult filesystem trees before BDC encoding, retain at least one positive related-data case, and show genuine complete-byte headroom against authentic r24 without weakening exact recovery or locality?",
+  "predicted_observables": [
+    "related_shift and related_boundary have sampled shared anchors and at least one noncanonical BDC size opportunity over genuine same-source r24",
+    "independent_entropy, tiny, sparse, symlink and hardlink families are rejected by the screen and use genuine r24 fallback",
+    "duplicate_content may pass the screen but must undergo full r24 vs BDC bytes; if r24 wins, r24 remains preferable",
+    "the extra bytes any canonical representation would require are NOT included in the research sibling; report strict additional-byte budget, not product admission"
+  ],
+  "screen_constants": {
+    "minimum_members": 3,
+    "maximum_members": 24,
+    "max_member_bytes": 1048576,
+    "max_sum_bytes": 8388608,
+    "window_bytes": 4096,
+    "anchor_bytes": 48,
+    "anchor_stride": 128,
+    "minimum_shared_ratio": 0.12,
+    "minimum_linked_peers": 2
+  },
+  "strong_control": "Build genuine r24 with current exact Builder; extract with genuine Reader, compare independent POSIX source/restored signatures including hardlink identity; for attempted BDC compare complete noncanonical sibling bytes, full FS manifest identity, corruption rejection and max 8x read amplification/8MiB decoder unit.",
+  "kill_or_narrow": [
+    "No prospective positive related-data sample or stronger canonical incumbent wins both held-outs",
+    "Negative controls consume BDC encoding despite prospective screen",
+    "Source/extraction filesystem signature mismatch or corruption accepted",
+    "Any result interpreted as canonical BDC compatibility or release credit",
+    "Admitted candidate shows severe additional memory/creation work without material full-byte headroom"
+  ],
+  "planned_cases": [
+    "related_shift",
+    "related_boundary",
+    "independent_entropy",
+    "duplicate_content",
+    "tiny",
+    "sparse",
+    "symlink",
+    "hardlink"
+  ],
+  "non_goals": [
+    "No tuning after observed outcomes in this execution",
+    "No frozen benchmark edits",
+    "No storage kind/format change",
+    "No core release decision",
+    "No claims about universal admission or comparator Zstd superiority from toy cases"
+  ],
+  "fallback_grammar": "Existing r24 only; BDC candidate remains noncanonical CMPNX research format. Future integration must use a newly supported grammar under adopted r25 or another approved format contract, with genuine r24 as fallback.",
+  "product_credit": false,
+  "release_credit": false
+}
