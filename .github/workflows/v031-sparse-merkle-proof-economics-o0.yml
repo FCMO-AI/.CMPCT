@@ -6,6 +6,7 @@ on:
       - agent/v031-development
     paths:
       - 'benchmarks/v031_sparse_merkle_proof_economics_o0.py'
+      - 'benchmarks/v031_sparse_merkle_independent_falsifier.py'
       - 'benchmarks/history/2026-10-23-v031-sparse-merkle-proof-economics-o0-prereg.md'
       - '.github/workflows/v031-sparse-merkle-proof-economics-o0.yml'
   workflow_dispatch:
@@ -32,6 +33,7 @@ jobs:
           test "$(git hash-object benchmarks/history/2026-10-23-v031-sparse-merkle-proof-economics-o0-prereg.md)" = "68af7b6b390a704f8f2670adcd6713abdb13ea9f"
           test "$(git hash-object benchmarks/v031_sparse_merkle_proof_economics_o0.py)" = "9938ac962611b41a20f32f8179d51e5a0e249aa5"
           test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git hash-object benchmarks/v031_sparse_merkle_independent_falsifier.py)" = "0a411e7ba1785564ed87b1b9f190818d5dfbd2ba"
           git rev-parse HEAD | tee source-head.txt
           git status --porcelain
       - name: Execute preregistered alternated O0 and hostile proof checks
@@ -51,7 +53,8 @@ jobs:
               print(r['case'], 'ratio=',round(ratio,3),
                     'charged_index=',r['fully_charged_extra_index_bytes'])
           PY
-          sha256sum sparse-merkle-o0.json | tee scientific-result-sha256.txt
+          python benchmarks/v031_sparse_merkle_independent_falsifier.py | tee sparse-merkle-independent.json
+          sha256sum sparse-merkle-o0.json sparse-merkle-independent.json | tee scientific-result-sha256.txt
       - name: Preserve raw samples and source provenance
         if: always()
         uses: actions/upload-artifact@v4
@@ -59,6 +62,7 @@ jobs:
           name: sparse-merkle-proof-economics-o0-raw
           path: |
             sparse-merkle-o0.json
+            sparse-merkle-independent.json
             scientific-result-sha256.txt
             source-head.txt
           if-no-files-found: warn
