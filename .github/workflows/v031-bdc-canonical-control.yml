@@ -10,11 +10,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cmpct-v031-bdc-canonical-\${{ github.sha }}
+  group: cmpct-v031-bdc-canonical-${{ github.sha }}
   cancel-in-progress: false
 env:
-  EVIDENCE_HEAD: \${{ github.sha }}
-  PYTHONPATH: \${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+  PYTHONPATH: ${{ github.workspace }}
 jobs:
   canonical-control:
     runs-on: ubuntu-24.04
@@ -23,7 +23,7 @@ jobs:
       - name: Checkout exact source
         uses: actions/checkout@v6
         with:
-          ref: \${{ env.EVIDENCE_HEAD }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Enforce frozen and canonical source identities
         run: |
           set -euo pipefail
@@ -67,7 +67,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: cmpct-v031-bdc-canonical-\${{ env.EVIDENCE_HEAD }}
+          name: cmpct-v031-bdc-canonical-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/
           if-no-files-found: error
           retention-days: 90
