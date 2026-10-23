@@ -7,6 +7,8 @@ on:
       - agent/phased3-v031-bdc-prospective-admission-oracle-20261023
     paths:
       - 'benchmarks/v031_bdc_prospective_admission_oracle.py'
+      - 'benchmarks/v031_bdc_sample_observability_falsifier.py'
+      - 'benchmarks/history/2026-10-23-v031-bdc-observability-falsifier-prereg.json'
       - 'benchmarks/history/2026-10-23-v031-bdc-prospective-admission-prereg.json'
       - '.github/workflows/v031-bdc-prospective-admission-oracle.yml'
   workflow_dispatch:
@@ -64,6 +66,11 @@ jobs:
           mkdir -p benchmark-artifacts
           python -m benchmarks.v031_bdc_prospective_admission_oracle --output benchmark-artifacts/v031-bdc-prospective-admission.json \
             | tee benchmark-artifacts/v031-bdc-prospective-admission.log
+      - name: Construct independent indistinguishability falsifier
+        run: |
+          set -euo pipefail
+          python -m benchmarks.v031_bdc_sample_observability_falsifier --output benchmark-artifacts/v031-bdc-observability-falsifier.json \
+            | tee benchmark-artifacts/v031-bdc-observability-falsifier.log
       - name: Retain evidence including adverse results
         if: always()
         uses: actions/upload-artifact@v4
