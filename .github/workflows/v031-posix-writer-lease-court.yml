@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git hash-object src/cmpct/transactions.py)" = "27a567bc42f4693e80fc2131bf58f1352c735453"
+          test "$(git hash-object src/cmpct/transactions.py)" = "fd2aa03f37c76cce71ae92ff7d6ca460ecfd5a92"
           test -f docs/v031-research/POSIX_COOPERATIVE_WRITER_LEASE_PREREG.md
       - name: Install actual package with test and native dependencies
         run: python -m pip install -e '.[test,audio]'
