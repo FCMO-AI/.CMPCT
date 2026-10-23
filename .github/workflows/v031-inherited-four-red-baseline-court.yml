@@ -7,6 +7,8 @@ on:
   push:
     branches:
       - "agent/phased2-v031-inherited-four-red-baseline-aabb-20261023"
+    paths:
+      - ".github/workflows/v031-inherited-four-red-baseline-court.yml"
 
 permissions:
   contents: read
