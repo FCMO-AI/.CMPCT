@@ -63,8 +63,8 @@ def main():
     p.add_argument("old")
     p.add_argument("new")
 
-    p = sp.add_parser("recover-blobs")
-    p.add_argument("archive")
+    p = sp.add_parser("recover-blobs", help="scan physical blob-header candidates (UNVERIFIED; not recovered files)")
+    p.add_argument("archive", help="archive to scan; no content CRC/SHA or committed-generation proof")
 
     p = sp.add_parser("compact")
     p.add_argument("archive")
