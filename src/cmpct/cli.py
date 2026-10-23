@@ -63,8 +63,8 @@ def main():
     p.add_argument("old")
     p.add_argument("new")
 
-    p = sp.add_parser("recover-blobs")
-    p.add_argument("archive")
+    p = sp.add_parser("recover-blobs", help="scan physical blob-header candidates (UNVERIFIED; not recovered files)")
+    p.add_argument("archive", help="archive to scan; no content CRC/SHA or committed-generation proof")
 
     p = sp.add_parser("compact")
     p.add_argument("archive")
@@ -86,7 +86,7 @@ def main():
         print(json.dumps(builder.build(Path(a.archive)), indent=2))
         return
     if a.cmd in {"update", "delete", "rename", "recover-blobs", "compact"}:
-        from .transactions import append_delete, append_rename, append_update, compact_archive, recover_blob_records
+        from .transactions import append_delete, append_rename, append_update, compact_archive, _iter_blob_header_candidates
 
         if a.cmd == "update":
             print(json.dumps(append_update(Path(a.archive), a.member, Path(a.source)), indent=2))
@@ -95,7 +95,15 @@ def main():
         elif a.cmd == "rename":
             append_rename(Path(a.archive), a.old, a.new)
         elif a.cmd == "recover-blobs":
-            print(json.dumps(recover_blob_records(Path(a.archive)), indent=2))
+            # Footnote: the library retains its list-returning API, but CLI enumeration must not
+            # reintroduce O(candidate count) RAM when scanning damaged multi-gigabyte archives.
+            # The streamed pretty JSON preserves the complete legacy array's exact text shape.
+            found=False
+            for row in _iter_blob_header_candidates(Path(a.archive)):
+                sys.stdout.write("[\n" if not found else ",\n")
+                sys.stdout.write("\n".join("  "+line for line in json.dumps(row,indent=2).splitlines()))
+                found=True
+            sys.stdout.write("\n]\n" if found else "[]\n")
         else:
             print(json.dumps(compact_archive(Path(a.archive), Path(a.output)), indent=2))
         return
