@@ -1,3 +1,4 @@
+# ci-lane: fast
 name: CMPCT v031 POSIX byte namespace oracle
 on:
   pull_request:
@@ -6,6 +7,9 @@ on:
       - '.github/workflows/v031-posix-byte-name-oracle.yml'
       - 'benchmarks/history/2026-10-23-v031-posix-byte-namespace-oracle.md'
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -22,6 +26,7 @@ jobs:
           python-version: '3.11'
       - name: Record exact source and execute UTF-8 physical court
         run: |
+          set -o pipefail
           git rev-parse HEAD
           python -m pip install msgpack==1.1.2
           python benchmarks/v031_posix_byte_namespace_oracle.py | tee /tmp/posix-byte-utf8.json
@@ -32,6 +37,7 @@ jobs:
           PYTHONUTF8: '0'
           PYTHONCOERCECLOCALE: '0'
         run: |
+          set -o pipefail
           python -c 'import sys; assert sys.getfilesystemencoding()=="ascii", sys.getfilesystemencoding()'
           python benchmarks/v031_posix_byte_namespace_oracle.py | tee /tmp/posix-byte-ascii.json
           python -c 'import json; a=json.load(open("/tmp/posix-byte-ascii.json")); assert a["status"]=="PASS" and a["host"]["status"]=="PASS"'
