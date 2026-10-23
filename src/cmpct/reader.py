@@ -326,7 +326,9 @@ class CMPCT:
         else:
             decoded=(self._blob(idx) for idx in ids)
 
-        parent=os.path.dirname(full) or '.';prefix=f'.{os.path.basename(full)}.cmpct-part-'
+        # The archived basename can consume the full POSIX NAME_MAX component budget.
+        # A same-directory O_EXCL stage needs a short independent random name, not a derived pathname.
+        parent=os.path.dirname(full) or '.';prefix='.cmpct-part-'
         fd,tmp=tempfile.mkstemp(prefix=prefix,dir=parent);committed=False
         digest=hashlib.sha256();written=0
         try:
@@ -446,22 +448,10 @@ class CMPCT:
             if storage and storage[0] in (S_CHUNKS,S_CDC):
                 self._extract_chunked_verified(row,full)
             elif storage and storage[0]==S_SPARSE:
-                # Create the logical length first, then write only allocated data extents. The gaps
-                # remain filesystem holes instead of consuming disk blocks full of zeros.
-                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_BINARY',0),mode or 0o666)
-                try:
-                    os.ftruncate(fd,size)
-                    for off,ln,ids in storage[1]:
-                        q=off
-                        for idx in ids:
-                            b=self._blob(idx);view=memoryview(b)
-                            while view:
-                                if hasattr(os,'pwrite'):
-                                    n=os.pwrite(fd,view,q)
-                                else:
-                                    os.lseek(fd,q,os.SEEK_SET);n=os.write(fd,view)
-                                view=view[n:];q+=n
-                finally:os.close(fd)
+                # Sparse extent placement and holes are part of the logical SHA commitment.
+                # Stage and verify the full sparse stream before replacing existing destination bytes.
+                from .sparse_extract import write_sparse_verified
+                write_sparse_verified(self,row,full)
             else:
                 raw=self.read(rel)
                 fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_BINARY',0),mode or 0o666)
