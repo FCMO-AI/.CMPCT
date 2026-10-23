@@ -28,8 +28,11 @@ def _wav(*, sample_width: int) -> bytes:
         dst.setframerate(22_050)
         if sample_width == 2:
             samples = b"".join(struct.pack("<h", (i * 7919 % 65536) - 32768) for i in range(frames))
-        else:
+        elif sample_width == 3:
             samples = b"".join(((i * 19937) & 0xFFFFFF).to_bytes(3, "little") for i in range(frames))
+        else:
+            assert sample_width == 4
+            samples = b"".join(struct.pack("<i", (i * 11939 % (2**32)) - (2**31)) for i in range(frames))
         dst.writeframes(samples)
     return buf.getvalue()
 
@@ -46,6 +49,11 @@ def test_sparse_and_supported_unsupported_wav_share_one_exact_archive(tmp_path: 
     pcm24 = _wav(sample_width=3)
     assert wavflac_compress(pcm24) is None, "unsupported PCM24 must use lossless fallback"
     (root / "pcm24.wav").write_bytes(pcm24)
+    pcm32 = _wav(sample_width=4)
+    # The historical WAV/FLAC candidate attempted an unsupported PCM_32 backend
+    # conversion. PR #229 must refuse that optional codec before backend import.
+    assert wavflac_compress(pcm32) is None, "unsupported PCM32 must not abort archive creation"
+    (root / "pcm32.wav").write_bytes(pcm32)
 
     original = {p.name: p.read_bytes() for p in sorted(root.iterdir())}
     origin_sha = {name: hashlib.sha256(data).digest() for name, data in original.items()}
