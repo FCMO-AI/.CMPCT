@@ -5,12 +5,62 @@ from __future__ import annotations
 # always leave the last committed generation readable.
 
 import binascii, hashlib, os, stat, struct, tempfile, zipfile, zlib
+from contextlib import contextmanager
+from functools import wraps
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # Windows is not yet an admitted writer-lease platform.
+    fcntl = None
 import msgpack
 
 from .codec import *
 from .builder import Builder
 from .reader import CMPCT
+
+@contextmanager
+def _cooperative_writer_lease(archive: Path):
+    """Serialize cooperating POSIX writers across the whole snapshot-to-footer interval.
+
+    The archive *inode*, rather than a pathname-local sidecar, owns the advisory
+    lock, so hardlink and symlink aliases serialize against one another. External
+    non-cooperating writers and concurrent path replacement are not made safe by
+    this lock; the identity checks detect only persistent path replacement.
+    """
+    if fcntl is None:
+        # Failing closed is preferable to claiming cross-process write safety on
+        # platforms where the archive-inode lease has not yet been implemented.
+        raise NotImplementedError("transactional writes require a POSIX inode lock on this candidate")
+    fd = os.open(archive, os.O_RDONLY | getattr(os, "O_CLOEXEC", 0))
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        original = os.fstat(fd)
+        if not stat.S_ISREG(original.st_mode):
+            raise OSError("CMPCT transactional archive must be a regular file")
+
+        def check_identity():
+            current = os.stat(archive)
+            if (current.st_dev, current.st_ino) != (original.st_dev, original.st_ino):
+                raise RuntimeError("CMPCT transactional archive pathname changed during writer lease")
+
+        check_identity()
+        yield
+        check_identity()
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+
+def _serialized_writer(func):
+    @wraps(func)
+    def locked(archive, *args, **kwargs):
+        with _cooperative_writer_lease(Path(archive)):
+            return func(archive, *args, **kwargs)
+    return locked
+
 
 def _encode_update_blob(raw:bytes,hint:str,dictionary:bytes|None):
     wf=wavflac_compress(raw) if hint=='.wav' else None
@@ -37,6 +87,7 @@ def _append_generation(archive:Path,delta:dict,prev_footer:int,checkpoint_index:
         f.write(enc);os.fsync(f.fileno());footer_pos=f.tell();f.write(footer);os.fsync(f.fileno())
     return footer_pos,len(enc)+FTR.size
 
+@_serialized_writer
 def append_update(archive:Path,member:str,source:Path):
     """Crash-safely append/replace one logical member, reusing CDC chunks when possible.
 
@@ -107,6 +158,7 @@ def _index_after_op(index:dict,op:list):
             if x[0]==op[1]:x[0]=op[2];break
     index['files'].sort(key=lambda x:x[0]);return index
 
+@_serialized_writer
 def append_delete(archive:Path,member:str):
     archive=Path(archive)
     with CMPCT(archive) as ar:
@@ -115,6 +167,7 @@ def append_delete(archive:Path,member:str):
     op=['del',member];checkpoint=_index_after_op(idx,op) if depth>=63 else None
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
 
+@_serialized_writer
 def append_rename(archive:Path,old:str,new:str):
     archive=Path(archive)
     with CMPCT(archive) as ar:
