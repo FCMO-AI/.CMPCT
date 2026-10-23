@@ -5,12 +5,127 @@ from __future__ import annotations
 # always leave the last committed generation readable.
 
 import binascii, hashlib, os, stat, struct, tempfile, zipfile, zlib
+from contextlib import contextmanager
+from functools import wraps
+from contextvars import ContextVar
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # Windows is not yet an admitted writer-lease platform.
+    fcntl = None
 import msgpack
 
 from .codec import *
 from .builder import Builder
 from .reader import CMPCT
+
+# Scoped transaction identity. No active expectation outside a cooperating Writer.
+_CURRENT_TRANSACTION_OWNER = ContextVar('cmpct_transaction_owner', default=None)
+
+@contextmanager
+def _cooperative_writer_lease(archive: Path):
+    """Serialize cooperating POSIX writers across the whole snapshot-to-footer interval.
+
+    The archive *inode*, rather than a pathname-local sidecar, owns the advisory
+    lock, so hardlink and symlink aliases serialize against one another. External
+    non-cooperating writers and concurrent path replacement are not made safe by
+    this lock; the identity checks detect only persistent path replacement.
+    """
+    if fcntl is None:
+        # Failing closed is preferable to claiming cross-process write safety on
+        # platforms where the archive-inode lease has not yet been implemented.
+        raise NotImplementedError("transactional writes require a POSIX inode lock on this candidate")
+    # Read and append permissions are both required by the public Writer.
+    # O_APPEND is carried by every dup of this open-file-description.
+    fd = os.open(archive, os.O_RDWR | os.O_APPEND | getattr(os, "O_CLOEXEC", 0))
+    locked = False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        locked = True
+        original = os.fstat(fd)
+        if not stat.S_ISREG(original.st_mode):
+            raise OSError("CMPCT transactional archive must be a regular file")
+
+        def check_identity():
+            current = os.stat(archive)
+            if (current.st_dev, current.st_ino) != (original.st_dev, original.st_ino):
+                raise RuntimeError("CMPCT transactional archive pathname changed during writer lease")
+
+        check_identity()
+        # Bind the owned inode to this execution context. A second opened
+        # pathname may point at a different inode after a concurrent replace.
+        token = _CURRENT_TRANSACTION_OWNER.set((original.st_dev, original.st_ino, fd))
+        try:
+            yield
+            check_identity()
+        finally:
+            _CURRENT_TRANSACTION_OWNER.reset(token)
+    finally:
+        try:
+            # A denied LOCK_EX may be followed by an equally failing LOCK_UN.
+            # Never overwrite the actionable acquisition error with a spurious
+            # unlock exception when no lease was ever acquired.
+            if locked:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+
+def _serialized_writer(func):
+    @wraps(func)
+    def locked(archive, *args, **kwargs):
+        with _cooperative_writer_lease(Path(archive)):
+            return func(archive, *args, **kwargs)
+    return locked
+
+
+
+def _checked_writer_reader(archive: Path):
+    # A successful path-level check at lock entry does not prove that a
+    # subsequently opened Reader references the same inode. Check its open
+    # descriptor before any snapshot may influence the committed generation.
+    reader = CMPCT(archive)
+    expected = _CURRENT_TRANSACTION_OWNER.get()
+    if expected is not None:
+        actual = os.fstat(reader.f.fileno())
+        if (actual.st_dev, actual.st_ino) != expected[:2]:
+            reader.close()
+            raise RuntimeError("CMPCT transactional archive Reader descriptor changed during writer lease")
+    return reader
+
+
+def _checked_append(archive: Path):
+    # Public transactional writers reuse the SAME locked open-file-description.
+    # A fresh pathname open creates a race window between a successful inode
+    # check and the kernel's actual write. dup() retains O_APPEND, the open-file
+    # description, and its inode independently of pathname replacement.
+    expected = _CURRENT_TRANSACTION_OWNER.get()
+    if expected is not None:
+        fd = os.dup(expected[2])
+    else:
+        # Internal non-public callers do not inherit a lease by accident.
+        fd = os.open(archive, os.O_WRONLY | os.O_APPEND | getattr(os, "O_CLOEXEC", 0))
+    try:
+        if expected is not None:
+            actual = os.fstat(fd)
+            if (actual.st_dev, actual.st_ino) != expected[:2]:
+                raise RuntimeError("CMPCT transactional append descriptor diverged from writer lease")
+        return os.fdopen(fd, "wb", buffering=0)
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _locked_archive_size(archive: Path) -> int:
+    # New blob offsets must describe the very inode that was locked and
+    # verified. A path stat here could capture a foreign inode temporarily
+    # substituted after the Reader snapshot (even if later restored).
+    owner = _CURRENT_TRANSACTION_OWNER.get()
+    if owner is not None:
+        return os.fstat(owner[2]).st_size
+    return Path(archive).stat().st_size
+
 
 def _encode_update_blob(raw:bytes,hint:str,dictionary:bytes|None):
     wf=wavflac_compress(raw) if hint=='.wav' else None
@@ -33,10 +148,11 @@ def _append_generation(archive:Path,delta:dict,prev_footer:int,checkpoint_index:
     if len(comp)<len(payload):enc=comp;codec=1
     else:enc=payload;codec=0
     footer=FTR.pack(FMAGIC,kind,codec,0,0,len(enc),len(payload),prev_footer,sha(payload))
-    with open(archive,'ab',buffering=0) as f:
+    with _checked_append(archive) as f:
         f.write(enc);os.fsync(f.fileno());footer_pos=f.tell();f.write(footer);os.fsync(f.fileno())
     return footer_pos,len(enc)+FTR.size
 
+@_serialized_writer
 def append_update(archive:Path,member:str,source:Path):
     """Crash-safely append/replace one logical member, reusing CDC chunks when possible.
 
@@ -46,14 +162,14 @@ def append_update(archive:Path,member:str,source:Path):
     table; the new generation's file row merely points at the reused + newly appended chunks.
     """
     archive=Path(archive);source=Path(source);raw=source.read_bytes();rh=sha(raw);st=source.stat();hint=source.suffix.lower()
-    with CMPCT(archive) as ar:
+    with _checked_writer_reader(archive) as ar:
         index=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False);record_base=ar.record_base;prev=ar.latest_footer_pos;depth=ar.delta_depth
         blob_by_hash={}
         for i,b in enumerate(ar.blobs):
             off=b[0];rrh=bytes(BHDR.unpack_from(ar.mm,record_base+off)[-1]);blob_by_hash.setdefault(rrh,i)
         dictionary=ar._blob(ar.dict_idx) if ar.dict_idx is not None else None
 
-    records=[];newblobs=[];archive_end=archive.stat().st_size;next_off=archive_end-record_base
+    records=[];newblobs=[];archive_end=_locked_archive_size(archive);next_off=archive_end-record_base
     def ensure_blob(part:bytes):
         nonlocal next_off
         h=sha(part);existing=blob_by_hash.get(h)
@@ -94,7 +210,7 @@ def append_update(archive:Path,member:str,source:Path):
     record=b''.join(records)
     # Two-phase durable commit: all uncommitted bytes are flushed together, then the tiny footer
     # commit marker is flushed separately. A crash before phase 2 leaves the previous footer valid.
-    with open(archive,'ab',buffering=0) as f:
+    with _checked_append(archive) as f:
         if record:f.write(record)
         f.write(enc);os.fsync(f.fileno());f.write(footer);os.fsync(f.fileno())
     return {'reused_chunks':reused,'new_chunks':len(newblobs),'new_size':archive.stat().st_size,
@@ -107,17 +223,19 @@ def _index_after_op(index:dict,op:list):
             if x[0]==op[1]:x[0]=op[2];break
     index['files'].sort(key=lambda x:x[0]);return index
 
+@_serialized_writer
 def append_delete(archive:Path,member:str):
     archive=Path(archive)
-    with CMPCT(archive) as ar:
+    with _checked_writer_reader(archive) as ar:
         if member not in ar.by:raise KeyError(member)
         prev=ar.latest_footer_pos;depth=ar.delta_depth;idx=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False)
     op=['del',member];checkpoint=_index_after_op(idx,op) if depth>=63 else None
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
 
+@_serialized_writer
 def append_rename(archive:Path,old:str,new:str):
     archive=Path(archive)
-    with CMPCT(archive) as ar:
+    with _checked_writer_reader(archive) as ar:
         if old not in ar.by:raise KeyError(old)
         if new in ar.by:raise FileExistsError(new)
         # Footnote: rename follows real filesystem semantics. A destination parent must already
