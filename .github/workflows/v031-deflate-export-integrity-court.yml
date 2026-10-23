@@ -37,6 +37,8 @@ jobs:
         run: python -m pytest -vv tests/test_v031_deflate_export_verified.py
       - name: Re-run inherited ZIP64 exact-count and stream-preservation court
         run: python -m pytest -vv tests/test_v031_zip64_export_count.py
+      - name: Independently stress actual bounded verifier against stdlib zlib
+        run: python benchmarks/v031_deflate_stream_property_court.py
       - name: Attribute guard cost separately from correctness gates
         run: python benchmarks/v031_deflate_zip_integrity_cost.py
       - name: Record source identity and exit status
