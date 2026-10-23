@@ -90,16 +90,16 @@ from cmpct.core import Builder, CMPCT
 if sys.getfilesystemencoding() != "ascii":
     raise SystemExit(77)
 work = Path(sys.argv[1]); root = work / "src"; root.mkdir()
-for label, target in [("validutf8", b"./caf\\xc3\\xa9"), ("nonutf8", b"./raw\\xff")]:
+for label, target in [("validutf8", b"./caf\xc3\xa9"), ("nonutf8", b"./raw\xff")]:
     os.symlink(target, os.fsencode(root / label))
 archive = work / "archive.cmpct"
 Builder(root, workers=1, reproducible=True).build(archive)
 with CMPCT(archive) as reader:
     assert reader.verify() == 2
-    for label, target in [("validutf8", b"./caf\\xc3\\xa9"), ("nonutf8", b"./raw\\xff")]:
+    for label, target in [("validutf8", b"./caf\xc3\xa9"), ("nonutf8", b"./raw\xff")]:
         assert reader.read(label) == target
     out = work / "out"; reader.extractall(out, metadata=False)
-for label, target in [("validutf8", b"./caf\\xc3\\xa9"), ("nonutf8", b"./raw\\xff")]:
+for label, target in [("validutf8", b"./caf\xc3\xa9"), ("nonutf8", b"./raw\xff")]:
     assert os.readlink(os.fsencode(out / label)) == target
 '''
     env = dict(os.environ, LC_ALL="C", PYTHONCOERCECLOCALE="0", PYTHONUTF8="0")
