@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from cmpct.builder import Builder
-from cmpct.codec import S_BLOB, S_CDC, S_PACK, S_SPARSE
+from cmpct.codec import S_BLOB, S_CDC, S_PACK, S_SPARSE, S_VZIP
 from cmpct.reader import CMPCT
 
 
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.skipif(
 def _make_archive(tmp_path: Path, *, kind: str) -> tuple[Path, str, int]:
     src = tmp_path / "source"
     src.mkdir()
-    rel = "z-last.zip" if kind == "pack" else "z-last.bin"
+    rel = "z-last.zip" if kind in ("pack", "vzip") else "z-last.bin"
     member = src / rel
     if kind == "blob":
         member.write_bytes(b"CMPCT-ARCHIVE-BYTES-" * 4096)
@@ -43,6 +43,12 @@ def _make_archive(tmp_path: Path, *, kind: str) -> tuple[Path, str, int]:
         # the filename or fixture identity; >4*CHUNK is required.
         member.write_bytes(os.urandom(2 * 1024 * 1024))
         expected = S_CDC
+    elif kind == "vzip":
+        # A single genuine stored-method ZIP is a deterministic VZIP recipe
+        # without relying on the host zlib compressor level implementation.
+        with zipfile.ZipFile(member, "w", compression=zipfile.ZIP_STORED) as z:
+            z.writestr("payload.dat", b"VZIP-NESTED-PAYLOAD" * 128)
+        expected = S_VZIP
     elif kind == "pack":
         # Eight genuine ZIP files trigger the Builder's ordinary generic
         # multi-ZIP PACK admission (not an index mutation or fabricated row).
@@ -78,7 +84,7 @@ def _assert_outside_unchanged(victim: Path, initial: tuple[int, int, bytes]) -> 
     assert (s.st_ino, s.st_size, hashlib.sha256(victim.read_bytes()).digest()) == initial
 
 
-@pytest.mark.parametrize("kind", ["blob", "sparse", "pack"])
+@pytest.mark.parametrize("kind", ["blob", "sparse", "pack", "vzip"])
 def test_safe_extract_fails_before_partial_publication_on_preexisting_hardlink_leaf(
     tmp_path: Path, kind: str
 ) -> None:
