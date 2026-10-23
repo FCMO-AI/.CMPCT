@@ -11,6 +11,7 @@ import msgpack
 from .codec import *
 from .builder import Builder
 from .reader import CMPCT
+from .path_policy import canonical_logical_path
 
 def _encode_update_blob(raw:bytes,hint:str,dictionary:bytes|None):
     wf=wavflac_compress(raw) if hint=='.wav' else None
@@ -119,11 +120,32 @@ def _reject_hardlink_owner_mutation(index:dict, member:str, operation:str):
                 f"surviving alias {row[0]!r} would dangle"
             )
 
+def _reject_nonempty_directory_mutation(index:dict, member:str, operation:str):
+    # Footnote: revision-24 rename/delete deltas mutate exactly one row. A
+    # nonempty directory has descendants whose logical paths and parent
+    # metadata cannot be rewritten by that one-row grammar. Never commit a
+    # generation that reports success but reconstructs a different tree.
+    # Compare canonical path components, not raw prefixes: an accepted
+    # archive may contain backslash spellings, and 'dir2' is not in 'dir/'.
+    directory = next((row for row in index['files'] if row[0] == member), None)
+    if directory is None or directory[1] != K_DIR:
+        return
+    owner_key, _ = canonical_logical_path(member)
+    descendant_prefix = owner_key + '/'
+    for row in index['files']:
+        child_key, _ = canonical_logical_path(row[0])
+        if child_key.startswith(descendant_prefix):
+            raise OSError(
+                f"cannot {operation} nonempty directory {member!r}: "
+                f"surviving descendant {row[0]!r} requires a subtree transaction"
+            )
+
 def append_delete(archive:Path,member:str):
     archive=Path(archive)
     with CMPCT(archive) as ar:
         if member not in ar.by:raise KeyError(member)
         _reject_hardlink_owner_mutation(ar.index,member,'delete')
+        _reject_nonempty_directory_mutation(ar.index,member,'delete')
         prev=ar.latest_footer_pos;depth=ar.delta_depth;idx=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False)
     op=['del',member];checkpoint=_index_after_op(idx,op) if depth>=63 else None
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
@@ -134,6 +156,7 @@ def append_rename(archive:Path,old:str,new:str):
         if old not in ar.by:raise KeyError(old)
         if new in ar.by:raise FileExistsError(new)
         _reject_hardlink_owner_mutation(ar.index,old,'rename')
+        _reject_nonempty_directory_mutation(ar.index,old,'rename')
         # Footnote: rename follows real filesystem semantics. A destination parent must already
         # exist as a logical directory; otherwise compaction/extraction could silently invent a
         # directory entry and its metadata. Root-level destinations remain valid.
