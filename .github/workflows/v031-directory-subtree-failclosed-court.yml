@@ -1,0 +1,69 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.31 Directory mutation fail-closed integration court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-directory-subtree-failclosed-on-hardlink-20261023
+    paths:
+      - src/cmpct/transactions.py
+      - tests/test_directory_subtree_failclosed.py
+      - .github/workflows/v031-directory-subtree-failclosed-court.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v031-directory-hardlink-composition-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+jobs:
+  directory-mutation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install canonical package and test dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y libsndfile1
+          python -m pip install -e '.[audio,test]'
+      - name: Assert source provenance and preserved hardlink-owner guard
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import pathlib,subprocess
+          got=subprocess.check_output(["git","hash-object","src/cmpct/transactions.py"],text=True).strip()
+          assert got == "fbd76cd0307c5e883643358b031f4c4e2ee53bfb", got
+          content=pathlib.Path("src/cmpct/transactions.py").read_text()
+          assert "_reject_hardlink_owner_mutation(ar.index,member,'delete')" in content
+          assert "_reject_hardlink_owner_mutation(ar.index,old,'rename')" in content
+          assert "_reject_nonempty_directory_mutation(ar.index,member,'delete')" in content
+          assert "_reject_nonempty_directory_mutation(ar.index,old,'rename')" in content
+          print("EXACT_CANDIDATE_AND_HARDLINK_PARENT_PASS",got)
+          PY
+      - name: Run authentic directory fail-closed suite
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python -m pytest -q tests/test_directory_subtree_failclosed.py \
+            2>&1 | tee benchmark-artifacts/directory-failclosed-pytest.log
+      - name: Run inherited hardlink-owner tests
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/test_v031_hardlink_owner_mutation_guard.py \
+            2>&1 | tee benchmark-artifacts/hardlink-owner-pytest.log
+      - name: Retain evidence on green or red
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-directory-mutator-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
