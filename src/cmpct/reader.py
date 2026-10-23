@@ -481,9 +481,22 @@ class CMPCT:
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
                 except OSError:pass
     def verify(self):
-        n=0
+        n=0;verified_packs=set()
         for row in self.files:
             if row[1]==K_DIR:continue
+            # PACK members deliberately omit per-slice hashes: their only durable SHA-256
+            # commitment is the *physical pack blob*. file_sha256(S_PACK) computes the
+            # same bytes being verified and is otherwise a tautology. Authenticate each
+            # shared pack once against the original physical header before accepting it.
+            storage=row[6]
+            if row[1]==K_FILE and storage and storage[0]==S_PACK:
+                idx=storage[1]
+                if idx not in verified_packs:
+                    pos=self.record_base+self.blobs[idx][0]
+                    expected=bytes(BHDR.unpack_from(self.mm,pos)[-1])
+                    if sha(self._blob(idx))!=expected:
+                        raise IOError(f'physical PACK SHA-256 verification failure: {row[0]}')
+                    verified_packs.add(idx)
             raw=self.read(row[0]);want=self.file_sha256(row[0])
             if sha(raw)!=want:raise IOError(f'SHA-256 verification failure: {row[0]}')
             n+=1

@@ -1,0 +1,42 @@
+# ci-lane: fast
+name: CMPCT v031 PACK physical SHA scientific court
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_pack_physical_sha_court.py'
+      - '.github/workflows/v031-pack-physical-sha-science.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  pack-physical-sha:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install real CMPCT package with native codec
+        run: python -m pip install -e '.[test]'
+      - name: Verify physical PACK SHA candidate with unchanged independent oracle
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          mkdir -p benchmark-artifacts
+          python benchmarks/v031_pack_physical_sha_court.py --expected-pack reject | tee benchmark-artifacts/pack-candidate.json
+      - name: Audit CI topology
+        run: python tools/check_ci_topology.py .github/workflows/v031-pack-physical-sha-science.yml
+      - name: Preserve experiment receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pack-physical-sha-science-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
