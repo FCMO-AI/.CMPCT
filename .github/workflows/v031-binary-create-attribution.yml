@@ -1,3 +1,5 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 # Research-only diagnostic. Not a release gate, comparator, or threshold change.
 # Single producer: SHA-bound A/A sham and A/B binary/library/create attribution.
 name: CMPCT v031 binary create attribution court
@@ -5,7 +7,15 @@ on:
   push:
     branches:
       - agent/phased3-v031-binary-create-aa-ab-attribution-20261023
+    paths:
+      - '.github/workflows/v031-binary-create-attribution.yml'
+      - 'benchmarks/v031_binary_create_aa_ab_attribution.py'
   workflow_dispatch:
+concurrency:
+  group: cmpct-v031-exact-diagnostic-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
 permissions:
   contents: read
 jobs:
@@ -16,6 +26,7 @@ jobs:
       - name: Checkout exact evidence branch
         uses: actions/checkout@v6
         with:
+          ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 0
       - name: Verify source boundary
         run: |
