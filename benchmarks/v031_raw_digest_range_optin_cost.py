@@ -39,6 +39,9 @@ def main():
                     order=list(funcs)
                     if rep%2:order.reverse()
                     for mode in order:
+                        # Equalize direct-read cache state: otherwise read() wins via a
+                        # previously retained 512KiB blob while verified_range always scans.
+                        reader.cache.clear()
                         tracemalloc.start()
                         try:
                             w=time.perf_counter_ns();c=time.process_time_ns()
@@ -53,6 +56,6 @@ def main():
                     'observations':observations,
                     'medians':{n:{k:statistics.median(v[k] for v in vals) for k in ('wall_ns','cpu_ns','python_heap_peak_bytes')} for n,vals in observations.items()},
                 })
-    data={'kind':'RESEARCH_ONLY_NOT_RELEASE','sha256_of_script':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'cases':groups}
+    data={'kind':'RESEARCH_ONLY_NOT_RELEASE','cache_policy':'clear_raw_decode_cache_each_trial','sha256_of_script':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'cases':groups}
     print(json.dumps(data,sort_keys=True,indent=2))
 if __name__=='__main__':main()
