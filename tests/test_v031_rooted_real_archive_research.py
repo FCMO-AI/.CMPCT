@@ -155,7 +155,11 @@ def test_moved_open_directory_inode_breaks_lexical_containment_negative(tmp_path
         os.rename(dest / "nested", escaped)
         (dest / "nested").symlink_to(outside, target_is_directory=True)
     with CMPCT(arc) as reader:
-        extract_rooted_research(reader, dest, after_parent_open=move_after_open)
+        # The Reader eventually refuses metadata traversal through the replacement symlink,
+        # but that failure occurs AFTER the fd-rooted staging and publication below. A late
+        # IOError does not establish "no writes outside the original lexical root".
+        with pytest.raises(OSError):
+            extract_rooted_research(reader, dest, after_parent_open=move_after_open)
     assert victim.read_bytes() == b"INVARIANT"
     assert (escaped / "member.bin").read_bytes() == b"PAYLOAD"
     assert (dest / "nested").is_symlink()
