@@ -64,6 +64,12 @@ def main() -> None:
     # Independent positive/negative controls are actual checked-in files.
     assert "docs/V030_RELEASE_LOCK.json" in covered
     assert "docs/V030_RELEASE_LOCK.json" in event_misses
+    # Concrete independent existing witnesses: the manifest, packaging, and native
+    # implementation all contribute to the release fingerprint but cannot
+    # initiate this workflow when they are the sole PR changes.
+    assert "pyproject.toml" in covered and "pyproject.toml" in event_misses
+    assert "native/cmpct-core/src/lib.rs" in covered
+    assert "native/cmpct-core/src/lib.rs" in event_misses
     assert "src/cmpct/reader.py" in covered
     assert "src/cmpct/reader.py" not in event_misses
     assert "src/cmpct/reader.py" not in classifier_misses
