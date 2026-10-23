@@ -1,0 +1,52 @@
+# ci-lane: fast
+name: v031 Direct Deflate Mutable-Source O2 Court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-deflate-export-mutable-source-o2-20261023
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v031-deflate-mmap-mutation-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  mutable-source-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact source HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+      - name: Verify source commit identity
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Use Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install real package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Execute preregistered real revision-24 mutable mmap court
+        run: python benchmarks/v031_deflate_mmap_mutation_o2_court.py --output deflate-mutation-evidence/result.json
+      - name: Record source SHA and file blob identities
+        if: always()
+        run: |
+          mkdir -p deflate-mutation-evidence
+          git rev-parse HEAD > deflate-mutation-evidence/source.sha
+          git hash-object src/cmpct/reader.py > deflate-mutation-evidence/reader.blob
+          git hash-object benchmarks/v031_deflate_mmap_mutation_o2_court.py > deflate-mutation-evidence/oracle.blob
+          git hash-object benchmarks/history/2026-10-23-v031-direct-deflate-mutable-source-o2-prereg.md > deflate-mutation-evidence/prereg.blob
+      - name: Upload primary evidence even when expectation is falsified
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-direct-deflate-mmap-o2-${{ github.sha }}
+          path: deflate-mutation-evidence/
+          if-no-files-found: error
