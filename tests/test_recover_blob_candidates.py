@@ -252,3 +252,53 @@ def test_cli_streaming_many_candidates_has_bounded_result_memory(tmp_path):
     run = subprocess.run([sys.executable, "-c", code, str(path)],
                          capture_output=True, text=True, check=True)
     assert int(run.stderr.strip()) < 16 * 1024, run.stderr
+
+
+def test_source_growth_after_open_is_not_unbounded_tail_follow(tmp_path, monkeypatch):
+    # Size is the initial opened inode's observed extent, not a continuously
+    # moving target. Inject growth after the scanner has already taken fstat.
+    import builtins
+    path = tmp_path / "growing.cmpct"
+    initial = _record(b"first physical frame")
+    after = _record(b"appended frame")
+    path.write_bytes(initial)
+    real_open = builtins.open
+    seen = {"growth": False, "read_bytes": 0}
+
+    class GrowingReader:
+        def __init__(self, f):
+            self.f = f
+
+        def __enter__(self):
+            self.f.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.f.__exit__(*args)
+
+        def fileno(self):
+            return self.f.fileno()
+
+        def readinto(self, view):
+            if not seen["growth"]:
+                with real_open(path, "ab") as out:
+                    out.write(after)
+                seen["growth"] = True
+            n = self.f.readinto(view)
+            seen["read_bytes"] += n
+            return n
+
+    def injecting_open(name, *args, **kwargs):
+        f = real_open(name, *args, **kwargs)
+        if Path(name) == path and args and args[0] == "rb":
+            return GrowingReader(f)
+        return f
+
+    with monkeypatch.context() as m:
+        m.setattr(builtins, "open", injecting_open)
+        rows = recover_blob_records(path)
+    assert seen["growth"]
+    assert path.stat().st_size == len(initial) + len(after)
+    assert seen["read_bytes"] == len(initial), seen
+    assert len(rows) == 1 and rows[0]["offset"] == 0
+    assert rows[0]["verification"] == "unverified"
