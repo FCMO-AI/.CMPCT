@@ -14,6 +14,7 @@ on:
       - "tools/v031_signed_symlink_crosshost_o2.py"
       - "tools/verify_v031_installed_signed_receipt.py"
       - "tests/test_v031_installed_signed_receipt_custody_r278.py"
+      - "tests/test_v031_signed_journal_symlink_crossproperty_o9.py"
       - "tools/check_v031_candidate_fingerprint.py"
       - "docs/V031_CANDIDATE_FINGERPRINT.json"
       - ".github/workflows/installed-native-package.yml"
@@ -58,7 +59,7 @@ jobs:
           # paths. A missing parent/diff fails closed rather than silently skipping.
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tests/installed_native_signed_symlink_smoke[.]py$|tools/v031_signed_symlink_crosshost_o2[.]py$|tools/verify_v031_installed_signed_receipt[.]py$|tests/test_v031_installed_signed_receipt_custody_r278[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tests/installed_native_signed_symlink_smoke[.]py$|tools/v031_signed_symlink_crosshost_o2[.]py$|tools/verify_v031_installed_signed_receipt[.]py$|tests/test_v031_installed_signed_receipt_custody_r278[.]py$|tests/test_v031_signed_journal_symlink_crossproperty_o9[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
             echo 'run_package=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_package=false' >> "$GITHUB_OUTPUT"
