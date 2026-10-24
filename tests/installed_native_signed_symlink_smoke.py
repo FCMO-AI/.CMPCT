@@ -71,7 +71,15 @@ def main() -> None:
                     try:
                         reader.extractall(dest, safe_symlinks=True, metadata=False)
                     except OSError as exc:
-                        if "unsafe symlink target" not in str(exc):
+                        # The shipping Win32 Reader reports its stricter rooted/drive
+                        # policy with distinct exact messages. Accept only those
+                        # authored rejection classes, never an arbitrary OSError.
+                        admitted = (
+                            "unsafe symlink target in 'z-link':",
+                            "unsafe Windows rooted symlink target in 'z-link':",
+                            "unsafe Windows symlink target in 'z-link':",
+                        )
+                        if not str(exc).startswith(admitted):
                             raise AssertionError(f"unexpected rejection: {name}: {exc}") from exc
                     else:
                         raise AssertionError(f"unsafe signed target accepted: {name}")
