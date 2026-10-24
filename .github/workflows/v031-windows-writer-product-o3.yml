@@ -1,0 +1,63 @@
+# ci-lane: fast
+name: CMPCT v031 Windows Writer O3 product court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-windows-writer-lease-o3-20261023
+    paths:
+      - 'src/cmpct/transactions.py'
+      - 'tests/test_v031_windows_writer_product_o3.py'
+      - 'docs/v031-research/2026-10-23-windows-writer-product-o3-prereg.md'
+      - 'docs/PORTABILITY.md'
+      - '.github/workflows/v031-windows-writer-product-o3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows-writer-product:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Source custody
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "test-artifacts" | Out-Null
+          if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw 'exact-head checkout mismatch' }
+          $writerBlob = git hash-object src/cmpct/transactions.py
+          $readerBlob = git hash-object src/cmpct/reader.py
+          # Original integrated Reader and immutable historical lock must not drift.
+          if ($readerBlob -ne 'c548a2ae4d650e928eb46ed1c2431423e49765b5') { throw 'Reader owner source drift' }
+          if (-not (Test-Path 'docs/v031-research/2026-10-23-windows-writer-product-o3-prereg.md')) { throw 'O3 prereg missing' }
+          @("HEAD=$env:GITHUB_SHA", "writer_blob=$writerBlob", "reader_blob=$readerBlob") | Out-File -Encoding utf8 "test-artifacts/source.txt"
+      - name: Install actual CMPCT package and focused pytest
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw 'pip upgrade failed' }
+          python -m pip install -e . pytest
+          if ($LASTEXITCODE -ne 0) { throw 'installed package build failed' }
+      - name: Windows independent process and reader / writer court
+        shell: pwsh
+        run: |
+          # Avoid unrelated historic research conftest importing Linux-only libzstd.so
+          # before selected Windows real-product tests can execute. All explicit
+          # O3 tests and package production imports still run without weakening assertions.
+          python -m pytest --noconftest -vv tests/test_v031_windows_writer_product_o3.py 2>&1 | Tee-Object -FilePath "test-artifacts/windows-writer-o3-pytest.txt"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows O3 product court failed; preserve negative' }
+      - name: Preserve custody and negative/positive evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-windows-writer-product-o3
+          path: test-artifacts/
+          if-no-files-found: warn

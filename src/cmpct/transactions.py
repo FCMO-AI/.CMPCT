@@ -12,36 +12,57 @@ from pathlib import Path
 
 try:
     import fcntl
-except ImportError:  # Windows is not yet an admitted writer-lease platform.
+except ImportError:
     fcntl = None
+try:
+    import msvcrt  # Native Windows CRT byte-range locks; no external runtime dependency.
+except ImportError:
+    msvcrt = None
 import msgpack
 
 from .codec import *
 from .builder import Builder
 from .reader import CMPCT
 
+# A Windows byte-range sentinel must stay beyond archive data, or ordinary
+# Reader header reads could be blocked. Windows O0/O1 hosted courts measured
+# this boundary and the initial O_APPEND file-offset side effect explicitly.
+_WINDOWS_LEASE_OFFSET = 1 << 60
+
 # Scoped transaction identity. No active expectation outside a cooperating Writer.
 _CURRENT_TRANSACTION_OWNER = ContextVar('cmpct_transaction_owner', default=None)
 
 @contextmanager
 def _cooperative_writer_lease(archive: Path):
-    """Serialize cooperating POSIX writers across the whole snapshot-to-footer interval.
+    """Serialize cooperative POSIX/Windows writers from snapshot to footer fsync.
 
-    The archive *inode*, rather than a pathname-local sidecar, owns the advisory
-    lock, so hardlink and symlink aliases serialize against one another. External
-    non-cooperating writers and concurrent path replacement are not made safe by
-    this lock; the identity checks detect only persistent path replacement.
+    POSIX uses an inode-wide advisory flock. Windows uses a CRT byte-range
+    lock at a sentinel offset outside archive content, permitting unrelated
+    Reader header access. The held physical descriptor owns both the lock and
+    dup-based appends, not a pathname-keyed sidecar. Neither platform is safe
+    against non-cooperating writers or adversarial namespace races.
     """
-    if fcntl is None:
-        # Failing closed is preferable to claiming cross-process write safety on
-        # platforms where the archive-inode lease has not yet been implemented.
+    # Keep POSIX's inherited fail-closed error contract on POSIX hosts.
+    if os.name == "nt":
+        if msvcrt is None:
+            raise NotImplementedError("transactional writes require a Windows byte-range lock on this candidate")
+    elif fcntl is None:
         raise NotImplementedError("transactional writes require a POSIX inode lock on this candidate")
     # Read and append permissions are both required by the public Writer.
     # O_APPEND is carried by every dup of this open-file-description.
-    fd = os.open(archive, os.O_RDWR | os.O_APPEND | getattr(os, "O_CLOEXEC", 0))
+    fd = os.open(archive, os.O_RDWR | os.O_APPEND | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0))
     locked = False
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        if os.name == "nt":
+            # CRT locks cover bytes at the CURRENT descriptor offset. Locking
+            # byte zero blocks ordinary CMPCT Readers; the high sentinel does
+            # not. lseek changes tell(), so physical offsets always use fstat.
+            if os.fstat(fd).st_size >= _WINDOWS_LEASE_OFFSET:
+                raise OSError("CMPCT archive exceeds reserved Windows lease offset")
+            os.lseek(fd, _WINDOWS_LEASE_OFFSET, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(fd, fcntl.LOCK_EX)
         locked = True
         original = os.fstat(fd)
         if not stat.S_ISREG(original.st_mode):
@@ -67,7 +88,13 @@ def _cooperative_writer_lease(archive: Path):
             # Never overwrite the actionable acquisition error with a spurious
             # unlock exception when no lease was ever acquired.
             if locked:
-                fcntl.flock(fd, fcntl.LOCK_UN)
+                if os.name == "nt":
+                    # dup-based writes may have changed the shared seek offset;
+                    # unlock EXACTLY the byte range acquired, never EOF.
+                    os.lseek(fd, _WINDOWS_LEASE_OFFSET, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
         finally:
             os.close(fd)
 

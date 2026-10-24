@@ -1,0 +1,62 @@
+# ci-lane: fast
+# Experimental source-exact Windows contention court. Green = truthful outcomes, not latency acceptance.
+name: CMPCT v031 Windows Writer Contention O4
+on:
+  push:
+    branches:
+      - agent/phased2-v031-windows-contention-abba-o4-20261023
+    paths:
+      - 'tests/test_v031_windows_writer_contention_o4.py'
+      - 'docs/v031-research/2026-10-23-windows-writer-contention-o4-prereg.md'
+      - '.github/workflows/v031-windows-writer-contention-o4.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v031-windows-contention-o4-${{ github.sha }}
+  cancel-in-progress: true
+jobs:
+  real-windows-contention:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind source and owner blobs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "test-artifacts" | Out-Null
+          if ((git rev-parse HEAD).Trim() -ne $env:GITHUB_SHA) { throw "exact HEAD mismatch" }
+          $writer = (git hash-object src/cmpct/transactions.py).Trim()
+          $reader = (git hash-object src/cmpct/reader.py).Trim()
+          if ($writer -ne "fd8d922ae5a6e77ab7e01bf599da16a14aca1cff") { throw "PR304 Writer source drift" }
+          if ($reader -ne "c548a2ae4d650e928eb46ed1c2431423e49765b5") { throw "PR285 Reader source drift" }
+          @("head=$env:GITHUB_SHA", "writer_blob=$writer", "reader_blob=$reader") |
+            Out-File -Encoding utf8 "test-artifacts/source.txt"
+      - name: Install real CMPCT package
+        shell: pwsh
+        run: |
+          python -m pip install -e . pytest
+          if ($LASTEXITCODE -ne 0) { throw "package installation failed" }
+      - name: Run independent-process contention and integrity witness
+        shell: pwsh
+        env:
+          CMPCT_O4_ARTIFACT_DIR: test-artifacts
+        run: |
+          # Avoid unrelated historical Linux-only conftest imports without suppressing O4 assertions.
+          python -m pytest --noconftest -vv -s tests/test_v031_windows_writer_contention_o4.py 2>&1 |
+            Tee-Object -FilePath "test-artifacts/pytest.txt"
+          if ($LASTEXITCODE -ne 0) { throw "O4 real Windows court failed" }
+      - name: Preserve raw positive and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v031-windows-writer-contention-o4-${{ github.sha }}
+          path: test-artifacts/
+          if-no-files-found: error
+          retention-days: 90
