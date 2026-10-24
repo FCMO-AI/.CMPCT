@@ -53,48 +53,6 @@ def streamed(lib, handle, index, size):
     return digest.digest(), bytes(reconstructed)
 
 
-def unsigned_row_court(base, original_path, lib, raw):
-    """Source-exact signed index with a deliberately absent logical SHA.
-
-    The physical RAW blob/header remains byte-for-byte identical. It has its
-    own SHA header, which must NEVER silently replace the absent row commitment.
-    """
-    original = original_path.read_bytes()
-    magic, version, flags, cs, us, data_size, old_hash = HDR.unpack_from(original)
-    assert magic == MAGIC and version == 24
-    plain = zd(original[HDR.size:HDR.size + cs], us)
-    assert sha(plain) == old_hash
-    rows = msgpack.unpackb(plain, raw=False)
-    item = next(row for row in rows["files"] if row[0] == "raw.bin")
-    assert item[5] == hashlib.sha256(raw).digest()
-    item[5] = None
-    new_plain = msgpack.packb(rows, use_bin_type=True)
-    new_index = zc(new_plain, 12)
-    new_hash = sha(new_plain)
-    physical = original[HDR.size + cs:HDR.size + cs + data_size]
-    target = base / "missing-row-sha.cmpct"
-    target.write_bytes(
-        HDR.pack(MAGIC, version, flags, len(new_index), len(new_plain), data_size, new_hash)
-        + new_index + physical + new_index
-        + FTR.pack(FMAGIC, 0, 1, 0, 0, len(new_index), len(new_plain), 0, new_hash)
-    )
-    produced = target.read_bytes()
-    assert produced[HDR.size + len(new_index):HDR.size + len(new_index) + data_size] == physical
-    assert produced[HDR.size:HDR.size + len(new_index)] == produced[-FTR.size - len(new_index):-FTR.size]
-    with CMPCT(target) as reader:
-        assert reader.read("raw.bin") == raw
-    handle = open_native(lib, target)
-    try:
-        idx = map_paths(lib, handle)["raw.bin"]
-        status, bytes_out = query(lib, handle, idx)
-        assert status == -7 and bytes_out == bytes(32), (status, bytes_out.hex())
-        digest, recovered = streamed(lib, handle, idx, len(raw))
-        assert recovered == raw and digest == hashlib.sha256(raw).digest()
-    finally:
-        lib.cmpct_close(handle)
-    return hashlib.sha256(produced).hexdigest()
-
-
 def main():
     if len(sys.argv) != 2:
         raise SystemExit("usage: native_authenticated_sha_o12.py RESULT.json")
@@ -109,15 +67,18 @@ def main():
         root.mkdir()
         (root / "directory").mkdir()
         raw = random.Random(834123).randbytes(86016)
+        cdc = random.Random(834124).randbytes(1_500_000)
         txt = ((b"typed object=source; owner=index; read=bounded; trust=signed;\n" * 1400)
                + b"tail:known")
         (root / "raw.bin").write_bytes(raw)
+        (root / "cdc.bin").write_bytes(cdc)
         (root / "directory" / "config.txt").write_bytes(txt)
         output = base / "corpus.cmpct"
         Builder(root, workers=1, reproducible=True).build(output)
         original = output.read_bytes()
         source_hashes = {
             "raw.bin": hashlib.sha256(raw).digest(),
+            "cdc.bin": hashlib.sha256(cdc).digest(),
             "directory/config.txt": hashlib.sha256(txt).digest(),
         }
         with CMPCT(output) as reference:
@@ -129,15 +90,18 @@ def main():
             assert int(reference.blobs[int(raw_store[1])][3]) == CODEC_RAW, (
                 "RAW control must not be reencoded", reference.blobs[int(raw_store[1])]
             )
-            for name, expected in [("raw.bin", raw), ("directory/config.txt", txt)]:
+            assert rows["raw.bin"][5] is None, "real Builder elides direct RAW logical SHA"
+            assert rows["directory/config.txt"][5] is None, "direct text has no row SHA"
+            assert rows["cdc.bin"][5] == hashlib.sha256(cdc).digest()
+            for name, expected in [("raw.bin", raw), ("cdc.bin", cdc),
+                                   ("directory/config.txt", txt)]:
                 assert reference.read(name) == expected
-                assert rows[name][5] == hashlib.sha256(expected).digest(), name
         # The archive source is signed and immutable during the positive court.
         handle = open_native(lib, output)
         cases = {}
         try:
             paths = map_paths(lib, handle)
-            for name, expected in [("raw.bin", raw), ("directory/config.txt", txt)]:
+            for name, expected in [("cdc.bin", cdc)]:
                 st, indexed = query(lib, handle, paths[name])
                 assert st == 0 and indexed == source_hashes[name], (name, st)
                 streamed_sha, reconstructed = streamed(
@@ -153,6 +117,8 @@ def main():
             # All failures zero the entire caller output, not merely its prefix.
             for name, h, index, code in [
                 ("nonfile", handle, paths["directory"], -7),
+                ("raw_direct_missing_row_hash", handle, paths["raw.bin"], -7),
+                ("text_direct_missing_row_hash", handle, paths["directory/config.txt"], -7),
                 ("out_of_range", handle, lib.cmpct_entry_count(handle) + 8, -6),
                 ("null_archive", None, paths["raw.bin"], -1),
             ]:
@@ -176,12 +142,14 @@ def main():
                 fd.write(bytes([original[off] ^ 1]))
                 fd.flush()
                 os.fsync(fd.fileno())
-            # The immutable authenticated-index commitment remains the same.
-            st, still_expected = query(lib, handle, paths["raw.bin"])
-            assert st == 0 and still_expected == source_hashes["raw.bin"]
+            # Absent row SHA is a real format/storage limitation, NOT a
+            # success attributed to the new API. Only an EXTERNAL source
+            # oracle identifies the new RAW bytes as corrupt in this court.
+            st, missing_sha = query(lib, handle, paths["raw.bin"])
+            assert st == -7 and missing_sha == bytes(32)
             changed_sha, changed = streamed(lib, handle, paths["raw.bin"], len(raw))
-            assert changed != raw and changed_sha != still_expected, (
-                "MUTATED_RAW_MUST_NOT_PASS_STREAM_SHA", changed_sha.hex()
+            assert changed != raw and changed_sha != source_hashes["raw.bin"], (
+                "MUTATED_RAW_REQUIRES_EXTERNAL_ORACLE", changed_sha.hex()
             )
             assert changed[193] == (raw[193] ^ 1)
             # Restore the physical bytes to demonstrate that the mismatch
@@ -193,28 +161,26 @@ def main():
                 os.fsync(fd.fileno())
             assert output.read_bytes() == original
             restored_sha, restored = streamed(lib, handle, paths["raw.bin"], len(raw))
-            assert restored == raw and restored_sha == still_expected
+            assert restored == raw and restored_sha == source_hashes["raw.bin"]
         finally:
             lib.cmpct_close(handle)
-
-        unsigned_court_sha = unsigned_row_court(base, output, lib, raw)
 
     result = {
         "schema": "cmpct-native-authenticated-stream-sha-o12-v1",
         "source_head_binding": "verified by workflow checkout EVIDENCE_HEAD",
         "archive_sha256": hashlib.sha256(original).hexdigest(),
-        "missing_row_sha_archive_sha256": unsigned_court_sha,
         "cases": cases,
         "controls": {
             "real_direct_raw_codec": True,
             "native_index_hash_matches_originals": True,
             "native_bounded_stream_output_hashes_match": True,
             "directory_invalid_index_and_null_fail_zero": True,
-            "mutated_RAW_payload_ranged_reads_must_mismatch_signed_SHA": True,
+            "mutated_RAW_payload_requires_external_reference_no_row_SHA": True,
             "restored_source_accepts_again": True,
-            "missing_signed_row_SHA_does_not_fallback_to_physical_header": True,
+            "real_direct_RAW_and_text_row_SHA_absent_fail_closed": True,
+            "real_cdc_stream_authenticated_index_hash": True,
         },
-        "decision": "NARROW_ABI_CAPABILITY_POSITIVE_NOT_PRODUCT_EXTRACTOR",
+        "decision": "RAW_GENERALITY_FALSIFIED_CDC_NARROWED_CANDIDATE",
     }
     dest = Path(sys.argv[1])
     dest.parent.mkdir(parents=True, exist_ok=True)
