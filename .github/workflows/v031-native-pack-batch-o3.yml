@@ -8,6 +8,7 @@ on:
       - 'native/cmpct-core/include/cmpct.h'
       - 'tests/native_pack_batch_abi.py'
       - 'docs/v031-research/NATIVE_PACK_OPERATION_BATCH_O3_PREREG.md'
+      - 'docs/v031-research/NATIVE_PACK_OPERATION_COST_O4_PREREG.md'
       - 'docs/NATIVE_CORE.md'
       - '.github/workflows/v031-native-pack-batch-o3.yml'
   workflow_dispatch:
@@ -42,7 +43,8 @@ jobs:
             tests/conformance/v24-pack.json \
             tests/native_pack_golden_abi.py \
             tests/native_pack_batch_abi.py \
-            docs/v031-research/NATIVE_PACK_OPERATION_BATCH_O3_PREREG.md
+            docs/v031-research/NATIVE_PACK_OPERATION_BATCH_O3_PREREG.md \
+            docs/v031-research/NATIVE_PACK_OPERATION_COST_O4_PREREG.md
           sha256sum native/cmpct-core/Cargo.lock tests/conformance/v24-pack.json
       - uses: actions/setup-python@v6
         with:
