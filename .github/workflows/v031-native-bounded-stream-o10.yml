@@ -1,0 +1,81 @@
+# ci-lane: fast
+name: CMPCT v0.31 O10 bounded streaming vs eager native C
+
+on:
+  pull_request:
+    paths:
+      - 'tests/native_pack_stream_o10.c'
+      - 'tests/native_pack_stream_o10.py'
+      - 'docs/v031-research/NATIVE_BOUNDED_STREAM_O10_PREREG.md'
+      - 'tests/native_pack_consumer_o7.c'
+      - 'native/cmpct-core/src/lib.rs'
+      - 'native/cmpct-core/include/cmpct.h'
+      - '.github/workflows/v031-native-bounded-stream-o10.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-native-stream-o10-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  bounded-stream-o10:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Exact source and independent prereg custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch \
+            tests/native_pack_stream_o10.c \
+            tests/native_pack_stream_o10.py \
+            tests/native_pack_consumer_o7.c \
+            docs/v031-research/NATIVE_BOUNDED_STREAM_O10_PREREG.md \
+            native/cmpct-core/include/cmpct.h
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Build identical exact-head native core and C consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+          cc -std=c11 -O2 -Wall -Wextra -Werror -I. tests/native_pack_consumer_o7.c \
+            -Lnative/cmpct-core/target/release -lcmpct_core \
+            -Wl,-rpath,"$PWD/native/cmpct-core/target/release" -o /tmp/cmpct-native-eager-o10
+          cc -std=c11 -O2 -Wall -Wextra -Werror -I. tests/native_pack_stream_o10.c \
+            -Lnative/cmpct-core/target/release -lcmpct_core \
+            -Wl,-rpath,"$PWD/native/cmpct-core/target/release" -o /tmp/cmpct-native-stream-o10
+      - name: Same-source measured ABBA and symlink canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cmpct-native-stream-o10"
+          python tests/native_pack_stream_o10.py \
+            /tmp/cmpct-native-eager-o10 \
+            /tmp/cmpct-native-stream-o10 \
+            "$RUNNER_TEMP/cmpct-native-stream-o10/result.json" \
+            | tee "$RUNNER_TEMP/cmpct-native-stream-o10/log.txt"
+          sha256sum "$RUNNER_TEMP/cmpct-native-stream-o10/result.json" > \
+            "$RUNNER_TEMP/cmpct-native-stream-o10/result.sha256"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-stream-o10-${{ github.run_id }}
+          path: ${{ runner.temp }}/cmpct-native-stream-o10/
+          if-no-files-found: warn
+          retention-days: 30
