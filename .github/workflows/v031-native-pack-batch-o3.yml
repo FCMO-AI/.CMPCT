@@ -38,6 +38,7 @@ jobs:
           git ls-files --error-unmatch \
             native/cmpct-core/Cargo.lock \
             native/cmpct-core/src/lib.rs \
+            native/cmpct-core/include/cmpct.h \
             tests/conformance/v24-pack.json \
             tests/native_pack_golden_abi.py \
             tests/native_pack_batch_abi.py \
