@@ -29,6 +29,14 @@ The additive `cmpct.validation` layer provides:
 - adversarial regression tests covering oversized index/generation declarations, corrupt blob framing, truncated archives and latest-generation fallback;
 - a direct structural mutation matrix covering unknown codecs, blob policy limits, pack bounds, fixed/CDC chunk accounting, sparse extent accounting, missing virtual-ZIP recipes, duplicate paths, unsafe paths, hardlink targets/cycles and filesystem-metadata references.
 
+### v0.31 draft integration: authenticated map rejection and Reader resource ownership
+
+Draft PR #321 (based on PR #316; composes PR #283) treats **parser rejection and resource release as one operation**. A fully SHA-authenticated index can contain ambiguous duplicate MessagePack keys. PR #316 rejects those index bytes before exposing a tree, but the ordinary Python `CMPCT(path)` constructor has already acquired an archive file descriptor when `_load_index` raises. If a caller retains the exception traceback, relying on eventual object destruction is insufficient.
+
+The PR #321 candidate transplants PR #283's constructor `try/except BaseException` and deterministic mmap/file cleanup *byte-for-byte* while preserving PR #316's three unique-map decoder hooks without modification. Two authenticated input routes are independently tested: a committed footer/index and a valid primary-only archive. Each compares the unmodified PR #316 source (expected retained-fd failure) against the composed Reader (reject + immediate cleanup) without garbage collection. The original PR #283 failure and valid-golden tests are retained unchanged. Source-exact hosted results and full performance/release evidence must be checked on the **latest PR SHA**; a draft is not a shipping guarantee.
+
+This is an additive **failure-path ownership** candidate. It does not change revision-24 wire bytes, allow duplicate keys, loosen preflight checks, add a recovery trust claim, or solve remaining native/parser portability and concurrency work.
+
 ### Default limits
 
 The initial defaults are intentionally generous for legitimate pre-1.0 archives while still placing finite ceilings on hostile declarations. They are policy, not format constants, and can be overridden with `CMPCT_MAX_*` environment variables or a `ParserLimits` instance.
