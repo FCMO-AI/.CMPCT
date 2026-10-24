@@ -1,0 +1,52 @@
+# ci-lane: fast
+name: CMPCT v0.31 authenticated delta replay O0
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_signed_delta_replay_o0.py'
+      - '.github/workflows/v031-delta-replay-o0.yml'
+      - 'docs/v031-research/2026-10-24-signed-delta-replay-cpu-o0-prereg.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-delta-replay-o0-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  signed-delta-replay-o0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Prove exact source and preregistered question
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -s docs/v031-research/2026-10-24-signed-delta-replay-cpu-o0-prereg.md
+          echo "EXACT_SOURCE_HEAD=$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install native-backed reference package
+        run: python -m pip install -e ".[test]"
+      - name: Execute signed delta/control ABBA and preserve raw costs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p delta-o0-artifacts
+          python benchmarks/v031_signed_delta_replay_o0.py --out delta-o0-artifacts --repeats 7 2>&1 | tee delta-o0-artifacts/court.log
+          sha256sum delta-o0-artifacts/delta-o0-receipt.json | tee delta-o0-artifacts/receipt.sha256
+      - name: Preserve result or negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-delta-replay-o0-${{ github.sha }}
+          path: delta-o0-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
