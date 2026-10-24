@@ -193,3 +193,69 @@ def test_lock_acquisition_error_is_not_overwritten_by_unlock(tmp_path, monkeypat
     with CMPCT(archive) as ar:
         assert "alpha.txt" not in ar.by
         assert ar.verify() >= 1
+
+
+def _probe_sentinel(archive, output):
+    """Independent process checks the actual Windows kernel lock state."""
+    import msvcrt
+
+    fd = os.open(archive, os.O_RDWR | os.O_APPEND | os.O_BINARY)
+    try:
+        os.lseek(fd, tx._WINDOWS_LEASE_OFFSET, os.SEEK_SET)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError as error:
+            output.put(("blocked", getattr(error, "winerror", None)))
+        else:
+            try:
+                output.put(("acquired", None))
+            finally:
+                os.lseek(fd, tx._WINDOWS_LEASE_OFFSET, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+    finally:
+        os.close(fd)
+
+
+def _independent_sentinel_attempt(archive):
+    ctx = mp.get_context("spawn")
+    output = ctx.Queue()
+    process = ctx.Process(target=_probe_sentinel, args=(str(archive), output))
+    process.start()
+    process.join(timeout=20)
+    if process.is_alive():
+        process.terminate()
+        process.join(timeout=5)
+    assert process.exitcode == 0
+    return output.get(timeout=5)
+
+
+def test_windows_lease_survives_dup_handle_close(tmp_path):
+    """A close() on Writer's duplicate must not release the original lease."""
+    archive = _archive(tmp_path)
+    before = archive.read_bytes()
+    with tx._cooperative_writer_lease(archive):
+        assert _independent_sentinel_attempt(archive)[0] == "blocked"
+        # _checked_append duplicates the protected descriptor, exactly as
+        # generation writing does. Closing the duplicate must NOT unlock the
+        # parent handle's sentinel, or another Writer may take a stale snapshot.
+        with tx._checked_append(archive) as stream:
+            stream.write(b"")
+        assert _independent_sentinel_attempt(archive)[0] == "blocked"
+    assert _independent_sentinel_attempt(archive)[0] == "acquired"
+    assert archive.read_bytes() == before
+
+
+def test_live_readonly_snapshot_survives_full_append(tmp_path):
+    """Windows must support an old mapped Reader while a new footer is appended."""
+    archive = _archive(tmp_path)
+    with CMPCT(archive) as old:
+        assert "alpha.txt" in old.by
+        tx.append_rename(archive, "alpha.txt", "alpha-new.txt")
+        with CMPCT(archive) as new:
+            assert "alpha-new.txt" in new.by
+            assert "alpha.txt" not in new.by
+            assert new.read("alpha-new.txt") == b"first value\n" * 90
+            assert new.verify() >= 2
+        # Existing mapped Reader still has the old consistent snapshot.
+        assert "alpha.txt" in old.by
+        assert old.read("alpha.txt") == b"first value\n" * 90
