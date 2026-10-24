@@ -7,6 +7,8 @@ on:
       - 'tests/native_signed_index_stage_o19.c'
       - 'tests/native_stage_fault_o19.c'
       - 'tests/native_stage_readback_fault_o19.py'
+      - 'tests/native_anonymous_stage_procfd_o19b.py'
+      - 'docs/v031-research/NATIVE_ANONYMOUS_STAGE_O19B_HOST_PREREG.md'
       - 'docs/v031-research/NATIVE_STAGE_READBACK_O19_PREREG.md'
       - 'docs/v031-research/NATIVE_STAGE_READBACK_O19_RESULT.md'
       - '.github/workflows/v031-native-stage-readback-o19.yml'
@@ -79,6 +81,13 @@ jobs:
             tests/native_stage_readback_fault_o19.py \
             docs/v031-research/NATIVE_STAGE_READBACK_O19_PREREG.md \
             > "$RUNNER_TEMP/cmpct-o19/sha256sums.txt"
+      - name: Independent O_TMPFILE/proc-fd host portability discriminator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/native_anonymous_stage_procfd_o19b.py "$RUNNER_TEMP/cmpct-o19/anonymous-stage.json"
+          sha256sum "$RUNNER_TEMP/cmpct-o19/anonymous-stage.json" tests/native_anonymous_stage_procfd_o19b.py \
+            >> "$RUNNER_TEMP/cmpct-o19/sha256sums.txt"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
