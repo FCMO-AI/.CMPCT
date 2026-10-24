@@ -108,9 +108,15 @@ def run_one(binary: Path, home: Path, ordinal: int, length: int) -> dict:
     with CMPCT(bad_archive) as reader:
         rows_bad = {row[0]: row for row in reader.files}
         assert rows_bad["cdc.bin"][5] == wrong_digest
-        # The independently reconstructed physical bytes are unchanged, despite
-        # the counterfactual signed-index commitment.
-        assert reader.read("cdc.bin") == source
+        # The reference Python Reader MUST independently reject the contradictory
+        # logical SHA on full reconstruction. Native C is separately judged by
+        # whether it preserves the no-publish barrier under bounded reads.
+        try:
+            reader.read("cdc.bin")
+        except IOError as err:
+            assert "integrity" in str(err).lower(), err
+        else:
+            raise AssertionError("reference Reader accepted contradictory CDC row SHA")
 
     badroot = home / f"rejected-hash-{ordinal}"
     badroot.mkdir()
