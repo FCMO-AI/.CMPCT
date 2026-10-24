@@ -198,9 +198,10 @@ def main():
         # preserves physical payload bytes and source archive identity.
         source = home / "stress-src"
         source.mkdir()
-        (source / "root.bin").write_bytes(A)
+        # Lexically first ordinary owner: Builder's inode-first dedup order matters.
+        (source / "a_root.bin").write_bytes(A)
         for j in range(1024):
-            os.link(source / "root.bin", source / f"l{j:04d}.bin")
+            os.link(source / "a_root.bin", source / f"l{j:04d}.bin")
         stress_path = home / "stress-star.cmpct"
         Builder(source, workers=1, reproducible=True).build(stress_path)
         star = stress_path.read_bytes()
@@ -208,7 +209,7 @@ def main():
             aliases = [row for row in index["files"] if row[1] == 3]
             aliases.sort(key=lambda row: row[0])
             for i, row in enumerate(aliases):
-                row[6] = ["root.bin" if i == 0 else aliases[i-1][0]]
+                row[6] = ["a_root.bin" if i == 0 else aliases[i-1][0]]
         chain_stress = rebuild(star, make_chain)
         measurements = {}
         for name, wire in (("star", star), ("chain", chain_stress)):
@@ -222,8 +223,8 @@ def main():
                 try:
                     ix = map_paths(lib, h)
                     assert len(ix) == 1025
-                    assert owner(lib, h, ix["l1023.bin"]) == (0, ix["root.bin"])
-                    assert owner(lib, h, ix["l0000.bin"]) == (0, ix["root.bin"])
+                    assert owner(lib, h, ix["l1023.bin"]) == (0, ix["a_root.bin"])
+                    assert owner(lib, h, ix["l0000.bin"]) == (0, ix["a_root.bin"])
                 finally:
                     lib.cmpct_close(h)
                 timings.append(dt / 1e6)
