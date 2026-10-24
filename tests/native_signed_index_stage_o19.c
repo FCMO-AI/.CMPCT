@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
     status = 0;
-    printf("{\"decision\":\"VERIFIED_CDC_STAGED\",\"bytes\":%" PRIu64
+    printf("{\"decision\":\"VERIFIED_CDC_STAGED_READBACK\",\"bytes\":%" PRIu64
            ",\"chunk_bytes\":%u,\"sha256\":\"",
            file_size, O18_CHUNK);
     print_digest(observed);
