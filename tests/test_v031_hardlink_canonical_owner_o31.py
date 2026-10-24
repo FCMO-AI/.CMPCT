@@ -57,7 +57,7 @@ def _signed_archive(path: Path, target: str, extra_links=None) -> Path:
 
 def test_o31_signed_hardlink_targets_use_the_same_canonical_owner_for_reader_and_extract(tmp_path):
     forward = _signed_archive(tmp_path / "forward.cmpct", "sub/owner.bin")
-    backslash = _signed_archive(tmp_path / "backslash.cmpct", "sub\\\\owner.bin")
+    backslash = _signed_archive(tmp_path / "backslash.cmpct", "sub\\owner.bin")
     # The index hashes differ while one owner and reconstructed contents agree.
     assert hashlib.sha256(forward.read_bytes()).digest() != hashlib.sha256(
         backslash.read_bytes()).digest()
@@ -77,7 +77,7 @@ def test_o31_signed_hardlink_targets_use_the_same_canonical_owner_for_reader_and
 
 
 @pytest.mark.parametrize("unsafe_target", [
-    "../escape.bin", "sub/../owner.bin", "sub\\\\..\\\\escape.bin",
+    "../escape.bin", "sub/../owner.bin", "sub\\..\\escape.bin",
 ])
 def test_o31_signed_unsafe_hardlink_target_still_rejected_before_extract(tmp_path, unsafe_target):
     path = _signed_archive(tmp_path / "unsafe.cmpct", unsafe_target)
@@ -93,10 +93,10 @@ def test_o31_mixed_separator_multihop_hardlink_and_alias_inode(tmp_path):
     # Held-out structural perturbation: an alias points through a second alias
     # by canonical lexical key. All paths have distinct on-wire spellings.
     path = _signed_archive(
-        tmp_path / "mixed-chain.cmpct", "branch\\\\first.bin",
+        tmp_path / "mixed-chain.cmpct", "branch\\first.bin",
         extra_links={
-            "branch/first.bin": "sub\\\\owner.bin",
-            "branch/second.bin": "branch\\\\first.bin",
+            "branch/first.bin": "sub\\owner.bin",
+            "branch/second.bin": "branch\\first.bin",
         },
     )
     assert preflight_archive(path)["files"] == 4
@@ -115,7 +115,7 @@ def test_o31_mixed_separator_multihop_hardlink_and_alias_inode(tmp_path):
 
 def test_o31_canonical_target_cycle_still_rejected(tmp_path):
     path = _signed_archive(
-        tmp_path / "cycle.cmpct", "branch\\\\first.bin",
+        tmp_path / "cycle.cmpct", "branch\\first.bin",
         extra_links={"branch/first.bin": "alias.bin"},
     )
     with pytest.raises(ValidationError):
@@ -128,7 +128,7 @@ def test_o31_canonical_target_cycle_still_rejected(tmp_path):
 def test_o31_canonical_duplicate_name_cannot_become_owner_alias(tmp_path):
     path = _signed_archive(
         tmp_path / "collision.cmpct", "sub/owner.bin",
-        extra_links={"sub\\\\owner.bin": "sub/owner.bin"},
+        extra_links={"sub\\owner.bin": "sub/owner.bin"},
     )
     with pytest.raises(ValidationError):
         preflight_archive(path)
