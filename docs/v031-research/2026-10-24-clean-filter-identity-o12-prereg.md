@@ -1,0 +1,19 @@
+# O12 — Git-filtered worktree source identity (preregistered)
+Date: 2026-10-24 UTC. Base: PR #366 at `ce47ef37d81354653d71c142754b9c1cfccf9065`. Status: PREREGISTERED BEFORE O12 IMPLEMENTATION AND HOSTED RESULTS. Existing v0.30 release lock and v0.31 raw-worktree fingerprint unchanged.
+
+## Decision question and negative evidence
+O11 eliminated untracked generated source pollution but verified that Windows and Unix-like checkouts on the same commit, with the same 2,371 tracked names, can yield different *raw-worktree* SHA-256 fingerprints. That may reflect Git's conversion of line endings/attributes, not source-code drift. Is an additional **Git-clean-filtered, per-path identity** stable across those hosts while still detecting substantive unstaged edits, staged new files, binary changes, and symlink replacement? This is an evidence/source-custody experiment, not a release fix or claim that physical bytes are identical.
+
+## Competing controls and prediction
+Control A: O11 raw fingerprint; expected different across Windows/Ubuntu/macOS for the same clean checkout. Control B: exact HEAD/index blob identity; expected stable, but disqualified as an exclusive worktree identity because it misses unstaged mutation. Candidate C: ask `git hash-object -- <tracked paths>` (no `--no-filters`, so Git applies checkout-configured path-specific clean filters) in bounded batches and SHA-256-bind ordered path bytes and resulting Git object IDs. This captures the current *working tree*, not only HEAD, and defers EOL, working-tree-encoding and attributes to Git. Preserve the O11 raw fingerprint as an independent physical-byte witness. Git objects can use SHA-1; the candidate is a **Git-equivalence custody signal**, not an independent collision-resistant SHA-256 proof of underlying bytes.
+
+## Falsifiers and costs
+1. Genuine same-SHA clean checkouts on Ubuntu, macOS and Windows must have same tracked source roster and candidate C digest; otherwise preserve mismatching names/filtered OIDs and reject universal parity.
+2. An unstaged substantive text edit and binary byte edit must alter C; staging a new eligible path must alter roster and C. Untracked native products must not alter it. Tracked symlink must still fail closed.
+3. On an attributed text file, CRLF-vs-LF alone **may intentionally leave C unchanged** while raw SHA-256 changes; this is not byte-exact worktree identity. A binary file with CRLF-like bytes must not be normalized by broad replacement. Record this limitation, do not hide it.
+4. Fail closed on Git filter errors, object-ID count mismatch, missing tracked file, index ambiguity or source SHA drift. Measure the added Git subprocess/scan overhead; do not assume no cost.
+5. Use the same exact source on all three hosts, hosted receipt with raw fingerprints, candidate C, per-file Git OID and file mode where supported; preserve complete negative results. No benchmark, comparator, safety rule, format, historical lock or version change.
+
+Kill/narrow: If C differs across hosts, examine attribute and filter origins; do not normalize all CRLF unconditionally. If C conceals substantive edits, or requires a potentially unsafe/custom clean filter without explicit policy, classify C as diagnostic-only and retain raw custody as promotion gate. If C passes, promote **research evidence only**; stronger hostile-filter and commit/worktree provenance are required before making C a release authority.
+
+Ownership: O12 adds a distinct independent test/workflow and helper; O11 PR #366 remains owner of tracked-path raw SHA-256. Do not touch neighboring installed O9/O11 Reader, native, canonical v0.30 or their gates. Discovery STATE remains a staleable cache rather than a claim.
