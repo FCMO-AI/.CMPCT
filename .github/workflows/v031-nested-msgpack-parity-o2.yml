@@ -1,0 +1,69 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: CMPCT authenticated nested-map Python Rust parity O2
+
+on:
+  pull_request:
+    paths:
+      - "tests/native_nested_map_parity_oracle.py"
+      - "native/cmpct-core/src/lib.rs"
+      - "docs/v031-research/2026-10-24-nested-msgpack-parity-o2-prereg.md"
+      - ".github/workflows/v031-nested-msgpack-parity-o2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-nested-map-o2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  independently-authenticated-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact HEAD and test source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          mkdir -p nested-map-evidence
+          {
+            echo "source_sha=$EVIDENCE_HEAD"
+            sha256sum tests/conformance/v24-direct-codecs.json
+            sha256sum tests/native_nested_map_parity_oracle.py
+            sha256sum native/cmpct-core/src/lib.rs
+            sha256sum src/cmpct/msgpack_policy.py
+            sha256sum src/cmpct/reader.py
+          } | tee nested-map-evidence/source.txt
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install authentic Python package with its native requirements
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd libzstd1
+          python -m pip install -e '.[test]'
+      - name: Build actual native C ABI at exact candidate HEAD
+        working-directory: native/cmpct-core
+        run: cargo build --release --locked
+      - name: Verify correction against frozen 18-case O2 negatives
+        run: |
+          set -o pipefail
+          python tests/native_nested_map_parity_oracle.py --phase fixed             2>&1 | tee nested-map-evidence/court.txt
+      - name: Preserve exact-head native/Python evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-nested-map-o2-${{ env.EVIDENCE_HEAD }}
+          path: nested-map-evidence/
+          if-no-files-found: error
+          retention-days: 90

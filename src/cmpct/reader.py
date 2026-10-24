@@ -11,6 +11,7 @@ from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
 from .path_policy import canonical_logical_path
+from .msgpack_policy import unique_map_pairs
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -24,20 +25,30 @@ def _safe_output_path(dest:Path,rel:str)->Path:
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
     def __init__(self,path:Path):
-        self.path=Path(path);self.f=open(path,'rb');self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};
-        if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
-        # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This
-        # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map
-        # one-to-one onto a destination filesystem.
-        canonical_seen=set()
+        self.path=Path(path);self.f=open(path,'rb');self.mm=None
         try:
-            for row in self.files:
-                key,_=canonical_logical_path(row[0])
-                if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
-                canonical_seen.add(key)
-        except ValueError as exc:
-            raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
-        self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
+            self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};
+            if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
+            # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This
+            # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map
+            # one-to-one onto a destination filesystem.
+            canonical_seen=set()
+            try:
+                for row in self.files:
+                    key,_=canonical_logical_path(row[0])
+                    if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
+                    canonical_seen.add(key)
+            except ValueError as exc:
+                raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
+            self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
+        except BaseException:
+            # Construction failures never reach close()/__exit__. Release owned handles before
+            # the original exception escapes: retained tracebacks may otherwise pin mmap/fd.
+            try:
+                if self.mm is not None:self.mm.close()
+            finally:
+                self.f.close()
+            raise
     def close(self):
         if getattr(self,'mm',None):self.mm.close();self.mm=None
         if self._zdict_decoder:self._zdict_decoder.close();self._zdict_decoder=None
@@ -64,7 +75,7 @@ class CMPCT:
             if g is None:return None
             kind,payload,prev=g
             if kind==0:
-                idx=msgpack.unpackb(payload,raw=False)
+                idx=msgpack.unpackb(payload,raw=False,object_pairs_hook=unique_map_pairs)
                 for delta in reversed(chain):
                     for b in delta.get('blobs',[]):idx['blobs'].append(b)
                     for op in delta.get('ops',[]):
@@ -80,7 +91,7 @@ class CMPCT:
                     idx['files'].sort(key=lambda x:x[0])
                 return idx,depth
             if kind!=1:return None
-            chain.append(msgpack.unpackb(payload,raw=False));depth+=1;pos=prev
+            chain.append(msgpack.unpackb(payload,raw=False,object_pairs_hook=unique_map_pairs));depth+=1;pos=prev
         return None
     def _latest_generation(self):
         # Scan backward for the newest valid commit footer. A partial append after an older footer
@@ -106,7 +117,7 @@ class CMPCT:
             self.latest_footer_pos=latest[1];self.delta_depth=latest[2];return latest[0],HDR.size+cs
         ic=self.f.read(cs);ib=zd(ic,us)
         if sha(ib)!=ih:raise IOError('both CMPCT indexes unavailable/corrupt')
-        self.latest_footer_pos=0;self.delta_depth=0;return msgpack.unpackb(ib,raw=False),HDR.size+cs
+        self.latest_footer_pos=0;self.delta_depth=0;return msgpack.unpackb(ib,raw=False,object_pairs_hook=unique_map_pairs),HDR.size+cs
     def _inflate(self,comp:bytes,usize:int)->bytes:
         if _ld is None or self._inflater is None:
             raw=zlib.decompress(comp,-15)
