@@ -12,6 +12,7 @@ on:
       - "tests/installed_native_package_smoke.py"
       - "tests/installed_native_signed_symlink_smoke.py"
       - "tests/installed_native_static_destination_smoke.py"
+      - "tests/installed_native_canonical_hardlink_o35b.py"
       - "tests/test_v031_static_destination_o10r_union_o27.py"
       - "tools/v031_signed_symlink_crosshost_o2.py"
       - "tools/verify_v031_installed_signed_receipt.py"
@@ -61,7 +62,7 @@ jobs:
           # paths. A missing parent/diff fails closed rather than silently skipping.
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tests/installed_native_signed_symlink_smoke[.]py$|tests/installed_native_static_destination_smoke[.]py$|tests/test_v031_static_destination_o10r_union_o27[.]py$|tools/v031_signed_symlink_crosshost_o2[.]py$|tools/verify_v031_installed_signed_receipt[.]py$|tests/test_v031_installed_signed_receipt_custody_r278[.]py$|tests/test_v031_signed_journal_symlink_crossproperty_o9[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tests/installed_native_signed_symlink_smoke[.]py$|tests/installed_native_static_destination_smoke[.]py$|tests/installed_native_canonical_hardlink_o35b[.]py$|tests/test_v031_static_destination_o10r_union_o27[.]py$|tools/v031_signed_symlink_crosshost_o2[.]py$|tools/verify_v031_installed_signed_receipt[.]py$|tests/test_v031_installed_signed_receipt_custody_r278[.]py$|tests/test_v031_signed_journal_symlink_crossproperty_o9[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
             echo 'run_package=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_package=false' >> "$GITHUB_OUTPUT"
@@ -162,6 +163,14 @@ jobs:
           if [ "$RUNNER_OS" = "macOS" ]; then PY="$RUNNER_TEMP/cmpct-installed/bin/python"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
           (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_static_destination_smoke.py" "$EVIDENCE_HEAD") | tee installed-static-destination-smoke.json
           python -m json.tool installed-static-destination-smoke.json >/dev/null
+      - name: Prove installed-wheel signed canonical hardlink owner and hostile graph (O35b)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
+          (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_canonical_hardlink_o35b.py" "$EVIDENCE_HEAD") | tee installed-canonical-hardlink-smoke.json
+          python -m json.tool installed-canonical-hardlink-smoke.json >/dev/null
       - name: Inspect installed dependency closure
         shell: bash
         run: |
@@ -184,6 +193,7 @@ jobs:
             installed-native-smoke.json
             installed-signed-smoke.json
             installed-static-destination-smoke.json
+            installed-canonical-hardlink-smoke.json
             installed-native-deps.txt
             ${{ runner.temp }}/wheels/cmpct-*.whl
           if-no-files-found: error
@@ -279,11 +289,25 @@ jobs:
               smoke_files=list(p.rglob('installed-native-smoke.json'))
               signed_files=list(p.rglob('installed-signed-smoke.json'))
               static_files=list(p.rglob('installed-static-destination-smoke.json'))
+              canonical_files=list(p.rglob('installed-canonical-hardlink-smoke.json'))
               dep_files=list(p.rglob('installed-native-deps.txt'))
               wheels=list(p.rglob('cmpct-*.whl'))
               assert len(smoke_files)==1,(os_name,smoke_files)
               assert len(dep_files)==1,(os_name,dep_files)
               assert len(signed_files)==1,(os_name,signed_files)
+              assert len(canonical_files)==1,(os_name,canonical_files)
+              canonical=json.loads(canonical_files[0].read_text())
+              assert canonical.get('schema')=='cmpct-v031-installed-canonical-hardlink-o35b-v1',canonical
+              assert canonical.get('source_sha')==expected_head,canonical
+              assert canonical.get('host_os')=={'ubuntu-24.04':'linux','macos-14':'darwin','windows-2025':'windows'}[os_name],canonical
+              assert canonical.get('wheel_import_under_prefix') is True,canonical
+              assert canonical.get('member_count')==4,canonical
+              for field in ('canonical_signed_mixed_chain_positive','implicit_hardlink_only_parent_restored','all_member_content_and_ranges_verified','unsafe_parent_target_rejected','canonical_cycle_rejected'):
+                  assert canonical.get(field) is True,(os_name,field,canonical)
+              assert canonical.get('host_posix_inode_identity_confirmed') is (os_name!='windows-2025'),canonical
+              for field in ('signed_archive_sha256','content_sha256'):
+                  value=canonical.get(field)
+                  assert isinstance(value,str) and len(value)==64 and all(ch in '0123456789abcdef' for ch in value),(os_name,field,value)
               static=None
               if os_name in {'ubuntu-24.04','macos-14'}:
                   assert len(static_files)==1,(os_name,static_files)
@@ -322,6 +346,9 @@ jobs:
                   'dict_vector_sha256':s['dict_vector_sha256'],
                   'installed_signed_fixture_sha256':manifest_sha,
                   'installed_prewrite_negatives':signed['required_prewrite_negatives'],
+                  'installed_canonical_hardlink_archive_sha256':canonical['signed_archive_sha256'],
+                  'installed_canonical_hardlink_strict_negative_controls':2,
+                  'installed_canonical_hardlink_implicit_parent':canonical['implicit_hardlink_only_parent_restored'],
                   'installed_static_destination_result':static['negative_result'] if static else 'not_executed_win32',
                   'installed_static_destination_archive_sha256':static['archive_sha256'] if static else None,
                   'installed_safe_relative_symlink_physical':signed['physical_safe_symlink_restored'],
@@ -337,6 +364,7 @@ jobs:
               'facts':{
                   'installed_signed_symlink_prewrite_three_host_green':True,
                   'installed_static_destination_prewrite_posix_two_host_green':True,
+                  'installed_canonical_signed_hardlink_three_host_green':True,
                   'sdist_first_wheel_build':True,
                   'linux_clean_install_green':True,
                   'macos_clean_install_green':True,
