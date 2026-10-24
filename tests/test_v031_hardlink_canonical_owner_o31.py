@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import binascii
 import hashlib
+import os
 from pathlib import Path
 
 import msgpack
@@ -22,12 +23,15 @@ from cmpct.validation import ValidationError, preflight_archive
 PAYLOAD = b"exact-r24-owner-separator-normalization\x00\xfe"
 
 
-def _signed_archive(path: Path, target: str) -> Path:
+def _signed_archive(path: Path, target: str, extra_links=None) -> Path:
     # Construct real format-r24 framing and SHA-committed logical index.
     # Only the alias spelling differs; physical owner and bytes are identical.
     files = sorted([
         ["sub/owner.bin", K_FILE, 0o644, 0, len(PAYLOAD), sha(PAYLOAD), [S_BLOB, 0]],
         ["alias.bin", K_HARDLINK, 0o644, 0, len(PAYLOAD), sha(PAYLOAD), [target]],
+    ] + [
+        [name, K_HARDLINK, 0o644, 0, len(PAYLOAD), sha(PAYLOAD), [link]]
+        for name, link in (extra_links or {}).items()
     ], key=lambda row: row[0])
     index = {
         "v": VERSION,
@@ -83,3 +87,51 @@ def test_o31_signed_unsafe_hardlink_target_still_rejected_before_extract(tmp_pat
         with CMPCT(path):
             pass
     assert not (tmp_path / "extracted").exists()
+
+
+def test_o31_mixed_separator_multihop_hardlink_and_alias_inode(tmp_path):
+    # Held-out structural perturbation: an alias points through a second alias
+    # by canonical lexical key. All paths have distinct on-wire spellings.
+    path = _signed_archive(
+        tmp_path / "mixed-chain.cmpct", "branch\\\\first.bin",
+        extra_links={
+            "branch/first.bin": "sub\\\\owner.bin",
+            "branch/second.bin": "branch\\\\first.bin",
+        },
+    )
+    assert preflight_archive(path)["files"] == 4
+    with CMPCT(path) as reader:
+        for name in ("alias.bin", "branch/first.bin", "branch/second.bin"):
+            assert reader._hardlink_owners[name] == "sub/owner.bin"
+            assert reader.read(name) == PAYLOAD
+            assert reader.read_range(name, 2, 5) == PAYLOAD[2:7]
+        dest = tmp_path / "mixed-out"
+        reader.extractall(dest, metadata=False)
+    all_paths = ["sub/owner.bin", "alias.bin", "branch/first.bin", "branch/second.bin"]
+    assert all((dest / p).read_bytes() == PAYLOAD for p in all_paths)
+    if os.name == "posix" and hasattr(os, "link"):
+        assert len({(dest / p).stat().st_ino for p in all_paths}) == 1
+
+
+def test_o31_canonical_target_cycle_still_rejected(tmp_path):
+    path = _signed_archive(
+        tmp_path / "cycle.cmpct", "branch\\\\first.bin",
+        extra_links={"branch/first.bin": "alias.bin"},
+    )
+    with pytest.raises(ValidationError):
+        preflight_archive(path)
+    with pytest.raises(OSError, match="hardlink cycle"):
+        with CMPCT(path):
+            pass
+
+
+def test_o31_canonical_duplicate_name_cannot_become_owner_alias(tmp_path):
+    path = _signed_archive(
+        tmp_path / "collision.cmpct", "sub/owner.bin",
+        extra_links={"sub\\\\owner.bin": "sub/owner.bin"},
+    )
+    with pytest.raises(ValidationError):
+        preflight_archive(path)
+    with pytest.raises(OSError, match="duplicate canonical logical path"):
+        with CMPCT(path):
+            pass
