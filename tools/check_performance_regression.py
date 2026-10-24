@@ -17,6 +17,7 @@ weakening current release policy.
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -30,8 +31,38 @@ def load(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("schema") != "cmpct-zip-parity-v1":
         raise ValueError(f"{path}: unsupported benchmark schema {data.get('schema')!r}")
-    if not isinstance(data.get("corpora"), dict):
-        raise ValueError(f"{path}: missing corpora")
+    corpora = data.get("corpora")
+    if not isinstance(corpora, dict) or not corpora:
+        raise ValueError(f"{path}: benchmark must contain at least one corpus")
+
+    # Footnote: a missing/nonfinite measurement must never become a green release gate.
+    # Python treats NaN comparisons as false, casts bools to ints, and truncates
+    # fractional bytes. Validate the *actual compared evidence* before applying
+    # the unchanged zero-byte size and 5%+3ms timing promotion rules.
+    for name, row in corpora.items():
+        if not isinstance(name, str) or not name or not isinstance(row, dict):
+            raise ValueError(f"{path}: malformed corpus name or record {name!r}")
+        # Release comparisons require the same logical input extent on both arms.
+        # Aggregation verifies this only *within* an arm; do not trust a
+        # name-equivalent but size-divergent base/candidate comparison.
+        logical = row.get("logical_bytes")
+        if type(logical) is not int or logical < 0:
+            raise ValueError(f"{path}: {name}/logical_bytes: expected non-negative integral logical input bytes")
+        for layer in LAYERS:
+            metric = row.get(layer)
+            metric = metric.get("cmpct") if isinstance(metric, dict) else None
+            if not isinstance(metric, dict):
+                raise ValueError(f"{path}: {name}/{layer}: missing CMPCT measurements")
+            size = metric.get("bytes")
+            if type(size) is not int or size <= 0:
+                raise ValueError(f"{path}: {name}/{layer}/bytes: expected positive integral archive bytes")
+            for field in TIMING_FIELDS:
+                seconds = metric.get(field)
+                if (type(seconds) not in (int, float)
+                        or not math.isfinite(seconds) or seconds <= 0):
+                    raise ValueError(
+                        f"{path}: {name}/{layer}/{field}: expected finite positive measured seconds"
+                    )
     return data
 
 
@@ -49,6 +80,17 @@ def main() -> int:
     ap.add_argument("--max-size-regression", type=float, default=None, help=argparse.SUPPRESS)
     ap.add_argument("--summary", type=Path)
     args = ap.parse_args()
+
+    # NaN bypasses both lower and upper numeric bounds and can hide a
+    # confirmed slowdown. Validate policy inputs before applying any alias.
+    for option, value in (
+        ("--timing-relative", args.timing_relative),
+        ("--timing-absolute-ms", args.timing_absolute_ms),
+        ("--max-time-regression", args.max_time_regression),
+        ("--max-size-regression", args.max_size_regression),
+    ):
+        if value is not None and not math.isfinite(value):
+            ap.error(f"{option} must be finite")
 
     if args.timing_relative < 0:
         ap.error("--timing-relative must be non-negative")
@@ -70,7 +112,9 @@ def main() -> int:
             ap.error(
                 f"deprecated --max-time-regression cannot weaken release policy above {POLICY_TIMING_RELATIVE:g}"
             )
-        args.timing_relative = args.max_time_regression
+        # Both accepted flags constrain promotion. A legacy alias must never
+        # override a stricter explicit bound and silently turn a red green.
+        args.timing_relative = min(args.timing_relative, args.max_time_regression)
     if args.max_size_regression is not None and args.max_size_regression < 0:
         ap.error("--max-size-regression must be non-negative")
 
@@ -90,6 +134,12 @@ def main() -> int:
     for name in sorted(base_names & cand_names):
         b_row = base["corpora"][name]
         c_row = cand["corpora"][name]
+        if b_row["logical_bytes"] != c_row["logical_bytes"]:
+            failures.append(
+                f"{name}: logical input bytes changed "
+                f"{b_row['logical_bytes']:,} -> {c_row['logical_bytes']:,}; "
+                "base/candidate input comparability not established"
+            )
         for layer in LAYERS:
             b_cmpct = b_row[layer]["cmpct"]
             c_cmpct = c_row[layer]["cmpct"]
