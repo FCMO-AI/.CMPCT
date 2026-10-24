@@ -71,10 +71,18 @@ class CMPCT:
                     # The signed target is a logical path, not a raw string dictionary key.
                     # Strict preflight canonicalizes backslashes as separators; use that
                     # same key here while retaining each real row's original spelling.
-                    try:target_key,_=canonical_logical_path(link[0])
-                    except ValueError as exc:
-                        raise IOError(f'unsafe hardlink target: {node!r}: {exc}') from exc
-                    node=canonical_names.get(target_key,link[0])
+                    # A target already present as an exact logical-row key passed the
+                    # canonical-name admission/collision checks at open. Avoid paying
+                    # for the same lexical normalization on every graph edge; keep
+                    # the original full validation for every nonexact spelling.
+                    target_name=link[0]
+                    if target_name in self.by:
+                        node=target_name
+                    else:
+                        try:target_key,_=canonical_logical_path(target_name)
+                        except ValueError as exc:
+                            raise IOError(f'unsafe hardlink target: {node!r}: {exc}') from exc
+                        node=canonical_names.get(target_key,target_name)
                 owner=self._hardlink_owners.get(node,node)
                 resolved=self.by.get(owner)
                 if resolved is None or resolved[1]!=K_FILE:

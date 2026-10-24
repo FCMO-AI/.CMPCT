@@ -1,0 +1,155 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# O38: product source differs from O31 by exactly one guarded owner resolver;
+# compare both through original unchanged O33 source/corpus semantics.
+name: CMPCT v031 O38 exact hardlink owner product economics
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - '.github/workflows/v031-reader-exact-owner-product-o38.yml'
+      - '.github/workflows/installed-native-package.yml'
+      - '.github/workflows/v031-hardlink-static-dest-union-o28.yml'
+      - 'docs/v031-research/2026-10-24-o31-exact-hit-productization-o38-prereg.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-o38-owner-product-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  O31_OWNER_SHA: 0edb7bc6e832deb1b403fea50c36e655da9844fd
+  O33_INSTRUMENT_SHA: 8842d593263a6cef563d4e1c0425f04a1877f6ee
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.classify.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Latest commit classifier
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if echo "$changed" | grep -Eq '^(src/cmpct/reader[.]py|[.]github/workflows/v031-reader-exact-owner-product-o38[.]yml|[.]github/workflows/installed-native-package[.]yml|[.]github/workflows/v031-hardlink-static-dest-union-o28[.]yml|docs/v031-research/2026-10-24-o31-exact-hit-productization-o38-prereg[.]md)$'; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_deep=false" >> "$GITHUB_OUTPUT"
+          fi
+  exact-owner-product-court:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind exact source, the single product mutation and original scientific instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o38-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse "$O31_OWNER_SHA:src/cmpct/reader.py")" = de9accf6607aca7cf70dfe71d7b299a02e298a2d
+          test "$(git hash-object src/cmpct/reader.py)" = 4aee9e8ddf50ff3c3e0db20ebf7671e2ac477867
+          test "$(git diff --name-only "$O31_OWNER_SHA" HEAD -- src/cmpct)" = src/cmpct/reader.py
+          git diff --check "$O31_OWNER_SHA" HEAD
+          git diff "$O31_OWNER_SHA" HEAD -- src/cmpct/reader.py > o38-evidence/product-reader.patch
+          git rev-parse HEAD > o38-evidence/source-head.txt
+          git rev-parse "$O31_OWNER_SHA" > o38-evidence/base-head.txt
+          git fetch --no-tags origin "$O33_INSTRUMENT_SHA"
+          test "$(git rev-parse "$O33_INSTRUMENT_SHA:tools/research_o33_reader_hardlink_economics.py")" = 8aabcc100843475068031e39a8a4cfb74edfddac
+          git show "$O33_INSTRUMENT_SHA:tools/research_o33_reader_hardlink_economics.py" > o38-evidence/research_o33_original.py
+          test "$(git hash-object o38-evidence/research_o33_original.py)" = 8aabcc100843475068031e39a8a4cfb74edfddac
+          git worktree add --detach --quiet "$RUNNER_TEMP/o38-owner" "$O31_OWNER_SHA"
+          test "$(git -C "$RUNNER_TEMP/o38-owner" hash-object src/cmpct/reader.py)" = de9accf6607aca7cf70dfe71d7b299a02e298a2d
+      - name: Install source-exact CMPCT and materialize historical native payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[test]'
+          python tools/materialize_performance_base_native.py "$RUNNER_TEMP/o38-owner" --receipt "$GITHUB_WORKSPACE/o38-evidence/base-native.json"
+      - name: Inherited adversarial Reader product tests, unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest --noconftest -q -rs \
+            tests/test_reader_hardlink_graph_o25.py \
+            tests/test_v031_hardlink_canonical_owner_o31.py \
+            tests/test_v031_static_destination_o10r_union_o27.py \
+            tests/test_v031_hardlink_static_destination_union_o28.py \
+            tests/test_v031_signed_tree_preflight.py 2>&1 | tee o38-evidence/hostile.log
+          exit "${PIPESTATUS[0]}"
+      - name: Fresh-process exact O31 vs committed product O38
+        shell: bash
+        run: |
+          set -euo pipefail
+          python o38-evidence/research_o33_original.py \
+            --base-source "$RUNNER_TEMP/o38-owner/src" \
+            --candidate-source "$GITHUB_WORKSPACE/src" \
+            --out "$GITHUB_WORKSPACE/o38-evidence" --reps 8 2>&1 | tee o38-evidence/economics.log
+          exit "${PIPESTATUS[0]}"
+      - name: Independent prospective product economics decision
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          p=pathlib.Path("o38-evidence/o33-raw.json")
+          raw=json.loads(p.read_text())
+          cases={(r["shape"],r["size"]):r for r in raw["results"]}
+          fan=cases[("fanout",4096)]["construct_ms"]
+          plain=cases[("plain",4096)]["construct_ms"]
+          gain=fan["base"]-fan["candidate"]
+          slowdown=plain["candidate"]-plain["base"]
+          danger=slowdown>=3.0 and (slowdown/plain["base"])>=0.10
+          summary={
+            "schema":"cmpct-o38-product-source-v1",
+            "product_head":os.environ["EVIDENCE_HEAD"],
+            "historical_source":os.environ["O31_OWNER_SHA"],
+            "measured_instrument_blob":"8aabcc100843475068031e39a8a4cfb74edfddac",
+            "raw_json_sha256":hashlib.sha256(p.read_bytes()).hexdigest(),
+            "fanout4096_gain_ms":gain,
+            "plain4096_extra_ms":slowdown,
+            "plain_material_regression":danger,
+            "passes_research_triage":gain>=2.0 and not danger,
+            "still_requires_full_gates":True,
+            "product_promotion":False
+          }
+          out=pathlib.Path("o38-evidence/decision.json")
+          out.write_text(json.dumps(summary,sort_keys=True,indent=2)+"\n")
+          print(json.dumps(summary,sort_keys=True,indent=2),flush=True)
+          if not summary["passes_research_triage"]:
+            raise SystemExit("O38 prospectively defined CPU/economics product triage not met")
+          PY
+      - name: Preserve positive, negative and raw scientific receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o38-product-economics-${{ github.sha }}
+          path: o38-evidence/
+          if-no-files-found: warn
+          retention-days: 90
