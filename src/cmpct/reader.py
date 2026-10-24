@@ -447,6 +447,19 @@ class CMPCT:
                         macos_parent=macos_next_node
             seen.add(key);canonical_rows.append((row,key,parts))
             if row[1]==K_SYMLINK:syms.add(key)
+        if os.name == 'nt':
+            # Win32 case-insensitive name resolution must not invent a missing
+            # archive hardlink owner: the authenticated logical spelling, not
+            # whichever physical alias the host finds, controls link identity.
+            # All paths were parsed above; seen contains every exact logical key.
+            for row, key, parts in canonical_rows:
+                if row[1] == K_HARDLINK:
+                    try:
+                        source_key, _ = canonical_logical_path(row[6][0])
+                    except (ValueError, TypeError, IndexError) as exc:
+                        raise IOError(f'unsafe Windows hardlink source: {row[0]!r}') from exc
+                    if source_key not in seen:
+                        raise IOError(f'missing logical Windows hardlink owner: {row[0]!r}')
         if sys.platform=='darwin':
             # Archive hardlinks name LOGICAL owners, not whatever physical APFS path
             # happens to resolve after normalization. The explicit validator already
