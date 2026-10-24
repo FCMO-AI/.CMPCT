@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 # Research-only source-exact court; no CMPCT release or parity credit.
 name: CMPCT v0.31 cross-host reproducible mode O14
 
@@ -24,7 +25,38 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_court: ${{ steps.scope.outputs.run_court }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Classify exact latest commit for product or instrument dependencies
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ] || ! git cat-file -e 'HEAD^' 2>/dev/null; then
+            echo 'run_court=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|benchmarks/v031_crosshost_repro_modes_o14[.]py$|benchmarks/v031_mode_fidelity_o14b[.]py$|tools/research_v031_crosshost_modes_o14_referee[.]py$|[.]github/workflows/v031-crosshost-mode-o14[.]yml$)'; then
+            echo 'run_court=true' >> "$GITHUB_OUTPUT"
+          else
+            # Docs-only updates do not constitute a new engine/instrument.
+            # Retain the source-exact court receipt, do not relabel a skipped court.
+            echo 'run_court=false' >> "$GITHUB_OUTPUT"
+          fi
   cross-host:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_court == 'true'
     name: Mode-only A/B ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -62,7 +94,8 @@ jobs:
           retention-days: 30
 
   referee:
-    needs: cross-host
+    needs: [latest-head-impact, cross-host]
+    if: needs.latest-head-impact.outputs.run_court == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
@@ -96,6 +129,8 @@ jobs:
           retention-days: 30
 
   fidelity-hostile:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_court == 'true'
     name: POSIX archive metadata fidelity negative O14b
     runs-on: ubuntu-24.04
     timeout-minutes: 20
