@@ -41,7 +41,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          test "$(git hash-object src/cmpct/reader.py)" = "de9accf6607aca7cf70dfe71d7b299a02e298a2d"
+          # O38 is a product-source variant; preserve proof of the exact O31 parent
+          # and bind this existing unchanged adversarial court to the new Reader.
+          test "$(git rev-parse 0edb7bc6e832deb1b403fea50c36e655da9844fd:src/cmpct/reader.py)" = "de9accf6607aca7cf70dfe71d7b299a02e298a2d"
+          test "$(git hash-object src/cmpct/reader.py)" = "4aee9e8ddf50ff3c3e0db20ebf7671e2ac477867"
           test "$(git hash-object tests/test_reader_hardlink_graph_o25.py)" = "db38f7024b2f960b66c4d387c2cd942111cf9007"
           test "$(git hash-object tests/test_v031_destination_static_symlink_preflight.py)" = "f55bd39b449a0d43af25658733ae14f8cd583ffa"
           test "$(git hash-object tests/test_v031_static_destination_o10r_union_o27.py)" = "$(git rev-parse '34a2059491fcd38bc09231cba178ec8541f74fdb:tests/test_v031_static_destination_o10r_union_o27.py')"
