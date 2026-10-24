@@ -212,6 +212,8 @@ jobs:
         run: python tests/native_sparse_golden_abi.py
       - name: Native micro-pack C-ABI gate
         run: python tests/native_pack_abi.py native/cmpct-core/target/release/libcmpct_core.so
+      - name: Independent fixed-byte S_PACK native ABI gate
+        run: python tests/native_pack_golden_abi.py
       - name: Committed golden Zstd-dictionary ABI gate
         run: python tests/native_dictionary_golden_abi.py
       - name: Committed WAV-FLAC native component gate
@@ -231,9 +233,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-# Footnote: the S_PACK gate is Builder-derived, so it is a regression/portability check rather than
-# an independent format oracle. A frozen builder-independent pack vector remains a separate conformance
-# task; this gate specifically prevents platform rebases from silently losing ordinary tiny-file reads.
+# Footnote: retain both independent fixed-byte S_PACK conformance and Builder-derived S_PACK regression.
+# The former catches shared encoder/reader assumptions and authenticates source-frozen physical bytes;
+# the latter catches evolving product-encoder admission and tiny-file portfolio regressions.
 # Native-core release evidence uses only the committed Cargo.lock. `--locked` plus a before/after byte comparison
 # makes dependency resolution part of the candidate rather than ambient runner state; changing the graph therefore
 # requires an explicit fingerprint-changing repository mutation before any new native-core receipt can become valid.
