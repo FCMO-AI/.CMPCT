@@ -1,0 +1,62 @@
+# ci-lane: fast
+name: CMPCT v031 filesystem semantic evidence court
+
+on:
+  pull_request:
+    paths:
+      - 'tools/v031_fs_semantics_oracle.py'
+      - 'tests/test_v031_fs_semantics_oracle.py'
+      - 'benchmarks/v031_fs_semantics_oracle_court.py'
+      - 'docs/v031-research/2026-10-24-fs-semantic-oracle-prereg.md'
+      - '.github/workflows/v031-fs-semantic-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-fs-semantic-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  fs-semantic-conformance:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind exact source and preserve historical helpers
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git diff --exit-code
+          git rev-parse HEAD
+      - name: Independent filesystem semantics adversarial suite
+        shell: bash
+        run: python -m unittest discover -s tests -p 'test_v031_fs_semantics_oracle.py' -v
+      - name: Run source-faithful historical false-equivalence comparisons
+        shell: bash
+        run: |
+          mkdir -p test-artifacts
+          python benchmarks/v031_fs_semantics_oracle_court.py > test-artifacts/v031-fs-semantic-results.json
+          cat test-artifacts/v031-fs-semantic-results.json
+      - name: Preserve exact-head science evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-fs-semantic-${{ matrix.os }}
+          path: test-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
