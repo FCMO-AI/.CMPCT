@@ -7,6 +7,7 @@ on:
       - 'docs/v031-research/2026-10-24-preflight-fresh-process-rss-o4-prereg.md'
       - 'docs/v031-research/2026-10-24-preflight-fresh-process-rss-o4-result.md'
       - 'docs/v031-research/2026-10-24-preflight-fresh-process-rss-o5-prereg.md'
+      - 'docs/v031-research/2026-10-24-preflight-fresh-process-rss-o5-result.md'
       - '.github/workflows/v031-preflight-fresh-rss-o4.yml'
   workflow_dispatch:
 permissions:
