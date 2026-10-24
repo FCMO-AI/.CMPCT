@@ -46,6 +46,16 @@ The presence of this code is **not yet release authority**. T01 stays open until
 
 ---
 
+## Experimental opt-in S_PACK operation-scoped verified batch (v0.31 O3 — not released)
+
+PR candidate O3 adds `cmpct_pack_read_batch(archive, requests, count, buffer, capacity, out_read)` to the revision-24 Rust C ABI. Each request is a `#[repr(C)] CmpctPackRange { entry_index: usize, offset: u64, length: usize }`; on success the result is one contiguous concatenation in request order.
+
+This operation is **not** an automatic cross-call cache and **does not replace** `cmpct_entry_read_range`. It is intentionally restricted to one shared physical Zstd `S_PACK` across all requests, with <=1024 ranges, <=16 MiB total copied bytes and <=16 MiB physical compressed/decoded PACK bytes. A RAW pack returns unsupported so ordinary RAW reads remain physically local. Every request and destination bound is checked before decoding; physical layout/strong decoded SHA and each applicable complete-member logical SHA are checked before any output is copied. Failure sets `out_read=0` and leaves caller bytes untouched. Callers must provide a valid live handle and nonoverlapping pointer regions, as documented beside the C export.
+
+**Source freshness:** the next batch reacquires the file lock and reauthenticates the physical Zstd data, just as ordinary independent reads do. The only amortization is within one explicitly requested operation; there is no retained decoded data. It does not claim atomicity against a hostile writer changing the physical file *during* the decode, which the original single-read contract does not guarantee either.
+
+The independent fixed-byte vectors under `tests/conformance/v24-pack.json` and the hosted real-Builder/native-ABI court `tests/native_pack_batch_abi.py` are the O3 evidence boundary. An experimental ABI without an actual integrated consumer, cross-platform checks, complete RSS/I/O benchmarking, and exact-head CI proof is **not a released capability or release performance win**. Continue to use the ordinary C ABI for all current platform shells.
+
 ## Revision-24 native foundation
 
 The remainder of this document preserves the detailed r24 capability/conformance record. It remains relevant because genuine r24 is the v0.30 product floor and fallback path.

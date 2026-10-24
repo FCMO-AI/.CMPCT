@@ -60,6 +60,33 @@ int32_t cmpct_entry_read_range(
     size_t *out_read
 );
 
+/*
+ * Explicit operation-scoped, verified batch read of ranges from ONE physical
+ * Zstd S_PACK. The output is all requested ranges concatenated in order.
+ * This optional export leaves independent cmpct_entry_read_range semantics
+ * unchanged and does not retain decoded data between calls.
+ *
+ * Bounds: 1..1024 requests, <=16 MiB total output, <=16 MiB compressed and
+ * decoded physical pack. RAW, mixed physical owners and malformed ranges
+ * fail closed. On error *out_read=0 and the output buffer is not modified.
+ * Requests, buffer and out_read must be valid, pairwise nonoverlapping memory;
+ * archive must remain live for the entire call.
+ */
+typedef struct CmpctPackRange {
+    size_t entry_index;
+    uint64_t offset;
+    size_t length;
+} CmpctPackRange;
+
+int32_t cmpct_pack_read_batch(
+    const CmpctArchive *archive,
+    const CmpctPackRange *requests,
+    size_t count,
+    uint8_t *buffer,
+    size_t capacity,
+    size_t *out_read
+);
+
 #ifdef __cplusplus
 }
 #endif

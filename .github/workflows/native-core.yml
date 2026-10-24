@@ -214,6 +214,10 @@ jobs:
         run: python tests/native_pack_abi.py native/cmpct-core/target/release/libcmpct_core.so
       - name: Independent fixed-byte S_PACK native ABI gate
         run: python tests/native_pack_golden_abi.py
+      - name: Explicit verified S_PACK batch ABI product and negative court
+        run: |
+          mkdir -p "$RUNNER_TEMP/cmpct-pack-batch-o3"
+          python tests/native_pack_batch_abi.py "$RUNNER_TEMP/cmpct-pack-batch-o3/result.json"
       - name: Committed golden Zstd-dictionary ABI gate
         run: python tests/native_dictionary_golden_abi.py
       - name: Committed WAV-FLAC native component gate
