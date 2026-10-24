@@ -1,4 +1,4 @@
-# ci-lane: research
+# ci-lane: release
 # ci-cancel-policy: preserve-running-exact-receipt
 # Standalone source-exact O1, not a replacement for canonical r24 gate/release authority.
 # Adapted from .github/workflows/zip-parity.yml at inherited PR #328 source.
@@ -8,6 +8,8 @@ name: CMPCT v0.31 direct-development parity O1
 on:
   pull_request:
     branches: [agent/phased3-v031-parity-admission-metric-truth-union-r267-20261024]
+    paths:
+      - ".github/workflows/v031-direct-development-parity-o1.yml"
   workflow_dispatch:
 
 permissions:
