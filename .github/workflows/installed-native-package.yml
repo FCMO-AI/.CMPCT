@@ -10,6 +10,8 @@ on:
       - "src/**"
       - "native/**"
       - "tests/installed_native_package_smoke.py"
+      - "tests/installed_native_signed_symlink_smoke.py"
+      - "tools/v031_signed_symlink_crosshost_o2.py"
       - "tools/check_v031_candidate_fingerprint.py"
       - "docs/V031_CANDIDATE_FINGERPRINT.json"
       - ".github/workflows/installed-native-package.yml"
@@ -54,14 +56,40 @@ jobs:
           # paths. A missing parent/diff fails closed rather than silently skipping.
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tests/installed_native_signed_symlink_smoke[.]py$|tools/v031_signed_symlink_crosshost_o2[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
             echo 'run_package=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_package=false' >> "$GITHUB_OUTPUT"
           fi
 
-  installed-package:
+  build-signed-fixtures:
     needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_package == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build signed r24 source fixtures once with authentic Builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pip install -e ".[test]"
+          python tools/v031_signed_symlink_crosshost_o2.py build --dir signed-fixtures --head "$EVIDENCE_HEAD"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installed-wheel-signed-fixtures-${{ env.EVIDENCE_HEAD }}
+          path: signed-fixtures/
+          if-no-files-found: error
+          retention-days: 14
+
+  installed-package:
+    needs: [latest-head-impact, build-signed-fixtures]
     if: needs.latest-head-impact.outputs.run_package == 'true'
     strategy:
       fail-fast: false
@@ -108,6 +136,18 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
           "$PY" -m pip install "$RUNNER_TEMP"/wheels/cmpct-*.whl
           (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee installed-native-smoke.json
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: installed-wheel-signed-fixtures-${{ env.EVIDENCE_HEAD }}
+          path: signed-fixtures
+      - name: Reject signed unsafe symlinks through the clean-installed wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
+          (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_signed_symlink_smoke.py" "$GITHUB_WORKSPACE/signed-fixtures" "$EVIDENCE_HEAD") | tee installed-signed-smoke.json
       - name: Inspect installed dependency closure
         shell: bash
         run: |
@@ -128,6 +168,7 @@ jobs:
           name: installed-native-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             installed-native-smoke.json
+            installed-signed-smoke.json
             installed-native-deps.txt
             ${{ runner.temp }}/wheels/cmpct-*.whl
           if-no-files-found: error
@@ -220,10 +261,19 @@ jobs:
           platform={}
           for os_name,p in found.items():
               smoke_files=list(p.rglob('installed-native-smoke.json'))
+              signed_files=list(p.rglob('installed-signed-smoke.json'))
               dep_files=list(p.rglob('installed-native-deps.txt'))
               wheels=list(p.rglob('cmpct-*.whl'))
               assert len(smoke_files)==1,(os_name,smoke_files)
               assert len(dep_files)==1,(os_name,dep_files)
+              assert len(signed_files)==1,(os_name,signed_files)
+              signed=json.loads(signed_files[0].read_text())
+              assert signed['schema']=='cmpct-v031-installed-wheel-signed-symlink-o3-v1'
+              assert signed['source_sha']==expected_head
+              assert signed['required_prewrite_negatives']==(4 if os_name=='windows-2025' else 2)
+              assert signed['physical_safe_symlink_restored']==(os_name!='windows-2025')
+              assert len(signed['fixture_manifest_sha256'])==64
+              assert sum(x['result']=='prewrite_rejected' for x in signed['results'])==signed['required_prewrite_negatives']
               assert len(wheels)==1,(os_name,wheels)
               s=json.loads(smoke_files[0].read_text())
               assert s['representative_archive_create_read_extract'] is True
@@ -236,15 +286,20 @@ jobs:
               platform[os_name]={
                   'archive_sha256':s['representative_archive_sha256'],
                   'dict_vector_sha256':s['dict_vector_sha256'],
+                  'installed_signed_fixture_sha256':signed['fixture_manifest_sha256'],
+                  'installed_prewrite_negatives':signed['required_prewrite_negatives'],
+                  'installed_safe_relative_symlink_physical':signed['physical_safe_symlink_restored'],
                   'wheel_name':wheel.name,
                   'wheel_sha256':hashlib.sha256(wheel.read_bytes()).hexdigest(),
               }
+          assert len({x['installed_signed_fixture_sha256'] for x in platform.values()})==1, 'signed input differs across hosts'
           evidence={
               'schema':'cmpct-v031-desktop-package-evidence-v1',
               'candidate_source_receipt_schema':'cmpct-v031-candidate-source-receipt-v1',
               'candidate_fingerprint':os.environ['FP'].strip(),
               'candidate_sha':expected_head,
               'facts':{
+                  'installed_signed_symlink_prewrite_three_host_green':True,
                   'sdist_first_wheel_build':True,
                   'linux_clean_install_green':True,
                   'macos_clean_install_green':True,
