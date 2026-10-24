@@ -53,8 +53,8 @@ jobs:
           # Deep-lane scheduling scope is the newest commit, not accumulated PR
           # paths. A missing parent/diff fails closed rather than silently skipping.
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          printf '%s\\n' "$changed"
-          if printf '%s\\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
             echo 'run_package=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_package=false' >> "$GITHUB_OUTPUT"
