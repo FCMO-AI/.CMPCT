@@ -1,0 +1,164 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# O36: source-exact non-product fastpath research; never modify committed Reader.
+name: CMPCT v031 Reader owner exact-hit oracle O36
+on:
+  pull_request:
+    paths:
+      - 'tools/research_o36_exact_owner_lookup_oracle.py'
+      - 'docs/v031-research/2026-10-24-o31-owner-lookup-o36-prereg.md'
+      - 'docs/v031-research/2026-10-24-o31-owner-lookup-o36-result.md'
+      - '.github/workflows/v031-reader-owner-lookup-o36.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-owner-lookup-o36-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  O36_OWNER_SHA: 0edb7bc6e832deb1b403fea50c36e655da9844fd
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.classify.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Classify latest commit before deep research
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if echo "$changed" | grep -Eq '^(tools/research_o36_exact_owner_lookup_oracle[.]py|[.]github/workflows/v031-reader-owner-lookup-o36[.]yml|docs/v031-research/2026-10-24-o31-owner-lookup-o36-prereg[.]md)$'; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_deep=false" >> "$GITHUB_OUTPUT"
+          fi
+  source-exact-o36:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Exact source custody and research-only mutation surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o36-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse "$O36_OWNER_SHA:src/cmpct/reader.py")" = "de9accf6607aca7cf70dfe71d7b299a02e298a2d"
+          test "$(git hash-object src/cmpct/reader.py)" = "de9accf6607aca7cf70dfe71d7b299a02e298a2d"
+          test "$(git hash-object tools/research_o33_reader_hardlink_economics.py)" = "8aabcc100843475068031e39a8a4cfb74edfddac"
+          if git diff --name-only "$O36_OWNER_SHA" "$EVIDENCE_HEAD" -- src/cmpct | grep -q .; then
+            echo 'O36 must not change shipping CMPCT product source' >&2
+            exit 1
+          fi
+          git diff --name-only "$O36_OWNER_SHA" "$EVIDENCE_HEAD" > o36-evidence/change-surface.txt
+          git rev-parse HEAD > o36-evidence/head.txt
+          git show -s --format='%H %ct %s' "$O36_OWNER_SHA" > o36-evidence/owner-source.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing CMPCT reference + test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Materialize disposable exact-O31 prototype with one text mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach --quiet "$RUNNER_TEMP/o36-oracle" "$O36_OWNER_SHA"
+          test "$(git -C "$RUNNER_TEMP/o36-oracle" rev-parse HEAD)" = "$O36_OWNER_SHA"
+          test "$(git -C "$RUNNER_TEMP/o36-oracle" hash-object src/cmpct/reader.py)" = "de9accf6607aca7cf70dfe71d7b299a02e298a2d"
+          python - "$RUNNER_TEMP/o36-oracle/src/cmpct/reader.py" <<'PY'
+          import pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          current = path.read_text()
+          old = """                    try:target_key,_=canonical_logical_path(link[0])
+                    except ValueError as exc:
+                        raise IOError(f'unsafe hardlink target: {node!r}: {exc}') from exc
+                    node=canonical_names.get(target_key,link[0])"""
+          new = """                    # Research oracle: already authenticated row keys were canonical-validated
+                    # before any graph resolution. Never bypass parsing of nonexact spellings.
+                    target_name=link[0]
+                    if target_name in self.by:
+                        node=target_name
+                    else:
+                        try:target_key,_=canonical_logical_path(target_name)
+                        except ValueError as exc:
+                            raise IOError(f'unsafe hardlink target: {node!r}: {exc}') from exc
+                        node=canonical_names.get(target_key,target_name)"""
+          if current.count(old) != 1:
+              raise SystemExit(f"Expected one exact owner resolver fragment, found {current.count(old)}")
+          path.write_text(current.replace(old, new, 1))
+          PY
+          git -C "$RUNNER_TEMP/o36-oracle" diff --check
+          test "$(git -C "$RUNNER_TEMP/o36-oracle" diff --name-only)" = "src/cmpct/reader.py"
+          git -C "$RUNNER_TEMP/o36-oracle" diff -- src/cmpct/reader.py > o36-evidence/disposable-prototype.patch
+          git -C "$RUNNER_TEMP/o36-oracle" hash-object src/cmpct/reader.py > o36-evidence/disposable-reader-blob.txt
+          sha256sum "$RUNNER_TEMP/o36-oracle/src/cmpct/reader.py" > o36-evidence/disposable-reader-sha256.txt
+          test "$(git hash-object src/cmpct/reader.py)" = "de9accf6607aca7cf70dfe71d7b299a02e298a2d"
+      - name: Build same-native-version payload for isolated prototype worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/materialize_performance_base_native.py "$RUNNER_TEMP/o36-oracle" --receipt "$GITHUB_WORKSPACE/o36-evidence/oracle-native.json"
+          test -f o36-evidence/oracle-native.json
+      - name: Prove source import and execute unchanged hostile product controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$RUNNER_TEMP/o36-oracle/src" python - "$RUNNER_TEMP/o36-oracle/src" <<'PY'
+          from pathlib import Path
+          import sys
+          import cmpct.reader as reader_mod
+          source = Path(sys.argv[1]).resolve()
+          loaded = Path(reader_mod.__file__).resolve()
+          if not loaded.is_relative_to(source):
+              raise SystemExit(f"Not disposable Reader source: {loaded}")
+          print(f"O36_DISPOSABLE_READER={loaded}", flush=True)
+          PY
+          PYTHONPATH="$RUNNER_TEMP/o36-oracle/src" python -m pytest --noconftest -q -rs \
+            tests/test_reader_hardlink_graph_o25.py \
+            tests/test_v031_hardlink_canonical_owner_o31.py \
+            tests/test_v031_static_destination_o10r_union_o27.py \
+            tests/test_v031_hardlink_static_destination_union_o28.py \
+            tests/test_v031_signed_tree_preflight.py 2>&1 | tee o36-evidence/semantic-hostile.log
+          exit "${PIPESTATUS[0]}"
+      - name: Run authentic revision-24 source-exact ABBA CPU/RSS research
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/research_o36_exact_owner_lookup_oracle.py \
+            --owner-source "$GITHUB_WORKSPACE/src" \
+            --prototype-source "$RUNNER_TEMP/o36-oracle/src" \
+            --out "$GITHUB_WORKSPACE/o36-evidence" \
+            --reps 8 2>&1 | tee o36-evidence/research.log
+          exit "${PIPESTATUS[0]}"
+      - name: Persist all positives, negatives, provenance and raw observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o36-disposable-owner-lookup-${{ github.sha }}
+          path: o36-evidence/
+          if-no-files-found: warn
+          retention-days: 90
