@@ -21,7 +21,7 @@ from native_pack_batch_abi import source_bytes
 ORIGIN_SHA = "611d0ea67a94f552f9ebca07ba747f191dee160e"
 FIXED_TIME = 1_700_000_000_000_000_000
 A = b"alpha independent inode O15|" * 30
-B = b"bravo different source O15|" * 30
+B = b"bravo different source O15||" * 30
 assert A != B and len(A) == len(B)
 
 
