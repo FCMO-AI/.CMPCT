@@ -6,8 +6,10 @@ on:
   pull_request:
     paths:
       - 'benchmarks/v031_crosshost_repro_modes_o14.py'
+      - 'benchmarks/v031_mode_fidelity_o14b.py'
       - 'tools/research_v031_crosshost_modes_o14_referee.py'
       - 'docs/v031-research/2026-10-24-crosshost-mode-equivalence-o14-*'
+      - 'docs/v031-research/2026-10-24-crosshost-mode-fidelity-o14b-*'
       - '.github/workflows/v031-crosshost-mode-o14.yml'
   workflow_dispatch:
 
@@ -90,5 +92,39 @@ jobs:
         with:
           name: o14-referee-${{ env.EVIDENCE_HEAD }}
           path: o14-referee.json
+          if-no-files-found: error
+          retention-days: 30
+
+  fidelity-hostile:
+    name: POSIX archive metadata fidelity negative O14b
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Independent chmod and authentic metadata-restoring extractor controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python benchmarks/v031_mode_fidelity_o14b.py --out o14b-result.json
+          python - <<'PY'
+          import json, os
+          r=json.load(open('o14b-result.json'))
+          assert r['source_sha']==os.environ['EVIDENCE_HEAD']
+          assert r['decision']=='SILENT_PORTABLE_MODE_PROFILES_FALSIFIED_FOR_FULL_POSIX_FIDELITY'
+          assert all(r['arm'][a]['strong_verify'] and r['arm'][a]['metadata_restore']
+                     for a in ('original','fixed_0644','mask_group_world_write'))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: o14b-fidelity-${{ env.EVIDENCE_HEAD }}
+          path: o14b-result.json
           if-no-files-found: error
           retention-days: 30
