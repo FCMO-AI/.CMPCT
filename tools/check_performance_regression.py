@@ -112,7 +112,9 @@ def main() -> int:
             ap.error(
                 f"deprecated --max-time-regression cannot weaken release policy above {POLICY_TIMING_RELATIVE:g}"
             )
-        args.timing_relative = args.max_time_regression
+        # Both accepted flags constrain promotion. A legacy alias must never
+        # override a stricter explicit bound and silently turn a red green.
+        args.timing_relative = min(args.timing_relative, args.max_time_regression)
     if args.max_size_regression is not None and args.max_size_regression < 0:
         ap.error("--max-size-regression must be non-negative")
 
