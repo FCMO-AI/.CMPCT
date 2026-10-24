@@ -75,6 +75,17 @@ def main() -> int:
     ap.add_argument("--summary", type=Path)
     args = ap.parse_args()
 
+    # NaN bypasses both lower and upper numeric bounds and can hide a
+    # confirmed slowdown. Validate policy inputs before applying any alias.
+    for option, value in (
+        ("--timing-relative", args.timing_relative),
+        ("--timing-absolute-ms", args.timing_absolute_ms),
+        ("--max-time-regression", args.max_time_regression),
+        ("--max-size-regression", args.max_size_regression),
+    ):
+        if value is not None and not math.isfinite(value):
+            ap.error(f"{option} must be finite")
+
     if args.timing_relative < 0:
         ap.error("--timing-relative must be non-negative")
     if args.timing_relative > POLICY_TIMING_RELATIVE:
