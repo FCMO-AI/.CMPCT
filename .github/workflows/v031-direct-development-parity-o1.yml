@@ -1,0 +1,305 @@
+# ci-lane: research
+# ci-cancel-policy: preserve-running-exact-receipt
+# Standalone source-exact O1, not a replacement for canonical r24 gate/release authority.
+# Adapted from .github/workflows/zip-parity.yml at inherited PR #328 source.
+# Difference: DIRECT canonical v0.31 DEVELOPMENT base instead of stacked-parent A/A.
+name: CMPCT v0.31 direct-development parity O1
+
+on:
+  pull_request:
+    branches: [agent/phased3-v031-parity-admission-metric-truth-union-r267-20261024]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-directdev-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  direct-development-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Each engine is run twice in ABBA order. Seven repetitions/run yields fourteen timed
+      # observations per metric per engine. The deeper sample is deliberate: the exact-head tiny
+      # diagnostic has shown that a six-observation aggregate can falsely report a >10% regression
+      # while a 28-observation focused ABBA on the same candidate/base pair is neutral-to-faster.
+      # Thresholds are unchanged; only the evidence resolution is increased.
+      CMPCT_PARITY_REPS: "7"
+      CMPCT_RELEASE_CORPUS: /tmp/cmpct-release-corpus
+    steps:
+      - name: Check out candidate repository history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # PR workflows normally check out a synthetic merge commit. Performance evidence should
+          # identify and execute the actual candidate head while still comparing against the PR base.
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind checkout to exact evidence head
+        run: |
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          test "$ACTUAL_HEAD" = "$EVIDENCE_HEAD"
+          echo "Exact evidence head: $ACTUAL_HEAD"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install benchmark dependencies
+        run: |
+          if ! sudo apt-get update; then
+            echo "Initial apt update failed; retrying without runner-provided Microsoft feeds" >&2
+            shopt -s nullglob
+            microsoft_lists=(
+              /etc/apt/sources.list.d/microsoft*.list
+              /etc/apt/sources.list.d/azure-cli*.list
+            )
+            if ((${#microsoft_lists[@]} == 0)); then
+              echo "apt update failed and no known irrelevant Microsoft feed was present" >&2
+              exit 1
+            fi
+            printf 'Disabling runner-provided feed: %s\n' "${microsoft_lists[@]}"
+            sudo rm -f "${microsoft_lists[@]}"
+            sudo apt-get update
+          fi
+          sudo apt-get install -y zstd xz-utils libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+
+      - name: Correctness gate
+        run: python -m pytest -q
+
+      - name: Bind direct canonical development baseline
+        id: base
+        run: |
+          set -euo pipefail
+          BASE_SHA="4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b"
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git cat-file -e "${BASE_SHA}^{commit}"
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "CANDIDATE_SHA=$(git rev-parse HEAD)"
+          echo "CANONICAL_DEVELOPMENT_BASE=$BASE_SHA"
+
+      - name: Materialize base engine worktree
+        run: git worktree add --detach /tmp/cmpct-performance-base "${{ steps.base.outputs.sha }}"
+
+      - name: Materialize historical base native payload
+        run: |
+          mkdir -p benchmark-artifacts
+          python tools/materialize_performance_base_native.py /tmp/cmpct-performance-base \
+            --receipt benchmark-artifacts/base-native.json | tee benchmark-artifacts/native-ownership.txt
+
+      - name: Generate one immutable release corpus
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import hashlib, json, os, shutil, sys
+          from pathlib import Path
+
+          root = Path.cwd()
+          sys.path.insert(0, str(root / 'benchmarks'))
+          import universal_bench as universal
+
+          corpus = Path(os.environ['CMPCT_RELEASE_CORPUS'])
+          shutil.rmtree(corpus, ignore_errors=True)
+          corpus.mkdir(parents=True)
+          universal.CORP = corpus
+          universal.reset_rng()
+          universal.make_corpora()
+
+          # CMPCT preserves richer metadata than ZIP. Identical payload bytes alone therefore do not
+          # define identical archive input; freeze controllable timestamps before either engine runs.
+          fixed_ns = 1767225600 * 1_000_000_000  # 2026-01-01T00:00:00Z
+          paths = sorted(corpus.rglob('*'), key=lambda p: (len(p.parts), p.as_posix()), reverse=True)
+          for path in paths:
+              try:
+                  os.utime(path, ns=(fixed_ns, fixed_ns), follow_symlinks=False)
+              except (NotImplementedError, OSError):
+                  if not path.is_symlink():
+                      raise
+          os.utime(corpus, ns=(fixed_ns, fixed_ns))
+
+          h = hashlib.sha256(); files = 0; logical = 0
+          for path in sorted(corpus.rglob('*')):
+              rel = path.relative_to(corpus).as_posix().encode(); st = path.lstat()
+              h.update(len(rel).to_bytes(4, 'little')); h.update(rel)
+              h.update((st.st_mode & 0o177777).to_bytes(4, 'little'))
+              h.update(st.st_mtime_ns.to_bytes(8, 'little', signed=True))
+              if path.is_symlink():
+                  target = os.readlink(path).encode(); h.update(b'L')
+                  h.update(len(target).to_bytes(4, 'little')); h.update(target)
+              elif path.is_file():
+                  data = path.read_bytes(); files += 1; logical += len(data); h.update(b'F')
+                  h.update(len(data).to_bytes(8, 'little')); h.update(data)
+              elif path.is_dir():
+                  h.update(b'D')
+          manifest = {'tree_sha256': h.hexdigest(), 'files': files, 'logical_bytes': logical,
+                      'fixed_mtime_ns': fixed_ns}
+          Path('benchmark-artifacts/corpus.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Capture shared-runner provenance
+        run: |
+          CANDIDATE_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -1)"
+          {
+            echo "candidate_commit=$(git rev-parse HEAD)"
+            echo "evidence_head=$EVIDENCE_HEAD"
+            echo "base_commit=${{ steps.base.outputs.sha }}"
+            echo "candidate_version=$CANDIDATE_VERSION"
+            echo "format_revision=$(PYTHONPATH=src python -c 'from cmpct.codec import VERSION; print(VERSION)')"
+            echo "python=$(python --version 2>&1)"
+            echo "uname=$(uname -a)"
+            echo "filesystem=$(df -T . | tail -1)"
+            echo "cpu_count=$(nproc)"
+            echo "cpu_model=$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)"
+            echo "mem=$(free -h | awk '/^Mem:/ {print $2}')"
+            echo "zstd=$(zstd --version | head -1)"
+          } | tee benchmark-artifacts/environment.txt
+
+      - name: Benchmark A — direct base
+        working-directory: benchmarks
+        env:
+          PYTHONPATH: /tmp/cmpct-performance-base/src
+          CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-release-corpus
+        run: |
+          python zip_parity_bench.py > ../benchmark-artifacts/base-a.stdout.txt
+          cp _parity_work/out/zip-parity.json ../benchmark-artifacts/base-a.json
+
+      - name: Benchmark B — candidate
+        working-directory: benchmarks
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-release-corpus
+        run: |
+          python zip_parity_bench.py > ../benchmark-artifacts/candidate-a.stdout.txt
+          cp _parity_work/out/zip-parity.json ../benchmark-artifacts/candidate-a.json
+
+      - name: Benchmark B — candidate repeat
+        working-directory: benchmarks
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-release-corpus
+        run: |
+          python zip_parity_bench.py > ../benchmark-artifacts/candidate-b.stdout.txt
+          cp _parity_work/out/zip-parity.json ../benchmark-artifacts/candidate-b.json
+
+      - name: Benchmark A — direct base repeat
+        working-directory: benchmarks
+        env:
+          PYTHONPATH: /tmp/cmpct-performance-base/src
+          CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-release-corpus
+        run: |
+          python zip_parity_bench.py > ../benchmark-artifacts/base-b.stdout.txt
+          cp _parity_work/out/zip-parity.json ../benchmark-artifacts/base-b.json
+
+      - name: Aggregate symmetric ABBA runs
+        run: |
+          python tools/aggregate_parity_runs.py --out benchmark-artifacts/base.json \
+            benchmark-artifacts/base-a.json benchmark-artifacts/base-b.json
+          python tools/aggregate_parity_runs.py --out benchmark-artifacts/candidate.raw.json \
+            benchmark-artifacts/candidate-a.json benchmark-artifacts/candidate-b.json
+
+      - name: Enrich candidate benchmark record
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          python - <<'PY'
+          import json, os, platform, subprocess, tomllib
+          from datetime import date
+          from pathlib import Path
+          from cmpct.codec import VERSION
+
+          root = Path.cwd()
+          data = json.loads((root / 'benchmark-artifacts/candidate.raw.json').read_text())
+          corpus = json.loads((root / 'benchmark-artifacts/corpus.json').read_text())
+          with (root / 'pyproject.toml').open('rb') as fh:
+              version = tomllib.load(fh)['project']['version']
+          data.update({
+              'project_version': version,
+              'source_commit': subprocess.check_output(['git','rev-parse','HEAD'], cwd=root, text=True).strip(),
+              'evidence_head': os.environ['EVIDENCE_HEAD'],
+              'date': date.today().isoformat(),
+              'record_kind': 'r24_core_zip_regression_evidence',
+              'harness': 'benchmarks/zip_parity_bench.py',
+              'release_design': 'ABBA; median of two 7-repetition run medians per engine',
+              'format_revision': VERSION,
+              'comparison_base_commit': os.environ.get('BASE_SHA',''),
+              'corpus_manifest': corpus,
+              'claim_boundary': (
+                  'canonical r24 src/cmpct core and ZIP parity only; does not measure the promoted v0.30 '
+                  'r24/r25 product selector or satisfy v0.30 external creation-speed dominance'
+              ),
+              'environment': {
+                  'python': platform.python_version(),
+                  'platform': platform.platform(),
+                  'cpu_count': os.cpu_count(),
+                  'cpu_model': subprocess.check_output(
+                      "lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1",
+                      shell=True, text=True,
+                  ).strip(),
+                  'zstd': subprocess.check_output(['zstd','--version'], text=True).splitlines()[0],
+              },
+          })
+          if data['source_commit'] != data['evidence_head']:
+              raise SystemExit(f"candidate/evidence head mismatch: {data['source_commit']} != {data['evidence_head']}")
+          (root / 'benchmark-artifacts/candidate.json').write_text(json.dumps(data, indent=2) + '\n')
+          PY
+
+      - name: Reject performance regressions
+        run: |
+          python tools/check_performance_regression.py \
+            --base benchmark-artifacts/base.json \
+            --candidate benchmark-artifacts/candidate.json \
+            --max-time-regression 0.05 \
+            --max-size-regression 0.01
+
+      - name: Publish performance summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          bp=Path('benchmark-artifacts/base.json'); cp=Path('benchmark-artifacts/candidate.json')
+          if not bp.exists() or not cp.exists():
+              raise SystemExit('missing r24 ZIP parity evidence for summary')
+          b=json.load(bp.open()); c=json.load(cp.open())
+          lines=['## CMPCT r24 core / ZIP performance gate','',
+                 '> This is canonical r24 core regression evidence, not promoted-v0.30 selector evidence.', '',
+                 '| Corpus | Metric | Base | Candidate | Delta |','|---|---|---:|---:|---:|']
+          for n in b['corpora']:
+              for m in ('bytes','create_s_median','extract_s_median'):
+                  x=b['corpora'][n]['library']['cmpct'][m]; y=c['corpora'][n]['library']['cmpct'][m]
+                  d=(y-x)/x*100 if x else 0
+                  lines.append(f'| {n} | {m} | {x:.6g} | {y:.6g} | {d:+.2f}% |')
+          text='\n'.join(lines)+'\n'
+          Path('benchmark-artifacts/PERFORMANCE_GATE.md').write_text(text)
+          summary=os.environ.get('GITHUB_STEP_SUMMARY')
+          if summary: Path(summary).write_text(text)
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/zip-parity.yml
+
+      - name: Upload release benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-directdev-research-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/
+          if-no-files-found: error
+          retention-days: 90
+
+# Footnote: the long-lived v0.30 integration PR previously cancelled this 45-minute ABBA receipt whenever any
+# newer PR commit arrived, even when that commit did not change r24 performance inputs. Exact-head concurrency now
+# preserves a started/queued receipt, while the full-PR-diff classifier admits every head whose net product tree differs from its PR merge-base. This
+# changes only CI custody: corpus, ABBA design, thresholds and direct-base comparison semantics are unchanged.
