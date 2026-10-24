@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'native/cmpct-core/src/lib.rs'
+      - 'native/cmpct-core/include/cmpct.h'
       - 'tests/native_pack_batch_abi.py'
       - 'docs/v031-research/NATIVE_PACK_OPERATION_BATCH_O3_PREREG.md'
       - 'docs/NATIVE_CORE.md'
@@ -54,6 +55,7 @@ jobs:
           python -m pip install -e '.[test]'
           cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
           cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+          printf '#include "native/cmpct-core/include/cmpct.h"\n_Static_assert(sizeof(CmpctPackRange) >= sizeof(size_t) + sizeof(uint64_t) + sizeof(size_t), "C ABI request layout");\nint main(void) { return 0; }\n' | cc -x c -std=c11 -Wall -Wextra -Werror -c -o /tmp/cmpct-pack-abi.o -
       - name: Original independent physical S_PACK conformance
         shell: bash
         run: |
