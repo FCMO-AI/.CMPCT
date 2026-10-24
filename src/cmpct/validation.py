@@ -397,6 +397,57 @@ def _validate_storage(path: str, kind: int, size: int, storage, blobs, recipes) 
         raise ValidationError(f"file {path!r} uses unknown storage kind {tag!r}")
 
 
+def _validate_fsmeta(fsmeta, file_count: int) -> None:
+    """Validate existing r24 filesystem metadata before any extraction side effects.
+
+    Footnote: index digests authenticate internal consistency, not the metadata grammar.
+    Extraction turns these arrays into per-file maps and applies xattrs sequentially.
+    Duplicate references or malformed nested fields can otherwise overwrite declarations,
+    raise only after payloads have been written, or silently alter inode metadata.
+    This bounded structural pass does not change stored bytes or OS xattr policy.
+    """
+    if not isinstance(fsmeta, dict):
+        raise ValidationError("fsmeta must be a map")
+    owner = fsmeta.get("owner", [0, 0])
+    if not isinstance(owner, list) or len(owner) != 2:
+        raise ValidationError("fsmeta owner must be [uid, gid]")
+    for value in owner:
+        _int(value, "fsmeta owner")
+
+    for label in ("owner_overrides", "xattrs"):
+        rows = fsmeta.get(label, [])
+        if not isinstance(rows, list):
+            raise ValidationError(f"fsmeta {label} must be an array")
+        seen_files = set()
+        for row in rows:
+            width = 3 if label == "owner_overrides" else 2
+            if not isinstance(row, list) or len(row) != width:
+                raise ValidationError(f"fsmeta {label} row is malformed")
+            file_index = _ref(row[0], file_count, f"fsmeta {label} file")
+            if file_index in seen_files:
+                raise ValidationError(f"fsmeta {label} has duplicate file reference")
+            seen_files.add(file_index)
+            if label == "owner_overrides":
+                _int(row[1], "fsmeta override uid")
+                _int(row[2], "fsmeta override gid")
+                continue
+            pairs = row[1]
+            if not isinstance(pairs, list):
+                raise ValidationError("fsmeta xattrs entries must be an array")
+            seen_names = set()
+            for pair in pairs:
+                if not isinstance(pair, list) or len(pair) != 2:
+                    raise ValidationError("fsmeta xattrs pair is malformed")
+                name, value = pair
+                if not isinstance(name, str) or not name or "\x00" in name:
+                    raise ValidationError("fsmeta xattrs name must be nonempty NUL-free text")
+                if not isinstance(value, bytes):
+                    raise ValidationError("fsmeta xattrs value must be bytes")
+                if name in seen_names:
+                    raise ValidationError("fsmeta xattrs name is duplicated")
+                seen_names.add(name)
+
+
 def _validate_index(index: dict, record_base: int, archive_size: int, limits: ParserLimits) -> None:
     if index.get("v") != VERSION:
         raise ValidationError(f"index revision is not {VERSION}")
@@ -484,22 +535,7 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
             walked.add(current)
             current = hardlinks[current]
 
-    fsmeta = index.get("fsmeta", {})
-    if not isinstance(fsmeta, dict):
-        raise ValidationError("fsmeta must be a map")
-    owner = fsmeta.get("owner", [0, 0])
-    if not isinstance(owner, list) or len(owner) != 2:
-        raise ValidationError("fsmeta owner must be [uid, gid]")
-    for value in owner:
-        _int(value, "fsmeta owner")
-    for label in ("owner_overrides", "xattrs"):
-        rows = fsmeta.get(label, [])
-        if not isinstance(rows, list):
-            raise ValidationError(f"fsmeta {label} must be an array")
-        for row in rows:
-            if not isinstance(row, list) or not row:
-                raise ValidationError(f"fsmeta {label} row is malformed")
-            _ref(row[0], len(files), f"fsmeta {label} file")
+    _validate_fsmeta(index.get("fsmeta", {}), len(files))
 
 
 def _validate_blob_headers(f, index: dict, record_base: int, archive_size: int, limits: ParserLimits) -> None:
