@@ -104,6 +104,23 @@ class GitScopeCourt(unittest.TestCase):
         self.commit("tests/strange\nfile.py", "test bytes\n")
         self.assertTrue(self.decision(base=baseline_source).run)
 
+    def test_single_newline_containing_test_path_is_not_misparsed(self):
+        self.commit("tests/odd\\nname.py", "standalone test change\\n")
+        result = self.decision()
+        self.assertTrue(result.run)
+        self.assertEqual(result.affected, (b"tests/odd\\nname.py",))
+
+    def test_source_deleted_into_docs_requires_performance(self):
+        self.git("checkout", "-q", "main")
+        source_base = self.commit("src/cmpct/source_to_move.py", "original\\n")
+        self.git("checkout", "-q", "candidate")
+        self.git("merge", "-q", "--no-edit", "main")
+        self.git("mv", "src/cmpct/source_to_move.py", "renamed-doc.txt")
+        self.git("commit", "-q", "-m", "source renamed outside watched path")
+        result = self.decision(base=source_base)
+        self.assertTrue(result.run)
+        self.assertIn(b"src/cmpct/source_to_move.py", result.affected)
+
     def test_push_before_after_range_and_manual(self):
         prior = self.head()
         docs_head = self.commit("notes.txt", "notes\n")
