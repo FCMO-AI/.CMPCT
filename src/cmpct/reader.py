@@ -450,6 +450,51 @@ class CMPCT:
                     try:os.setxattr(full,name,value,follow_symlinks=False)
                     except OSError:pass
 
+    @staticmethod
+    def _preflight_existing_destination_links(dest_s, clean):
+        """Reject pre-existing destination symlink pivots before extracting any member.
+
+        This deliberately closes the *static* trust-boundary defect in issue #265.
+        It cannot resist a concurrent actor swapping directories after lstat:
+        fully race-resistant extraction needs fd-relative, no-follow traversal
+        for every file/metadata operation. The caller-selected root is trusted,
+        including an intentional symlink at that root; only paths below its
+        resolved physical location are inspected.
+        """
+        root=os.path.realpath(dest_s)
+        verified_dirs=set()
+
+        def check_path(parts, allow_leaf_link=False):
+            for depth in range(1,len(parts)+1):
+                path=os.path.join(root,*parts[:depth])
+                leaf=(depth==len(parts))
+                if not leaf and path in verified_dirs:continue
+                try:mode=os.lstat(path).st_mode
+                except FileNotFoundError:break
+                if stat.S_ISLNK(mode):
+                    if leaf and allow_leaf_link:continue
+                    raise IOError(f'pre-existing destination symlink: {path!r}')
+                if not leaf:
+                    if not stat.S_ISDIR(mode):
+                        raise IOError(f'non-directory destination parent: {path!r}')
+                    verified_dirs.add(path)
+
+        for row,parts,_full in clean:
+            k=row[1];storage=row[6]
+            # These paths unlink or atomically replace a leaf inode instead of
+            # following its prior symlink. Their parents must still be checked.
+            replace_leaf=(k in (K_SYMLINK,K_HARDLINK) or (
+                k==K_FILE and storage and storage[0] in (S_CHUNKS,S_CDC)))
+            check_path(parts,allow_leaf_link=replace_leaf)
+            if k==K_HARDLINK:
+                try:_,target_parts=canonical_logical_path(storage[0])
+                except ValueError as exc:
+                    raise IOError(f'unsafe hardlink target: {storage[0]!r}: {exc}') from exc
+                # Unlike the alias leaf, the source of os.link must never be
+                # resolved through an inherited symlink to outside the root.
+                check_path(target_parts)
+
+
     def extractall(self,dest:Path,metadata=True,max_bytes:int|None=None,safe_symlinks=True):
         """Extract the logical tree with a low-syscall fast path.
 
@@ -591,6 +636,11 @@ class CMPCT:
             for row, _parts, _full in clean:
                 if row[1] == K_SYMLINK:
                     validate_signed_symlink_target(row[0], self.read(row[0]).decode('utf-8','surrogateescape'))
+
+        if safe_symlinks:
+            # Preflight the selected destination namespace *before* any archive
+            # materialization. This is static defense, not a TOCTOU guarantee.
+            self._preflight_existing_destination_links(dest_s,clean)
 
         # Build all directories first. Parents are guaranteed to exist before regular-file writes,
         # eliminating hundreds of redundant stat/mkdir calls on large source trees.
