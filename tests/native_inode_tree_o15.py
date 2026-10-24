@@ -17,6 +17,7 @@ import tempfile
 
 from cmpct.builder import Builder
 from native_pack_batch_abi import source_bytes
+from native_hardlink_owner_o14 import rebuild, wire_parts
 
 ORIGIN_SHA = "611d0ea67a94f552f9ebca07ba747f191dee160e"
 FIXED_TIME = 1_700_000_000_000_000_000
@@ -173,6 +174,63 @@ def main() -> None:
                     "canary_sha256": digest(canary),
                     "destination_entries": sorted(os.listdir(bad)),
                 }
+        # O15b was preregistered after O15's first successful hosted result:
+        # reorder only signed index *rows*, without rewriting physical payloads
+        # or weakening the source-tree oracle. Here a hardlink alias precedes
+        # its terminal regular-file owner in the public ABI enumeration.
+        original_archive = (home / "archive-a.cmpct").read_bytes()
+        original_index, original_records, original_flags = wire_parts(
+            original_archive
+        )
+        positions = {
+            row[0]: n for n, row in enumerate(original_index["files"])
+        }
+        assert positions["a.bin"] < positions["y_alias.bin"]
+        def swap_owner_and_alias(index):
+            rows = index["files"]
+            rows[positions["a.bin"]], rows[positions["y_alias.bin"]] = (
+                rows[positions["y_alias.bin"]], rows[positions["a.bin"]]
+            )
+        reordered = rebuild(original_archive, swap_owner_and_alias)
+        new_index, new_records, new_flags = wire_parts(reordered)
+        assert new_records == original_records and new_flags == original_flags
+        assert sorted(repr(row) for row in original_index["files"]) == (
+            sorted(repr(row) for row in new_index["files"])
+        ), "reorder changed logical index rows, not merely enumeration"
+        reordered_positions = {
+            row[0]: n for n, row in enumerate(new_index["files"])
+        }
+        assert reordered_positions["y_alias.bin"] < reordered_positions["a.bin"]
+        signed_path = home / "archive-a-reordered.cmpct"
+        signed_path.write_bytes(reordered)
+        reordered_dest = home / "extracted-a-reordered"
+        reordered_dest.mkdir(mode=0o700)
+        reordered_run = invoke(binary, signed_path, reordered_dest)
+        assert reordered_run.returncode == 0, (
+            "signed alias-before-owner extraction failed",
+            reordered_run.returncode, reordered_run.stderr[:2000]
+        )
+        reorder_counts = json.loads(reordered_run.stdout.strip())
+        reorder_oracle = tree_oracle(home / "source-a", reordered_dest)
+        assert reorder_counts["batch_calls"] >= 1
+        assert reorder_counts["batch_members"] >= 2
+        assert reorder_counts["max_stage_bytes"] <= 1024 * 1024
+        cases["a_reordered"] = {
+            "owner_name": "a.bin",
+            "archive_sha256": digest(reordered),
+            "archive_bytes": len(reordered),
+            "native_counts": reorder_counts,
+            "signed_index_order": {
+                "alias_ordinal": reordered_positions["y_alias.bin"],
+                "owner_ordinal": reordered_positions["a.bin"],
+            },
+            "physical_records_sha256": digest(new_records),
+            "original_records_sha256": digest(original_records),
+            "oracle": reorder_oracle,
+        }
+        assert cases["a_reordered"]["archive_sha256"] != (
+            cases["a"]["archive_sha256"]
+        )
         assert cases["a"]["archive_sha256"] != cases["b"]["archive_sha256"]
         assert cases["a"]["oracle"]["inode_equivalence_classes"] != (
             cases["b"]["oracle"]["inode_equivalence_classes"]
