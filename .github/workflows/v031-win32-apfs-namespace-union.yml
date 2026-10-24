@@ -10,6 +10,7 @@ on:
       - 'tests/test_v031_windows_member_namespace.py'
       - 'tests/test_v031_apfs_namespace.py'
       - 'tests/test_v031_win32_apfs_union.py'
+      - 'tests/test_v031_win32_logical_hardlink_o2.py'
       - '.github/workflows/v031-win32-apfs-namespace-union.yml'
   workflow_dispatch:
 
@@ -51,7 +52,7 @@ jobs:
       - name: Portable path and unchanged APFS-owner suite plus joint invariant
         # --noconftest avoids unrelated historical Linux-only library imports on Windows.
         # Owner platform skips are reported verbosely by pytest (-rs).
-        run: python -m pytest -q -rs --noconftest tests/test_path_policy.py tests/test_v031_apfs_namespace.py tests/test_v031_win32_apfs_union.py
+        run: python -m pytest -q -rs --noconftest tests/test_path_policy.py tests/test_v031_apfs_namespace.py tests/test_v031_win32_apfs_union.py tests/test_v031_win32_logical_hardlink_o2.py
       - name: Unchanged complete Win32-owner court on original Linux and Windows hosts
         if: runner.os != 'macOS'
         run: python -m pytest -q -rs --noconftest tests/test_v031_windows_member_namespace.py
