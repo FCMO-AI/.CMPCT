@@ -779,6 +779,11 @@ class CMPCT:
             target=source[2]
             if not os.path.isfile(target) or os.path.islink(target):
                 raise IOError(f'hardlink owner not materialized safely: {owner!r}')
+            # Signed r24 permits implicit directories. A hardlink-only prefix
+            # need not occur among materialized regular entries or explicit dirs;
+            # create its parent after complete lexical/static destination preflight.
+            parent=os.path.dirname(full)
+            if parent and not os.path.isdir(parent):os.makedirs(parent,exist_ok=True)
             try:os.unlink(full)
             except FileNotFoundError:pass
             os.link(target,full)
