@@ -156,3 +156,49 @@ This is a representation-specific safety increment, not a replacement for full n
 ## Revision rule
 
 No format revision bump is required for this increment because it writes **no new field, record, codec, transform or storage semantic**. If later hardening requires a reader-visible on-disk rule, that change must follow the repository's normal revision/spec/history/current-state/conformance gate.
+
+### Cross-owner Win32/APFS union O0/O1/O2 — v0.31 draft, not shipping
+
+Independent host-specific extraction protections in PR #332 (Win32) and #334
+(APFS) change the same Reader/path-policy files. Draft integration PR #336,
+based on #334 exact `be60184c76bd89da7d2f31614717e174393907fc`,
+imports the unchanged original #332 Win32 helper, Reader guard, tests and
+workflow. Joint source retains APFS Unicode normalization/casefold, implicit
+prefix collision and exact logical hardlink owner checking; r24 archive
+path spelling remains unchanged and POSIX byte-distinct names remain legal.
+
+A first genuine three-host union court at `e239972f880f6906ec016e814fba2bc1c9add5e0`
+was **green Windows/Ubuntu but red macOS**: the original Windows
+non-Windows-positive fixture expected `Case` and `case` to coexist on every
+POSIX filesystem, contradicting the intentional APFS conservative alias refusal.
+O0 evidence: [Actions 40076842895](https://github.com/FCMO-AI/.CMPCT/actions/runs/40076842895).
+O1 prospectively limited that *unchanged* Windows positive assertion to its
+original Linux/Windows host domains; every other original Windows test, the
+entire original APFS suite, and the joint policy tests remain on the three-host
+matrix. O1 [Actions 40077116609](https://github.com/FCMO-AI/.CMPCT/actions/runs/40077116609)
+passed on **all three real hosts**; platform skips and the one explicitly
+excluded incompatible Mac assertion are preserved, not silently counted
+as passes.
+
+A prospective O2 revealed a distinct real Windows logical-identity defect:
+`Alpha` as a regular archive member and a hardlink `alias` naming `alpha`
+could be accepted due to Win32 case-insensitive filesystem lookup even when
+`alpha` was **not** an authenticated logical member. Original source/test
+at `2204f71c117550d8dcc148e5df982837c076cdc8`, Windows hosted [Actions
+40077537326](https://github.com/FCMO-AI/.CMPCT/actions/runs/40077537326):
+**1 FAIL / 14 PASS / 8 SKIPPED**, `DID NOT RAISE OSError` after an
+independent `samefile` proof of physical aliasing. Linux and macOS controls
+remained green. The first repair, `0d689154f6823001ad3ee31cff575b273e8499d0`,
+requires hardlink sources to belong to the full exact logical member set on
+Windows before any extraction write, mirroring the existing Mac requirement
+without weakening Windows path/device admission. The original O2 test is
+unchanged. The repair has **no positive hosted result at this record's first
+write**; inspect exact-head CI before granting product evidence.
+
+These guards do **not** prove native filesystem collation equivalence,
+pre-existing symlink/reparse-point safety, concurrent-root confinement, full
+transactional rollback, or Win32 deep-tree preflight performance. The original
+Windows prefix checker repeatedly joins entire prefixes, with quadratic-in-depth
+byte work; bounded node-ID ownership is a promising *mechanism-level* future
+control, not yet a tested product improvement. Nothing in this draft grants
+merge/release authority.
