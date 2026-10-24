@@ -5,6 +5,8 @@ on:
   pull_request:
     paths:
       - 'research/native_pack_amplification_o1.py'
+      - 'research/native_pack_source_mutation_o2.py'
+      - 'docs/v031-research/NATIVE_PACK_SOURCE_MUTATION_O2_PREREG.md'
       - 'docs/v031-research/NATIVE_PACK_RUNTIME_AMPLIFICATION_O1_PREREG.md'
       - '.github/workflows/v031-native-pack-amplification-o1.yml'
   workflow_dispatch:
@@ -51,6 +53,16 @@ jobs:
         run: |
           set -euo pipefail
           python tests/native_pack_golden_abi.py
+      - name: Same-open native PACK physical-source freshness O2
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cmpct-native-pack-o1"
+          python research/native_pack_source_mutation_o2.py \
+            "$RUNNER_TEMP/cmpct-native-pack-o1/physical-source-mutation-o2.json" \
+            | tee "$RUNNER_TEMP/cmpct-native-pack-o1/freshness-o2.log"
+          sha256sum "$RUNNER_TEMP/cmpct-native-pack-o1/physical-source-mutation-o2.json" \
+            > "$RUNNER_TEMP/cmpct-native-pack-o1/freshness-o2.sha256"
       - name: Execute prospective ABBA real native-runtime experiment
         shell: bash
         run: |
