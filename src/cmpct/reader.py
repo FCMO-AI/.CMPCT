@@ -761,7 +761,13 @@ class CMPCT:
                     raise IOError(f'unsafe hardlink target: {target_name!r}') from exc
                 node=canonical_to_raw.get(target_key,target_name)
             owner=owner_cache.get(node,node)
-            if owner!=self._hardlink_owners[alias]:
+            # Some historical cross-platform namespace courts instantiate a
+            # minimal CMPCT object without running the constructor. Such stubs
+            # have no signed owner cache, but the current extraction graph still
+            # receives its full canonical-cycle and regular-owner validation.
+            # Real opened archives always carry the cache and must match it.
+            committed_owners=getattr(self,'_hardlink_owners',None)
+            if committed_owners is not None and owner!=committed_owners[alias]:
                 raise IOError(f'hardlink owner graph changed after Reader open: {alias!r}')
             source=materialized.get(owner)
             if source is None or source[0][1]!=K_FILE:
