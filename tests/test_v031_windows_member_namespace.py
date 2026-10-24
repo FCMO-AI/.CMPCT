@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from cmpct.codec import K_DIR, K_SYMLINK, S_BLOB
+from cmpct.codec import K_DIR, K_HARDLINK, K_SYMLINK, S_BLOB
 from cmpct.path_policy import canonical_logical_path, canonical_windows_extraction_key
 from cmpct.reader import CMPCT
 
@@ -100,3 +100,28 @@ def test_real_windows_regular_directory_roundtrip_remains_available(tmp_path: Pa
     destination = tmp_path / "out"
     ar.extractall(destination, metadata=False)
     assert (destination / "ordinary" / "child").is_dir()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires real Windows filesystem semantics")
+def test_real_windows_implicit_parent_case_alias_is_rejected_prewrite(tmp_path: Path) -> None:
+    ar = object.__new__(CMPCT)
+    ar.files = [
+        ["Dir/a", K_DIR, 0o755, 0, 0, b"", None],
+        ["dir/b", K_DIR, 0o755, 0, 0, b"", None],
+    ]
+    destination = tmp_path / "out"
+    with pytest.raises(IOError, match="ambiguous Windows parent case alias"):
+        ar.extractall(destination, metadata=False)
+    assert destination.exists()
+    assert list(destination.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires real Windows filesystem semantics")
+def test_real_windows_hardlink_owner_cannot_change_drive_authority(tmp_path: Path) -> None:
+    ar = object.__new__(CMPCT)
+    ar.files = [["alias", K_HARDLINK, 0o644, 0, 0, b"", ["D:outside"]]]
+    destination = tmp_path / "out"
+    with pytest.raises(IOError, match="unsafe Windows hardlink target"):
+        ar.extractall(destination, metadata=False)
+    assert destination.exists()
+    assert list(destination.iterdir()) == []
