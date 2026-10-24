@@ -18,7 +18,7 @@ import time
 from collections import Counter, defaultdict
 
 from cmpct.builder import Builder
-from cmpct.codec import BHDR, BMAGIC, CODEC_RAW, CODEC_ZSTD, HDR, K_FILE, S_BLOB, S_PACK
+from cmpct.codec import BHDR, BMAGIC, CODEC_RAW, CODEC_ZSTD, HDR, FTR, K_FILE, S_BLOB, S_PACK
 from cmpct.reader import CMPCT
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -150,7 +150,7 @@ def inspect_archive(archive: Path, expected: dict[str, bytes]) -> dict:
             physical.append([idx, off, us, cs, codec, ml, len(pack_members.get(idx, ()))])
             blob_span += BHDR.size + ml + cs
         assert blob_span == data_span
-        assert reader.record_base + data_span + index_cs + 64 == archive.stat().st_size, (
+        assert reader.record_base + data_span + index_cs + FTR.size == archive.stat().st_size, (
             reader.record_base, data_span, index_cs, archive.stat().st_size
         )
         assert used_blob_ids <= set(range(len(reader.blobs)))
