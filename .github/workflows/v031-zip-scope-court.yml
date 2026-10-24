@@ -35,6 +35,17 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           python -m unittest discover -s tests -p test_v031_zip_parity_scope.py -v
+      - name: Execute unchanged native materializer wiring invariants against new classifier
+        run: |
+          python - <<'PY'
+          import runpy
+          controls = runpy.run_path("tests/test_performance_base_native_wiring.py")
+          cases = [name for name in controls if name.startswith("test_")]
+          for name in sorted(cases):
+              controls[name]()
+              print(f"{name}: PASS")
+          assert len(cases) == 2, f"unexpected native materializer contract count: {cases}"
+          PY
       - name: Reproduce authentic PR316 product-first workflow-last false skip
         env:
           HISTORICAL_HEAD: 1ed92767e6438d9bb8835ddc7ae27160440c2014
