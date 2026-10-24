@@ -1,0 +1,93 @@
+# Research-only source-exact court; no CMPCT release or parity credit.
+name: CMPCT v0.31 cross-host reproducible mode O14
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_crosshost_repro_modes_o14.py'
+      - 'tools/research_v031_crosshost_modes_o14_referee.py'
+      - 'docs/v031-research/2026-10-24-crosshost-mode-equivalence-o14-*'
+      - '.github/workflows/v031-crosshost-mode-o14.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o14-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  cross-host:
+    name: Mode-only A/B ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Assert exact HEAD, build installed product, run original-source A/B
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python benchmarks/v031_crosshost_repro_modes_o14.py --out o14-result.json
+          python - <<'PY'
+          import json, os
+          d=json.load(open('o14-result.json'))
+          assert d['source_sha']==os.environ['EVIDENCE_HEAD']
+          assert d['only_index_modes_changed'] is True
+          assert d['repeat_count_per_variant']==2
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: o14-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o14-result.json
+          if-no-files-found: error
+          retention-days: 30
+
+  referee:
+    needs: cross-host
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: o14-*-${{ env.EVIDENCE_HEAD }}
+          path: o14-observations
+      - name: Independent platform equality referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python tools/research_v031_crosshost_modes_o14_referee.py --root o14-observations --sha "$EVIDENCE_HEAD" --out o14-referee.json
+          python - <<'PY'
+          import json
+          r=json.load(open('o14-referee.json'))
+          assert r['source_logical_members_equal'] is True
+          print('O14_SCIENTIFIC_DECISION='+r['decision'])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: o14-referee-${{ env.EVIDENCE_HEAD }}
+          path: o14-referee.json
+          if-no-files-found: error
+          retention-days: 30
