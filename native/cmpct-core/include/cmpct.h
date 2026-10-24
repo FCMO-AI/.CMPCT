@@ -97,6 +97,25 @@ int32_t cmpct_entry_pack_owner(
     size_t *out_owner
 );
 
+/*
+ * Optional signed-index hardlink topology: the terminal regular-file ordinal.
+ * Returns CMPCT_OK for a hardlink and writes its terminal owner entry index,
+ * which may validly be zero. Only compare ordinals on the same LIVE archive.
+ * Non-hardlinks return UNSUPPORTED, bad index RANGE, null pointers NULL.
+ * When out_owner is valid, it is always zeroed on any error.
+ *
+ * Native open validates the complete hardlink reference graph and refuses
+ * missing, cyclic, non-regular or wrong-sized owners before any index is exposed.
+ * This does not write hardlinks or verify mutable physical payload bytes.
+ * The caller owns safe filesystem publication and must not close the handle
+ * concurrently with this operation.
+ */
+int32_t cmpct_entry_hardlink_owner(
+    const CmpctArchive *archive,
+    size_t index,
+    size_t *out_owner
+);
+
 int32_t cmpct_pack_read_batch(
     const CmpctArchive *archive,
     const CmpctPackRange *requests,
