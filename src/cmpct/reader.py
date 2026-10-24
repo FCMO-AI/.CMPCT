@@ -373,7 +373,9 @@ class CMPCT:
             uid,gid=over.get(i,common)
             if hasattr(os,'chown') and (uid or gid):
                 try:os.chown(full,uid,gid,follow_symlinks=False)
-                except (OSError,PermissionError):pass
+                # A valid archived uid/gid may exceed this host's os.chown range.
+                # Treat it like unsupported ownership, not an extraction failure after writes.
+                except (OSError,OverflowError):pass
             if i in xam and hasattr(os,'setxattr'):
                 for name,value in xam[i]:
                     try:os.setxattr(full,name,value,follow_symlinks=False)
