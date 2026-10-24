@@ -26,6 +26,12 @@ The five checkpoint **paired block** extra costs are all positive: 512: `+2.075,
 
 What earlier observable could have decided this sooner? A single authentic checkpoint cold-open A/B with the resource patch, retaining both process wall and CPU, would have exposed the likely import-owner cost. To establish a *nonmateriality* decision across journal/checkpoint and source identities, the additional ABBA/BAAB repeated court was still warranted. No discovery-policy modification is earned from a single case.
 
+## Secondary full-subprocess cost (not the preregistered import+constructor decision)
+
+The same retained observations expose a **separate end-to-end boundary**: whole interpreter child-process latency. Its 512-checkpoint median was O9 `86.638ms` vs O10R `92.439ms`: **+5.801ms / +6.70%**, numerically larger than both +5% and +3ms. The 4,096-checkpoint whole-process median was `96.097ms` vs `99.149ms`: **+3.052ms / +3.18%**. All five alternating paired blocks had positive whole-process checkpoint deltas: for 512 `+2.221,+5.246,+3.680,+2.871,+6.844ms`, and for 4,096 `+3.242,+4.071,+0.633,+2.097,+3.867ms`. **The official +5%/+3ms policy applies to its documented create/extract boundary, not to this research whole-process boundary**, and our preregistration used import+constructor, not subprocess wall. Therefore these values are meaningful **observed exported process-cost debt**, not a retrospective official performance-gate FAIL or independently established causal component. The complete subprocess boundary includes interpreter startup/exit, scheduling and other noise. Import+constructor CPU and block-positive checkpoint findings sharpen the likely attribution but do not fully isolate it.
+
+**Narrowed decision:** O10R preserved O9's 4,096-journal cold performance in the tested source-only court and did not trigger its preregistered import+constructor materiality threshold. Nevertheless checkpoint-only cold startup and whole-process latency are measurably worse in this execution. Do **not** describe O10R as universally no-regression: require a dedicated checkpoint-heavy installed-wheel follow-up or justified lightweight policy-import refactor before any startup-latency product claim.
+
 ## Adversarial limitations
 - One Ubuntu CPython 3.11 run and dynamic Reader-module substitution, not both independently installed wheel lineages or Windows/macOS latency.
 - `VmHWM` is process lifetime high water; cannot attribute tiny differences solely to Reader allocations.
