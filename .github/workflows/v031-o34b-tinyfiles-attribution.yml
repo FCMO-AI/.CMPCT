@@ -1,0 +1,109 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# Retrospective O34b/O34c: ONE already-identified hostile product row, never a substitute
+# for the unchanged frozen 15+15 O34 promotion court (which already failed).
+name: CMPCT v0.31 O34b tiny-files four-way causal attribution
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-o34b-retrospective-tiny-cost-20261024
+    paths:
+      - '.github/workflows/v031-o34b-tinyfiles-attribution.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-o34b-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  o34b-attribution:
+    name: Single-row source-exact r24 pack-budget shipping compact controls
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Exact source ancestor and unchanged original scientific owner
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          src = "b878f40a540162ab977776d7f90c3502d2749588"
+          original_court = "17a000f150f68e724efb6cdcdd3d1dddb079c5ca"
+          git = lambda *xs: subprocess.check_output(["git", *xs], text=True).strip()
+          assert git("merge-base", "--is-ancestor", src, "HEAD") == ""
+          assert git("merge-base", "--is-ancestor", original_court, "HEAD") == ""
+          expected_changes = {
+              "benchmarks/history/2026-09-30-v030-compact-r24-full-matrix-prereg.json",
+              "benchmarks/history/2026-10-01-v030-pr212-matrix-route-audit.json",
+              ".github/workflows/v031-compact-r24-frozen-matrix-o34.yml",
+              "docs/v031-research/2026-10-24-o34-compact-r24-frozen-matrix-negative.md",
+              "tools/v031_o34b_retrospective_tinyfiles.py",
+              "docs/v031-research/2026-10-24-o34b-tinyfiles-shared-overhead-result.md",
+              ".github/workflows/v031-o34b-tinyfiles-attribution.yml",
+          }
+          actual = set(git("diff", "--name-only", src, "HEAD").splitlines())
+          assert actual == expected_changes, (actual, expected_changes)
+          prereg = json.loads(Path(
+              "benchmarks/history/2026-09-30-v030-compact-r24-full-matrix-prereg.json"
+          ).read_text())
+          original = {
+              "process_prebuild": "experiments/entropygraph_v030_r24_process_prebuild.py",
+              "process_shipping": "experiments/entropygraph_v030_r24_process_shipping.py",
+              "candidate_prebuild": "experiments/entropygraph_v030_r24_compact_candidate_prebuild.py",
+              "compact_facade": "experiments/entropygraph_v030_release_product_compact_r24.py",
+              "launcher": "tools/run_v030_compact_candidate.py",
+              "ablation_harness": "benchmarks/v030_release_ablation_product.py",
+          }
+          assert prereg["source_head"] == src
+          for label, path in original.items():
+              assert git("hash-object", path) == prereg["custody_blobs"][label], path
+          print("Exact frozen source science, ancestry and diagnostic-only additions: PASS", flush=True)
+          PY
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install actual public builder/reader and fixture dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run one source-authenticated four-way byte-attribution experiment
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          set +e
+          python -u tools/v031_o34b_retrospective_tinyfiles.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/one-row-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/o34b-four-way.json" > benchmark-artifacts/o34b-run.log 2>&1
+          code=$?
+          set -e
+          echo "$code" > benchmark-artifacts/o34b-exit-code.txt
+          cat benchmark-artifacts/o34b-run.log
+          exit "$code"
+      - name: Preserve valid results and negative/error receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-o34b-tinyfiles-${{ github.sha }}
+          path: |
+            benchmark-artifacts/o34b-four-way.json
+            benchmark-artifacts/o34b-run.log
+            benchmark-artifacts/o34b-exit-code.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Independent post-hoc accounting only: no matrix/evaluator/threshold change;
+# no promotion even if the losing row turns favorable on this narrow diagnostic.
