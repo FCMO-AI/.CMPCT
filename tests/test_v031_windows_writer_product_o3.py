@@ -259,3 +259,45 @@ def test_live_readonly_snapshot_survives_full_append(tmp_path):
         # Existing mapped Reader still has the old consistent snapshot.
         assert "alpha.txt" in old.by
         assert old.read("alpha.txt") == b"first value\n" * 90
+
+
+def _crash_holder_before_footer(archive, ready):
+    """Parent terminates a process holding an uncommitted append tail."""
+    path = Path(archive)
+    with tx._cooperative_writer_lease(path):
+        with tx._checked_append(path) as stream:
+            stream.write(b"CMPCT-O4-ORPHAN-UNCOMMITTED-TAIL\x00")
+            os.fsync(stream.fileno())
+        ready.put(("uncommitted_tail", path.stat().st_size))
+        time.sleep(60)
+
+
+def test_process_termination_releases_lease_and_preserves_last_commit(tmp_path):
+    """Windows termination must not strand the lock or commit orphan bytes."""
+    archive = _archive(tmp_path)
+    committed_size = archive.stat().st_size
+    ctx = mp.get_context("spawn")
+    ready = ctx.Queue()
+    child = ctx.Process(target=_crash_holder_before_footer, args=(str(archive), ready))
+    child.start()
+    try:
+        status, after_partial = ready.get(timeout=40)
+        assert status == "uncommitted_tail"
+        assert after_partial > committed_size
+    finally:
+        child.terminate()
+        child.join(timeout=20)
+        if child.is_alive():
+            child.kill()
+            child.join(timeout=5)
+    assert child.exitcode != 0
+    assert archive.stat().st_size > committed_size
+    with CMPCT(archive) as recovered:
+        assert recovered.read("alpha.txt") == b"first value\n" * 90
+        assert recovered.read("beta.txt") == b"second value\n" * 80
+        assert recovered.verify() >= 2
+    tx.append_rename(archive, "alpha.txt", "alpha-new.txt")
+    with CMPCT(archive) as after:
+        assert after.read("alpha-new.txt") == b"first value\n" * 90
+        assert after.read("beta.txt") == b"second value\n" * 80
+        assert after.verify() >= 2
