@@ -1764,6 +1764,47 @@ pub unsafe extern "C" fn cmpct_entry_pack_owner(
     CmpctStatus::Ok as c_int
 }
 
+/// Export the file's logical SHA-256 from the authenticated revision-24 index.
+///
+/// This is an index commitment to complete *logical* bytes, not a claim that the
+/// mutable physical payload is still identical. A streaming consumer can hash
+/// exactly what it reconstructed and compare after the final byte, without
+/// allocating the full logical file. Never synthesize an expected digest from
+/// an uncommitted physical blob header: missing row SHA fails closed.
+///
+/// On every non-null output pointer, failure zeroes all 32 bytes. No file data
+/// is read or decoded and no borrowed index pointer is returned.
+///
+/// # Safety
+/// `archive` must be a live `cmpct_open` handle, and `out_digest` must point
+/// to 32 writable, nonaliasing bytes; the caller must not concurrently close
+/// `archive` or mutate either memory region.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_entry_logical_sha256(
+    archive: *const Archive,
+    index: usize,
+    out_digest: *mut u8,
+) -> c_int {
+    let Some(out_digest) = (out_digest as *mut [u8; 32]).as_mut() else {
+        return CmpctStatus::Null as c_int;
+    };
+    *out_digest = [0u8; 32];
+    let Some(archive) = archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
+    let Some(entry) = archive.entries.get(index) else {
+        return CmpctStatus::Range as c_int;
+    };
+    if entry.kind != 0 {
+        return CmpctStatus::Unsupported as c_int;
+    }
+    let Some(digest) = entry.logical_hash else {
+        return CmpctStatus::Unsupported as c_int;
+    };
+    *out_digest = digest;
+    CmpctStatus::Ok as c_int
+}
+
 /// Return the terminal regular-file ordinal for one hardlink's signed index graph.
 /// Ordinals are meaningful only on the SAME live archive handle; this metadata-only
 /// lookup never reads mutable physical payloads and cannot itself extract a filesystem.
