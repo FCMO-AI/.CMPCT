@@ -288,3 +288,39 @@ containment remain independent gates. In particular, nested symlink admission,
 hardlink target type and order, existing filesystem objects and concurrent
 rebindings are separate questions; accepting a tree's **logical** topology
 never proves its **physical** extraction environment is safe.
+
+
+#### O1 held-out signed hardlink target-kind boundary (same #339 lane)
+
+Prospective O1 preregistration was committed in
+`docs/v031-research/2026-10-24-hardlink-owner-type-preflight-o1-prereg.md`
+at `884535f6cd310b66357d4d50bb9acb0f335a70b8`
+before appending any O1 test or source edit. The existing strict preflight
+checked only exact hardlink owner existence and cycle-freedom: it did not
+require the terminal owner to be a **regular file**. A reauthenticated r24
+archive can therefore add `z_dir_alias` as `K_HARDLINK` targeting a real
+`K_DIR` named `folder` and still pass strict preflight, although authentic
+Reader extraction cannot create this directory-hardlink relationship.
+The Builder's complete original blob bytes, real directory and regular-file
+controls, and both newly authenticated index commitments were preserved.
+
+Test-only exact source `14fbeb7d8df8d869129c1d49565ca16977830a5b`
+reproduced **1 failed O1 strict preflight assertion: `DID NOT RAISE
+ValidationError`; 7/7 inherited O0 tests passed** on genuine macOS and
+Windows in [negative run 40081342588](https://github.com/FCMO-AI/.CMPCT/actions/runs/40081342588);
+Ubuntu result must be reconciled separately. The ordinary extraction
+`OSError` check and all physical/semantic controls passed before the sole
+strict validator assertion.
+
+A type-bound fix in `src/cmpct/validation.py` first landed at
+`6b02d287d3d4f1f7d7accbc268ca0a89aea52679`:
+record each canonical member's kind during bounded index scanning; after
+the unchanged hardlink chain/cycle check, reject any terminal owner not
+`K_FILE`. This is not a directory hardlink feature nor a change to the
+released format. Positive exact-head installed-product CI for the
+**unchanged eight-test** court is separately required and was pending at
+the moment of this record. The check adds O(member count) bookkeeping
+for kinds and O(1) terminal-owner lookup to the existing cycle traversal.
+It does not fix pre-existing extract-time races, namespacing aliases or
+the existing potential O(number-of-hardlinks × chain-depth) repeated cycle
+work; these remain separate potential product costs.
