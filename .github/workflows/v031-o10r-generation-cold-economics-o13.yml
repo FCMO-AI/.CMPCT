@@ -16,7 +16,7 @@ concurrency:
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
-  installed-o9-vs-source-o3:
+  installed-o10r-vs-source-o9:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -25,7 +25,7 @@ jobs:
           ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 0
           clean: true
-      - name: Bind exact O3 parent source and O10R installed candidate
+      - name: Bind exact O9 source and O10R installed candidate
         shell: bash
         run: |
           set -euo pipefail
