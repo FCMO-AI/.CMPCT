@@ -111,6 +111,16 @@ def serial(lib, handle, requests):
 def fixed_court(lib, home):
     vectors = json.loads(GOLDEN.read_text())["vectors"]
     results = []
+    # C ABI contract regression: a valid out_read pointer must be cleared
+    # even when archive itself is null. A null out_read must never be dereferenced.
+    null_output = ctypes.create_string_buffer(bytes([0xA5]) * 8)
+    null_witness = ctypes.c_size_t(987654)
+    null_requests = (Request * 1)(Request(0, 0, 8))
+    null_status = lib.cmpct_pack_read_batch(
+        None, null_requests, 1, null_output, 8, ctypes.byref(null_witness)
+    )
+    assert null_status == -1 and null_witness.value == 0
+    assert null_output.raw == bytes([0xA5]) * 8
     for vector in vectors:
         wire = base64.b64decode(vector["archive_base64"], validate=True)
         assert hashlib.sha256(wire).hexdigest() == vector["archive_sha256"]
