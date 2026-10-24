@@ -100,7 +100,8 @@ def semantic_tree_digest_v1(
                 try:
                     before = os.fstat(fd)
                     if (not stat.S_ISREG(before.st_mode) or
-                        (before.st_dev, before.st_ino) != (st.st_dev, st.st_ino)):
+                        ((before.st_dev, before.st_ino) != (st.st_dev, st.st_ino)
+                         and os.name != 'nt')):
                         raise ValueError("file changed identity before read")
                     content = hashlib.sha256()
                     total = 0
