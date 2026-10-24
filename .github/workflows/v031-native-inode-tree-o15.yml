@@ -1,0 +1,85 @@
+# ci-lane: fast
+name: CMPCT v0.31 native inode-tree composition O15
+
+on:
+  pull_request:
+    paths:
+      - 'tests/native_inode_tree_o15.c'
+      - 'tests/native_inode_tree_o15.py'
+      - 'docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15_PREREG.md'
+      - 'docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15B_PREREG.md'
+      - 'docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15_RESULT.md'
+      - '.github/workflows/v031-native-inode-tree-o15.yml'
+      - 'native/cmpct-core/src/lib.rs'
+      - 'native/cmpct-core/include/cmpct.h'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-native-inode-o15-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  native-inode-tree:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Exact SHA, prereg, ABI and code identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch \
+            native/cmpct-core/src/lib.rs \
+            native/cmpct-core/include/cmpct.h \
+            native/cmpct-core/Cargo.lock \
+            docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15_PREREG.md \
+            docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15B_PREREG.md \
+            docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15_RESULT.md \
+            tests/native_inode_tree_o15.c tests/native_inode_tree_o15.py
+          sha256sum native/cmpct-core/src/lib.rs native/cmpct-core/include/cmpct.h \
+            docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15_PREREG.md
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Build unchanged native ABI and standalone public C client
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[test]'
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
+          cargo test --locked --manifest-path native/cmpct-core/Cargo.toml
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+          cc -std=c11 -O2 -Wall -Wextra -Werror \
+            -I. tests/native_inode_tree_o15.c \
+            -Lnative/cmpct-core/target/release -lcmpct_core \
+            -Wl,-rpath,"$PWD/native/cmpct-core/target/release" \
+            -o /tmp/cmpct-native-inode-o15
+      - name: Two independent inode-partition trees, actual PACK and hostile destination
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cmpct-native-o15"
+          python tests/native_inode_tree_o15.py /tmp/cmpct-native-inode-o15 \
+            "$RUNNER_TEMP/cmpct-native-o15/result.json" \
+            | tee "$RUNNER_TEMP/cmpct-native-o15/log.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/cmpct-native-o15/source.sha"
+          sha256sum "$RUNNER_TEMP/cmpct-native-o15/result.json" \
+            tests/native_inode_tree_o15.c tests/native_inode_tree_o15.py \
+            > "$RUNNER_TEMP/cmpct-native-o15/content.sha256"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-inode-o15-${{ github.run_id }}
+          path: ${{ runner.temp }}/cmpct-native-o15/
+          if-no-files-found: warn
+          retention-days: 30
