@@ -10,7 +10,7 @@ import msgpack
 from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
-from .path_policy import canonical_logical_path
+from .path_policy import canonical_logical_path, macos_comparison_component
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -393,11 +393,33 @@ class CMPCT:
 
         # Validate every logical path once and reject aliases/symlink pivots before writing anything.
         canonical_rows=[];seen=set();syms=set()
+        # Node IDs make host-normalized prefix checks linear in archive path components,
+        # rather than repeatedly materializing O(depth²) full prefix strings.
+        macos_prefixes={};macos_next_node=0
         for row in self.files:
             rel=row[0]
             try:key,parts=canonical_logical_path(rel)
             except ValueError as exc:raise IOError(f'unsafe archive path: {rel!r}: {exc}') from exc
             if key in seen:raise IOError(f'duplicate canonical archive path: {rel!r}')
+            if sys.platform=='darwin':
+                # APFS/HFS+ can map two different Unicode spellings (NFC/NFD) or
+                # case variants onto the same directory entry. Reject the entire
+                # ambiguous archive before writing any member, preserving Linux's
+                # byte-distinct archive namespace and revision-24 wire format.
+                macos_parent=0
+                for part in parts:
+                    try:comparison=macos_comparison_component(part)
+                    except ValueError as exc:raise IOError(f'unsafe macOS archive path: {rel!r}: {exc}') from exc
+                    normalized=(macos_parent,comparison)
+                    prior=macos_prefixes.get(normalized)
+                    if prior is not None:
+                        previous_part,macos_parent=prior
+                        if previous_part!=part:
+                            raise IOError(f'ambiguous macOS archive path: {rel!r}')
+                    else:
+                        macos_next_node+=1
+                        macos_prefixes[normalized]=(part,macos_next_node)
+                        macos_parent=macos_next_node
             seen.add(key);canonical_rows.append((row,key,parts))
             if row[1]==K_SYMLINK:syms.add(key)
         clean=[]
