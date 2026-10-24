@@ -6,6 +6,10 @@ on:
   pull_request:
     paths:
       - "tests/native_duplicate_root_index_oracle.py"
+      - "src/cmpct/reader.py"
+      - "src/cmpct/validation.py"
+      - "src/cmpct/msgpack_policy.py"
+      - "native/cmpct-core/src/lib.rs"
       - "docs/v031-research/DUPLICATE_MAP_KEYS_O0_PREREG.md"
       - ".github/workflows/v031-duplicate-map-keys-o0.yml"
   workflow_dispatch:
