@@ -92,26 +92,41 @@ def main():
             finally:
                 lib.cmpct_close(handle)
 
-            # A physical stream/header corruption must not cross the native ABI
-            # merely because the logical S_PACK reference points into a valid index.
-            corrupt = bytearray(wire)
-            # Physical record begins after the primary compressed index.
+            # Structural header-versus-authenticated-index disagreement MUST be
+            # rejected for BOTH RAW and compressed physical PACKs. By contrast,
+            # ordinary RAW selective reads intentionally do not hash unseen bytes.
             import struct
             encoded_index = struct.unpack_from("<Q", wire, 12)[0]
             physical_offset = 68 + encoded_index
-            # BHDR is 64 bytes; the strong digest occupies its final 32 bytes.
-            corrupt[physical_offset + 32] ^= 1
-            bad = Path(td) / f"{vec['name']}-corrupt.cmpct"
-            bad.write_bytes(corrupt)
-            handle = ctypes.c_void_p()
-            assert lib.cmpct_open(str(bad).encode(), ctypes.byref(handle)) == 0
-            try:
-                status, actual = read_native(
-                    lib, handle, 0, 0, vec["files"]["alpha-copy.txt"]["size"]
-                )
-                assert status != 0 and not actual, (vec["name"], status)
-            finally:
-                lib.cmpct_close(handle)
+
+            def require_rejection(raw_wire, tag):
+                bad = Path(td) / f"{vec['name']}-{tag}.cmpct"
+                bad.write_bytes(raw_wire)
+                target_handle = ctypes.c_void_p()
+                opened = lib.cmpct_open(str(bad).encode(), ctypes.byref(target_handle))
+                if opened != 0:
+                    return  # fail-closed structural validation may occur at open
+                try:
+                    failure_status, partial = read_native(
+                        lib, target_handle, 0, 0,
+                        vec["files"]["alpha-copy.txt"]["size"]
+                    )
+                    assert failure_status != 0 and not partial, (vec["name"], tag, failure_status)
+                finally:
+                    lib.cmpct_close(target_handle)
+
+            malformed_size = bytearray(wire)
+            # BHDR: magic(4), codec(1), flags(1), reserved(2), usize(8).
+            malformed_size[physical_offset + 8] ^= 1
+            require_rejection(malformed_size, "physical-size-mismatch")
+
+            if vec["physical_codec"] == 1:
+                # Zstd requests decode/authenticate the entire physical blob;
+                # a strong physical SHA mismatch is therefore always detectable.
+                bad_hash = bytearray(wire)
+                bad_hash[physical_offset + 32] ^= 1
+                require_rejection(bad_hash, "physical-zstd-sha-mismatch")
+
 
 
 if __name__ == "__main__":
