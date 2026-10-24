@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, mmap, os, shutil, stat, struct, sys, tempfile, threading, time, zipfile, zlib
 from pathlib import Path
 import msgpack
+import ntpath
 
 from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
@@ -457,8 +458,11 @@ class CMPCT:
                     tp=Path(target)
                     if tp.is_absolute() or any(x=='..' for x in tp.parts):raise IOError(f'unsafe symlink target in {rel!r}: {target!r}')
                     if os.name == 'nt':
-                        # Drive-relative symlink targets (e.g. D:outside) are not absolute, but
-                        # can still escape the selected root. Reuse the Win32 component policy.
+                        # Win32 treats root-relative (\\victim) and drive-relative (D:victim)
+                        # targets as outside the selected directory; pathlib.is_absolute()
+                        # alone does not reject root-relative paths.
+                        if ntpath.isabs(target) or target.startswith(('\\', '/')):
+                            raise IOError(f'unsafe Windows rooted symlink target in {rel!r}: {target!r}')
                         target_parts=tuple(p for p in target.replace('\\', '/').split('/') if p not in ('', '.'))
                         try:canonical_windows_extraction_key(target_parts)
                         except ValueError as exc:raise IOError(f'unsafe Windows symlink target in {rel!r}: {target!r}') from exc
