@@ -64,7 +64,7 @@ def in_place(fd: int, image: bytes) -> None:
 
 
 def one_case(root: Path, *, packed: bool, original: bytes, altered: bytes) -> dict:
-    label = "micro_pack_128" if packed else "direct_raw_4mib"
+    label = ("micro_pack_128" if len(original) == 128 else "pack_4mib") if packed else ("raw_128" if len(original) == 128 else "direct_raw_4mib")
     assert len(original) == len(altered)
     assert original != altered and len(original) % 2 == 0
     original_image = archive_bytes(original, original, packed=packed)
@@ -185,9 +185,22 @@ def court() -> dict:
             root, packed=False, original=large,
             altered=large[:-1] + bytes([large[-1] ^ 1])
         )
+        # O23b registered cross-factors BEFORE adding these two fixtures.
+        small_raw = one_case(
+            root, packed=False, original=tiny,
+            altered=tiny[:-1] + bytes([tiny[-1] ^ 1])
+        )
+        large_pack = one_case(
+            root, packed=True, original=large,
+            altered=large[:-1] + bytes([large[-1] ^ 1])
+        )
     predicted = (
         pack["same_handle_extraction"] == "ORIGINAL_VERIFIED"
         and raw["same_handle_extraction"] == "MUTATED_UNVERIFIED"
+    )
+    crossed = (
+        small_raw["same_handle_extraction"] == "ORIGINAL_VERIFIED"
+        and large_pack["same_handle_extraction"] == "MUTATED_UNVERIFIED"
     )
     # The harness must stay green for a genuine counterexample to the
     # prediction. "PASS" denotes valid controls, NOT a product promotion.
@@ -201,10 +214,19 @@ def court() -> dict:
         "predicted_specific_raw_publication": "MUTATED_UNVERIFIED",
         "predicted_specific_pack_publication": "ORIGINAL_VERIFIED",
         "all_fundamental_controls": "PASS",
+        "o23b_decision": (
+            "CACHE_SIZE_CROSSED_CAUSAL_PREDICTION_CONFIRMED"
+            if crossed else "CACHE_SIZE_CROSS_PREDICTION_FALSIFIED_OR_NARROWED"
+        ),
+        "o23b_expected_small_direct_raw": "ORIGINAL_VERIFIED",
+        "o23b_expected_large_pack": "MUTATED_UNVERIFIED",
         "classification": "RESEARCH_SOURCE_LIFETIME_ONLY",
         "source_pr": 258,
         "fixture_expected_git_blob": "2383bf9a8f7ce8a9a01028ccf1072169897df3f1",
-        "cases": {"micro_pack": pack, "direct_raw": raw},
+        "cases": {
+            "micro_pack": pack, "direct_raw": raw,
+            "small_raw": small_raw, "large_pack": large_pack,
+        },
         "limitations": [
             "Sequential authorized same-inode source rewrite, not concurrent malicious race proof",
             "Synthetic r24 direct RAW and PACK, one Linux host, no complete tree or portability proof",
