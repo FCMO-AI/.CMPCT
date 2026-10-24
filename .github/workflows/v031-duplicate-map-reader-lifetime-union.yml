@@ -1,0 +1,131 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: CMPCT duplicate map x Reader lifetime source-exact union
+
+on:
+  pull_request:
+    paths:
+      - "src/cmpct/reader.py"
+      - "src/cmpct/msgpack_policy.py"
+      - "tests/test_v031_reader_open_failure_resource_ownership.py"
+      - "tests/test_v031_duplicate_map_open_resource_union.py"
+      - "docs/v031-research/2026-10-24-duplicate-map-reader-resource-union-prereg.md"
+      - ".github/workflows/v031-duplicate-map-reader-lifetime-union.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-map-open-union-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  genuine-python-product:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Prove exact source head, inherited test sources, and available historical control
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object tests/test_v031_reader_open_failure_resource_ownership.py)" = "7e75fffaa4e7337463390299edbd18ef3bb7fe7b"
+          test "$(git rev-parse 1ed92767e6438d9bb8835ddc7ae27160440c2014:src/cmpct/reader.py)" = "9b49bcb4d5fa50b393ddcec6b280dec8cdc5e126"
+          mkdir -p map-open-union-evidence
+          {
+            echo "source_head=$EVIDENCE_HEAD"
+            git hash-object src/cmpct/reader.py
+            git hash-object src/cmpct/msgpack_policy.py
+            git hash-object tests/test_v031_reader_open_failure_resource_ownership.py
+            git hash-object tests/test_v031_duplicate_map_open_resource_union.py
+          } > map-open-union-evidence/source.txt
+      - name: Verify exact cross-owner Reader source composition
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          def git_blob(ref, path):
+              return subprocess.check_output(["git", "show", f"{ref}:{path}"])
+
+          original = git_blob("1ed92767e6438d9bb8835ddc7ae27160440c2014", "src/cmpct/reader.py")
+          resource_owner = git_blob("7ac0376ffed9", "src/cmpct/reader.py")
+          actual = Path("src/cmpct/reader.py").read_bytes()
+
+          def constructor(data):
+              start = data.index(b"class CMPCT:\n")
+              end = data.index(b"    def close(self):", start)
+              return data[start:end]
+
+          original_constructor = constructor(original)
+          resource_constructor = constructor(resource_owner)
+          assert original != resource_owner
+          assert actual == original.replace(original_constructor, resource_constructor, 1), (
+              "Reader union contains unowned source modifications"
+          )
+          assert actual.count(b"object_pairs_hook=unique_map_pairs") == 3
+          print("EXACT_OWNER_UNION: PR283 constructor, PR316 parser, no other Reader edits")
+          PY
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install authentic CMPCT package and dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd libzstd1
+          python -m pip install -e '.[test]'
+      - name: "Independent negative: exact PR316 Reader rejects but holds descriptor"
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp src/cmpct/reader.py /tmp/cmpct-map-open-union-candidate.py
+          git show 1ed92767e6438d9bb8835ddc7ae27160440c2014:src/cmpct/reader.py > src/cmpct/reader.py
+          test "$(git hash-object src/cmpct/reader.py)" = "9b49bcb4d5fa50b393ddcec6b280dec8cdc5e126"
+          set +e
+          python -m pytest -q --junitxml=map-open-union-evidence/negative.junit.xml tests/test_v031_duplicate_map_open_resource_union.py -k authenticated_ambiguous_index_refused_and_fd_closed > map-open-union-evidence/negative.txt 2>&1
+          status=$?
+          set -e
+          cp /tmp/cmpct-map-open-union-candidate.py src/cmpct/reader.py
+          test "$(git hash-object src/cmpct/reader.py)" = "$(git rev-parse HEAD:src/cmpct/reader.py)"
+          if [ "$status" -ne 1 ]; then
+            cat map-open-union-evidence/negative.txt
+            echo "Original source did not yield a failing independent court"
+            exit 1
+          fi
+          python - <<'PY'
+          from xml.etree import ElementTree
+          root = ElementTree.parse("map-open-union-evidence/negative.junit.xml").getroot()
+          cases = root.findall(".//testcase")
+          assert len(cases) == 12, f"Expected exactly 12 signed hostile controls, got {len(cases)}"
+          for case in cases:
+              failure = case.find("failure")
+              assert failure is not None, f"Unexpected original-source success: {case.attrib}"
+              detail = (failure.get("message") or "") + (failure.text or "")
+              assert "authenticated duplicate-map rejection leaked Reader fd" in detail, (
+                  f"Wrong failure mechanism: {case.attrib}"
+              )
+          print("SOURCE_EXACT_NEGATIVE_ALL_12_RETENTION_FAILURES_CONFIRMED")
+          PY
+          echo "ORIGINAL_316_FAILS_12/12_RETAINED_FD_OWNERSHIP"
+      - name: Verify combined genuine Reader product court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -vv tests/test_v031_reader_open_failure_resource_ownership.py tests/test_v031_duplicate_map_open_resource_union.py 2>&1 | tee map-open-union-evidence/positive.txt
+      - name: Persist exact-source negative and positive evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-map-open-union-${{ env.EVIDENCE_HEAD }}
+          path: map-open-union-evidence/
+          if-no-files-found: warn
+          retention-days: 90
