@@ -1,0 +1,60 @@
+# ci-lane: fast
+name: CMPCT v0.31 O22 signed resource policy cold Reader A/B
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/validation.py'
+      - 'src/cmpct/resource_limits.py'
+      - 'benchmarks/v031_resource_policy_cold_o22.py'
+      - '.github/workflows/v031-resource-policy-cold-o22.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-shared-resource-policy-o22-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  source-exact-o10r-vs-o22:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+      - name: Bind exact O10R historical Reader, O22 candidate and shared policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = "2ee41b4b51bac88cfb815c6d0532be97d13fa823"
+          test "$(git rev-parse 54c998200b1908b696ade049fe94df71a736c284:src/cmpct/reader.py)" = "2402721258531a56cfa2a53dcbd81874fd6c1f76"
+          test "$(git hash-object src/cmpct/resource_limits.py)" = "dda379de094cbe6e0d4ecdffb97cb0be9cba0e36"
+          test "$(git hash-object src/cmpct/validation.py)" = "4059443d447f1bb95175841c558b58a3bfee1c33"
+          test "$(git hash-object benchmarks/v031_signed_delta_replay_o0.py)" = "02c5f506c9294130db6b0eb9c36c0a61460c3b35"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic candidate CMPCT wheel and test deps
+        run: python -m pip install ".[test]"
+      - name: O22 inherited hostile-generation and split-policy focused courts
+        run: python -m pytest -q tests/test_v031_reader_generation_limits_o10r.py tests/test_v031_resource_policy_split_o22.py
+      - name: O22 source-exact fresh-process CPU RSS and cold Reader economics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o22-evidence
+          python -u benchmarks/v031_resource_policy_cold_o22.py --out o22-evidence --sizes 512 4096 --repeats 5 2>&1 | tee o22-evidence/experiment.log
+          sha256sum o22-evidence/shared-policy-cold-economics-o22.json | tee o22-evidence/receipt.sha256
+      - name: Preserve O22 positives and negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-policy-cold-economics-o22-${{ github.event.pull_request.head.sha || github.sha }}
+          path: o22-evidence/
+          if-no-files-found: warn
+          retention-days: 30
