@@ -60,21 +60,39 @@ class CMPCT:
         self.f.close()
     def __enter__(self):return self
     def __exit__(self,*a):self.close()
-    def _decode_generation_payload(self,footer_pos:int):
+    def _decode_generation_payload(self,footer_pos:int,limits=None):
+        # Authenticating a footer requires decoding, so first honor the same
+        # resource ceilings as strict preflight *before* archive-supplied sizes
+        # reach the decompressor or a large encoded read.
+        from .validation import ParserLimits, ResourceLimitError
+        limits=limits or ParserLimits.from_env()
         if footer_pos<0:return None
         self.f.seek(footer_pos);fb=self.f.read(FTR.size)
         if len(fb)!=FTR.size:return None
         m,kind,codec,flags,res,cs,us,prev,ph=FTR.unpack(fb)
-        if m!=FMAGIC or cs>footer_pos:return None
+        # Disqualify implausible magic matches before treating their sizes
+        # as a genuine resource request; preserve older-footer recovery.
+        if (m!=FMAGIC or kind not in (0,1) or codec not in (0,1)
+                or flags or res or cs>footer_pos
+                or (prev and prev>=footer_pos)):
+            return None
+        if cs>limits.max_generation_bytes or us>limits.max_generation_bytes:
+            raise ResourceLimitError(
+                f'generation payload exceeds limit: compressed={cs}, uncompressed={us}'
+            )
         self.f.seek(footer_pos-cs);enc=self.f.read(cs)
         try:payload=enc if codec==0 else zd(enc,us)
         except Exception:return None
         if len(payload)!=us or sha(payload)!=ph:return None
         return kind,payload,prev
     def _index_from_footer(self,footer_pos:int):
+        from .validation import ParserLimits, ResourceLimitError
+        limits=ParserLimits.from_env()
         chain=[];pos=footer_pos;depth=0;seen=set()
         while pos and pos not in seen:
-            seen.add(pos);g=self._decode_generation_payload(pos)
+            if depth>limits.max_delta_depth:
+                raise ResourceLimitError('transaction chain exceeds parser limit')
+            seen.add(pos);g=self._decode_generation_payload(pos,limits)
             if g is None:return None
             kind,payload,prev=g
             if kind==0:
