@@ -1,5 +1,5 @@
 # ci-lane: fast
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
 name: CMPCT independent S_PACK conformance court
 
 on:
@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-pack-fixed-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
+  group: cmpct-pack-fixed-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
