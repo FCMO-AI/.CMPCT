@@ -1,0 +1,55 @@
+# ci-lane: fast
+name: CMPCT v0.31 O10R generation ceiling cold economics O13
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_o10r_generation_cold_economics_o13.py'
+      - 'docs/v031-research/2026-10-24-o10r-resource-cold-economics-o13-prereg.md'
+      - '.github/workflows/v031-o10r-generation-cold-economics-o13.yml'
+      - 'src/cmpct/reader.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-installed-reader-cold-o13-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  installed-o10r-vs-source-o9:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+      - name: Bind exact O9 source and O10R installed candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = "2402721258531a56cfa2a53dcbd81874fd6c1f76"
+          test "$(git rev-parse 1d8701588bdb8ece69749149a60d4b70a643e12f:src/cmpct/reader.py)" = "bd1df6091c952e74c8690cf2ba0764747e6db815"
+          test "$(git hash-object benchmarks/v031_signed_delta_replay_o0.py)" = "02c5f506c9294130db6b0eb9c36c0a61460c3b35"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine CMPCT source product
+        run: python -m pip install ".[test]"
+      - name: O10R installed / O9 source-exact fresh-process O13 economics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o13-evidence
+          python -u benchmarks/v031_o10r_generation_cold_economics_o13.py --out o13-evidence --sizes 512 4096 --repeats 5 2>&1 | tee o13-evidence/experiment.log
+          sha256sum o13-evidence/installed-reader-cold-economics-o13.json | tee o13-evidence/receipt.sha256
+      - name: Preserve honest positive or negative O13 observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installed-reader-cold-economics-o13-${{ github.event.pull_request.head.sha || github.sha }}
+          path: o13-evidence/
+          if-no-files-found: warn
+          retention-days: 30
