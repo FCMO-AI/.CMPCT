@@ -35,7 +35,8 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git ls-files --error-unmatch native/cmpct-core/Cargo.lock tests/native_authenticated_sha_o12.py docs/v031-research/NATIVE_AUTHENTICATED_STREAM_SHA_O12_PREREG.md
-          git show --format=fuller --no-patch "$(git log --format=%H -- docs/v031-research/NATIVE_AUTHENTICATED_STREAM_SHA_O12_PREREG.md | tail -1)"
+          test -s docs/v031-research/NATIVE_AUTHENTICATED_STREAM_SHA_O12_PREREG.md
+          sha256sum docs/v031-research/NATIVE_AUTHENTICATED_STREAM_SHA_O12_PREREG.md
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
