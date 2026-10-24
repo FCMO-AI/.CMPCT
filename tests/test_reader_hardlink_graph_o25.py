@@ -114,3 +114,29 @@ def test_o25_deep_acyclic_chain_avoids_python_call_stack(tmp_path):
         # Every alias is SHA-checked by the genuine Reader; neither repeated
         # ownership lookups nor direct reads should depend on recursion depth.
         assert reader.verify() == count + 1
+
+
+def test_o25_plain_checkpoint_has_no_hardlink_dependency(tmp_path):
+    path = _archive(tmp_path / "plain.cmpct", {})
+    assert preflight_archive(path)["files"] == 1
+    with CMPCT(path) as reader:
+        assert reader.read("owner.bin") == PAYLOAD
+        assert reader.read_range("owner.bin", 2, 5) == PAYLOAD[2:7]
+        assert reader.read_raw_range_verified("owner.bin", 0, len(PAYLOAD)) == PAYLOAD
+        assert reader.verify() == 1
+
+
+def test_o25_branching_alias_graph_reuses_terminal_owner(tmp_path):
+    # A shared intermediate alias must not turn N siblings into N full
+    # traversals; all leaves must bind one terminal inode/bytes.
+    edges = {"pivot01": "pivot02", "pivot02": "owner.bin"}
+    edges.update({f"fan{i:04d}": "pivot01" for i in range(256)})
+    path = _archive(tmp_path / "fanout.cmpct", edges)
+    assert preflight_archive(path)["files"] == len(edges) + 1
+    with CMPCT(path) as reader:
+        for i in range(256):
+            name = f"fan{i:04d}"
+            assert reader.read(name) == PAYLOAD
+            assert reader.read_range(name, 1, 4) == PAYLOAD[1:5]
+            assert reader.file_sha256(name) == sha(PAYLOAD)
+        assert reader.verify() == len(edges) + 1
