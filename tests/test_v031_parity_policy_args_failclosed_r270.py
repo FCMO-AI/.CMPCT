@@ -15,8 +15,10 @@ def _run(tmp_path, *args, create=0.107, archive_bytes=1000):
     base_metric = {"bytes": 1000, "create_s_median": 0.100, "extract_s_median": 0.070}
     cand_metric = {"bytes": archive_bytes, "create_s_median": create, "extract_s_median": 0.070}
     base = {"schema": "cmpct-zip-parity-v1", "corpora": {"hostile_policy": {
+        "logical_bytes": 1000,
         "library": {"cmpct": base_metric}, "cli": {"cmpct": base_metric}}}}
     candidate = {"schema": "cmpct-zip-parity-v1", "corpora": {"hostile_policy": {
+        "logical_bytes": 1000,
         "library": {"cmpct": cand_metric}, "cli": {"cmpct": cand_metric}}}}
     pa, pb = tmp_path / "base.json", tmp_path / "candidate.json"
     pa.write_text(json.dumps(base), encoding="utf-8")

@@ -28,6 +28,7 @@ def _report():
         "schema": "cmpct-zip-parity-v1",
         "corpora": {
             "independent_test": {
+                "logical_bytes": 1000,
                 "library": {"cmpct": copy.deepcopy(metric)},
                 "cli": {"cmpct": copy.deepcopy(metric)},
             }

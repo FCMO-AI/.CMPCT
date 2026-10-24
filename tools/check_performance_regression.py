@@ -42,6 +42,12 @@ def load(path: Path) -> dict[str, Any]:
     for name, row in corpora.items():
         if not isinstance(name, str) or not name or not isinstance(row, dict):
             raise ValueError(f"{path}: malformed corpus name or record {name!r}")
+        # Release comparisons require the same logical input extent on both arms.
+        # Aggregation verifies this only *within* an arm; do not trust a
+        # name-equivalent but size-divergent base/candidate comparison.
+        logical = row.get("logical_bytes")
+        if type(logical) is not int or logical < 0:
+            raise ValueError(f"{path}: {name}/logical_bytes: expected non-negative integral logical input bytes")
         for layer in LAYERS:
             metric = row.get(layer)
             metric = metric.get("cmpct") if isinstance(metric, dict) else None
@@ -126,6 +132,12 @@ def main() -> int:
     for name in sorted(base_names & cand_names):
         b_row = base["corpora"][name]
         c_row = cand["corpora"][name]
+        if b_row["logical_bytes"] != c_row["logical_bytes"]:
+            failures.append(
+                f"{name}: logical input bytes changed "
+                f"{b_row['logical_bytes']:,} -> {c_row['logical_bytes']:,}; "
+                "base/candidate input comparability not established"
+            )
         for layer in LAYERS:
             b_cmpct = b_row[layer]["cmpct"]
             c_cmpct = c_row[layer]["cmpct"]
