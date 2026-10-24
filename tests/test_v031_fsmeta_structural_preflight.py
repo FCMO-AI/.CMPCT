@@ -1,6 +1,6 @@
 """Revision-24 hostile filesystem-metadata structural court.
 
-Pre-registered defect: a validly signed index may carry malformed fsmeta rows that
+Pre-registered defect: a self-checksummed but unauthenticated index may carry malformed fsmeta rows that
 pass preflight and fail only after extraction writes file content. The expected
 outcome is early rejection by both independent preflight and the Reader, before
 creating a destination. No changes to frozen format bytes or benchmark thresholds.
@@ -59,6 +59,9 @@ BAD_FS_META = [
     ("owner-row-short", lambda meta: meta.update(owner_overrides=[[0, 1000]])),
     ("owner-row-bool", lambda meta: meta.update(owner_overrides=[[0, True, 1000]])),
     ("owner-duplicate-file", lambda meta: meta.update(owner_overrides=[[0, 1, 2], [0, 3, 4]])),
+    ("owner-negative-uid", lambda meta: meta.update(owner_overrides=[[0, -1, 42]])),
+    ("xattr-pair-width", lambda meta: meta.update(xattrs=[[0, [["user.good", b"ok", b"extra"]]]])),
+    ("xattr-pairs-not-array", lambda meta: meta.update(xattrs=[[0, {"user.good": b"ok"}]])),
 ]
 
 
@@ -94,3 +97,27 @@ def test_valid_fsmeta_contract_and_reconstruction(ordinary_archive, tmp_path):
         assert reader.read("payload.bin") == b"exact-content-" * 10
         reader.extractall(tmp_path / "valid-output", metadata=False)
     assert (tmp_path / "valid-output" / "payload.bin").read_bytes() == b"exact-content-" * 10
+
+def test_reader_rejects_bad_fsmeta_without_any_explicit_preflight(ordinary_archive, tmp_path):
+    """Independent write-boundary test; do not rely on preflight's exception to mask Reader."""
+    mutated = _authenticated_fsmeta_mutation(
+        ordinary_archive,
+        lambda meta: meta.update(xattrs=[[0, [["user.bad", "not-bytes"]]]),
+        tmp_path / "reader-only.cmpct",
+    )
+    output = tmp_path / "uncreated"
+    with CMPCT(mutated) as reader:
+        with pytest.raises(ValidationError, match="fsmeta"):
+            reader.extractall(output)
+    assert not output.exists()
+
+
+def test_reader_verify_refuses_structurally_invalid_fsmeta(ordinary_archive, tmp_path):
+    mutated = _authenticated_fsmeta_mutation(
+        ordinary_archive,
+        lambda meta: meta.update(owner_overrides=[[0, 10]]),
+        tmp_path / "verify-only.cmpct",
+    )
+    with CMPCT(mutated) as reader:
+        with pytest.raises(ValidationError, match="fsmeta"):
+            reader.verify()
