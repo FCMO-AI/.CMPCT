@@ -1,7 +1,8 @@
-"""Research O0: identical authenticated r24 wire, conflicting native/Python tree.
+"""Source-frozen O0 negative → O1 fail-closed duplicate-map regression court.
 
-A SUCCESSFUL scientific court reports a negative product finding. It does NOT
-establish safe Reader behavior. This is a source-exact adversarial oracle.
+The unmodified initial research commit f48662e7, run 40052842656, proved 6/6
+authenticated SAME-WIRE Python/Rust semantic divergences. This successor court
+requires both production readers and Python preflight to reject those bytes.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from pathlib import Path
 
 import msgpack
 from cmpct.reader import CMPCT
+from cmpct.validation import preflight_archive, ValidationError
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = ROOT / "tests/conformance/v24-direct-codecs.json"
@@ -166,43 +168,52 @@ def main():
                 wire = forge_authenticated_duplicate(orig, zstd, first_empty=first_empty)
                 path = root / f"{vector['codec']}-first-empty-{first_empty}.cmpct"
                 path.write_bytes(wire)
-                with CMPCT(path) as python:
-                    python_count = len(python.files)
-                    if python_count:
-                        assert python_count == 1
-                        assert sha(python.read(vector["name"])).hex() == expected_digest
-                native_count, native_data = native_read(
-                    lib, path, vector["logical_size"]
+                # The reference reader must reject ambiguity before exposing
+                # either file count. Check real Python open and bounded preflight.
+                python_refused = False
+                try:
+                    with CMPCT(path) as python:
+                        python.read(vector["name"])
+                except (ValueError, IOError):
+                    python_refused = True
+                assert python_refused, ("Python accepted duplicated root key", vector["codec"])
+                preflight_refused = False
+                try:
+                    preflight_archive(path)
+                except (ValueError, IOError, ValidationError):
+                    preflight_refused = True
+                assert preflight_refused, ("preflight accepted duplicated key", vector["codec"])
+
+                handle = ctypes.c_void_p()
+                native_status = lib.cmpct_open(str(path).encode(), ctypes.byref(handle))
+                if handle.value:
+                    lib.cmpct_close(handle)
+                assert native_status != 0, (
+                    "Native accepted fully signed ambiguous root", vector["codec"], first_empty
                 )
-                if native_count:
-                    assert sha(native_data).hex() == expected_digest
-                expected_python = 1 if first_empty else 0
-                expected_native = 0 if first_empty else 1
-                assert (python_count, native_count) == (
-                    expected_python, expected_native
-                ), (vector["codec"], first_empty, python_count, native_count)
                 evidence.append({"codec": vector["codec"], "case":
                                  "first-empty" if first_empty else "last-empty",
                                  "wire_sha256": sha(wire).hex(),
-                                 "python_count": python_count,
-                                 "native_count": native_count,
-                                 "agreement": False,
+                                 "python_refused": python_refused,
+                                 "preflight_refused": preflight_refused,
+                                 "native_refused": True,
                                  "physical_data_unchanged": True,
                                  "both_indexes_authenticated": True})
 
     verdict = {
         "schema": "cmpct-dual-reader-authenticated-root-duplicate-o0-v1",
-        "verdict": "PROVEN_DIVERGENT_LOGICAL_TREES_NOT_SAFE",
+        "verdict": "DUPLICATE_ROOT_FIELDS_REJECTED_BY_ALL_READERS",
         "source": "independent committed revision-24 direct-codec goldens",
         "positive_same_wire": 3,
-        "negative_same_wire": 6,
+        "hostile_same_wire": 6,
         "cases": evidence,
-        "product_fix_or_release_credit": False,
+        "scoped_product_fix_candidate": True,
+        "release_credit": False,
     }
     dest = Path("duplicate-root-evidence")
     dest.mkdir(exist_ok=True)
     (dest / "verdict.json").write_text(json.dumps(verdict, indent=2, sort_keys=True) + "\n")
-    print(f"DIVERGENCE_CONFIRMED {verdict['negative_same_wire']}/6; NOT A PRODUCT PASS")
+    print(f"DUPLICATE_MAPS_REFUSED {verdict['hostile_same_wire']}/6 across Python/preflight/Rust; release pending")
     print(json.dumps(verdict, sort_keys=True))
 
 
