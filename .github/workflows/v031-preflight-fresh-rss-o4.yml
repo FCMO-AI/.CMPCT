@@ -1,0 +1,54 @@
+# ci-lane: fast
+name: CMPCT v0.31 fresh-process preflight RSS source-exact O4
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_preflight_fresh_process_rss_o4.py'
+      - 'docs/v031-research/2026-10-24-preflight-fresh-process-rss-o4-prereg.md'
+      - '.github/workflows/v031-preflight-fresh-rss-o4.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-preflight-fresh-rss-o4-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  fresh-process-resident-court:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+      - name: Verify checked-out source head, exact comparator and unchanged validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git cat-file -e 51c2849061f99a4afeddb7666956b24566ce7de0
+          test "$(git rev-parse "$EVIDENCE_HEAD:src/cmpct/validation.py")" = "1e085db992add64118a9488790096c574fff154d"
+          python -m py_compile benchmarks/v031_preflight_fresh_process_rss_o4.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install same authentic CMPCT package for both arms
+        run: python -m pip install -e ".[test]"
+      - name: Measure separate-process maximum RSS, wall and CPU on authentic signed r24
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p fresh-rss-o4-artifacts
+          python -u benchmarks/v031_preflight_fresh_process_rss_o4.py --out fresh-rss-o4-artifacts --repeats 5 --sizes 512 2048 4096 2>&1 | tee fresh-rss-o4-artifacts/console.log
+          sha256sum fresh-rss-o4-artifacts/fresh-process-rss-o4.json | tee fresh-rss-o4-artifacts/receipt.sha256
+      - name: Preserve both positive and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-fresh-rss-o4-${{ github.sha }}
+          path: fresh-rss-o4-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
