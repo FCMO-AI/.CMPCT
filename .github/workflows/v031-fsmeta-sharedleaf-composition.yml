@@ -9,6 +9,7 @@ on:
       - 'src/cmpct/validation.py'
       - 'tests/test_v031_fsmeta_sharedleaf_composition.py'
       - 'benchmarks/v031_fsmeta_sharedleaf_abba.py'
+      - 'tests/test_v031_fsmeta_missing_cache_regression.py'
       - 'tests/test_v031_fsmeta_structural_preflight.py'
       - '.github/workflows/v031-fsmeta-sharedleaf-composition.yml'
   workflow_dispatch:
@@ -54,6 +55,8 @@ jobs:
           python -m pytest -vv tests/test_v031_fsmeta_sharedleaf_composition.py 2>&1 | tee fsmeta-sharedleaf-evidence/composition-pytest.txt
       - name: Preserve original path-only synthetic Reader alias rejection
         run: python -m pytest -vv tests/test_path_policy.py
+      - name: Missing metadata cache remains fail-closed against present index
+        run: python -m pytest -vv tests/test_v031_fsmeta_missing_cache_regression.py
       - name: Original owner regression suites unchanged
         run: |
           set -o pipefail
