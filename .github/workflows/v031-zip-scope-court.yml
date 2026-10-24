@@ -1,0 +1,39 @@
+# ci-lane: fast
+# Focused admission truth. Runs against the exact PR head even when the
+# inherited v0.30 release-fingerprint assertions block unrelated general CI.
+name: CMPCT v0.31 ZIP parity source-scope court
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/v031-zip-scope-court.yml"
+      - ".github/workflows/zip-parity.yml"
+      - "tools/classify_zip_parity_scope.py"
+      - "tools/check_ci_topology.py"
+      - "tests/test_v031_zip_parity_scope.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-zip-scope-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-source-classifier-court:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Verify exact checkout and run adversarial Git DAG court
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m unittest discover -s tests -p test_v031_zip_parity_scope.py -v
+      - name: Recheck installed topology law
+        run: python tools/check_ci_topology.py .github/workflows/zip-parity.yml .github/workflows/v031-zip-scope-court.yml
