@@ -1,0 +1,54 @@
+# ci-lane: fast
+name: CMPCT v0.31 signed non-directory ancestor extraction
+on:
+  pull_request:
+    paths:
+      - 'tests/test_v031_signed_nondir_ancestor.py'
+      - 'docs/v031-research/2026-10-24-signed-nondir-ancestor-o0-prereg.md'
+      - 'src/cmpct/reader.py'
+      - '.github/workflows/v031-signed-nondir-ancestor.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-nondir-ancestor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  exact-head-authenticated-tree:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Prove exact-head source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "EXACT_SOURCE_HEAD=$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine CMPCT including native codec
+        run: python -m pip install -e ".[test]"
+      - name: Execute immutable signed archive and valid control cases
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q -rs --noconftest tests/test_v031_signed_nondir_ancestor.py 2>&1 | tee signed-nondir-evidence.log
+      - name: Preserve positive or negative exact-head logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-nondir-${{ matrix.os }}-${{ github.sha }}
+          path: signed-nondir-evidence.log
+          if-no-files-found: warn
+          retention-days: 30

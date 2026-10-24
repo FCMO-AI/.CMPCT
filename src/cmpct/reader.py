@@ -472,6 +472,24 @@ class CMPCT:
                         raise IOError(f'unsafe macOS hardlink source: {row[0]!r}') from exc
                     if source_key not in macos_logical_owners:
                         raise IOError(f'missing logical macOS hardlink owner: {row[0]!r}')
+        # An authenticated logical tree can describe a file and its descendant as two
+        # individually valid entries, though no filesystem can materialize both. Without
+        # this preflight, extraction publishes the first file and fails on the child,
+        # leaving a partial tree. A component trie keeps the check O(total path parts)
+        # rather than rescanning every candidate ancestor against every member.
+        namespace_root={}
+        for row, key, parts in canonical_rows:
+            node=namespace_root
+            for component in parts:
+                node=node.setdefault(component,{})
+            node[None]=row[1]  # None is not a valid logical path component.
+        for row, key, parts in canonical_rows:
+            node=namespace_root
+            for component in parts[:-1]:
+                node=node[component]
+                if node.get(None) in (K_FILE,K_HARDLINK):
+                    raise IOError(f'non-directory archive ancestor of {row[0]!r}')
+
         clean=[]
         for row,key,parts in canonical_rows:
             rel=row[0]
