@@ -137,20 +137,20 @@ def test_real_posix_extractor_keeps_legal_windows_incompatible_names(tmp_path: P
     assert sorted(p.name for p in destination.iterdir()) == sorted(names)
 
 
-@pytest.mark.parametrize("target", [r"\\outside", "/outside", r"\\Windows\\Temp"])
+@pytest.mark.parametrize("target", [r"\outside", "/outside", r"\Windows\Temp"])
 def test_win32_root_relative_symlink_target_is_not_relative_to_destination(target: str) -> None:
     # This independent standard-library discriminator catches a common false
     # assumption: PureWindowsPath.is_absolute() is false for root-relative paths,
     # although a symlink to them escapes its containing extraction directory.
-    root = r"C:\\safe\\root"
+    root = r"C:\safe\root"
     joined = ntpath.normcase(ntpath.normpath(ntpath.join(root, target)))
-    assert not joined.startswith(ntpath.normcase(root) + "\\\\")
+    assert not joined.startswith(ntpath.normcase(ntpath.normpath(root)) + "\\")
     # Python 3.13 may return False from ntpath.isabs for a single leading
     # separator. Confinement is the invariant, not one stdlib predicate.
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires real Windows symlink creation policy")
-@pytest.mark.parametrize("target", [r"\\outside", "/outside"])
+@pytest.mark.parametrize("target", [r"\outside", "/outside"])
 def test_real_win32_root_relative_symlink_target_rejected(tmp_path: Path, target: str) -> None:
     ar = object.__new__(CMPCT)
     ar.files = [["link", K_SYMLINK, 0o777, 0, len(target.encode()), b"", [S_BLOB, 0]]]
