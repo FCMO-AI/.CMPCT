@@ -10,6 +10,7 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import json
+import msgpack
 import os
 from pathlib import Path
 import random
@@ -17,7 +18,7 @@ import sys
 import tempfile
 
 from cmpct.builder import Builder
-from cmpct.codec import CODEC_RAW, K_FILE, K_DIR, S_BLOB
+from cmpct.codec import (CODEC_RAW, K_FILE, K_DIR, S_BLOB, FMAGIC, FTR, HDR, MAGIC, sha, zc, zd)
 from cmpct.reader import CMPCT
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +51,48 @@ def streamed(lib, handle, index, size):
         digest.update(chunk)
         reconstructed.extend(chunk)
     return digest.digest(), bytes(reconstructed)
+
+
+def unsigned_row_court(base, original_path, lib, raw):
+    """Source-exact signed index with a deliberately absent logical SHA.
+
+    The physical RAW blob/header remains byte-for-byte identical. It has its
+    own SHA header, which must NEVER silently replace the absent row commitment.
+    """
+    original = original_path.read_bytes()
+    magic, version, flags, cs, us, data_size, old_hash = HDR.unpack_from(original)
+    assert magic == MAGIC and version == 24
+    plain = zd(original[HDR.size:HDR.size + cs], us)
+    assert sha(plain) == old_hash
+    rows = msgpack.unpackb(plain, raw=False)
+    item = next(row for row in rows["files"] if row[0] == "raw.bin")
+    assert item[5] == hashlib.sha256(raw).digest()
+    item[5] = None
+    new_plain = msgpack.packb(rows, use_bin_type=True)
+    new_index = zc(new_plain, 12)
+    new_hash = sha(new_plain)
+    physical = original[HDR.size + cs:HDR.size + cs + data_size]
+    target = base / "missing-row-sha.cmpct"
+    target.write_bytes(
+        HDR.pack(MAGIC, version, flags, len(new_index), len(new_plain), data_size, new_hash)
+        + new_index + physical + new_index
+        + FTR.pack(FMAGIC, 0, 1, 0, 0, len(new_index), len(new_plain), 0, new_hash)
+    )
+    produced = target.read_bytes()
+    assert produced[HDR.size + len(new_index):HDR.size + len(new_index) + data_size] == physical
+    assert produced[HDR.size:HDR.size + len(new_index)] == produced[-FTR.size - len(new_index):-FTR.size]
+    with CMPCT(target) as reader:
+        assert reader.read("raw.bin") == raw
+    handle = open_native(lib, target)
+    try:
+        idx = map_paths(lib, handle)["raw.bin"]
+        status, bytes_out = query(lib, handle, idx)
+        assert status == -7 and bytes_out == bytes(32), (status, bytes_out.hex())
+        digest, recovered = streamed(lib, handle, idx, len(raw))
+        assert recovered == raw and digest == hashlib.sha256(raw).digest()
+    finally:
+        lib.cmpct_close(handle)
+    return hashlib.sha256(produced).hexdigest()
 
 
 def main():
@@ -154,10 +197,10 @@ def main():
         finally:
             lib.cmpct_close(handle)
 
-    result = {
+    unsigned_court_sha = unsigned_row_court(base, output, lib, raw)\n\n    result = {
         "schema": "cmpct-native-authenticated-stream-sha-o12-v1",
         "source_head_binding": "verified by workflow checkout EVIDENCE_HEAD",
-        "archive_sha256": hashlib.sha256(original).hexdigest(),
+        "archive_sha256": hashlib.sha256(original).hexdigest(),\n        "missing_row_sha_archive_sha256": unsigned_court_sha,
         "cases": cases,
         "controls": {
             "real_direct_raw_codec": True,
@@ -165,7 +208,7 @@ def main():
             "native_bounded_stream_output_hashes_match": True,
             "directory_invalid_index_and_null_fail_zero": True,
             "mutated_RAW_payload_ranged_reads_must_mismatch_signed_SHA": True,
-            "restored_source_accepts_again": True,
+            "restored_source_accepts_again": True,\n            "missing_signed_row_SHA_does_not_fallback_to_physical_header": True,
         },
         "decision": "NARROW_ABI_CAPABILITY_POSITIVE_NOT_PRODUCT_EXTRACTOR",
     }
