@@ -33,14 +33,40 @@ class CMPCT:
             # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This
             # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map
             # one-to-one onto a destination filesystem.
-            canonical_seen=set()
+            canonical_seen=set();hardlink_aliases=[]
             try:
                 for row in self.files:
                     key,_=canonical_logical_path(row[0])
                     if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
                     canonical_seen.add(key)
+                    if row[1]==K_HARDLINK:hardlink_aliases.append(row[0])
             except ValueError as exc:
                 raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
+            # Strict preflight already checks authenticated hardlink owner graphs, but ordinary
+            # Reader opens historically skipped that court. A signed self-cycle could then recurse
+            # forever during read(), and a valid long chain could exceed Python's call stack.
+            # Resolve each edge once, fail before the Reader exposes an unsafe tree, and reuse the
+            # terminal regular owner for every public read surface. No-link checkpoints pay only
+            # one empty allocation; graph work is O(aliases + edges), not per-read traversal.
+            self._hardlink_owners={}
+            for alias in hardlink_aliases:
+                node=alias;trail=[];walked=set()
+                while node not in self._hardlink_owners:
+                    current=self.by.get(node)
+                    if current is None:raise IOError(f'hardlink targets missing owner: {node!r}')
+                    if current[1]!=K_HARDLINK:break
+                    if node in walked:raise IOError(f'hardlink cycle involving {alias!r}')
+                    walked.add(node);trail.append(node)
+                    link=current[6]
+                    if (not isinstance(link,list) or len(link)!=1
+                            or not isinstance(link[0],str)):
+                        raise IOError(f'hardlink has invalid target: {node!r}')
+                    node=link[0]
+                owner=self._hardlink_owners.get(node,node)
+                resolved=self.by.get(owner)
+                if resolved is None or resolved[1]!=K_FILE:
+                    raise IOError(f'hardlink must resolve to regular owner: {alias!r} -> {owner!r}')
+                for linked_name in trail:self._hardlink_owners[linked_name]=owner
             self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
         except BaseException:
             # Construction failures never reach close()/__exit__. Release owned handles before
@@ -192,7 +218,7 @@ class CMPCT:
 
     def file_sha256(self,name:str)->bytes:
         row=self.by[name];storage=row[6]
-        if row[1]==K_HARDLINK:return self.file_sha256(storage[0])
+        if row[1]==K_HARDLINK:return self.file_sha256(self._hardlink_owners[name])
         if storage[0]==S_BLOB:
             off=self.blobs[storage[1]][0];pos=self.record_base+off;return bytes(BHDR.unpack_from(self.mm,pos)[-1])
         if storage[0]==S_VZIP:return bytes(self.recipes[storage[1]][3])
@@ -203,7 +229,7 @@ class CMPCT:
     def read(self,name:str)->bytes:
         row=self.by[name];rel,k,mode,mt,size,h,storage=row
         if k==K_DIR:raise IsADirectoryError(name)
-        if k==K_HARDLINK:return self.read(storage[0])
+        if k==K_HARDLINK:return self.read(self._hardlink_owners[name])
         if k==K_SYMLINK:return self._blob(storage[1])
         sk=storage[0]
         if sk==S_PACK:
@@ -250,7 +276,7 @@ class CMPCT:
         return raw
     def read_range(self,name,start,length):
         row=self.by[name];size=row[4];storage=row[6];end=start+length
-        if row[1]==K_HARDLINK:return self.read_range(storage[0],start,length)
+        if row[1]==K_HARDLINK:return self.read_range(self._hardlink_owners[name],start,length)
         if start<0 or length<0 or end>size:raise ValueError('range outside member')
         if storage[0]==S_PACK:
             pack=self._blob(storage[1]);base=storage[2];return pack[base+start:base+end]
@@ -312,7 +338,7 @@ class CMPCT:
         """
         row=self.by[name]
         if row[1]==K_HARDLINK:
-            return self.read_raw_range_verified(row[6][0],start,length,max_scan_bytes=max_scan_bytes)
+            return self.read_raw_range_verified(self._hardlink_owners[name],start,length,max_scan_bytes=max_scan_bytes)
         if row[1]!=K_FILE or not row[6] or row[6][0]!=S_BLOB:
             raise ValueError('digest-verified RAW ranges require a regular direct-blob member')
         size=row[4]
