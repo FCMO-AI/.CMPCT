@@ -437,6 +437,10 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
         _ref(dict_idx, len(blobs), "dictionary blob")
 
     seen_paths = set()
+    # Strict preflight validates one coherent materializable tree, not only
+    # individually readable rows. None cannot be a path component, so it
+    # safely marks the kind owned by each terminal trie node.
+    namespace_root = {}
     hardlinks = {}
     for fi, row in enumerate(files):
         if not isinstance(row, list) or len(row) != 7:
@@ -445,7 +449,7 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
         if not isinstance(path, str):
             raise ValidationError(f"file row {fi} path is not text")
         try:
-            canonical_path, _ = canonical_logical_path(path, max_path_bytes=limits.max_path_bytes)
+            canonical_path, components = canonical_logical_path(path, max_path_bytes=limits.max_path_bytes)
         except ValueError as exc:
             raise ValidationError(f"unsafe logical path {path!r}: {exc}") from exc
         # Footnote: duplicate detection is keyed by the same lexical spelling extraction uses. Without
@@ -466,6 +470,19 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
         ):
             raise ValidationError(f"file {path!r} logical hash must be 32 bytes")
         _validate_storage(path, kind, size, storage, blobs, recipes)
+        # An authenticated index can name both a regular file (or hardlink)
+        # and a descendant of that file. Reject before a caller treats this
+        # strict preflight as approval to materialize the tree. Check both
+        # insertion orders in O(total path components), without I/O or payload
+        # decoding; ordinary Reader member reads remain independently valid.
+        node = namespace_root
+        for component in components:
+            if node.get(None) in (K_FILE, K_HARDLINK):
+                raise ValidationError(f"non-directory archive ancestor of {path!r}")
+            node = node.setdefault(component, {})
+        if kind in (K_FILE, K_HARDLINK) and any(k is not None for k in node):
+            raise ValidationError(f"non-directory archive ancestor {path!r}")
+        node[None] = kind
         if kind == K_HARDLINK:
             try:
                 target_key, _ = canonical_logical_path(storage[0], max_path_bytes=limits.max_path_bytes)
