@@ -1,0 +1,70 @@
+# ci-lane: fast
+# Focused admission truth. Runs against the exact PR head even when the
+# inherited v0.30 release-fingerprint assertions block unrelated general CI.
+name: CMPCT v0.31 ZIP parity source-scope court
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/v031-zip-scope-court.yml"
+      - ".github/workflows/zip-parity.yml"
+      - "tools/classify_zip_parity_scope.py"
+      - "tools/check_ci_topology.py"
+      - "tests/test_v031_zip_parity_scope.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-zip-scope-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-source-classifier-court:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Verify exact checkout and run adversarial Git DAG court
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m unittest discover -s tests -p test_v031_zip_parity_scope.py -v
+      - name: Execute unchanged native materializer wiring invariants against new classifier
+        run: |
+          python - <<'PY'
+          import runpy
+          controls = runpy.run_path("tests/test_performance_base_native_wiring.py")
+          cases = [name for name in controls if name.startswith("test_")]
+          for name in sorted(cases):
+              controls[name]()
+              print(f"{name}: PASS")
+          assert len(cases) == 2, f"unexpected native materializer contract count: {cases}"
+          PY
+      - name: Reproduce authentic PR316 product-first workflow-last false skip
+        env:
+          HISTORICAL_HEAD: 1ed92767e6438d9bb8835ddc7ae27160440c2014
+          HISTORICAL_BASE: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
+        run: |
+          set -euo pipefail
+          git cat-file -e "${HISTORICAL_HEAD}^{commit}"
+          git cat-file -e "${HISTORICAL_BASE}^{commit}"
+          git worktree add --detach /tmp/cmpct-pr316-source "${HISTORICAL_HEAD}"
+          (
+            cd /tmp/cmpct-pr316-source
+            git diff-tree --no-commit-id --name-only -r HEAD > /tmp/pr316-last-commit-only.txt
+            # Real last-commit classifier sees only a workflow: false skip.
+            ! grep -Eq '^(src/|native/|benchmarks/|tests/)' /tmp/pr316-last-commit-only.txt
+            python "$GITHUB_WORKSPACE/tools/classify_zip_parity_scope.py" \
+              --event pull_request --head "$HISTORICAL_HEAD" \
+              --base "$HISTORICAL_BASE" | tee /tmp/pr316-full-pr-classification.txt
+            grep -Fxq 'run_performance=true' /tmp/pr316-full-pr-classification.txt
+            grep -Fxq 'scope_basis=pr-merge-base' /tmp/pr316-full-pr-classification.txt
+          )
+      - name: Recheck installed topology law
+        run: python tools/check_ci_topology.py .github/workflows/zip-parity.yml .github/workflows/v031-zip-scope-court.yml
