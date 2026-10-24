@@ -138,3 +138,35 @@ def test_valid_hardlink_owner_alias_remains_preflightable(tmp_path: Path) -> Non
     assert preflight_archive(valid)["files"] == 3
     with CMPCT(valid) as reader:
         assert reader.read("z_alias.bin") == b"PHYSICAL-OWNER"
+
+
+def test_strict_preflight_rejects_signed_hardlink_to_directory_owner(tmp_path: Path) -> None:
+    """O1 held-out: hardlink owner must resolve to a regular inode, not a directory."""
+    root = tmp_path / "with_directory"
+    (root / "folder").mkdir(parents=True)
+    (root / "normal.bin").write_bytes(b"CONTROL-REGULAR")
+    original = tmp_path / "source_directory.cmpct"
+    Builder(root, workers=1, reproducible=True).build(original)
+    assert preflight_archive(original)["files"] >= 2
+
+    hostile = tmp_path / "signed_directory_alias.cmpct"
+
+    def mutate(index):
+        directory = next(row for row in index["files"] if row[0] == "folder")
+        owner = next(row for row in index["files"] if row[0] == "normal.bin")
+        assert directory[1] == K_DIR
+        index["files"].append([
+            "z_dir_alias", K_HARDLINK, owner[2], owner[3], 0,
+            None, ["folder"],
+        ])
+        index["files"].sort(key=lambda row: row[0])
+
+    _resign(original, hostile, mutate)
+    with CMPCT(hostile) as reader:
+        assert reader.read("normal.bin") == b"CONTROL-REGULAR"
+        with pytest.raises(OSError):
+            reader.extractall(tmp_path / "out", metadata=False)
+
+    # Before O1 correction, strict preflight only checks existence/cycles, not kind.
+    with pytest.raises(ValidationError, match="hardlink.*regular"):
+        preflight_archive(hostile)
