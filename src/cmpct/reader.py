@@ -554,6 +554,29 @@ class CMPCT:
                     if '/'.join(parts[:i]) in syms:raise IOError(f'archive symlink used as parent path: {rel!r}')
             clean.append((row,parts,os.path.join(dest_s,*parts)))
 
+        # Archive path/ancestor admission is already prewrite. Authenticate signed
+        # symlink target bytes at the same boundary: a late target error must not
+        # leave previously decoded regular members on the destination filesystem.
+        # Retain the same validator at publication (mmap/source may change between
+        # passes); short target blobs are reused from the Reader's existing cache.
+        def validate_signed_symlink_target(rel: str, target: str) -> None:
+            tp=Path(target)
+            if tp.is_absolute() or any(x=='..' for x in tp.parts):raise IOError(f'unsafe symlink target in {rel!r}: {target!r}')
+            if os.name == 'nt':
+                # Win32 treats root-relative (\\victim) and drive-relative (D:victim)
+                # targets as outside the selected directory; pathlib.is_absolute()
+                # alone does not reject root-relative paths.
+                if ntpath.isabs(target) or target.startswith(('\\', '/')):
+                    raise IOError(f'unsafe Windows rooted symlink target in {rel!r}: {target!r}')
+                target_parts=tuple(p for p in target.replace('\\', '/').split('/') if p not in ('', '.'))
+                try:canonical_windows_extraction_key(target_parts)
+                except ValueError as exc:raise IOError(f'unsafe Windows symlink target in {rel!r}: {target!r}') from exc
+
+        if safe_symlinks:
+            for row, _parts, _full in clean:
+                if row[1] == K_SYMLINK:
+                    validate_signed_symlink_target(row[0], self.read(row[0]).decode('utf-8','surrogateescape'))
+
         # Build all directories first. Parents are guaranteed to exist before regular-file writes,
         # eliminating hundreds of redundant stat/mkdir calls on large source trees.
         dirs=[]
@@ -578,17 +601,7 @@ class CMPCT:
             if k==K_SYMLINK:
                 target=self.read(rel).decode('utf-8','surrogateescape')
                 if safe_symlinks:
-                    tp=Path(target)
-                    if tp.is_absolute() or any(x=='..' for x in tp.parts):raise IOError(f'unsafe symlink target in {rel!r}: {target!r}')
-                    if os.name == 'nt':
-                        # Win32 treats root-relative (\\victim) and drive-relative (D:victim)
-                        # targets as outside the selected directory; pathlib.is_absolute()
-                        # alone does not reject root-relative paths.
-                        if ntpath.isabs(target) or target.startswith(('\\', '/')):
-                            raise IOError(f'unsafe Windows rooted symlink target in {rel!r}: {target!r}')
-                        target_parts=tuple(p for p in target.replace('\\', '/').split('/') if p not in ('', '.'))
-                        try:canonical_windows_extraction_key(target_parts)
-                        except ValueError as exc:raise IOError(f'unsafe Windows symlink target in {rel!r}: {target!r}') from exc
+                    validate_signed_symlink_target(rel, target)
                 try:os.unlink(full)
                 except FileNotFoundError:pass
                 os.symlink(target,full)
