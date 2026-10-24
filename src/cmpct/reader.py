@@ -11,6 +11,7 @@ from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
 from .path_policy import canonical_logical_path
+from .msgpack_policy import unique_map_pairs
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -64,7 +65,7 @@ class CMPCT:
             if g is None:return None
             kind,payload,prev=g
             if kind==0:
-                idx=msgpack.unpackb(payload,raw=False)
+                idx=msgpack.unpackb(payload,raw=False,object_pairs_hook=unique_map_pairs)
                 for delta in reversed(chain):
                     for b in delta.get('blobs',[]):idx['blobs'].append(b)
                     for op in delta.get('ops',[]):
@@ -80,7 +81,7 @@ class CMPCT:
                     idx['files'].sort(key=lambda x:x[0])
                 return idx,depth
             if kind!=1:return None
-            chain.append(msgpack.unpackb(payload,raw=False));depth+=1;pos=prev
+            chain.append(msgpack.unpackb(payload,raw=False,object_pairs_hook=unique_map_pairs));depth+=1;pos=prev
         return None
     def _latest_generation(self):
         # Scan backward for the newest valid commit footer. A partial append after an older footer
@@ -106,7 +107,7 @@ class CMPCT:
             self.latest_footer_pos=latest[1];self.delta_depth=latest[2];return latest[0],HDR.size+cs
         ic=self.f.read(cs);ib=zd(ic,us)
         if sha(ib)!=ih:raise IOError('both CMPCT indexes unavailable/corrupt')
-        self.latest_footer_pos=0;self.delta_depth=0;return msgpack.unpackb(ib,raw=False),HDR.size+cs
+        self.latest_footer_pos=0;self.delta_depth=0;return msgpack.unpackb(ib,raw=False,object_pairs_hook=unique_map_pairs),HDR.size+cs
     def _inflate(self,comp:bytes,usize:int)->bytes:
         if _ld is None or self._inflater is None:
             raw=zlib.decompress(comp,-15)
