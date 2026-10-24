@@ -52,6 +52,8 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest -vv tests/test_v031_fsmeta_sharedleaf_composition.py 2>&1 | tee fsmeta-sharedleaf-evidence/composition-pytest.txt
+      - name: Preserve original path-only synthetic Reader alias rejection
+        run: python -m pytest -vv tests/test_path_policy.py
       - name: Original owner regression suites unchanged
         run: |
           set -o pipefail

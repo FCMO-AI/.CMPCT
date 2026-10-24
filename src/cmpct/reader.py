@@ -490,6 +490,17 @@ class CMPCT:
                 check_path(target_parts)
         return atomic_shared
 
+    def _fsmeta_for_validation(self):
+        """Preserve the pre-existing path-only Reader test contract without ignoring indexed metadata.
+
+        Genuine opened archives always populate fsmeta in __init__. Some hostile-path
+        regression tests construct a minimal Reader via object.__new__ and intentionally
+        install only files; those have no index/metadata to validate. If a real index
+        exists without its cache field, validate the indexed declarations instead.
+        """
+        if hasattr(self, 'fsmeta'):return self.fsmeta
+        return self.index.get('fsmeta', {}) if hasattr(self, 'index') else {}
+
     def extractall(self,dest:Path,metadata=True,max_bytes:int|None=None,safe_symlinks=True,atomic_shared_leaf=False):
         """Extract the logical tree with a low-syscall fast path.
 
@@ -501,7 +512,7 @@ class CMPCT:
         """
         # A digest-consistent index can still contain malformed filesystem metadata. Refuse it
         # before allocating a new shared-inode destination or writing any regular archive member.
-        _validate_fsmeta(self.fsmeta, len(self.files))
+        _validate_fsmeta(self._fsmeta_for_validation(), len(self.files))
         dest=Path(dest);dest.mkdir(parents=True,exist_ok=True);dest_s=os.fspath(dest)
         total=sum(x[4] for x in self.files if x[1]!=K_DIR)
         if max_bytes is not None and total>max_bytes:raise IOError(f'archive expands to {total} bytes, above limit {max_bytes}')
@@ -607,7 +618,7 @@ class CMPCT:
                 except OSError:pass
     def verify(self):
         # Logical data identity does not certify a malformed metadata control plane.
-        _validate_fsmeta(self.fsmeta, len(self.files))
+        _validate_fsmeta(self._fsmeta_for_validation(), len(self.files))
         n=0
         for row in self.files:
             if row[1]==K_DIR:continue
