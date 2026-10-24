@@ -649,9 +649,16 @@ impl Archive {
         // (decoded start, byte length, output start, complete-member logical identity)
         let mut spans = Vec::with_capacity(requests.len());
         for request in requests {
-            let entry = self.entries.get(request.entry_index).ok_or(CmpctError::Range)?;
+            let entry = self
+                .entries
+                .get(request.entry_index)
+                .ok_or(CmpctError::Range)?;
             let (index, base, member_len) = match &entry.storage {
-                Storage::Pack { index, offset, length } => (*index, *offset, *length),
+                Storage::Pack {
+                    index,
+                    offset,
+                    length,
+                } => (*index, *offset, *length),
                 _ => return Err(CmpctError::Unsupported),
             };
             if member_len != entry.size {
@@ -665,7 +672,10 @@ impl Archive {
                 pack_owner = Some(index);
             }
             let request_length = u64::try_from(request.length).map_err(|_| CmpctError::Range)?;
-            let end = request.offset.checked_add(request_length).ok_or(CmpctError::Range)?;
+            let end = request
+                .offset
+                .checked_add(request_length)
+                .ok_or(CmpctError::Range)?;
             if end > entry.size {
                 return Err(CmpctError::Range);
             }
@@ -676,7 +686,9 @@ impl Archive {
                 return Err(CmpctError::Range);
             }
             let start = usize::try_from(from).map_err(|_| CmpctError::MemberLimit)?;
-            total = total.checked_add(request.length).ok_or(CmpctError::MemberLimit)?;
+            total = total
+                .checked_add(request.length)
+                .ok_or(CmpctError::MemberLimit)?;
             if total > MAX_PACK_BATCH_BYTES {
                 return Err(CmpctError::MemberLimit);
             }
