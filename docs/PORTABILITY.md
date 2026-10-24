@@ -202,6 +202,27 @@ File association must point to the native handler/browser, not to a Python sourc
 safe-symlink rule is intentionally host-independent so an archive validated elsewhere cannot become a
 Windows traversal vector when finally materialized here.
 
+### Experimental v0.31 cooperative Writer ownership (not released)
+
+Revision-24 transactional mutation remains Python-side rather than a writable native handler API.
+The draft Windows Writer extension (PR #304, stacked on Reader/Writer PR #298) uses a cooperative
+`msvcrt.locking` byte at position `2^60` of the held `O_RDWR|O_APPEND` descriptor, from
+before Reader snapshot through committed footer `fsync`. The POSIX branch still uses
+`flock` on the original archive inode. Physical appends `dup()` the protected descriptor;
+offsets use `fstat()`, not the file position moved by acquiring the Windows sentinel.
+
+Unlike locking byte zero, the distant byte-range lease permits existing Reader access in the
+Windows-2022 focused installed-product checks. O3 exercises independent spawned Writers on
+the same pathname and hardlink aliases, successful combined mutations, concurrent Reader
+access, lock failure cleanup, and post-`dup()` lock continuity. These are candidate results,
+not a claim about published v0.30. Any additional crash/recovery court and current CI outcome
+must be read directly from PR #304 rather than inferred from earlier runs.
+
+Open release debt: Windows CRT retry latency/contended throughput, alternative Win32 share
+modes and adversarial namespace changes, hostile noncooperating writers, power-loss recovery,
+Windows version/filesystem variants (especially SMB), macOS parity, native mutation ABI,
+end-to-end performance and resource evidence. No format revision or release authority follows.
+
 ## Apple platforms
 
 Apple integrations should declare a CMPCT Uniform Type Identifier conforming to document/data types,
