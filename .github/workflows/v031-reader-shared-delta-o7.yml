@@ -45,7 +45,10 @@ jobs:
           def blob(path):
               return subprocess.check_output(["git", "hash-object", path], text=True).strip()
           old = subprocess.check_output(["git", "show", f"{baseline}:src/cmpct/reader.py"], text=True)
-          new = Path("src/cmpct/reader.py").read_text(encoding="utf-8")
+          # Compare canonical Git blobs, not checkout line endings (Windows may use CRLF).
+          new = subprocess.check_output(
+              ["git", "show", "HEAD:src/cmpct/reader.py"],
+          ).decode("utf-8")
           old_start = old.index("                for delta in reversed(chain):")
           old_end = old.index("                return idx,depth", old_start)
           new_start = new.index("                if chain:", new.index("def _index_from_footer("))
