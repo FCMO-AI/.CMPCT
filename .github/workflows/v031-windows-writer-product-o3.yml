@@ -48,7 +48,10 @@ jobs:
       - name: Windows independent process and reader / writer court
         shell: pwsh
         run: |
-          # Avoid unrelated historic research conftest importing Linux-only libzstd.so\n          # before selected Windows real-product tests can execute. All explicit\n          # O3 tests and package production imports still run without weakening assertions.\n          python -m pytest --noconftest -vv tests/test_v031_windows_writer_product_o3.py 2>&1 | Tee-Object -FilePath "test-artifacts/windows-writer-o3-pytest.txt"
+          # Avoid unrelated historic research conftest importing Linux-only libzstd.so
+          # before selected Windows real-product tests can execute. All explicit
+          # O3 tests and package production imports still run without weakening assertions.
+          python -m pytest --noconftest -vv tests/test_v031_windows_writer_product_o3.py 2>&1 | Tee-Object -FilePath "test-artifacts/windows-writer-o3-pytest.txt"
           if ($LASTEXITCODE -ne 0) { throw 'Windows O3 product court failed; preserve negative' }
       - name: Preserve custody and negative/positive evidence
         if: always()
