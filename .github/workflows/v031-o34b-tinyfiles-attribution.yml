@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 0
       - name: Exact source ancestor and unchanged original scientific owner
         run: |
@@ -50,6 +50,7 @@ jobs:
               ".github/workflows/v031-compact-r24-frozen-matrix-o34.yml",
               "docs/v031-research/2026-10-24-o34-compact-r24-frozen-matrix-negative.md",
               "tools/v031_o34b_retrospective_tinyfiles.py",
+              "docs/v031-research/2026-10-24-o34b-tinyfiles-shared-overhead-result.md",
               ".github/workflows/v031-o34b-tinyfiles-attribution.yml",
           }
           actual = set(git("diff", "--name-only", src, "HEAD").splitlines())
