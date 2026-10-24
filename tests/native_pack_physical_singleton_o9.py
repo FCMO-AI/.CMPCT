@@ -154,13 +154,18 @@ def inspect_archive(archive: Path, expected: dict[str, bytes]) -> dict:
             reader.record_base, data_span, index_cs, archive.stat().st_size
         )
         assert used_blob_ids <= set(range(len(reader.blobs)))
+        # Structural self-test: the blob table stores (offset, usize, csize, codec, mlen).
+        # Never mistake its fourth slot (codec id) for compressed payload bytes.
+        physical_payload_bytes = sum(desc[2] for desc in reader.blobs)
+        physical_metadata_bytes = sum(desc[4] for desc in reader.blobs)
+        assert physical_payload_bytes + physical_metadata_bytes + BHDR.size * len(reader.blobs) == blob_span
         return {
             "whole_archive_bytes": archive.stat().st_size,
             "index_compressed_bytes": index_cs,
             "index_uncompressed_bytes": index_us,
             "physical_blob_count": len(reader.blobs),
             "physical_blob_frame_bytes": blob_span,
-            "physical_payload_bytes": sum(x[3] for x in reader.blobs),
+            "physical_payload_bytes": physical_payload_bytes,
             "unique_content_sha_count": len(set(member_hash.values())),
             "member_storage_counts": dict(storage_counts),
             "all_blob_codec_counts": dict(codec_counts),
