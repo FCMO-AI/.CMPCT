@@ -69,7 +69,7 @@ def mutated_index(original: bytes, zstd: Zstd, family: str, first: bool) -> byte
     assert new_index != old_index
     # Ordinary decoder silently selects one value: the signed bytes are
     # semantically ambiguous despite being cryptographically intact.
-    decoded = msgpack.unpackb(new_index, raw=False)
+    decoded = msgpack.unpackb(new_index, raw=False, strict_map_key=False)
     assert decoded["files"] == root["files"]
     if family == "nested-owner":
         assert decoded["fsmeta"]["owner"] != []
