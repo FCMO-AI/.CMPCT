@@ -91,16 +91,30 @@ jobs:
           git show 1ed92767e6438d9bb8835ddc7ae27160440c2014:src/cmpct/reader.py > src/cmpct/reader.py
           test "$(git hash-object src/cmpct/reader.py)" = "9b49bcb4d5fa50b393ddcec6b280dec8cdc5e126"
           set +e
-          python -m pytest -q tests/test_v031_duplicate_map_open_resource_union.py > map-open-union-evidence/negative.txt 2>&1
+          python -m pytest -q --junitxml=map-open-union-evidence/negative.junit.xml tests/test_v031_duplicate_map_open_resource_union.py -k authenticated_ambiguous_index_refused_and_fd_closed > map-open-union-evidence/negative.txt 2>&1
           status=$?
           set -e
           cp /tmp/cmpct-map-open-union-candidate.py src/cmpct/reader.py
           test "$(git hash-object src/cmpct/reader.py)" = "$(git rev-parse HEAD:src/cmpct/reader.py)"
-          if [ "$status" -ne 1 ] || ! grep -q "12 failed" map-open-union-evidence/negative.txt || ! grep -q "authenticated duplicate-map rejection leaked Reader fd" map-open-union-evidence/negative.txt; then
+          if [ "$status" -ne 1 ]; then
             cat map-open-union-evidence/negative.txt
-            echo "Required source-exact negative discriminator absent"
+            echo "Original source did not yield a failing independent court"
             exit 1
           fi
+          python - <<'PY'
+          from xml.etree import ElementTree
+          root = ElementTree.parse("map-open-union-evidence/negative.junit.xml").getroot()
+          cases = root.findall(".//testcase")
+          assert len(cases) == 12, f"Expected exactly 12 signed hostile controls, got {len(cases)}"
+          for case in cases:
+              failure = case.find("failure")
+              assert failure is not None, f"Unexpected original-source success: {case.attrib}"
+              detail = (failure.get("message") or "") + (failure.text or "")
+              assert "authenticated duplicate-map rejection leaked Reader fd" in detail, (
+                  f"Wrong failure mechanism: {case.attrib}"
+              )
+          print("SOURCE_EXACT_NEGATIVE_ALL_12_RETENTION_FAILURES_CONFIRMED")
+          PY
           echo "ORIGINAL_316_FAILS_12/12_RETAINED_FD_OWNERSHIP"
       - name: Verify combined genuine Reader product court
         shell: bash
