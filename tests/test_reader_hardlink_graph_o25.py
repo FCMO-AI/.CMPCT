@@ -68,6 +68,8 @@ def test_o25_direct_owner_and_alias_control(tmp_path):
         assert reader.read("alias") == PAYLOAD
         assert reader.read_range("alias", 2, 7) == PAYLOAD[2:9]
         assert reader.read_raw_range_verified("alias", 3, 4) == PAYLOAD[3:7]
+        assert reader.file_sha256("alias") == sha(PAYLOAD)
+        assert reader.verify() == 2
 
 
 @pytest.mark.parametrize("edges", [
@@ -108,3 +110,7 @@ def test_o25_deep_acyclic_chain_avoids_python_call_stack(tmp_path):
         assert reader.read_range("alias00000", 1, 10) == PAYLOAD[1:11]
         assert reader.read_raw_range_verified("alias00000", 0, 3) == PAYLOAD[:3]
         assert reader.read(f"alias{count-1:05d}") == PAYLOAD
+        assert reader.file_sha256("alias00000") == sha(PAYLOAD)
+        # Every alias is SHA-checked by the genuine Reader; neither repeated
+        # ownership lookups nor direct reads should depend on recursion depth.
+        assert reader.verify() == count + 1
