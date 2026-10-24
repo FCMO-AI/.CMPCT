@@ -67,9 +67,11 @@ def _writer(archive, events):
                 "duration_ms": (time.perf_counter_ns() - started) / 1e6,
             }))
             raise
+        completed_ns = time.perf_counter_ns()
         events.put(("lock_exit", {
             "status": "acquired",
-            "duration_ms": (time.perf_counter_ns() - started) / 1e6,
+            "duration_ms": (completed_ns - started) / 1e6,
+            "completed_ns": completed_ns,
         }))
         return value
 
@@ -102,7 +104,7 @@ def test_contended_real_windows_transaction(tmp_path, hold_seconds):
     ctx = mp.get_context("spawn")
     events = ctx.Queue()
     child = ctx.Process(target=_writer, args=(str(archive), events))
-    entered_ns = released_ns = None
+    entered_ns = release_begin_ns = released_ns = None
     try:
         with tx._cooperative_writer_lease(archive):
             child.start()
@@ -110,6 +112,9 @@ def test_contended_real_windows_transaction(tmp_path, hold_seconds):
             deadline = time.monotonic() + hold_seconds
             while time.monotonic() < deadline:
                 time.sleep(min(0.04, max(0.001, deadline - time.monotonic())))
+            # Still inside the held lease: a successful child lock before this
+            # instant would be a lock-exclusion violation, even if bytes later verify.
+            release_begin_ns = time.perf_counter_ns()
         released_ns = time.perf_counter_ns()
         child.join(timeout=45)
         assert child.exitcode == 0, ("child exit", child.exitcode)
@@ -124,6 +129,9 @@ def test_contended_real_windows_transaction(tmp_path, hold_seconds):
 
     assert (lock["status"] == "acquired") == (outcome["status"] == "success")
     if outcome["status"] == "success":
+        assert lock["completed_ns"] >= release_begin_ns, (
+            "child acquired CRT lease while parent still held it", lock
+        )
         with CMPCT(archive) as reader:
             assert sorted(reader.by) == ["alpha-renamed.txt", "beta.txt"]
             assert reader.read("alpha-renamed.txt") == b"alpha-unchanged\n" * 73
@@ -146,6 +154,7 @@ def test_contended_real_windows_transaction(tmp_path, hold_seconds):
     _save("windows-contention-" + str(round(hold_seconds * 1000)), {
         "hold_target_ms": round(hold_seconds * 1000, 2),
         "hold_actual_ms": round((released_ns - entered_ns) / 1e6, 3),
+        "release_begin_ns": release_begin_ns,
         "lock": lock, "writer": outcome, "child_exitcode": child.exitcode,
         "archive_sha256_before": before, "archive_sha256_final": _sha(archive),
         "platform": platform.platform(), "python": platform.python_version(),

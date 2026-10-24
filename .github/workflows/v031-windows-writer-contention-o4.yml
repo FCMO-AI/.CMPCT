@@ -14,7 +14,7 @@ permissions:
   contents: read
 concurrency:
   group: cmpct-v031-windows-contention-o4-${{ github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   real-windows-contention:
     runs-on: windows-2022
