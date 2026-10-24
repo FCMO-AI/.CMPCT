@@ -1,0 +1,104 @@
+# ci-lane: fast
+name: CMPCT v0.31 Writer and indexed signed delta replay source union O6
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/validation.py'
+      - 'tests/test_v031_delta_replay_indexed_o1.py'
+      - 'tests/test_v031_signed_delta_hardlink_union_o6.py'
+      - 'tests/test_v031_signed_tree_preflight.py'
+      - 'tests/test_v031_hardlink_graph_budget.py'
+      - 'tests/test_v031_signed_graph_differential_r273.py'
+      - 'benchmarks/v031_signed_delta_replay_o0.py'
+      - 'benchmarks/v031_reader_signed_delta_open_o6.py'
+      - 'docs/v031-research/2026-10-24-writer-delta-replay-exact-union-o6-prereg.md'
+      - '.github/workflows/v031-writer-delta-replay-source-union-o6.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-writer-delta-replay-union-o6-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  exact-merge-and-product:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+      - name: Exact provenance, complete validator source and strict MessagePack retention
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+          from hashlib import sha256
+          def show(ref):
+              return subprocess.check_output(
+                  ["git", "show", f"{ref}:src/cmpct/validation.py"]
+              ).decode("utf-8")
+          def segment(text, start, end):
+              return text[text.index(start):text.index(end, text.index(start))]
+          parent = show("33c4ef777542039ab3c1b97797e5ac8ca31af96a")
+          owner = show("0062961be78cd4d28231a9acaf37a4d9cf43920c")
+          historic = show("4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b")
+          old = segment(parent, "def _apply_delta(", "def _index_from_footer(")
+          assert old == segment(historic, "def _apply_delta(", "def _index_from_footer(")
+          graft = segment(owner, "def _apply_delta_indexed(", "def _index_from_footer(")
+          expected = parent.replace(
+              "from dataclasses import dataclass\n",
+              "from dataclasses import dataclass\nimport heapq\n",
+          ).replace(old, graft)
+          actual = Path("src/cmpct/validation.py").read_text()
+          assert actual == expected, "Unreviewed source drift outside exact owner replay block"
+          assert "object_pairs_hook=unique_map_pairs" in actual
+          assert actual.count("def _apply_delta_indexed(") == 1
+          assert actual.count("def _apply_delta(") == 1
+          import subprocess
+          for path, expected in (
+              ("tests/test_v031_delta_replay_indexed_o1.py", "4e442f329051235950a4de7aef12ef9990658d35"),
+              ("benchmarks/v031_signed_delta_replay_o0.py", "02c5f506c9294130db6b0eb9c36c0a61460c3b35"),
+          ):
+              actual_blob = subprocess.check_output(["git", "hash-object", path], text=True).strip()
+              assert actual_blob == expected, f"Frozen owner evidence altered: {path}"
+          print("O6_EXACT_OWNER_SOURCE_UNION_PASS", sha256(actual.encode()).hexdigest())
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CMPCT source as tested product
+        run: python -m pip install -e ".[test]"
+      - name: Independent replay semantics and source-inherited signed tree/hardlink courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o6-evidence
+          python -m pytest --noconftest -q -rs tests/test_v031_delta_replay_indexed_o1.py tests/test_v031_hardlink_graph_budget.py tests/test_v031_signed_tree_preflight.py tests/test_v031_signed_graph_differential_r273.py 2>&1 | tee o6-evidence/focused-court.log
+      - name: Genuine Builder and SHA-committed revision-24 journal against checkpoint
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest --noconftest -q -rs tests/test_v031_signed_delta_hardlink_union_o6.py 2>&1 | tee o6-evidence/signed-journal-hardlink-o6c.log
+          python -u benchmarks/v031_signed_delta_replay_o0.py --out o6-evidence --repeats 5 2>&1 | tee o6-evidence/replay-court.log
+          python -u benchmarks/v031_reader_signed_delta_open_o6.py --out o6-evidence --repeats 5 2>&1 | tee o6-evidence/reader-open-o6b.log
+          sha256sum o6-evidence/delta-o0-receipt.json o6-evidence/reader-open-o6b-receipt.json | tee o6-evidence/receipt.sha256
+      - name: Preserve raw positive or negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: writer-delta-replay-union-o6-${{ matrix.os }}-${{ github.sha }}
+          path: o6-evidence/
+          if-no-files-found: warn
+          retention-days: 30

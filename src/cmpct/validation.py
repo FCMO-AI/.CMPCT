@@ -8,6 +8,7 @@ values. It intentionally does not change revision-24 bytes or encoder policy.
 """
 
 from dataclasses import dataclass
+import heapq
 import os
 from pathlib import Path
 
@@ -173,6 +174,58 @@ def _decode_footer(f, archive_size: int, pos: int, limits: ParserLimits):
     return kind, payload, prev
 
 
+def _apply_delta_indexed(files: list, ops: list, limits: ParserLimits) -> None:
+    """Preserve linear-list transaction semantics with indexed *positions*, not names alone.
+
+    Footnote: signed generation replays can contain transient duplicate names.
+    A plain dict loses first-match rename/put and all-matches delete semantics.
+    Slot indexes keep stable relative row order even after deletes; min-heaps
+    identify the same first surviving row as the original linear scan.
+    The index belongs to this one replay only and never alters the wire format.
+    """
+    positions: dict[str, list[int]] = {}
+    slots = list(files)
+    for i, row in enumerate(slots):
+        positions.setdefault(row[0], []).append(i)
+    alive = len(slots)
+
+    for op in ops:
+        if not isinstance(op, list) or not op:
+            raise ValidationError("malformed transaction operation")
+        tag = op[0]
+        if tag == "put" and len(op) == 2:
+            row = op[1]
+            if not isinstance(row, list) or not row or not isinstance(row[0], str):
+                raise ValidationError("malformed put operation")
+            heap = positions.get(row[0])
+            if heap:
+                slots[heap[0]] = row
+            else:
+                pos = len(slots)
+                slots.append(row)
+                positions[row[0]] = [pos]
+                alive += 1
+                if alive > limits.max_files:
+                    raise ResourceLimitError("file count exceeds parser limit")
+        elif tag == "del" and len(op) == 2 and isinstance(op[1], str):
+            heap = positions.pop(op[1], ())
+            for pos in heap:
+                slots[pos] = None
+                alive -= 1
+        elif tag == "ren" and len(op) == 3 and all(isinstance(x, str) for x in op[1:]):
+            heap = positions.get(op[1])
+            if heap:
+                pos = heapq.heappop(heap)
+                slots[pos][0] = op[2]
+                heapq.heappush(positions.setdefault(op[2], []), pos)
+        else:
+            raise ValidationError(f"unsupported transaction operation {tag!r}")
+
+    # Preserve the caller's list identity, and the original sequence of all
+    # surviving rows, including duplicates still subject to strict validation.
+    files[:] = [row for row in slots if row is not None]
+
+
 def _apply_delta(index: dict, delta: dict, limits: ParserLimits) -> None:
     if not isinstance(delta, dict):
         raise ValidationError("transaction delta is not a map")
@@ -187,6 +240,17 @@ def _apply_delta(index: dict, delta: dict, limits: ParserLimits) -> None:
     if len(blobs) + len(new_blobs) > limits.max_blobs:
         raise ResourceLimitError("blob count exceeds parser limit")
     blobs.extend(new_blobs)
+
+    # The untrusted cost of repeated file-table scans is quadratic for a large
+    # signed generation. Retain the simple scan for small deltas; on ordinary
+    # large well-formed lists use an operation-local positional index instead.
+    # Malformed pre-existing rows keep their historical path to the strict
+    # validator; this helper never makes an otherwise-invalid row acceptable.
+    if len(ops) >= 8 and len(files) >= 64 and all(
+        isinstance(row, list) and row and isinstance(row[0], str) for row in files
+    ):
+        _apply_delta_indexed(files, ops, limits)
+        return
 
     for op in ops:
         if not isinstance(op, list) or not op:
