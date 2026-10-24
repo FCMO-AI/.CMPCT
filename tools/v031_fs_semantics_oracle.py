@@ -76,7 +76,11 @@ def semantic_tree_digest_v1(
             if not name or name in (b".", b".."):
                 raise ValueError("invalid filesystem entry name")
             rel = parts + (name,)
-            st = item.stat(follow_symlinks=False)
+            # On Windows DirEntry.stat and os.stat can expose nonmatching
+            # file IDs for the same path; use one stable query family for
+            # both the hardlink partition and later path identity checks.
+            st = (os.stat(item.path, follow_symlinks=False) if os.name == "nt"
+                  else item.stat(follow_symlinks=False))
             if stat.S_ISDIR(st.st_mode):
                 if depth >= max_depth:
                     raise ValueError("filesystem oracle depth budget exceeded")
