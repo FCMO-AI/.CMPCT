@@ -105,6 +105,9 @@ def semantic_tree_digest_v1(
                 digest.update(struct.pack("<Q", len(target_bytes)))
                 digest.update(target_bytes)
             elif stat.S_ISREG(st.st_mode):
+                # Reject oversized names before opening or hashing payload.
+                digest.update(b"F")
+                append_path(rel)
                 flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
                 flags |= getattr(os, "O_NOFOLLOW", 0)
                 flags |= getattr(os, "O_CLOEXEC", 0)
@@ -152,8 +155,6 @@ def semantic_tree_digest_v1(
                 if key not in groups:
                     groups[key] = next_group
                     next_group += 1
-                digest.update(b"F")
-                append_path(rel)
                 digest.update(struct.pack("<Q", groups[key]))
                 digest.update(struct.pack("<Q", total))
                 digest.update(content.digest())
