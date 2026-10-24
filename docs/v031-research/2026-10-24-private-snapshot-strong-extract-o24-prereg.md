@@ -1,0 +1,24 @@
+# O24 preregistration — private archive snapshot for strong extraction source custody
+
+Date: 2026-10-24 UTC. **Research only.** Preregistered before adding any O24 experiment or workflow. Released CMPCT v0.30.0/r24 unchanged.
+
+## Baseline and question
+Parent: O23 #376 at exact `3493f4e3cfbad6c295161f63ec163a6b78d60692`, itself based on #258. O23 [40126277049](https://github.com/FCMO-AI/.CMPCT/actions/runs/40126277049) proved `verify(); extractall()` on the same Reader does **not** freeze source bytes: an authorized same-inode CRC-repaired SHA-stale mutation between calls can publish mutated >2-MiB RAW and PACK bytes, while <=2-MiB cache controls retain the original. O21 #373 already priced the unchanged-source same-handle control, PACK ~1.082x and RAW ~2.039x versus ordinary extraction, but excluded source mutation. Neither is transactional source custody.
+
+**Primary question:** is an application-owned, private, complete byte snapshot of the archive before `verify(); extractall()` a correctly bounded *simpler control* against the exact O23 same-inode mutation, and what fully charged disk/wall/RSS cost does it export versus unchanged-source same-handle verification?
+
+## Frozen prediction, disproof, alternatives
+1. Build genuine independent revision-24 direct RAW and S_PACK archives from the *unchanged* O23 physical fixture generator. Use a 128-byte and 4-MiB member for each representation.
+2. Copy every archive byte into a private temporary directory with restricted permissions before allowing a same-inode, same-size rewrite of the **original** path. Bind source/snapshot SHA-256 and identical length; verify the copied archive and extract through one Reader of the private snapshot. **Prediction:** all four cases publish original bytes, even after the original inode is CRC-repaired and SHA-stale. A fresh Reader of the mutated source must reject on physical SHA; a copy created *after* mutation must also reject.
+3. **Falsify** if any snapshot extraction publishes mutant bytes, does not pass strong verification of the original physical commitment, fails legitimate content or tree identity, or cannot demonstrate original-source mutation and post-mutation fresh rejection with identical inode/size.
+4. Measure unchanged-source operations as separate fresh child interpreters, five alternated A/B blocks per representation: A = direct `verify(); extractall()`, B = private copy + same `verify(); extractall()`. Report wall+CPU and Linux peak RSS; charge full snapshot physical bytes and temp write/read amplification. No threshold garden: if 4-MiB snapshot median total time exceeds 3x same-source A or uses >10MiB additional peak RSS, mark costly/debt; if below, merely *bounded headroom*, not product admission.
+5. Stronger alternative: one-pass per-physical-owner authenticated streaming and staging, which could avoid a complete archive duplicate. The snapshot is the *cheap safe upper-cost control*, not presumed optimal. `flock` is advisory and does not establish source immutability against uncooperative writers. Copying source after corruption must not be rescued by internal index/authentication relabeling.
+
+## Trust boundary
+Private snapshot is not cryptographic provenance from an external signer. The source could already be corrupted before copying; the Reader's internal physical SHA rejects that condition. A concurrent writer during copy may create an inconsistent snapshot that must be rejected; this deterministic test **does not prove race freedom during the snapshot copy**. A private directory avoids ordinary untrusted path replacement but not a privileged attacker writing that directory, malicious source with valid resealed metadata, or destination symlink races. No whole-tree atomic publication promise. This research measures one Python Linux host with explicit stable-file test; no Windows/macOS/native/format/release credit.
+
+## Scientific and product economics
+Record complete archive bytes; exact snapshot bytes; source/snapshot SHA; verified tree output; original source inode/size; mutation CRC/SHA controls; fresh-process wall/CPU/RSS, raw order and repetitions; temp persisted bytes and minimum read/write accounting. No frozen benchmark, product source, validator, comparator, release gate or thresholds may be altered. A green research court only decides whether a credible safe-control path exists for the observed O23 condition. Preserve any negative and prefer simpler, lower exported-work approaches if product economics fail.
+
+## Ownership and coordination
+O23 #376 owns the source-lifetime observation, O21 #373 owns immutable-source verification economics, #258 owns PACK physical SHA enforcement. This isolated O24 branch changes only a new research script, this prereg and its workflow. No changes to the owners, shared discovery state or canonical main. Report exact-head source/runs/artifacts and next unclaimed action.

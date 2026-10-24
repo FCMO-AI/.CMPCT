@@ -1,0 +1,88 @@
+# ci-lane: fast
+name: CMPCT v0.31 private verified archive snapshot O24
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_private_verified_snapshot_o24.py'
+      - 'docs/v031-research/2026-10-24-private-snapshot-strong-extract-o24-prereg.md'
+      - 'docs/v031-research/2026-10-24-private-snapshot-strong-extract-o24-result.md'
+      - '.github/workflows/v031-private-verified-snapshot-o24.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-private-verified-snapshot-o24-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  private-verified-snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind exact parent fixture and Reader source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 3493f4e3cfbad6c295161f63ec163a6b78d60692 HEAD
+          test "$(git hash-object src/cmpct/reader.py)" = 60f52328467ca509bb410abe6a34810c50917cb5
+          test "$(git hash-object benchmarks/v031_pack_physical_sha_court.py)" = 2383bf9a8f7ce8a9a01028ccf1072169897df3f1
+          test "$(git hash-object benchmarks/v031_verify_extract_source_lifetime_o23.py)" = 134085f99b92764a79899e4cbf5f6c5b3b7b01cf
+          python -m py_compile benchmarks/v031_private_verified_snapshot_o24.py
+          git log --format='%H %s' -4 > benchmark-artifacts/lineage.txt
+          git hash-object src/cmpct/reader.py benchmarks/v031_pack_physical_sha_court.py benchmarks/v031_verify_extract_source_lifetime_o23.py benchmarks/v031_private_verified_snapshot_o24.py > benchmark-artifacts/source-blobs.txt
+          printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/source-head.txt
+      - name: Install original CMPCT implementation
+        run: python -m pip install -e '.[test]'
+      - name: Execute snapshot correctness and charged A/B science
+        shell: bash
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_private_verified_snapshot_o24.py --out benchmark-artifacts/o24-original-data.json > benchmark-artifacts/o24-stdout.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r = json.loads(Path("benchmark-artifacts/o24-original-data.json").read_text())
+          assert r["status"] == "PASS"
+          assert set(r["mutations"]) == {"micro_pack_128", "direct_raw_128", "pack_4mib", "direct_raw_4mib"}
+          assert r["scientific_decision"] == "PRIVATE_SNAPSHOT_SUFFICES_FOR_TESTED_POSTCOPY_SOURCE_REWRITE"
+          for k, m in r["mutations"].items():
+              assert m["private_snapshot_verify"] == "PASS", k
+              assert m["source_inode_and_size_stable"], k
+              assert m["postmutation_fresh_source_sha_reject"], k
+              assert m["postmutation_copy_sha_reject"], k
+              assert m["snapshot_archive_sha256"] == m["original_archive_sha256"], k
+              assert m["private_snapshot_extraction_sha256"] == m["verified_original_logical_sha256"], k
+              assert m["snapshot_temp_stored_bytes"] == m["stored_archive_bytes"], k
+          for k, c in r["costs"].items():
+              rows = c["raw"]
+              assert len(rows) == 10, k
+              assert len([x for x in rows if x["mode"]=="direct"]) == 5, k
+              assert len([x for x in rows if x["mode"]=="snapshot"]) == 5, k
+              assert all(x["source_bytes"] == c["summary"]["archive_bytes"] for x in rows), k
+              print(k, "wall_ratio", c["summary"]["operation_wall_ratio"],
+                    "peak_delta_kib", c["summary"]["peak_rss_delta_kib"],
+                    "economic_class", c["summary"]["economic_classification"])
+          PY
+      - name: Upload original source-bound receipt regardless of outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-private-snapshot-o24-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
