@@ -80,6 +80,7 @@ def make_archive(home: Path, owner_name: str):
         (source / name).write_bytes(data)
         (source / name).chmod(0o644)
     (source / "directory").mkdir()
+    (source / "directory" / "nested.bin").write_bytes(A)
     (source / "symlink").symlink_to("a.bin")
     os.link(source / owner_name, source / "z_alias.bin")
     for name in ("a.bin", "b.bin"):
@@ -162,6 +163,8 @@ def main():
             ("directory_owner", lambda i: i["files"][paths["z_alias.bin"]].__setitem__(6, ["directory"])),
             ("symlink_owner", lambda i: i["files"][paths["z_alias.bin"]].__setitem__(6, ["symlink"])),
             ("unsafe_owner", lambda i: i["files"][paths["z_alias.bin"]].__setitem__(6, ["../escape"])),
+            # Canonical slash alias exists but Python index name does not: exact target spelling matters.
+            ("nonexact_owner_spelling", lambda i: i["files"][paths["z_alias.bin"]].__setitem__(6, ["directory\\\\nested.bin"])),
             ("wrong_size", lambda i: i["files"][paths["z_alias.bin"]].__setitem__(4, len(A) + 1)),
             ("wrong_shape", lambda i: i["files"][paths["z_alias.bin"]].__setitem__(6, [23])),
         ]
