@@ -55,7 +55,7 @@ jobs:
               wire = base64.b64decode(vec["archive_base64"], validate=True)
               assert len(wire) == vec["archive_bytes"], vec["name"]
               assert hashlib.sha256(wire).hexdigest() == vec["archive_sha256"], vec["name"]
-              assert wire.startswith(b"CMPCT24\\0"), vec["name"]
+              assert wire.startswith(b"CMPCT24\0"), vec["name"]
           Path("pack-evidence/wire-integrity.json").write_text(
               json.dumps({"source": "fixed-wire-manifest", "vectors": [
                   {"name": v["name"], "archive_sha256": v["archive_sha256"],
