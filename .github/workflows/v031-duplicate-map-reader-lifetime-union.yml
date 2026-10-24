@@ -61,7 +61,7 @@ jobs:
           actual = Path("src/cmpct/reader.py").read_bytes()
 
           def constructor(data):
-              start = data.index(b"class CMPCT:\\n")
+              start = data.index(b"class CMPCT:\n")
               end = data.index(b"    def close(self):", start)
               return data[start:end]
 
