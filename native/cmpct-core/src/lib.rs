@@ -16,7 +16,7 @@ use flate2::read::DeflateDecoder;
 use rmpv::Value;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::CStr;
 use std::fs::File;
 use std::io::{Cursor, Read, Seek, SeekFrom};
@@ -114,6 +114,9 @@ struct SparseExtent {
 #[derive(Debug, Clone)]
 enum Storage {
     Unsupported,
+    // Only during authenticated-index parsing; replaced by a terminal ordinal before open returns.
+    HardlinkName(String),
+    Hardlink(usize),
     Direct(usize),
     Fixed(Vec<ChunkRef>),
     VirtualZip(vzip::VirtualZipRecipe),
@@ -764,7 +767,9 @@ impl Archive {
 
         let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
         match &entry.storage {
-            Storage::Unsupported => return Err(CmpctError::Unsupported),
+            Storage::Unsupported | Storage::HardlinkName(_) | Storage::Hardlink(_) => {
+                return Err(CmpctError::Unsupported)
+            }
             Storage::Direct(index) => {
                 let blob = self.blobs.get(*index).ok_or_else(|| {
                     CmpctError::Schema("direct member references missing blob".into())
@@ -1360,7 +1365,9 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
         ));
     }
 
-    let mut seen = HashSet::with_capacity(files.len().min(65_536));
+    // Use the existing canonical-path collision map as the owner-ordinal lookup: avoid a
+    // second large index-sized map and resolve all hardlink edges once at open.
+    let mut seen = HashMap::with_capacity(files.len().min(65_536));
     let mut entries = Vec::with_capacity(files.len());
     for (i, value) in files.iter().enumerate() {
         let row = value
@@ -1373,7 +1380,7 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
             .as_str()
             .ok_or_else(|| CmpctError::Schema(format!("file row {i} path is not UTF-8 text")))?;
         let key = canonical_path(path)?;
-        if !seen.insert(key) {
+        if seen.insert(key, i).is_some() {
             return Err(CmpctError::Path(path.into()));
         }
         let kind = row[1]
@@ -1393,7 +1400,22 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
             .as_u64()
             .ok_or_else(|| CmpctError::Schema(format!("file row {i} has invalid size")))?;
         let logical_hash = parse_hash(&row[5], i)?;
-        let storage = parse_storage(index, &row[6], size, blobs, i)?;
+        let storage = if kind == 3 {
+            // K_HARDLINK has an owner-path tuple, NOT a storage-kind integer. Previously
+            // it silently became Unsupported and erased information needed by native
+            // consumers to reconstruct POSIX inode-equivalence classes (O13/O13b).
+            let target = row[6]
+                .as_array()
+                .filter(|parts| parts.len() == 1)
+                .and_then(|parts| parts[0].as_str())
+                .ok_or_else(|| {
+                    CmpctError::Schema(format!("file row {i} hardlink target shape is invalid"))
+                })?;
+            canonical_path(target)?;
+            Storage::HardlinkName(target.to_owned())
+        } else {
+            parse_storage(index, &row[6], size, blobs, i)?
+        };
         if matches!(
             storage,
             Storage::Fixed(_) | Storage::Sparse(_) | Storage::Cdc(_)
@@ -1425,7 +1447,76 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
             logical_hash,
         });
     }
+    resolve_hardlink_owners(&mut entries, &seen)?;
     Ok(entries)
+}
+
+/// Normalize each signed hardlink path to its terminal regular entry exactly once.
+/// Path compression plus an iterative visiting set bounds the total number of
+/// edges traversed to O(entries+links), including very deep valid chains.
+/// The resolver never touches filesystem pathnames or physical blob contents.
+fn resolve_hardlink_owners(
+    entries: &mut [Entry],
+    paths: &HashMap<String, usize>,
+) -> Result<(), CmpctError> {
+    let mut visiting = vec![false; entries.len()];
+    for start in 0..entries.len() {
+        if !matches!(&entries[start].storage, Storage::HardlinkName(_)) {
+            continue;
+        }
+        let mut chain = Vec::new();
+        let mut current = start;
+        let owner = loop {
+            match &entries[current].storage {
+                Storage::Hardlink(owner) => break *owner,
+                Storage::HardlinkName(target) => {
+                    if visiting[current] {
+                        return Err(CmpctError::Schema(format!(
+                            "hardlink cycle detected at file row {current}"
+                        )));
+                    }
+                    visiting[current] = true;
+                    chain.push(current);
+                    let canonical = canonical_path(target)?;
+                    let next = *paths.get(&canonical).ok_or_else(|| {
+                        CmpctError::Schema(format!(
+                            "file row {} hardlink owner does not exist",
+                            chain[0]
+                        ))
+                    })?;
+                    // Canonical-path lookup is for collision-proof indexing only.
+                    // Python's signed index resolves owner paths BYTE-EXACTLY;
+                    // accepting a different slash spelling here could invent a
+                    // cross-reader hardlink relationship absent in that reader.
+                    if entries[next].path != *target {
+                        return Err(CmpctError::Schema(format!(
+                            "file row {} hardlink owner path is not an exact entry name",
+                            chain[0]
+                        )));
+                    }
+                    current = next;
+                }
+                _ if entries[current].kind == 0 => break current,
+                _ => {
+                    return Err(CmpctError::Schema(format!(
+                        "file row {} hardlink owner is not a regular file",
+                        chain[0]
+                    )))
+                }
+            }
+        };
+        let owner_size = entries[owner].size;
+        for node in chain {
+            if entries[node].size != owner_size {
+                return Err(CmpctError::Schema(format!(
+                    "file row {node} hardlink size disagrees with terminal owner"
+                )));
+            }
+            entries[node].storage = Storage::Hardlink(owner);
+            visiting[node] = false;
+        }
+    }
+    Ok(())
 }
 
 #[repr(C)]
@@ -1671,6 +1762,42 @@ pub unsafe extern "C" fn cmpct_entry_pack_owner(
     }
     *out_owner = *owner;
     CmpctStatus::Ok as c_int
+}
+
+/// Return the terminal regular-file ordinal for one hardlink's signed index graph.
+/// Ordinals are meaningful only on the SAME live archive handle; this metadata-only
+/// lookup never reads mutable physical payloads and cannot itself extract a filesystem.
+///
+/// All hardlink chains, cycles, owner existence, canonical path collisions and
+/// owner kinds are validated at native open (linear-time iterative resolution).
+/// The output is zeroed on every error, even with a null archive.
+///
+/// # Safety
+/// `out_owner` must be a valid writable usize pointer, not alias concurrent
+/// mutable memory; `archive` must be live for the entire invocation.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_entry_hardlink_owner(
+    archive: *const Archive,
+    index: usize,
+    out_owner: *mut usize,
+) -> c_int {
+    let Some(out_owner) = out_owner.as_mut() else {
+        return CmpctStatus::Null as c_int;
+    };
+    *out_owner = 0;
+    let Some(archive) = archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
+    let Some(entry) = archive.entries.get(index) else {
+        return CmpctStatus::Range as c_int;
+    };
+    match &entry.storage {
+        Storage::Hardlink(owner) => {
+            *out_owner = *owner;
+            CmpctStatus::Ok as c_int
+        }
+        _ => CmpctStatus::Unsupported as c_int,
+    }
 }
 
 /// Copy several ranges from the same physical Zstd S_PACK in one authenticated operation.
