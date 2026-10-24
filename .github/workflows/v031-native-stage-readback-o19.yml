@@ -9,6 +9,7 @@ on:
       - 'tests/native_stage_readback_fault_o19.py'
       - 'tests/native_anonymous_stage_procfd_o19b.py'
       - 'docs/v031-research/NATIVE_ANONYMOUS_STAGE_O19B_HOST_PREREG.md'
+      - 'docs/v031-research/NATIVE_ANONYMOUS_STAGE_O19B_HOST_RESULT.md'
       - 'docs/v031-research/NATIVE_STAGE_READBACK_O19_PREREG.md'
       - 'docs/v031-research/NATIVE_STAGE_READBACK_O19_RESULT.md'
       - '.github/workflows/v031-native-stage-readback-o19.yml'
