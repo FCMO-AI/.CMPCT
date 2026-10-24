@@ -258,6 +258,37 @@ class SemanticTreeDigestCourt(unittest.TestCase):
         # when repaired, don't make the improved behavior a test failure.
         self.assertIsInstance(legacy(self.left) == legacy(self.right), bool)
 
+    def test_real_r24_archive_preserves_typed_tree_and_hardlink_partition(self):
+        # Unlike a digest-only comparison, this exercises the *real* Builder
+        # and Reader on a held-out mixed tree. In standalone stdlib-only courts
+        # the installed package is intentionally unavailable; general CMPCT
+        # CI must exercise this test against its actual package installation.
+        try:
+            from cmpct.core import Builder, CMPCT
+        except ModuleNotFoundError as exc:
+            if exc.name in ("cmpct", "cmpct.core"):
+                self.skipTest("real installed CMPCT package unavailable in stdlib-only court")
+            raise
+        (self.left / "nested").mkdir()
+        (self.left / "nested" / "data.bin").write_bytes(b"real r24 exact test" * 256)
+        self.hardlink(self.left / "nested" / "data.bin", self.left / "a-hard.bin")
+        self.symlink(self.left, "file-link", "nested/data.bin")
+        self.symlink(self.left, "directory-link", "nested", is_dir=True)
+        expected = sha(self.left)
+        archive = Path(self.tmp.name) / "authentic.cmpct"
+        Builder(self.left, workers=1).build(archive)
+        with CMPCT(archive) as reader:
+            self.assertTrue(reader.verify())
+            reader.extractall(self.right, metadata=False)
+        self.assertEqual(sha(self.right), expected)
+        self.assertTrue((self.right / "file-link").is_symlink())
+        self.assertTrue((self.right / "directory-link").is_symlink())
+        self.assertEqual(os.readlink(self.right / "file-link"), "nested/data.bin")
+        self.assertEqual(os.readlink(self.right / "directory-link"), "nested")
+        owner = (self.right / "nested" / "data.bin").stat()
+        alias = (self.right / "a-hard.bin").stat()
+        self.assertEqual((owner.st_dev, owner.st_ino), (alias.st_dev, alias.st_ino))
+
     def test_large_file_hash_is_chunked(self):
         for root in (self.left, self.right):
             with (root / "data").open("wb") as f:
