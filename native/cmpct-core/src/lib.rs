@@ -209,22 +209,11 @@ impl Archive {
                 "trailing bytes after root index object".into(),
             ));
         }
-        // Authenticated MessagePack bytes can contain the same root key twice.
-        // Python dictionaries retain the last value while rmpv map lookup keeps
-        // the first. Reject the ambiguity before parsing blobs or file entries.
-        let root = index
-            .as_map()
-            .ok_or_else(|| CmpctError::Schema("root index is not a map".into()))?;
-        let mut unique_keys = HashSet::with_capacity(root.len().min(256));
-        for (key, _) in root {
-            if let Some(name) = key.as_str() {
-                if !unique_keys.insert(name) {
-                    return Err(CmpctError::Schema(format!(
-                        "duplicate MessagePack index root key: {name}"
-                    )));
-                }
-            }
-        }
+        // The authenticated r24 index is not unambiguous merely because its
+        // root map is. Python's MessagePack object_pairs_hook visits nested
+        // maps as well, and rejects non-text map keys at ordinary Reader open.
+        // Traverse every value before returning any native file tree.
+        reject_ambiguous_index_maps(&index)?;
         let blobs = parse_blobs(&index, data_span)?;
         let dict_blob = parse_dictionary_blob(&index, &blobs)?;
         let entries = parse_entries(&index, &blobs)?;
@@ -719,6 +708,74 @@ fn le_u32(bytes: &[u8]) -> u32 {
 
 fn le_u64(bytes: &[u8]) -> u64 {
     u64::from_le_bytes(bytes.try_into().expect("fixed-width header slice"))
+}
+
+/// Validate every authenticated MessagePack map against the Python Reader
+/// grammar *before* selecting fields. A SHA-256 authenticates the ambiguous
+/// bytes too; choosing first/last duplicate at any depth is not integrity.
+///
+/// The walker is iterative: memory tracks nesting depth rather than the
+/// breadth of a multi-million-entry file table. Keys borrow from the decoded
+/// index, so only small HashSet bookkeeping is allocated for each map.
+/// Python's ordinary Reader accepts text and binary keys but refuses other
+/// MessagePack map-key types (strict_map_key=True).
+fn reject_ambiguous_index_maps(index: &Value) -> Result<(), CmpctError> {
+    if index.as_map().is_none() {
+        return Err(CmpctError::Schema("root index is not a map".into()));
+    }
+    enum Frame<'a> {
+        Node(&'a Value),
+        Array(std::slice::Iter<'a, Value>),
+        Map(std::slice::Iter<'a, (Value, Value)>),
+    }
+    let mut frames = vec![Frame::Node(index)];
+    while let Some(frame) = frames.pop() {
+        match frame {
+            Frame::Node(Value::Map(pairs)) => {
+                let mut seen = HashSet::with_capacity(pairs.len().min(256));
+                for (key, _) in pairs {
+                    // Keep text and bytes in distinct domains. Python also
+                    // treats str and bytes map keys as distinct even when the
+                    // underlying UTF-8 bytes coincide.
+                    let typed_key = match key {
+                        Value::String(s) => {
+                            let text = s.as_str().ok_or_else(|| {
+                                CmpctError::Schema("invalid UTF-8 index map key".into())
+                            })?;
+                            (0u8, text.as_bytes())
+                        }
+                        Value::Binary(b) => (1u8, b.as_slice()),
+                        _ => {
+                            return Err(CmpctError::Schema(
+                                "non-text/non-binary MessagePack index map key".into(),
+                            ))
+                        }
+                    };
+                    if !seen.insert(typed_key) {
+                        return Err(CmpctError::Schema(
+                            "duplicate MessagePack index map key".into(),
+                        ));
+                    }
+                }
+                frames.push(Frame::Map(pairs.iter()));
+            }
+            Frame::Node(Value::Array(items)) => frames.push(Frame::Array(items.iter())),
+            Frame::Node(_) => {}
+            Frame::Array(mut it) => {
+                if let Some(item) = it.next() {
+                    frames.push(Frame::Array(it));
+                    frames.push(Frame::Node(item));
+                }
+            }
+            Frame::Map(mut it) => {
+                if let Some((_, value)) = it.next() {
+                    frames.push(Frame::Map(it));
+                    frames.push(Frame::Node(value));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn map_field<'a>(value: &'a Value, key: &str) -> Result<&'a Value, CmpctError> {
