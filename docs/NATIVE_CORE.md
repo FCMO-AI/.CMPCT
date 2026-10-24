@@ -46,6 +46,18 @@ The presence of this code is **not yet release authority**. T01 stays open until
 
 ---
 
+## Experimental native hardlink owner graph (v0.31 O14 — draft, NOT released)
+
+Source-exact candidate [PR #349](https://github.com/FCMO-AI/.CMPCT/pull/349), stacked on [PR #326](https://github.com/FCMO-AI/.CMPCT/pull/326), addresses an **information boundary**, not a compression or throughput benchmark. [PR #343](https://github.com/FCMO-AI/.CMPCT/pull/343) O13/O13b proved that valid revision-24 source trees with different hardlink inode owners can produce identical published native C observations: the r24 index retains the hardlink owner path, but the native Entry previously treated that storage tuple as unsupported and did not expose the relationship.
+
+The optional `cmpct_entry_hardlink_owner(archive, entry_index, out_owner)` returns a same-handle **terminal regular-file entry ordinal** for a hardlink, not a pathname or borrowed pointer. Its implementation validates the authenticated-index graph **iteratively during native open** and fails closed on missing, cyclic, unsafe, non-regular, inconsistent-size or differently spelled ownership references. The index's canonical path mapping is used to detect collisions, but the actual owner path must match an entry name **byte-for-byte**; this intentionally preserves the existing Python Reader's owner-resolution semantics. On valid output pointers the ordinal is cleared before returning errors, including null archive, invalid index and non-hardlink. Owner ordinal zero is valid on success.
+
+This API does **not** alter r24 bytes, hash or mutate stored data, and the original `cmpct_entry_read_range` still rejects hardlink reads as unsupported; future clients must reconstruct links through safely published destination inodes. An ordinal is meaningful only within its current open archive handle and must not be persisted as a stable content identity. This metadata operation does not validate a mutable physical payload, authenticate an external signer, repair recovery, restore uid/gid/xattrs, or guarantee safe tree extraction.
+
+O14's evidence boundary: `docs/v031-research/NATIVE_HARDLINK_OWNER_ORDINAL_O14_PREREG.md` (frozen at commit `e69f5631baae50c333f9d9eb23d13fe0ee2757e1`), `tests/native_hardlink_owner_o14.py`, and `.github/workflows/v031-native-hardlink-owner-o14.yml`. The independent court uses real Builder trees, independently signed-index hostiles including owner alias spellings/cycles, exact C ABI calls, and same-count 1024-hardlink chain/star timing; only exact result-bearing CI grants experiment credit. It remains **DRAFT** pending review, adversarial conformance and portability/release authority. No numeric core release, on-disk revision change or official performance credit is claimed.
+
+---
+
 ## Experimental opt-in S_PACK operation-scoped verified batch (v0.31 O3 — not released)
 
 PR candidate O3 adds `cmpct_pack_read_batch(archive, requests, count, buffer, capacity, out_read)` to the revision-24 Rust C ABI. Each request is a `#[repr(C)] CmpctPackRange { entry_index: usize, offset: u64, length: usize }`; on success the result is one contiguous concatenation in request order.
