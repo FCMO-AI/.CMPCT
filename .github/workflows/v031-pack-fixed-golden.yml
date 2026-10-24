@@ -53,6 +53,7 @@ jobs:
           python -m pip install -e '.[test]'
       - name: Independent frozen-byte regenerability
         run: |
+          set -o pipefail
           python tests/conformance/generate_v24_pack_golden.py \
             2>&1 | tee pack-evidence/generator.txt
       - name: Authentic Python Reader and preflight conformance
