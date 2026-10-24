@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          test "$(git hash-object src/cmpct/reader.py)" = "b0d45d98d3988660729237148d67fdc9baec1a5f"
+          test "$(git hash-object src/cmpct/reader.py)" = "b611fd02eb1ccbcb5069603e6c0e5ac3abc47ed9"
           test "$(git hash-object tests/test_reader_hardlink_graph_o25.py)" = "db38f7024b2f960b66c4d387c2cd942111cf9007"
           test "$(git hash-object tests/test_v031_destination_static_symlink_preflight.py)" = "f55bd39b449a0d43af25658733ae14f8cd583ffa"
           test "$(git hash-object tests/test_v031_static_destination_o10r_union_o27.py)" = "$(git rev-parse '34a2059491fcd38bc09231cba178ec8541f74fdb:tests/test_v031_static_destination_o10r_union_o27.py')"
