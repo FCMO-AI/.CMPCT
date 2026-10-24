@@ -1,0 +1,54 @@
+# ci-lane: fast
+name: CMPCT v0.31 signed-tree strict preflight parity
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/validation.py'
+      - 'tests/test_v031_signed_tree_preflight.py'
+      - '.github/workflows/v031-signed-tree-preflight.yml'
+      - 'docs/v031-research/2026-10-24-signed-tree-preflight-o0-prereg.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-strict-tree-preflight-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  signed-strict-preflight:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Prove checked-out exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "EXACT_SOURCE_HEAD=$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual CMPCT native-backed package
+        run: python -m pip install -e ".[test]"
+      - name: Execute unchanged signed-file and valid hardlink/dir controls
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q -rs --noconftest tests/test_v031_signed_tree_preflight.py 2>&1 | tee signed-tree-preflight.log
+      - name: Preserve source-bound positive or negative logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strict-tree-preflight-${{ matrix.os }}-${{ github.sha }}
+          path: signed-tree-preflight.log
+          if-no-files-found: warn
+          retention-days: 30
