@@ -169,7 +169,8 @@ def main():
         "format_revision": 24,
         "generation_provenance": {
             "method": "independently assembled struct/MessagePack revision-24 wire; no CMPCT Builder or Reader imports",
-            "python": "3.11",
+            "python": "3.13.5",
+            "libzstd": "1.5.7",
             "msgpack": "1.1.2",
             "index_and_zstd_codec": "system libzstd level 12",
             "purpose": "fixed cross-implementation byte oracle for S_PACK shared-blob slices and offsets",
