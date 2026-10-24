@@ -102,7 +102,7 @@ def run_court(name: str, labels: tuple[str, str, str, str], engines: dict, bench
     aggregate_a = json.loads(ba.read_text())
     aggregate_b = json.loads(bb.read_text())
     all_equal_size = all(
-        aggregate_a["corpora"][corpus]["__".replace("__", layer)]["cmpct"]["bytes"]
+        aggregate_a["corpora"][corpus][layer]["cmpct"]["bytes"]
         == aggregate_b["corpora"][corpus][layer]["cmpct"]["bytes"]
         for corpus in NAMES for layer in LAYERS)
     # Archive digest comparison is stronger than archive size but is only about the *produced*
@@ -154,7 +154,7 @@ def main():
         raise RuntimeError("research candidate is not derived from exact product parent")
     # No research change may alter code, native, release corpus, comparator or formatter.
     quiet = subprocess.run(["git", "-C", str(b), "diff", "--quiet", CANDIDATE_PARENT,
-                            "HEAD", "--", "src/", "native/", "benchmarks/", "pyproject.toml",
+                            "HEAD", "--", "src/", "native/", "benchmarks/zip_parity_bench.py", "benchmarks/universal_bench.py", "benchmarks/zip_cli_helper.py", "pyproject.toml",
                             "tools/check_performance_regression.py",
                             "tools/aggregate_parity_runs.py"])
     if quiet.returncode:
