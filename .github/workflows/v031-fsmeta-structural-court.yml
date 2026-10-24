@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: v031-fsmeta-court-${{ github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   fsmeta:
