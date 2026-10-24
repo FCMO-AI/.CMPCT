@@ -25,7 +25,9 @@ PAYLOAD = b"o25-physical-owner-raw-payload\x00\xff"
 
 def _archive(path: Path, edges: dict[str, str], *, target_kind: int = K_FILE) -> Path:
     """Build real r24 physical bytes, with a SHA-committed checkpoint index."""
-    owner = ["owner.bin", target_kind, 0o644, 0, len(PAYLOAD), sha(PAYLOAD),
+    owner = ["owner.bin", target_kind, 0o644, 0,
+             len(PAYLOAD) if target_kind == K_FILE else 0,
+             sha(PAYLOAD) if target_kind == K_FILE else b"",
              [S_BLOB, 0] if target_kind == K_FILE else None]
     records = [owner]
     records.extend(
