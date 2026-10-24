@@ -98,6 +98,26 @@ int32_t cmpct_entry_pack_owner(
 );
 
 /*
+ * Copy the authenticated index's complete *logical* SHA-256 commitment for an
+ * ordinary file into a caller-owned 32-byte buffer. This metadata-only query
+ * does not read mutable physical bytes or verify the reconstructed output:
+ * callers streaming ranges must compute their own SHA-256 over the completed
+ * output and compare BEFORE treating that output as authenticated.
+ *
+ * Success requires an existing authenticated file-row logical SHA-256.
+ * Missing row digest / non-file -> CMPCT_ERR_UNSUPPORTED, invalid index ->
+ * CMPCT_ERR_RANGE, null archive/buffer -> CMPCT_ERR_NULL. A non-null
+ * out_digest buffer is zeroed on every error. No implicit fallback to a
+ * mutable physical blob-header SHA is allowed. The buffer must hold 32 bytes,
+ * must not alias the live archive object, and the archive must stay open.
+ */
+int32_t cmpct_entry_logical_sha256(
+    const CmpctArchive *archive,
+    size_t index,
+    uint8_t out_digest[32]
+);
+
+/*
  * Optional signed-index hardlink topology: the terminal regular-file ordinal.
  * Returns CMPCT_OK for a hardlink and writes its terminal owner entry index,
  * which may validly be zero. Only compare ordinals on the same LIVE archive.

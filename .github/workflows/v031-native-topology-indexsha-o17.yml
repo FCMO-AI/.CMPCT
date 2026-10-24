@@ -1,0 +1,70 @@
+# ci-lane: fast
+name: CMPCT v0.31 native topology and signed-index SHA O17
+on:
+  pull_request:
+    paths:
+      - 'native/cmpct-core/src/lib.rs'
+      - 'native/cmpct-core/include/cmpct.h'
+      - 'tests/native_authenticated_sha_o12.py'
+      - 'tests/native_topology_indexsha_o17.py'
+      - 'docs/v031-research/NATIVE_TOPOLOGY_INDEXSHA_UNION_O17_PREREG.md'
+      - '.github/workflows/v031-native-topology-indexsha-o17.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-native-o17-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  native-two-abi:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Exact Git custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 611d0ea67a94f552f9ebca07ba747f191dee160e HEAD
+          test "$(git hash-object tests/native_authenticated_sha_o12.py)" = "8b498d632220eaad2053a289180aef18dee6c3f1"
+          test "$(git hash-object tests/native_hardlink_owner_o14.py)" = "1c553ed572a4ae5bcb676745e24085f416993628"
+          git ls-files --error-unmatch native/cmpct-core/Cargo.lock docs/v031-research/NATIVE_TOPOLOGY_INDEXSHA_UNION_O17_PREREG.md
+          sha256sum docs/v031-research/NATIVE_TOPOLOGY_INDEXSHA_UNION_O17_PREREG.md
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Actual native compile plus two-symbol C header gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[test]'
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
+          cargo test --locked --manifest-path native/cmpct-core/Cargo.toml
+          cargo clippy --locked --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+          printf '#include "native/cmpct-core/include/cmpct.h"\nint main(void) { int32_t (*sha)(const CmpctArchive *, size_t, uint8_t *) = cmpct_entry_logical_sha256; int32_t (*own)(const CmpctArchive *, size_t, size_t *) = cmpct_entry_hardlink_owner; return sha == 0 || own == 0; }\n' | cc -x c -std=c11 -Wall -Wextra -Werror -c -o /tmp/cmpct-o17-header.o -
+      - name: Independently inherited and same-handle O17 conformance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cmpct-o17"
+          python tests/native_pack_golden_abi.py 2>&1 | tee "$RUNNER_TEMP/cmpct-o17/pack.log"
+          python tests/native_authenticated_sha_o12.py "$RUNNER_TEMP/cmpct-o17/o12.json" 2>&1 | tee "$RUNNER_TEMP/cmpct-o17/o12.log"
+          python tests/native_hardlink_owner_o14.py "$RUNNER_TEMP/cmpct-o17/o14.json" 2>&1 | tee "$RUNNER_TEMP/cmpct-o17/o14.log"
+          python tests/native_topology_indexsha_o17.py "$RUNNER_TEMP/cmpct-o17/o17.json" 2>&1 | tee "$RUNNER_TEMP/cmpct-o17/o17.log"
+          sha256sum "$RUNNER_TEMP/cmpct-o17/"*.json > "$RUNNER_TEMP/cmpct-o17/sha256sums.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/cmpct-o17/source.sha"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-topology-sha-o17-${{ github.run_id }}
+          path: ${{ runner.temp }}/cmpct-o17/
+          if-no-files-found: warn
+          retention-days: 30
