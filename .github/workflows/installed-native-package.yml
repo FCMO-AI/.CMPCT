@@ -11,6 +11,8 @@ on:
       - "native/**"
       - "tests/installed_native_package_smoke.py"
       - "tests/installed_native_signed_symlink_smoke.py"
+      - "tests/installed_native_static_destination_smoke.py"
+      - "tests/test_v031_static_destination_o10r_union_o27.py"
       - "tools/v031_signed_symlink_crosshost_o2.py"
       - "tools/verify_v031_installed_signed_receipt.py"
       - "tests/test_v031_installed_signed_receipt_custody_r278.py"
@@ -59,7 +61,7 @@ jobs:
           # paths. A missing parent/diff fails closed rather than silently skipping.
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tests/installed_native_signed_symlink_smoke[.]py$|tools/v031_signed_symlink_crosshost_o2[.]py$|tools/verify_v031_installed_signed_receipt[.]py$|tests/test_v031_installed_signed_receipt_custody_r278[.]py$|tests/test_v031_signed_journal_symlink_crossproperty_o9[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tests/installed_native_signed_symlink_smoke[.]py$|tests/installed_native_static_destination_smoke[.]py$|tests/test_v031_static_destination_o10r_union_o27[.]py$|tools/v031_signed_symlink_crosshost_o2[.]py$|tools/verify_v031_installed_signed_receipt[.]py$|tests/test_v031_installed_signed_receipt_custody_r278[.]py$|tests/test_v031_signed_journal_symlink_crossproperty_o9[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
             echo 'run_package=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_package=false' >> "$GITHUB_OUTPUT"
@@ -151,6 +153,15 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
           (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_signed_symlink_smoke.py" "$GITHUB_WORKSPACE/signed-fixtures" "$EVIDENCE_HEAD") | tee installed-signed-smoke.json
+      - name: Prove installed-wheel pre-existing destination symlink protection on POSIX
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$RUNNER_OS" = "macOS" ]; then PY="$RUNNER_TEMP/cmpct-installed/bin/python"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
+          (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_static_destination_smoke.py" "$EVIDENCE_HEAD") | tee installed-static-destination-smoke.json
+          python -m json.tool installed-static-destination-smoke.json >/dev/null
       - name: Inspect installed dependency closure
         shell: bash
         run: |
@@ -172,6 +183,7 @@ jobs:
           path: |
             installed-native-smoke.json
             installed-signed-smoke.json
+            installed-static-destination-smoke.json
             installed-native-deps.txt
             ${{ runner.temp }}/wheels/cmpct-*.whl
           if-no-files-found: error
@@ -266,11 +278,29 @@ jobs:
           for os_name,p in found.items():
               smoke_files=list(p.rglob('installed-native-smoke.json'))
               signed_files=list(p.rglob('installed-signed-smoke.json'))
+              static_files=list(p.rglob('installed-static-destination-smoke.json'))
               dep_files=list(p.rglob('installed-native-deps.txt'))
               wheels=list(p.rglob('cmpct-*.whl'))
               assert len(smoke_files)==1,(os_name,smoke_files)
               assert len(dep_files)==1,(os_name,dep_files)
               assert len(signed_files)==1,(os_name,signed_files)
+              static=None
+              if os_name in {'ubuntu-24.04','macos-14'}:
+                  assert len(static_files)==1,(os_name,static_files)
+                  static=json.loads(static_files[0].read_text())
+                  assert static.get('schema')=='cmpct-v031-installed-wheel-static-destination-o32-v1',static
+                  assert static.get('source_sha')==expected_head,static
+                  assert static.get('host_os')=={'ubuntu-24.04':'linux','macos-14':'darwin'}[os_name],static
+                  assert static.get('wheel_import_under_prefix') is True,static
+                  assert static.get('negative_result')=='prewrite_rejected',static
+                  assert static.get('positive_result')=='exact_inode_reconstruction',static
+                  assert static.get('prewrite_no_ordinary_members') is True,static
+                  assert static.get('external_inode_sha_unchanged') is True,static
+                  for k in ('archive_sha256','outside_sentinel_sha256'):
+                      digest=static.get(k)
+                      assert isinstance(digest,str) and len(digest)==64 and all(c in '0123456789abcdef' for c in digest),(k,digest)
+              else:
+                  assert len(static_files)==0,(os_name,static_files)
               signed=json.loads(signed_files[0].read_text())
               # Counts alone can falsely certify duplicated negatives while
               # omitting another hostile case or the physical POSIX positive.
@@ -292,6 +322,8 @@ jobs:
                   'dict_vector_sha256':s['dict_vector_sha256'],
                   'installed_signed_fixture_sha256':manifest_sha,
                   'installed_prewrite_negatives':signed['required_prewrite_negatives'],
+                  'installed_static_destination_result':static['negative_result'] if static else 'not_executed_win32',
+                  'installed_static_destination_archive_sha256':static['archive_sha256'] if static else None,
                   'installed_safe_relative_symlink_physical':signed['physical_safe_symlink_restored'],
                   'wheel_name':wheel.name,
                   'wheel_sha256':hashlib.sha256(wheel.read_bytes()).hexdigest(),
@@ -304,6 +336,7 @@ jobs:
               'candidate_sha':expected_head,
               'facts':{
                   'installed_signed_symlink_prewrite_three_host_green':True,
+                  'installed_static_destination_prewrite_posix_two_host_green':True,
                   'sdist_first_wheel_build':True,
                   'linux_clean_install_green':True,
                   'macos_clean_install_green':True,
