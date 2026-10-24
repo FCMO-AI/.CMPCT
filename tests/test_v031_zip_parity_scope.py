@@ -122,25 +122,17 @@ class GitScopeCourt(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checkout HEAD mismatch"):
             MODULE.classify("pull_request", "0" * 40, self.base, cwd=self.repo)
 
-    def test_unrelated_histories_fail_closed(self):
-        self.commit("README.md", "docs\n")
-        with tempfile.TemporaryDirectory() as other:
-            other = Path(other)
-            subprocess.run(["git", "init", "-q", "-b", "other"], cwd=other, check=True)
-            subprocess.run(["git", "config", "user.name", "CI Scope Court"], cwd=other, check=True)
-            subprocess.run(["git", "config", "user.email", "scope@example.invalid"], cwd=other, check=True)
-            (other / "x").write_text("unrelated")
-            subprocess.run(["git", "add", "-A"], cwd=other, check=True)
-            subprocess.run(["git", "commit", "-q", "-m", "other"], cwd=other, check=True)
-            foreign = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], cwd=other, text=True,
-            ).strip()
-            raw = subprocess.check_output(
-                ["git", "cat-file", "commit", foreign], cwd=other,
-            )
-            # No fetch is necessary: missing base is an even stronger
-            # fail-closed control; don't claim this tests disjoint fetched DAGs.
-            self.assertTrue(self.decision(base=foreign).run)
+    def test_fetched_but_unrelated_histories_fail_closed(self):
+        self.commit("README.md", "candidate docs\\n")
+        # A live Git object can exist without any common ancestry. Merely
+        # checking cat-file on the event base is insufficient for PR custody.
+        self.git("checkout", "-q", "--orphan", "foreign")
+        self.git("rm", "-q", "-rf", ".")
+        foreign = self.commit("unrelated.txt", "independent history\\n")
+        self.git("checkout", "-q", "candidate")
+        result = self.decision(base=foreign)
+        self.assertTrue(result.run)
+        self.assertEqual(result.basis, "history-unavailable-fail-closed")
 
     def test_workflow_topology_with_pr_diff_marker(self):
         spec = importlib.util.spec_from_file_location(
@@ -151,6 +143,22 @@ class GitScopeCourt(unittest.TestCase):
         spec.loader.exec_module(checker)
         workflow = ROOT / ".github" / "workflows" / "zip-parity.yml"
         self.assertEqual(checker.validate(workflow), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            broken = Path(tmp) / "zip-parity.yml"
+            contents = workflow.read_text()
+            # A marker and commented-out call must not trick the text-level
+            # topology ratchet into approving an unenforced release gate.
+            broken.write_text(contents.replace(
+                "          python tools/classify_zip_parity_scope.py",
+                "          # python tools/classify_zip_parity_scope.py",
+            ))
+            errors = checker.validate(broken)
+            self.assertTrue(any("classifier" in error for error in errors))
+            broken.write_text(contents.replace(
+                "          fetch-depth: 0", "          fetch-depth: 2",
+            ))
+            errors = checker.validate(broken)
+            self.assertTrue(any("fetch-depth" in error for error in errors))
 
 
 if __name__ == "__main__":
