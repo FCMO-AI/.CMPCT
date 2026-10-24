@@ -1,0 +1,54 @@
+# ci-lane: fast
+name: CMPCT v0.31 Installed Reader cold economics O11
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_installed_reader_cold_economics_o11.py'
+      - 'docs/v031-research/2026-10-24-installed-reader-cold-economics-o11-prereg.md'
+      - '.github/workflows/v031-installed-reader-cold-economics-o11.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-installed-reader-cold-o11-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  installed-o9-vs-source-o3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+      - name: Bind exact O3 parent source and O9 installed candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = "bd1df6091c952e74c8690cf2ba0764747e6db815"
+          test "$(git rev-parse bf09afa516024e2503143189017a6931fc4947d0:src/cmpct/reader.py)" = "79171b2f53dbc7c1e0cfb3f3266a35663fcf9cd8"
+          test "$(git hash-object benchmarks/v031_signed_delta_replay_o0.py)" = "02c5f506c9294130db6b0eb9c36c0a61460c3b35"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine CMPCT source product
+        run: python -m pip install ".[test]"
+      - name: Installed candidate / source-exact base fresh-process O11 economics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o11-evidence
+          python -u benchmarks/v031_installed_reader_cold_economics_o11.py --out o11-evidence --sizes 512 4096 --repeats 5 2>&1 | tee o11-evidence/experiment.log
+          sha256sum o11-evidence/installed-reader-cold-economics-o11.json | tee o11-evidence/receipt.sha256
+      - name: Preserve honest positive or negative O11 observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installed-reader-cold-economics-o11-${{ github.event.pull_request.head.sha || github.sha }}
+          path: o11-evidence/
+          if-no-files-found: warn
+          retention-days: 30
