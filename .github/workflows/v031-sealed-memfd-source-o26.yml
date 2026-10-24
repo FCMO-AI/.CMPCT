@@ -6,6 +6,7 @@ on:
     paths:
       - 'benchmarks/v031_sealed_memfd_source_o26.py'
       - 'docs/v031-research/2026-10-24-sealed-memfd-source-o26-prereg.md'
+      - 'docs/v031-research/2026-10-24-sealed-memfd-mmap-o26b-prereg.md'
       - 'docs/v031-research/2026-10-24-sealed-memfd-source-o26-result.md'
       - '.github/workflows/v031-sealed-memfd-source-o26.yml'
   workflow_dispatch:
@@ -67,6 +68,12 @@ jobs:
               assert case["sealed_archive_sha"] == case["source_sha_original"], name
               assert case["output_sha"] == case["expected_original_output_sha"], name
               assert case["same_user_write_attempts_rejected"], name
+              assert len(case["postverify_write_denials"]) == 4, name
+              m = case["postverify_mapping_control"]
+              assert m["unsealed_shared_mapping_writable"], name
+              assert m["sealed_shared_mapping_denied_errno"] in (1, 13), name
+              assert m["private_mapping_copy_on_write"], name
+              assert m["sealed_source_digest_preserved"], name
               assert len(case["write_denials"]) == 4, name
               assert case["fresh_mutant_sha_rejected"], name
               assert case["late_sealed_clone_sha_rejected"], name
