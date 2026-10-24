@@ -1,0 +1,67 @@
+# ci-lane: fast
+name: CMPCT v0.31 native authenticated stream SHA O12
+
+on:
+  pull_request:
+    paths:
+      - 'native/cmpct-core/src/lib.rs'
+      - 'native/cmpct-core/include/cmpct.h'
+      - 'tests/native_authenticated_sha_o12.py'
+      - 'docs/v031-research/NATIVE_AUTHENTICATED_STREAM_SHA_O12_PREREG.md'
+      - '.github/workflows/v031-native-authenticated-stream-sha-o12.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-native-sha-o12-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  native-authenticated-sha-o12:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact HEAD and immutable preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch native/cmpct-core/Cargo.lock tests/native_authenticated_sha_o12.py docs/v031-research/NATIVE_AUTHENTICATED_STREAM_SHA_O12_PREREG.md
+          git show --format=fuller --no-patch "$(git log --format=%H -- docs/v031-research/NATIVE_AUTHENTICATED_STREAM_SHA_O12_PREREG.md | tail -1)"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Build exact-source native ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+          printf '#include "native/cmpct-core/include/cmpct.h"\nint main(void) { int32_t (*query)(const CmpctArchive *, size_t, uint8_t *) = cmpct_entry_logical_sha256; return query == 0; }\n' | cc -x c -std=c11 -Wall -Wextra -Werror -c -o /tmp/cmpct-sha-o12.o -
+      - name: Existing native conformance and new independent streaming court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/native_pack_golden_abi.py
+          mkdir -p "$RUNNER_TEMP/cmpct-native-sha-o12"
+          python tests/native_authenticated_sha_o12.py "$RUNNER_TEMP/cmpct-native-sha-o12/result.json" | tee "$RUNNER_TEMP/cmpct-native-sha-o12/log.txt"
+          sha256sum "$RUNNER_TEMP/cmpct-native-sha-o12/result.json" > "$RUNNER_TEMP/cmpct-native-sha-o12/result.sha256"
+          git rev-parse HEAD > "$RUNNER_TEMP/cmpct-native-sha-o12/source.sha"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-sha-o12-${{ github.run_id }}
+          path: ${{ runner.temp }}/cmpct-native-sha-o12/
+          if-no-files-found: warn
+          retention-days: 30
