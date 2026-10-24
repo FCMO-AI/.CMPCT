@@ -2,10 +2,11 @@
   "format_revision": 24,
   "generation_provenance": {
     "index_and_zstd_codec": "system libzstd level 12",
+    "libzstd": "1.5.7",
     "method": "independently assembled struct/MessagePack revision-24 wire; no CMPCT Builder or Reader imports",
     "msgpack": "1.1.2",
     "purpose": "fixed cross-implementation byte oracle for S_PACK shared-blob slices and offsets",
-    "python": "3.11"
+    "python": "3.13.5"
   },
   "schema": "cmpct-v24-independent-pack-golden-v1",
   "vectors": [
