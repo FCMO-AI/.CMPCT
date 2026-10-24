@@ -422,6 +422,18 @@ class CMPCT:
                         macos_parent=macos_next_node
             seen.add(key);canonical_rows.append((row,key,parts))
             if row[1]==K_SYMLINK:syms.add(key)
+        if sys.platform=='darwin':
+            # Archive hardlinks name LOGICAL owners, not whatever physical APFS path
+            # happens to resolve after normalization. The explicit validator already
+            # checks logical membership; ordinary extraction must not bypass it.
+            macos_logical_owners={key for _,key,_ in canonical_rows}
+            for row,key,parts in canonical_rows:
+                if row[1]==K_HARDLINK:
+                    try:source_key,_=canonical_logical_path(row[6][0])
+                    except (ValueError,TypeError,IndexError) as exc:
+                        raise IOError(f'unsafe macOS hardlink source: {row[0]!r}') from exc
+                    if source_key not in macos_logical_owners:
+                        raise IOError(f'missing logical macOS hardlink owner: {row[0]!r}')
         clean=[]
         for row,key,parts in canonical_rows:
             rel=row[0]
