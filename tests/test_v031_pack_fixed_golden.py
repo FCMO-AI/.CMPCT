@@ -45,7 +45,7 @@ def test_independently_frozen_pack_complete_and_selective_reads(tmp_path, golden
     with CMPCT(path) as reader:
         assert set(reader.by) == set(vec["files"])
         assert len(reader.blobs) == 1
-        blob_idx = next(iter(reader.blobs))
+        blob_idx = 0
         assert reader.blobs[blob_idx][3] == vec["physical_codec"]
         offset = reader.record_base + reader.blobs[blob_idx][0]
         physical = BHDR.unpack_from(wire, offset)
