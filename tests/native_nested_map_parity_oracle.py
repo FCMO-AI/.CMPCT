@@ -119,7 +119,7 @@ def main() -> None:
         for vector in manifest["vectors"]:
             original = base64.b64decode(vector["archive_base64"], validate=True)
             assert sha(original).hex() == vector["archive_sha256"]
-            path = temp / (vector["codec"] + "-good.cmpct")
+            path = temp / f"{vector['codec']}-good.cmpct"
             path.write_bytes(original)
             with CMPCT(path) as reader:
                 assert len(reader.files) == 1
