@@ -207,10 +207,14 @@ class SemanticTreeDigestCourt(unittest.TestCase):
                         shutil.rmtree(node)
                     else:
                         node.unlink()
+            # Generate ONCE for both roots. Otherwise any changed name/link
+            # trivially compares two unrelated byte corpora instead of isolating
+            # the single structural difference under test.
+            common_payloads = [rng.randbytes(rng.randrange(0, 60))
+                               for _ in range(rng.randrange(1, 8))]
             for root in (self.left, self.right):
                 (root / "nested").mkdir()
-                for n in range(rng.randrange(1, 8)):
-                    payload = rng.randbytes(rng.randrange(0, 60))
+                for n, payload in enumerate(common_payloads):
                     (root / "nested" / f"data{n}").write_bytes(payload)
                 (root / "root").write_bytes(b"same bytes")
             if case % 3 == 0:
