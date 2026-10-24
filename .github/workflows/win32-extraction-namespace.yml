@@ -44,7 +44,10 @@ jobs:
       - name: Install CMPCT and pytest
         run: python -m pip install -e ".[test]"
       - name: Run unchanged lexical controls and Win32 physical admission
-        run: python -m pytest -q tests/test_path_policy.py tests/test_v031_windows_member_namespace.py
+        # The global conftest imports historical research engines whose Linux-only libzstd.so
+        # dependency is irrelevant to these two independent product/namespace test modules.
+        # --noconftest runs every unchanged assertion without loading that unrelated engine.
+        run: python -m pytest -q --noconftest tests/test_path_policy.py tests/test_v031_windows_member_namespace.py
       - name: Preserve real product/host identity
         if: always()
         shell: bash
