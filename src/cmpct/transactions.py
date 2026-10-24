@@ -42,8 +42,12 @@ def _cooperative_writer_lease(archive: Path):
     dup-based appends, not a pathname-keyed sidecar. Neither platform is safe
     against non-cooperating writers or adversarial namespace races.
     """
-    if fcntl is None and msvcrt is None:
-        raise NotImplementedError("CMPCT cooperative writer lease unavailable on this platform")
+    # Keep POSIX's inherited fail-closed error contract on POSIX hosts.
+    if os.name == "nt":
+        if msvcrt is None:
+            raise NotImplementedError("transactional writes require a Windows byte-range lock on this candidate")
+    elif fcntl is None:
+        raise NotImplementedError("transactional writes require a POSIX inode lock on this candidate")
     # Read and append permissions are both required by the public Writer.
     # O_APPEND is carried by every dup of this open-file-description.
     fd = os.open(archive, os.O_RDWR | os.O_APPEND | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0))
