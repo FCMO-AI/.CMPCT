@@ -44,6 +44,9 @@ const STORAGE_PACK: u64 = 4;
 const STORAGE_CDC: u64 = 5;
 const MAX_INDEX_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_DIRECT_DECODE_BYTES: u64 = 256 * 1024 * 1024;
+// Explicit multi-member PACK reads deliberately use a smaller one-operation memory budget.
+const MAX_PACK_BATCH_BYTES: usize = 16 * 1024 * 1024;
+const MAX_PACK_BATCH_RANGES: usize = 1024;
 const MAX_FILES: usize = 4_000_000;
 const MAX_BLOBS: usize = 4_000_000;
 const MAX_PATH_BYTES: usize = 1024 * 1024;
@@ -134,6 +137,15 @@ pub struct Entry {
     storage: Storage,
     #[serde(skip)]
     logical_hash: Option<[u8; 32]>,
+}
+
+/// One range inside an explicit native S_PACK batch. Results are concatenated in request order.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct CmpctPackRange {
+    pub entry_index: usize,
+    pub offset: u64,
+    pub length: usize,
 }
 
 #[derive(Debug)]
@@ -612,6 +624,102 @@ impl Archive {
             ),
             vzip_dispatch::VirtualZipDispatchError::LogicalHash => CmpctError::MemberHash,
         })
+    }
+
+    /// Read multiple ranges from one *compressed* S_PACK as a single verified operation.
+    ///
+    /// This explicitly scoped operation has no persistent decode cache: a later call rereads the
+    /// physical source and reauthenticates it. Validation, strong physical SHA and every complete
+    /// logical member hash finish before any caller-visible output is copied. RAW PACKs continue to
+    /// use the ordinary range-local API, which avoids forcing an entire RAW physical read.
+    pub fn read_pack_batch(
+        &self,
+        requests: &[CmpctPackRange],
+        out: &mut [u8],
+    ) -> Result<usize, CmpctError> {
+        if requests.is_empty() {
+            return Err(CmpctError::Range);
+        }
+        if requests.len() > MAX_PACK_BATCH_RANGES {
+            return Err(CmpctError::MemberLimit);
+        }
+
+        let mut pack_owner = None;
+        let mut total = 0usize;
+        // (decoded start, byte length, output start, complete-member logical identity)
+        let mut spans = Vec::with_capacity(requests.len());
+        for request in requests {
+            let entry = self.entries.get(request.entry_index).ok_or(CmpctError::Range)?;
+            let (index, base, member_len) = match &entry.storage {
+                Storage::Pack { index, offset, length } => (*index, *offset, *length),
+                _ => return Err(CmpctError::Unsupported),
+            };
+            if member_len != entry.size {
+                return Err(CmpctError::BlobHeader);
+            }
+            if let Some(first_owner) = pack_owner {
+                if first_owner != index {
+                    return Err(CmpctError::Unsupported);
+                }
+            } else {
+                pack_owner = Some(index);
+            }
+            let request_length = u64::try_from(request.length).map_err(|_| CmpctError::Range)?;
+            let end = request.offset.checked_add(request_length).ok_or(CmpctError::Range)?;
+            if end > entry.size {
+                return Err(CmpctError::Range);
+            }
+            let from = base.checked_add(request.offset).ok_or(CmpctError::Range)?;
+            let physical_end = from.checked_add(request_length).ok_or(CmpctError::Range)?;
+            let blob = self.blobs.get(index).ok_or(CmpctError::BlobHeader)?;
+            if physical_end > blob.usize {
+                return Err(CmpctError::Range);
+            }
+            let start = usize::try_from(from).map_err(|_| CmpctError::MemberLimit)?;
+            total = total.checked_add(request.length).ok_or(CmpctError::MemberLimit)?;
+            if total > MAX_PACK_BATCH_BYTES {
+                return Err(CmpctError::MemberLimit);
+            }
+            let output_start = total - request.length;
+            let complete_hash = if request.offset == 0 && end == entry.size {
+                entry.logical_hash
+            } else {
+                None
+            };
+            spans.push((start, request.length, output_start, complete_hash));
+        }
+        if total > out.len() {
+            return Err(CmpctError::Range);
+        }
+
+        let owner = pack_owner.ok_or(CmpctError::Range)?;
+        let blob = self.blobs.get(owner).ok_or(CmpctError::BlobHeader)?;
+        if blob.codec != CODEC_ZSTD {
+            return Err(CmpctError::Unsupported);
+        }
+        if blob.usize > MAX_PACK_BATCH_BYTES as u64 || blob.csize > MAX_PACK_BATCH_BYTES as u64 {
+            return Err(CmpctError::MemberLimit);
+        }
+        // A single file lock and one complete physical validation define an operation-scoped
+        // verified snapshot; later calls never reuse the decoded bytes.
+        let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
+        let (payload_pos, physical_hash) = self.checked_blob_layout(blob, &mut file)?;
+        let decoded = self.decode_zstd_blob(blob, &mut file, payload_pos, &physical_hash)?;
+
+        for (start, len, _, complete_hash) in &spans {
+            let end = start.checked_add(*len).ok_or(CmpctError::Range)?;
+            let slice = decoded.get(*start..end).ok_or(CmpctError::Range)?;
+            if let Some(hash) = complete_hash {
+                if Sha256::digest(slice).as_slice() != hash {
+                    return Err(CmpctError::MemberHash);
+                }
+            }
+        }
+        // Nothing has escaped to the caller until all ranges and every relevant hash pass.
+        for (start, len, output_start, _) in spans {
+            out[output_start..output_start + len].copy_from_slice(&decoded[start..start + len]);
+        }
+        Ok(total)
     }
 
     /// Read a byte range from a supported direct, chunked, sparse, packed, or virtual member.
@@ -1418,6 +1526,58 @@ pub unsafe extern "C" fn cmpct_entry_read_range(
         std::slice::from_raw_parts_mut(buffer, length)
     };
     match archive.read_range(index, offset, out) {
+        Ok(n) => {
+            *out_read = n;
+            CmpctStatus::Ok as c_int
+        }
+        Err(error) => error_status(&error) as c_int,
+    }
+}
+
+/// Copy several ranges from the same physical Zstd S_PACK in one authenticated operation.
+///
+/// The output is the concatenation of ranges in request order. All request metadata and complete
+/// member identities are checked before writing any bytes; failure leaves the output untouched
+/// and sets `out_read` to zero. This is deliberately opt-in and never caches between calls.
+///
+/// # Safety
+/// `archive` must be a live `cmpct_open` handle; `requests` must point to `count` readable
+/// `CmpctPackRange` objects when count > 0. `buffer` must be writable for `capacity` bytes
+/// when capacity > 0, and neither that region nor `out_read` may overlap `requests`.
+/// `out_read` must point to a writable `usize`. The caller must not concurrently close `archive`.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_pack_read_batch(
+    archive: *const Archive,
+    requests: *const CmpctPackRange,
+    count: usize,
+    buffer: *mut u8,
+    capacity: usize,
+    out_read: *mut usize,
+) -> c_int {
+    let Some(archive) = archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
+    let Some(out_read) = out_read.as_mut() else {
+        return CmpctStatus::Null as c_int;
+    };
+    *out_read = 0;
+    if count > MAX_PACK_BATCH_RANGES || capacity > MAX_PACK_BATCH_BYTES {
+        return CmpctStatus::Limit as c_int;
+    }
+    if (count > 0 && requests.is_null()) || (capacity > 0 && buffer.is_null()) {
+        return CmpctStatus::Null as c_int;
+    }
+    let requests = if count == 0 {
+        &[]
+    } else {
+        std::slice::from_raw_parts(requests, count)
+    };
+    let out = if capacity == 0 {
+        &mut []
+    } else {
+        std::slice::from_raw_parts_mut(buffer, capacity)
+    };
+    match archive.read_pack_batch(requests, out) {
         Ok(n) => {
             *out_read = n;
             CmpctStatus::Ok as c_int
