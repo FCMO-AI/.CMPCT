@@ -42,3 +42,18 @@ The base PR #304 alone should already pass Writer tests but lacks bounded salvag
 ## Pre-implementation source-audit correction (2026-10-23; before composed product source)
 
 The eight PR #266 prospective fingerprint source files are **already present byte-for-byte** on Writer PR #304: each matching Git blob agrees with PR #302. Therefore no source overlay of those eight files is warranted, and doing so would only duplicate already-satisfied custody. The correct minimal union instead preserves #304's prospective source receipt unchanged, adds #293's bounded salvage source+CLI+specialized tests, and reconciles the shared `transactions.py` and `docs/HARDENING.md` surfaces explicitly. PR #302's experiment-specific workflow is not transplanted because its narrower original-source guards do not describe the merged Writer transaction module. This amendment narrows the earlier prospective method without changing its scientific hypothesis, acceptance criteria, or evidence strength.
+
+
+## O2 prospective hardlink-alias interaction (added after O1 hosted result, before O2 code)
+
+Base exact-head source: `e522ae27bc7f9c69b3ff59dfc03f1c73c6ec4f63`. O1 Linux hosted 46/46 and Windows hosted 36 pass + 2 platform skips, both on the exact source. This O2 question is deliberately separate from the original O1 preregistration, not retroactively part of its prediction.
+
+**Question:** When two archive pathnames are genuine hardlinks to the same inode, does a public cooperative Writer operation via one pathname preserve one coherent committed namespace and the same physically framed candidate offsets through *both* aliases? The physical candidate scanner must not claim an obsolete member is still logically live merely because its original blob remains on disk.
+
+**Prediction:** Create an r24 archive using the real Builder; create `os.link` alias; check `os.path.samefile` before and after; collect identical original/alias candidate sequences; rename one member via the hardlink alias; both Reader paths verify the identical committed namespace; both physical candidate scans still agree on the same original candidates marked `unverified` and generation `unknown`. Do not infer the rename from header candidates.
+
+**Control and alternative:** The inherited Writer POSIX and Windows suites already verify cooperative hardlink locking, and the inherited salvage suite already verifies framing. Neither tests the cross-product through an actual alias *after* a mutation. This additional test is bounded to one public Writer transition; no new algorithm needed.
+
+**Kill:** Any successful transition that only one pathname observes, any altered physical header claim, incorrect trust elevation, or an unsupported system-level hardlink creation treated as a silent pass invalidates the test. The test must not alter the existing Writer's cooperative contention/wait contract.
+
+**Evidence rung:** installed-package exact-source Linux and Windows test, plus launch of official r24/ZIP same-source performance receipt when the final latest test-bearing commit triggers it; raw results, including infrastructure failures, retained. No O2 result is asserted before execution.
