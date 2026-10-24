@@ -94,19 +94,19 @@ jobs:
           path = pathlib.Path(sys.argv[1])
           current = path.read_text()
           old = """                    try:target_key,_=canonical_logical_path(link[0])
-                    except ValueError as exc:
-                        raise IOError(f'unsafe hardlink target: {node!r}: {exc}') from exc
-                    node=canonical_names.get(target_key,link[0])"""
+                              except ValueError as exc:
+                                  raise IOError(f'unsafe hardlink target: {node!r}: {exc}') from exc
+                              node=canonical_names.get(target_key,link[0])"""
           new = """                    # Research oracle: already authenticated row keys were canonical-validated
-                    # before any graph resolution. Never bypass parsing of nonexact spellings.
-                    target_name=link[0]
-                    if target_name in self.by:
-                        node=target_name
-                    else:
-                        try:target_key,_=canonical_logical_path(target_name)
-                        except ValueError as exc:
-                            raise IOError(f'unsafe hardlink target: {node!r}: {exc}') from exc
-                        node=canonical_names.get(target_key,target_name)"""
+                              # before any graph resolution. Never bypass parsing of nonexact spellings.
+                              target_name=link[0]
+                              if target_name in self.by:
+                                  node=target_name
+                              else:
+                                  try:target_key,_=canonical_logical_path(target_name)
+                                  except ValueError as exc:
+                                      raise IOError(f'unsafe hardlink target: {node!r}: {exc}') from exc
+                                  node=canonical_names.get(target_key,target_name)"""
           if current.count(old) != 1:
               raise SystemExit(f"Expected one exact owner resolver fragment, found {current.count(old)}")
           path.write_text(current.replace(old, new, 1))
