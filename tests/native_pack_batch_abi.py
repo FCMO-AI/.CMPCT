@@ -120,7 +120,7 @@ def fixed_court(lib, home):
         None, null_requests, 1, null_output, 8, ctypes.byref(null_witness)
     )
     assert null_status == -1 and null_witness.value == 0
-    assert null_output.raw == bytes([0xA5]) * 8
+    assert null_output.raw[:8] == bytes([0xA5]) * 8  # ctypes appends a NUL terminator
     for vector in vectors:
         wire = base64.b64decode(vector["archive_base64"], validate=True)
         assert hashlib.sha256(wire).hexdigest() == vector["archive_sha256"]
