@@ -84,7 +84,7 @@ def vector(codec: int, compress, decompress):
             raw_pack.extend(b"INTERSTICE:NOT-A-LOGICAL-MEMBER")
     raw_pack = bytes(raw_pack)
     physical = raw_pack if codec == 0 else compress(raw_pack)
-    assert physical if codec == 0 else decompress(physical, len(raw_pack)) == raw_pack
+    assert (physical if codec == 0 else decompress(physical, len(raw_pack))) == raw_pack
     record = BHDR.pack(
         BMAGIC, codec, 0, 0, len(raw_pack), len(physical), 0,
         binascii.crc32(raw_pack) & 0xffffffff, sha256(raw_pack),
