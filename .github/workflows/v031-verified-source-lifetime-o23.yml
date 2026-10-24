@@ -1,0 +1,86 @@
+# ci-lane: fast
+name: CMPCT v0.31 verified extraction source-lifetime O23
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_verify_extract_source_lifetime_o23.py'
+      - 'docs/v031-research/2026-10-24-strong-extract-source-lifetime-o23-prereg.md'
+      - 'docs/v031-research/2026-10-24-strong-extract-source-lifetime-o23-result.md'
+      - '.github/workflows/v031-verified-source-lifetime-o23.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-source-lifetime-o23-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  source-lifetime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind original product and independent fixture source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 2cf7c3915cd618b9a72a5dc26bdd15a25cb75230 HEAD
+          test "$(git hash-object src/cmpct/reader.py)" = "60f52328467ca509bb410abe6a34810c50917cb5"
+          test "$(git hash-object benchmarks/v031_pack_physical_sha_court.py)" = "2383bf9a8f7ce8a9a01028ccf1072169897df3f1"
+          git log --format='%H %s' -4 > benchmark-artifacts/commit-lineage.txt
+          git hash-object src/cmpct/reader.py benchmarks/v031_pack_physical_sha_court.py benchmarks/v031_verify_extract_source_lifetime_o23.py > benchmark-artifacts/source-blobs.txt
+          printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/source-head.txt
+          python -m py_compile benchmarks/v031_verify_extract_source_lifetime_o23.py
+      - name: Install unchanged CMPCT package
+        run: python -m pip install -e '.[test]'
+      - name: Execute registered same-inode source lifetime court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_pack_physical_sha_court.py --expected-pack reject > benchmark-artifacts/inherited-strong-verify.json
+          python benchmarks/v031_verify_extract_source_lifetime_o23.py --out benchmark-artifacts/o23-source-lifetime.json > benchmark-artifacts/o23-stdout.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          record=json.loads(Path("benchmark-artifacts/o23-source-lifetime.json").read_text())
+          assert record["status"]=="PASS"
+          assert record["all_fundamental_controls"]=="PASS"
+          assert set(record["cases"])=={"micro_pack", "direct_raw"}
+          for case in record["cases"].values():
+              assert case["first_strong_verify"]=="PASS"
+              assert case["fresh_mutant_strong_verify"]=="REJECT_EXACT_PHYSICAL_SHA"
+              assert case["source_inode_stable"] and case["source_size_stable"]
+              assert case["crc_repaired_and_post_mutation_ordinary_read_exact"]
+              assert case["authenticated_index_and_physical_sha_unmodified"]
+              assert case["unchanged_source_control"]=="PUBLISHED_EXACT"
+              assert case["same_handle_extraction"] in (
+                  "MUTATED_UNVERIFIED", "ORIGINAL_VERIFIED", "REJECTED",
+                  "OTHER_UNEXPECTED_BYTES"
+              )
+          print("O23 valid scientific observation:", record["decision"])
+          for name, case in record["cases"].items():
+              print(name, case["same_handle_extraction"],
+                    "cached owner indices", case["same_handle_cache_indices_after_verify"])
+          PY
+      - name: Preserve source-custodied controls and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-source-lifetime-o23-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
