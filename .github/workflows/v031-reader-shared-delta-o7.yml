@@ -1,0 +1,99 @@
+# ci-lane: fast
+name: CMPCT v0.31 Reader shared signed-journal replay O7
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/validation.py'
+      - 'tests/test_v031_reader_shared_replay_o7.py'
+      - 'tests/test_v031_delta_replay_indexed_o1.py'
+      - 'benchmarks/v031_reader_shared_replay_o7.py'
+      - 'benchmarks/v031_signed_delta_replay_o0.py'
+      - 'docs/v031-research/2026-10-24-reader-shared-replay-o7-prereg.md'
+      - '.github/workflows/v031-reader-shared-delta-o7.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-reader-shared-delta-o7-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  source-exact-authenticated-court:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+      - name: Historical Reader and inherited validator source-exact custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+          baseline = "5f6c1462e30686687ea13cc2507c9702f13df116"
+          def blob(path):
+              return subprocess.check_output(["git", "hash-object", path], text=True).strip()
+          old = subprocess.check_output(["git", "show", f"{baseline}:src/cmpct/reader.py"], text=True)
+          # Compare canonical Git blobs, not checkout line endings (Windows may use CRLF).
+          new = subprocess.check_output(
+              ["git", "show", "HEAD:src/cmpct/reader.py"],
+          ).decode("utf-8")
+          old_start = old.index("                for delta in reversed(chain):")
+          old_end = old.index("                return idx,depth", old_start)
+          new_start = new.index("                if chain:", new.index("def _index_from_footer("))
+          new_end = new.index("                return idx,depth", new_start)
+          # SHA custody is authoritative on all platforms. Windows git.exe text
+          # stdout may transform EOL in a source slicing comparison; retain the
+          # independent prefix/suffix structural proof on Unix, and enforce the
+          # exact reviewed Git blob (stronger than textual slices) everywhere.
+          assert blob("src/cmpct/reader.py") == "6de2edcf5b804e224a1c651ca77361af5667dc2e"
+          if os.name != "nt":
+              assert old[:old_start] == new[:new_start], "Unreviewed Reader drift before replay"
+              assert old[old_end:] == new[new_end:], "Unreviewed Reader drift after replay"
+          assert "from .validation import ParserLimits, _apply_delta" in new[new_start:new_end]
+          assert "_apply_delta(idx, delta, limits)" in new[new_start:new_end]
+          assert "idx['files'].sort(key=lambda row: row[0])" in new[new_start:new_end]
+          assert blob("src/cmpct/validation.py") == "2bb3f53c918ae93efb105364e2b93ea46aeca034"
+          assert blob("tests/test_v031_delta_replay_indexed_o1.py") == "4e442f329051235950a4de7aef12ef9990658d35"
+          assert blob("benchmarks/v031_signed_delta_replay_o0.py") == "02c5f506c9294130db6b0eb9c36c0a61460c3b35"
+          print("O7_SOURCE_EXACT_READER_PATCH_AND_VALIDATOR_OWNER_PASS", blob("src/cmpct/reader.py"))
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine CMPCT product
+        run: python -m pip install -e ".[test]"
+      - name: Independent semantics plus signed multi-generation Reader product tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o7-evidence
+          python -m pytest --noconftest -q -rs tests/test_v031_delta_replay_indexed_o1.py tests/test_v031_reader_shared_replay_o7.py 2>&1 | tee o7-evidence/focused-court.log
+      - name: Same-runner source-exact historical Reader versus candidate ABBA
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -u benchmarks/v031_reader_shared_replay_o7.py --out o7-evidence --repeats 5 2>&1 | tee o7-evidence/historical-abba.log
+          python -u benchmarks/v031_reader_signed_delta_open_o6.py --out o7-evidence --repeats 5 2>&1 | tee o7-evidence/checkpoint-ratio.log
+          sha256sum o7-evidence/reader-shared-replay-o7-receipt.json o7-evidence/reader-open-o6b-receipt.json | tee o7-evidence/receipt.sha256
+      - name: Preserve raw positive or negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reader-shared-delta-o7-${{ matrix.os }}-${{ github.sha }}
+          path: o7-evidence/
+          if-no-files-found: warn
+          retention-days: 30
