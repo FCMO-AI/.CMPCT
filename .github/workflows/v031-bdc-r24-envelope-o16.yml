@@ -1,0 +1,108 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.31 BDC r24 opaque-envelope O16 falsifier
+on:
+  push:
+    branches: [agent/phased2-v031-bdc-r24-envelope-oracle-o16-20261024]
+    paths:
+      - '.github/workflows/v031-bdc-r24-envelope-o16.yml'
+      - 'benchmarks/v031_bdc_r24_envelope_oracle_o16.py'
+      - 'docs/v031-research/2026-10-24-bdc-r24-envelope-o16-prereg.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v031-bdc-r24-envelope-o16-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+  PYTHONPATH: ${{ github.workspace }}
+jobs:
+  opaque-envelope-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind frozen and original product source identities
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import json, os, platform, subprocess
+          from pathlib import Path
+          expected={
+            'benchmarks/v031_bounded_drift_coordered_court.py':'2fd04bacd64c14b45678b8575ba8ae7c692aa2df',
+            'benchmarks/history/2026-10-04-v031-bounded-drift-coordered-court-prereg.json':'f8e53f058a1c123ea4665b730c45f5619eb93d5f',
+            'benchmarks/resemblance_hostile_corpus_v1.py':'335169bd6eb336b6d444cfbd34c291101262c3a9',
+            'experiments/entropygraph_v030_bounded_drift_container_v1.py':'ed3165ce7fea3021e12220e409d972dd3cffd5b9',
+            'experiments/entropygraph_v030_bounded_drift_v1.py':'d210b0d69e9f470aa5cfa59ce59a4ce9ae47ce73',
+            'experiments/entropygraph_v030_product_fs.py':'72404386775be4576365cc687784f4e4f752d9de',
+            'experiments/entropygraph_v030_canonical_final.py':'caeaa2fb277481c500600af75eb13470f767d911',
+            'src/cmpct/builder.py':'663ef0922992b1fbb8f19e6eea88d55c10a56044',
+            'src/cmpct/reader.py':'e716233403dabd0966863c45635e18fa5ac6afb8',
+            'benchmarks/v031_bdc_r24_envelope_oracle_o16.py':'959d7c2c4b7362b83be68ec25b4ecee0ff5b6839',
+            'docs/v031-research/2026-10-24-bdc-r24-envelope-o16-prereg.md':'41a31de01ccfab79a6ae81881da05bf965c98b99'}
+          observed={p:subprocess.check_output(['git','hash-object',p],text=True).strip() for p in expected}
+          Path('benchmark-artifacts/source-identity.json').write_text(json.dumps({
+            'head':os.environ['EVIDENCE_HEAD'],'expected':expected,
+            'observed':observed,'platform':platform.platform()
+          },indent=2,sort_keys=True)+'\n')
+          if observed!=expected:raise SystemExit('UNMEASURED: historical/current product or O16 oracle source drift')
+          PY
+      - name: Install Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install existing CMPCT research dependencies
+        run: |
+          python -m pip install -e '.[test]'
+          python - <<'PY'
+          import json,platform,msgpack,zstandard
+          from pathlib import Path
+          Path('benchmark-artifacts/runtime.json').write_text(json.dumps({
+            'python':platform.python_version(),'zstandard':zstandard.__version__,
+            'libzstd':zstandard.ZSTD_VERSION,'msgpack':msgpack.__version__
+          },indent=2,default=str)+'\n')
+          PY
+      - name: Execute actual r24 wrapper oracle on exact frozen sibling bytes
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_bdc_r24_envelope_oracle_o16.py \
+            --output benchmark-artifacts/o16-result.json \
+            2>&1 | tee benchmark-artifacts/o16.log
+      - name: Independently judge decision boundaries
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/o16-result.json')
+          if not p.exists(): raise SystemExit('UNMEASURED: no result')
+          r=json.loads(p.read_text())
+          assert r['status']=='CORRECT_OPAQUE_ENVELOPE',r
+          assert r['product_credit'] is False and r['release_credit'] is False
+          assert r['original_filesystem_exposed_in_r24'] is False
+          assert {x['name'] for x in r['rows']}=={'01_shifted_versions','03_boundary_churn'}
+          for row in r['rows']:
+            a=row['r24_real_opaque_envelope']
+            assert a['inner_byte_identical'] and a['decoded_original_manifest_identical']
+            assert row['remaining_external_slack_bytes']==row['pinned_original_zstd19_bytes']-a['archive_bytes']
+            assert a['net_physical_carry_bytes']==a['archive_bytes']-row['sibling_original']['bytes']
+            assert row['strict_size_win_vs_pinned_zstd19']==(row['remaining_external_slack_bytes']>0)
+          assert r['decision'] in {
+            'OPAQUE_ENVELOPE_PASSES_SIZE_ONLY_RESEARCH_RUNG',
+            'RETIRE_OPAQUE_ENVELOPE_STRICT_EXTERNAL_WIN_ROUTE'}
+          print('O16 correctness/provenance judge PASS; scientific decision:',r['decision'])
+          PY
+      - name: Preserve exact head, negative or incomplete artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-bdc-r24-envelope-o16-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/
+          if-no-files-found: error
+          retention-days: 90
