@@ -42,6 +42,27 @@ jobs:
             sha256sum tests/conformance/generate_v24_pack_golden.py
             sha256sum tests/test_v031_pack_fixed_golden.py
           } | tee pack-evidence/source.txt
+      - name: Fail fast on independent frozen wire identity before package installation
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json
+          from pathlib import Path
+          p = Path("tests/conformance/v24-pack.json")
+          manifest = json.loads(p.read_text())
+          assert manifest["schema"] == "cmpct-v24-independent-pack-golden-v1"
+          assert len(manifest["vectors"]) == 2
+          for vec in manifest["vectors"]:
+              wire = base64.b64decode(vec["archive_base64"], validate=True)
+              assert len(wire) == vec["archive_bytes"], vec["name"]
+              assert hashlib.sha256(wire).hexdigest() == vec["archive_sha256"], vec["name"]
+              assert wire.startswith(b"CMPCT24\\0"), vec["name"]
+          Path("pack-evidence/wire-integrity.json").write_text(
+              json.dumps({"source": "fixed-wire-manifest", "vectors": [
+                  {"name": v["name"], "archive_sha256": v["archive_sha256"],
+                   "archive_bytes": v["archive_bytes"]} for v in manifest["vectors"]
+              ]}, sort_keys=True, indent=2) + "\n"
+          )
+          PY
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
