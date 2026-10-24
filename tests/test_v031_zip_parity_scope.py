@@ -134,6 +134,29 @@ class GitScopeCourt(unittest.TestCase):
         self.assertTrue(result.run)
         self.assertEqual(result.basis, "history-unavailable-fail-closed")
 
+    def test_criss_cross_incomparable_merge_bases_run_conservatively(self):
+        # Two independent merge commits incorporating each other's earlier
+        # changes, but not each other's merge commits, have two merge-bases.
+        # Selecting just one can classify source changes as absent.
+        self.git("checkout", "-q", "-b", "left")
+        left = self.commit("src/cmpct/left.py", "source\\n")
+        self.git("checkout", "-q", "-b", "right", self.base)
+        right = self.commit("README.md", "right docs\\n")
+        self.git("checkout", "-q", "left")
+        self.git("merge", "-q", "--no-ff", "--no-edit", right)
+        left_merge = self.head()
+        self.git("checkout", "-q", "right")
+        self.git("merge", "-q", "--no-ff", "--no-edit", left)
+        right_merge = self.head()
+        self.assertEqual(len(self.git(
+            "merge-base", "--all", left_merge, right_merge,
+        ).splitlines()), 2)
+        result = MODULE.classify(
+            "pull_request", right_merge, left_merge, cwd=self.repo,
+        )
+        self.assertTrue(result.run)
+        self.assertEqual(result.basis, "ambiguous-merge-base-fail-closed")
+
     def test_workflow_topology_with_pr_diff_marker(self):
         spec = importlib.util.spec_from_file_location(
             "ci_topology", ROOT / "tools" / "check_ci_topology.py"
