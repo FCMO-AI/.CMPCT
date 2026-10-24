@@ -1,0 +1,130 @@
+# ci-lane: fast
+name: CMPCT v0.31 Git-Clean Source Identity O12
+on:
+  pull_request:
+    paths:
+      - 'tools/research_v031_git_filtered_custody_o12.py'
+      - 'tests/test_v031_git_filtered_custody_o12.py'
+      - 'docs/v031-research/2026-10-24-clean-filter-identity-o12-prereg.md'
+      - '.github/workflows/v031-git-clean-identity-o12.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-git-clean-o12-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  source-identities:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact source and record both clean identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          mkdir -p o12-evidence
+          python -m tools.research_v031_git_filtered_custody_o12 --output o12-evidence/clean.json
+      - name: Re-run after untracked compiler source and preserve raw witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native/cmpct-core/target/release/build/o12/out
+          printf '// generated artifact\n' > native/cmpct-core/target/release/build/o12/out/private.rs
+          python -m tools.research_v031_git_filtered_custody_o12 --output o12-evidence/after-generated.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("o12-evidence/clean.json").read_text())
+          b=json.loads(Path("o12-evidence/after-generated.json").read_text())
+          assert a["paths"] == b["paths"]
+          assert a["raw_worktree_sha256"] == b["raw_worktree_sha256"]
+          assert a["git_filtered_roster_sha256"] == b["git_filtered_roster_sha256"]
+          assert a["source_sha"] == b["source_sha"]
+          print("O12_UNTRACKED_NATIVE_CONTAMINATION_CONTROL_PASS")
+          PY
+      - name: Independent source mutation and Git filter semantics court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install pytest
+          python -m pytest --noconftest -q -rs tests/test_v031_git_filtered_custody_o12.py 2>&1 | tee o12-evidence/pytest.txt
+          exit "${PIPESTATUS[0]}"
+      - name: Preserve independent exact-HEAD receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o12-git-clean-${{ matrix.os }}-${{ github.sha }}
+          path: o12-evidence/
+          if-no-files-found: warn
+          retention-days: 30
+  cross-host-comparison:
+    needs: source-identities
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: o12-git-clean-*
+          path: o12-all
+      - name: Compare exact source, Git-filtered and raw-physical bytes across OS
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          roots = sorted(Path("o12-all").glob("*/clean.json"))
+          if len(roots) != 3:
+              raise SystemExit(f"O12 missing three OS witnesses: {roots}")
+          docs = {p.parent.name: json.loads(p.read_text()) for p in roots}
+          first=next(iter(docs.values()))
+          report={"source_sha":first["source_sha"],"hosts":{}, "roster_equal":True,
+                  "filtered_equal":True,"raw_worktree_equal":True}
+          for host,doc in docs.items():
+              report["hosts"][host] = {
+                  "source_sha":doc["source_sha"],
+                  "source_count":doc["source_count"],
+                  "raw_sha256":doc["raw_worktree_sha256"],
+                  "git_filtered_sha256":doc["git_filtered_roster_sha256"],
+                  "object_format":doc["git_object_id_algorithm"],
+                  "cost_ns":doc["cost_ns"]}
+              report["roster_equal"] &= doc["paths"] == first["paths"]
+              report["filtered_equal"] &= doc["git_filtered_roster_sha256"] == first["git_filtered_roster_sha256"]
+              report["raw_worktree_equal"] &= doc["raw_worktree_sha256"] == first["raw_worktree_sha256"]
+          report["raw_different_paths"] = [p for p in first["paths"]
+              if len({d["raw_file_sha256"].get(p) for d in docs.values()}) != 1]
+          report["filtered_different_paths"] = [p for p in first["paths"]
+              if len({d["git_filtered_object_ids"].get(p) for d in docs.values()}) != 1]
+          report["raw_different_paths_count"] = len(report["raw_different_paths"])
+          report["filtered_different_paths_count"] = len(report["filtered_different_paths"])
+          Path("o12-cross-host-verdict.json").write_text(json.dumps(report,indent=2)+"\n")
+          print("O12_CROSS_HOST_VERDICT",json.dumps({k:v for k,v in report.items() if k not in ("raw_different_paths","filtered_different_paths")}))
+          if not report["roster_equal"] or not report["filtered_equal"]:
+              print("O12_NEGATIVE Git-filtered parity not established; preserve differential")
+              raise SystemExit(1)
+          if len({d["source_sha"] for d in docs.values()}) != 1:
+              raise SystemExit("O12 source SHA drift between OS")
+          print("O12_GIT_FILTERED_CLEAN_CHECKOUT_CROSS_HOST_PARITY_PASS")
+          PY
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o12-git-clean-crosshost-verdict
+          path: o12-cross-host-verdict.json
+          if-no-files-found: warn
+          retention-days: 30
