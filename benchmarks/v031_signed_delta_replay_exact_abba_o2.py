@@ -129,7 +129,7 @@ def median_ms(samples, field):
     return statistics.median(x[field] for x in samples) / 1e6
 
 
-def trial(baseline, meta: dict, delta: Path, checkpoint: Path, repeats: int):
+def trial(baseline, meta: dict, delta: Path, checkpoint: Path, repeats: int, ticks):
     modules = {"historical": baseline, "indexed": candidate}
     paths = {"delta": delta, "checkpoint": checkpoint}
     expect = {"delta": baseline.preflight_archive(delta),
@@ -139,7 +139,6 @@ def trial(baseline, meta: dict, delta: Path, checkpoint: Path, repeats: int):
     assert expect["delta"]["files"] == expect["checkpoint"]["files"] == meta["file_count"]
     assert expect["delta"]["delta_depth"] == 1 and expect["checkpoint"]["delta_depth"] == 0
 
-    ticks = {key: attach_attribution(mod) for key, mod in modules.items()}
     samples = {label: {which: [] for which in paths} for label in modules}
     for name, mod in modules.items():
         for kind, path in paths.items():
@@ -214,12 +213,14 @@ def main():
             "repeats": args.repeats,
             "cases": {},
         }
+        ticks = {"historical": attach_attribution(baseline),
+                 "indexed": attach_attribution(candidate)}
         for n in args.sizes:
             delta, checkpoint, meta = make_case(tmp, source_archive, n)
             # Same files reused on both validators; keep their complete SHA in receipt.
             assert digest(delta.read_bytes()) == meta["delta_sha256"]
             assert digest(checkpoint.read_bytes()) == meta["checkpoint_sha256"]
-            item = trial(baseline, meta, delta, checkpoint, args.repeats)
+            item = trial(baseline, meta, delta, checkpoint, args.repeats, ticks)
             receipt["cases"][str(n)] = item
             print("O2_RESULT " + json.dumps({
                 "n": n,
