@@ -41,8 +41,20 @@ jobs:
           python -c 'import os; assert os.name=="posix"'
       - name: Install authentic revision-24 package
         run: python -m pip install -e '.[test,audio]'
-      - name: Run original static-pivot owner controls and new intersection falsifier
-        run: python -m pytest -q tests/test_v031_destination_static_symlink_preflight.py tests/test_v031_static_destination_o10r_union_o27.py
+      - name: Run authentic tests without unrelated research-conftest imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Repository tests/conftest.py transitively imports historical Linux-only
+          # experiments/entropygraph_v025.py (ctypes libzstd.so), making unrelated
+          # macOS pytest collection fail before these source-exact tests can run.
+          # Only relocate unchanged test bytes, never change their assertions.
+          TESTDIR="$(mktemp -d "${RUNNER_TEMP}/cmpct-o27.XXXXXX")"
+          cp tests/test_v031_destination_static_symlink_preflight.py "$TESTDIR/"
+          cp tests/test_v031_static_destination_o10r_union_o27.py "$TESTDIR/"
+          python -m pytest -q --rootdir="$TESTDIR" --confcutdir="$TESTDIR" \
+            "$TESTDIR/test_v031_destination_static_symlink_preflight.py" \
+            "$TESTDIR/test_v031_static_destination_o10r_union_o27.py"
       - name: Scope
         run: |
           echo "O27 POSIX static-containment court only: NOT race-safe, NOT release, NOT source-lifetime binding."
