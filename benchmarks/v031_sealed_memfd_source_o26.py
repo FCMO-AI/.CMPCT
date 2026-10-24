@@ -10,6 +10,7 @@ import fcntl
 import hashlib
 import json
 import math
+import mmap
 import os
 import resource
 import statistics
@@ -105,6 +106,46 @@ def deny_write(fd: int) -> dict:
     return errors
 
 
+
+def mapping_seal_court(fd: int) -> dict:
+    """Different syscall root: shared map refused, private COW map cannot change inode."""
+    # Positive control distinguishes unsupported mmap from a seal-specific denial.
+    control = os.memfd_create("cmpct-o26-unsealed-control", os.MFD_ALLOW_SEALING)
+    try:
+        os.write(control, b"unsealed control")
+        with mmap.mmap(control, 1, flags=mmap.MAP_SHARED,
+                       prot=mmap.PROT_READ | mmap.PROT_WRITE) as mapping:
+            mapping[0:1] = b"U"
+        assert os.pread(control, 1, 0) == b"U", "unsealed shared mmap not writable"
+    finally:
+        os.close(control)
+
+    try:
+        with mmap.mmap(fd, 1, flags=mmap.MAP_SHARED,
+                       prot=mmap.PROT_READ | mmap.PROT_WRITE) as mapping:
+            mapping[0:1] = b"!"
+    except OSError as exc:
+        shared_errno = exc.errno
+    else:
+        raise AssertionError("sealed archive accepted writable shared mmap")
+    if shared_errno not in (errno.EPERM, errno.EACCES):
+        raise AssertionError(f"mmap failed for wrong reason: errno={shared_errno}")
+
+    before = hash_fd(fd)
+    with mmap.mmap(fd, 1, flags=mmap.MAP_PRIVATE,
+                   prot=mmap.PROT_READ | mmap.PROT_WRITE) as mapping:
+        first = mapping[0:1]
+        mapping[0:1] = bytes([first[0] ^ 1])
+        assert mapping[0:1] != first, "private mapping did not change"
+    assert hash_fd(fd) == before, "private COW mapping altered sealed source"
+    return {
+        "unsealed_shared_mapping_writable": True,
+        "sealed_shared_mapping_denied_errno": shared_errno,
+        "private_mapping_copy_on_write": True,
+        "sealed_source_digest_preserved": True,
+    }
+
+
 def mutation_case(root: Path, name: str, packed: bool, original: bytes) -> dict:
     mutant = original[:-1] + bytes([original[-1] ^ 1])
     good = archive_bytes(original, original, packed=packed)
@@ -133,6 +174,10 @@ def mutation_case(root: Path, name: str, packed: bool, original: bytes) -> dict:
         assert must_reject_sha(path, packed) == digest(mutant)
         with CMPCT(proc_path(fd)) as reader:
             assert reader.verify() == (2 if packed else 1)
+            # O26b: hostile operations at the exact verified->extracted boundary.
+            postverify_denial = deny_write(fd)
+            postverify_mapping = mapping_seal_court(fd)
+            assert hash_fd(fd) == snapshot_sha
             dest = root / (name + "-output")
             reader.extractall(dest, metadata=False)
         restored = view(dest, packed)
@@ -156,6 +201,8 @@ def mutation_case(root: Path, name: str, packed: bool, original: bytes) -> dict:
             "output_sha": digest(restored),
             "expected_original_output_sha": digest(original),
             "same_user_write_attempts_rejected": True,
+            "postverify_write_denials": postverify_denial,
+            "postverify_mapping_control": postverify_mapping,
             "fresh_mutant_sha_rejected": True,
             "late_sealed_clone_sha_rejected": True,
             "memfd_minimum_page_charge": math.ceil(copied / PAGE) * PAGE,
