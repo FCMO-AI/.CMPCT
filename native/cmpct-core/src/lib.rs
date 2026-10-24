@@ -769,7 +769,7 @@ impl Archive {
         match &entry.storage {
             Storage::Unsupported | Storage::HardlinkName(_) | Storage::Hardlink(_) => {
                 return Err(CmpctError::Unsupported)
-            },
+            }
             Storage::Direct(index) => {
                 let blob = self.blobs.get(*index).ok_or_else(|| {
                     CmpctError::Schema("direct member references missing blob".into())
@@ -1408,7 +1408,9 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
                 .as_array()
                 .filter(|parts| parts.len() == 1)
                 .and_then(|parts| parts[0].as_str())
-                .ok_or_else(|| CmpctError::Schema(format!("file row {i} hardlink target shape is invalid")))?;
+                .ok_or_else(|| {
+                    CmpctError::Schema(format!("file row {i} hardlink target shape is invalid"))
+                })?;
             canonical_path(target)?;
             Storage::HardlinkName(target.to_owned())
         } else {
