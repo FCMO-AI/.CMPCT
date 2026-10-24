@@ -1,4 +1,4 @@
-# ci-lane: research
+# ci-lane: fast
 name: CMPCT v0.31 native S_PACK amplification O1
 
 on:
@@ -13,6 +13,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-native-pack-o1-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
