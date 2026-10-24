@@ -9,6 +9,7 @@ on:
       - 'tests/test_v031_hardlink_graph_budget.py'
       - 'tests/test_v031_signed_graph_differential_r273.py'
       - 'benchmarks/v031_signed_delta_replay_o0.py'
+      - 'benchmarks/v031_reader_signed_delta_open_o6.py'
       - 'docs/v031-research/2026-10-24-writer-delta-replay-exact-union-o6-prereg.md'
       - '.github/workflows/v031-writer-delta-replay-source-union-o6.yml'
   workflow_dispatch:
@@ -63,6 +64,13 @@ jobs:
           assert "object_pairs_hook=unique_map_pairs" in actual
           assert actual.count("def _apply_delta_indexed(") == 1
           assert actual.count("def _apply_delta(") == 1
+          import subprocess
+          for path, expected in (
+              ("tests/test_v031_delta_replay_indexed_o1.py", "4e442f329051235950a4de7aef12ef9990658d35"),
+              ("benchmarks/v031_signed_delta_replay_o0.py", "02c5f506c9294130db6b0eb9c36c0a61460c3b35"),
+          ):
+              actual_blob = subprocess.check_output(["git", "hash-object", path], text=True).strip()
+              assert actual_blob == expected, f"Frozen owner evidence altered: {path}"
           print("O6_EXACT_OWNER_SOURCE_UNION_PASS", sha256(actual.encode()).hexdigest())
           PY
       - uses: actions/setup-python@v5
@@ -82,7 +90,8 @@ jobs:
         run: |
           set -euo pipefail
           python -u benchmarks/v031_signed_delta_replay_o0.py --out o6-evidence --repeats 5 2>&1 | tee o6-evidence/replay-court.log
-          sha256sum o6-evidence/delta-o0-receipt.json | tee o6-evidence/receipt.sha256
+          python -u benchmarks/v031_reader_signed_delta_open_o6.py --out o6-evidence --repeats 5 2>&1 | tee o6-evidence/reader-open-o6b.log
+          sha256sum o6-evidence/delta-o0-receipt.json o6-evidence/reader-open-o6b-receipt.json | tee o6-evidence/receipt.sha256
       - name: Preserve raw positive or negative evidence
         if: always()
         uses: actions/upload-artifact@v4
