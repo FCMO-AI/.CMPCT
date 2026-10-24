@@ -142,7 +142,11 @@ def test_win32_root_relative_symlink_target_is_not_relative_to_destination(targe
     # This independent standard-library discriminator catches a common false
     # assumption: PureWindowsPath.is_absolute() is false for root-relative paths,
     # although a symlink to them escapes its containing extraction directory.
-    assert ntpath.isabs(target)
+    root = r"C:\\safe\\root"
+    joined = ntpath.normcase(ntpath.normpath(ntpath.join(root, target)))
+    assert not joined.startswith(ntpath.normcase(root) + "\\\\")
+    # Python 3.13 may return False from ntpath.isabs for a single leading
+    # separator. Confinement is the invariant, not one stdlib predicate.
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires real Windows symlink creation policy")
