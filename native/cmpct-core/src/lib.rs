@@ -209,6 +209,22 @@ impl Archive {
                 "trailing bytes after root index object".into(),
             ));
         }
+        // Authenticated MessagePack bytes can contain the same root key twice.
+        // Python dictionaries retain the last value while rmpv map lookup keeps
+        // the first. Reject the ambiguity before parsing blobs or file entries.
+        let root = index
+            .as_map()
+            .ok_or_else(|| CmpctError::Schema("root index is not a map".into()))?;
+        let mut unique_keys = HashSet::with_capacity(root.len().min(256));
+        for (key, _) in root {
+            if let Some(name) = key.as_str() {
+                if !unique_keys.insert(name) {
+                    return Err(CmpctError::Schema(format!(
+                        "duplicate MessagePack index root key: {name}"
+                    )));
+                }
+            }
+        }
         let blobs = parse_blobs(&index, data_span)?;
         let dict_blob = parse_dictionary_blob(&index, &blobs)?;
         let entries = parse_entries(&index, &blobs)?;

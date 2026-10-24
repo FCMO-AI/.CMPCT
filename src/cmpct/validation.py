@@ -14,6 +14,7 @@ from pathlib import Path
 import msgpack
 
 from .path_policy import canonical_logical_path
+from .msgpack_policy import unique_map_pairs
 
 from .codec import (
     BHDR, BMAGIC, CODEC_DEFLATE, CODEC_RAW, CODEC_WAVFLAC, CODEC_ZSTD, CODEC_ZSTDDICT,
@@ -105,6 +106,7 @@ def _unpack(payload: bytes, limits: ParserLimits, label: str):
             payload,
             raw=False,
             strict_map_key=False,
+            object_pairs_hook=unique_map_pairs,
             max_str_len=max(limits.max_path_bytes, 1024 * 1024),
             max_bin_len=limits.max_index_bytes,
             max_array_len=cap,
