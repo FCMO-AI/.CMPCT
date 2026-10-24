@@ -1,0 +1,57 @@
+# ci-lane: fast
+name: CMPCT v0.31 source-exact signed delta replay ABBA O2
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_signed_delta_replay_exact_abba_o2.py'
+      - 'docs/v031-research/2026-10-24-signed-delta-replay-source-exact-abba-o2-prereg.md'
+      - '.github/workflows/v031-delta-replay-exact-abba-o2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-source-exact-delta-abba-o2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  exact-historical-versus-indexed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0  # required for the historical validation blob and base-commit proof
+          clean: true
+      - name: Prove immutable source custody before measuring
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          git merge-base --is-ancestor fb887d8610dced551acf5a84778ba539d08dac59 HEAD
+          test -s docs/v031-research/2026-10-24-signed-delta-replay-source-exact-abba-o2-prereg.md
+          echo "O2_SOURCE_HEAD=$EVIDENCE_HEAD"
+          echo "O2_HISTORICAL_VALIDATOR_BLOB=$(git rev-parse 4545d7d5b2a0:src/cmpct/validation.py)"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic CMPCT package
+        run: python -m pip install -e ".[test]"
+      - name: Preserve semantic reference and signed source-exact ABBA timing and allocations
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p delta-exact-abba-o2-artifacts
+          python -m pytest --noconftest -q -rs tests/test_v031_delta_replay_indexed_o1.py 2>&1 | tee delta-exact-abba-o2-artifacts/semantic-court.log
+          python -u benchmarks/v031_signed_delta_replay_exact_abba_o2.py --out delta-exact-abba-o2-artifacts --repeats 7 2>&1 | tee delta-exact-abba-o2-artifacts/abba-court.log
+          sha256sum delta-exact-abba-o2-artifacts/source-exact-abba-o2.json | tee delta-exact-abba-o2-artifacts/receipt.sha256
+      - name: Preserve success or negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delta-exact-abba-o2-${{ github.sha }}
+          path: delta-exact-abba-o2-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
