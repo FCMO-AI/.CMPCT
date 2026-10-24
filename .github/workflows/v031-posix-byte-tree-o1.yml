@@ -1,0 +1,81 @@
+# ci-lane: fast
+name: CMPCT v031 POSIX whole-tree byte-manifest O1
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_posix_byte_tree_o1.py'
+      - 'benchmarks/v031_posix_pathfd_bounds_o1.py'
+      - 'benchmarks/v031_posix_byte_namespace_oracle.py'
+      - '.github/workflows/v031-posix-byte-tree-o1.yml'
+      - 'docs/v031-research/2026-10-24-posix-byte-manifest-o1-prereg.md'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  detached-posix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Source identity and pinned experimental dependency
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee /tmp/posix-o1-head.txt
+          python -m pip install msgpack==1.1.2
+          git hash-object benchmarks/v031_posix_byte_namespace_oracle.py
+      - name: Reconstruct byte-identical filesystem under UTF-8
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_posix_byte_tree_o1.py | tee /tmp/posix-o1-utf8.json
+          python - <<'PY'
+          import json
+          x = json.load(open("/tmp/posix-o1-utf8.json"))
+          assert x["status"] == "PASS"
+          assert set(x["formats"]) == {"mixed", "utf8", "portable"}
+          assert all(x["formats"][k]["candidates"][g]["physical_reconstruction"] == "PASS" for k in x["formats"] for g in ("typed", "escaped"))
+          assert all(len(x["negative"][g]) == 13 for g in ("typed", "escaped"))
+          assert x["formats"]["mixed"]["xattrs_available"], "Linux xattr fixture skipped: no claim without xattrs"
+          assert x["formats"]["mixed"]["candidates"]["typed"]["stored_bytes_detached"] <= x["formats"]["mixed"]["candidates"]["escaped"]["stored_bytes_detached"]
+          PY
+      - name: Reconstruct under actual ASCII filesystem encoding
+        env:
+          LC_ALL: C
+          PYTHONUTF8: '0'
+          PYTHONCOERCECLOCALE: '0'
+        run: |
+          set -euo pipefail
+          python -c 'import sys; assert sys.getfilesystemencoding()=="ascii", sys.getfilesystemencoding()'
+          python benchmarks/v031_posix_byte_tree_o1.py | tee /tmp/posix-o1-ascii.json
+          python - <<'PY'
+          import json
+          x=json.load(open("/tmp/posix-o1-ascii.json"))
+          assert x["status"]=="PASS"
+          assert x["formats"]["mixed"]["xattrs_available"]
+          assert all(len(x["negative"][g])==13 for g in ("typed","escaped"))
+          PY
+      - name: Probe PATH_MAX counterexample with real directory descriptors
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_posix_pathfd_bounds_o1.py | tee /tmp/posix-o1-pathfd.json
+          python - <<'PY'
+          import json,errno
+          x=json.load(open("/tmp/posix-o1-pathfd.json"))
+          assert x["status"]=="PASS" and x["dirfd_stepwise_create"]=="PASS"
+          assert x["raw_relative_bytes"]==4095 and x["absolute_stat"]=="FAIL_ERRNO_"+str(errno.ENAMETOOLONG)
+          PY
+      - name: Preserve exact-head raw research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: posix-byte-whole-tree-o1-research-only
+          path: /tmp/posix-o1-*.json
+          if-no-files-found: warn
