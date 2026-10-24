@@ -8,6 +8,7 @@ on:
       - 'tests/native_inode_tree_o15.py'
       - 'docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15_PREREG.md'
       - 'docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15B_PREREG.md'
+      - 'docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15_RESULT.md'
       - '.github/workflows/v031-native-inode-tree-o15.yml'
       - 'native/cmpct-core/src/lib.rs'
       - 'native/cmpct-core/include/cmpct.h'
@@ -42,6 +43,7 @@ jobs:
             native/cmpct-core/Cargo.lock \
             docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15_PREREG.md \
             docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15B_PREREG.md \
+            docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15_RESULT.md \
             tests/native_inode_tree_o15.c tests/native_inode_tree_o15.py
           sha256sum native/cmpct-core/src/lib.rs native/cmpct-core/include/cmpct.h \
             docs/v031-research/NATIVE_INODE_TREE_COMPOSITION_O15_PREREG.md
