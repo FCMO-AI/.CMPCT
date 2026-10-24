@@ -46,6 +46,34 @@ jobs:
             git hash-object tests/test_v031_reader_open_failure_resource_ownership.py
             git hash-object tests/test_v031_duplicate_map_open_resource_union.py
           } > map-open-union-evidence/source.txt
+      - name: Verify exact cross-owner Reader source composition
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          def git_blob(ref, path):
+              return subprocess.check_output(["git", "show", f"{ref}:{path}"])
+
+          original = git_blob("1ed92767e6438d9bb8835ddc7ae27160440c2014", "src/cmpct/reader.py")
+          resource_owner = git_blob("7ac0376ffed9", "src/cmpct/reader.py")
+          actual = Path("src/cmpct/reader.py").read_bytes()
+
+          def constructor(data):
+              start = data.index(b"class CMPCT:\\n")
+              end = data.index(b"    def close(self):", start)
+              return data[start:end]
+
+          original_constructor = constructor(original)
+          resource_constructor = constructor(resource_owner)
+          assert original != resource_owner
+          assert actual == original.replace(original_constructor, resource_constructor, 1), (
+              "Reader union contains unowned source modifications"
+          )
+          assert actual.count(b"object_pairs_hook=unique_map_pairs") == 3
+          print("EXACT_OWNER_UNION: PR283 constructor, PR316 parser, no other Reader edits")
+          PY
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
