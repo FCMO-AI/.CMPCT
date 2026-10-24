@@ -1476,12 +1476,23 @@ fn resolve_hardlink_owners(
                     visiting[current] = true;
                     chain.push(current);
                     let canonical = canonical_path(target)?;
-                    current = *paths.get(&canonical).ok_or_else(|| {
+                    let next = *paths.get(&canonical).ok_or_else(|| {
                         CmpctError::Schema(format!(
                             "file row {} hardlink owner does not exist",
                             chain[0]
                         ))
                     })?;
+                    // Canonical-path lookup is for collision-proof indexing only.
+                    // Python's signed index resolves owner paths BYTE-EXACTLY;
+                    // accepting a different slash spelling here could invent a
+                    // cross-reader hardlink relationship absent in that reader.
+                    if entries[next].path != *target {
+                        return Err(CmpctError::Schema(format!(
+                            "file row {} hardlink owner path is not an exact entry name",
+                            chain[0]
+                        )));
+                    }
+                    current = next;
                 }
                 _ if entries[current].kind == 0 => break current,
                 _ => {
