@@ -138,6 +138,10 @@ def child(source: Path, archive: Path, samples: list[str]) -> None:
     imported_reader = Path(reader_mod.__file__).resolve()
     if not imported_reader.is_relative_to(source):
         raise RuntimeError(f"Source path mismatch: {imported_reader} not under {source}")
+    import cmpct.native_codec as native_mod
+    imported_native = Path(native_mod._library_path()).resolve()
+    if not imported_native.is_relative_to(source):
+        raise RuntimeError(f"Native payload provenance mismatch: {imported_native} not under {source}")
     after_import = time.perf_counter_ns()
     mem_pre = rss()
     cpu_pre = time.process_time_ns()
@@ -158,6 +162,7 @@ def child(source: Path, archive: Path, samples: list[str]) -> None:
     mem_done = rss()
     print(json.dumps({
         "source": str(source), "module": str(imported_reader),
+        "native_module": str(imported_native),
         "archive": str(archive), "files": count,
         "import_ms": (after_import - t_import) / 1e6,
         "construct_ms": (t_construct - t_open) / 1e6,
