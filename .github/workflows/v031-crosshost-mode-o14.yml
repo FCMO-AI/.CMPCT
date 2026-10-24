@@ -1,0 +1,165 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# Research-only source-exact court; no CMPCT release or parity credit.
+name: CMPCT v0.31 cross-host reproducible mode O14
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_crosshost_repro_modes_o14.py'
+      - 'benchmarks/v031_mode_fidelity_o14b.py'
+      - 'tools/research_v031_crosshost_modes_o14_referee.py'
+      - 'docs/v031-research/2026-10-24-crosshost-mode-equivalence-o14-*'
+      - 'docs/v031-research/2026-10-24-crosshost-mode-fidelity-o14b-*'
+      - '.github/workflows/v031-crosshost-mode-o14.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o14-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_court: ${{ steps.scope.outputs.run_court }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Classify exact latest commit for product or instrument dependencies
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ] || ! git cat-file -e 'HEAD^' 2>/dev/null; then
+            echo 'run_court=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|benchmarks/v031_crosshost_repro_modes_o14[.]py$|benchmarks/v031_mode_fidelity_o14b[.]py$|tools/research_v031_crosshost_modes_o14_referee[.]py$|[.]github/workflows/v031-crosshost-mode-o14[.]yml$)'; then
+            echo 'run_court=true' >> "$GITHUB_OUTPUT"
+          else
+            # Docs-only updates do not constitute a new engine/instrument.
+            # Retain the source-exact court receipt, do not relabel a skipped court.
+            echo 'run_court=false' >> "$GITHUB_OUTPUT"
+          fi
+  cross-host:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_court == 'true'
+    name: Mode-only A/B ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Assert exact HEAD, build installed product, run original-source A/B
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python benchmarks/v031_crosshost_repro_modes_o14.py --out o14-result.json
+          python - <<'PY'
+          import json, os
+          d=json.load(open('o14-result.json'))
+          assert d['source_sha']==os.environ['EVIDENCE_HEAD']
+          assert d['only_index_modes_changed'] is True
+          assert d['repeat_count_per_variant']==2
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: o14-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o14-result.json
+          if-no-files-found: error
+          retention-days: 30
+
+  referee:
+    needs: [latest-head-impact, cross-host]
+    if: needs.latest-head-impact.outputs.run_court == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: o14-*-${{ env.EVIDENCE_HEAD }}
+          path: o14-observations
+      - name: Independent platform equality referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python tools/research_v031_crosshost_modes_o14_referee.py --root o14-observations --sha "$EVIDENCE_HEAD" --out o14-referee.json
+          python - <<'PY'
+          import json
+          r=json.load(open('o14-referee.json'))
+          assert r['source_logical_members_equal'] is True
+          print('O14_SCIENTIFIC_DECISION='+r['decision'])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: o14-referee-${{ env.EVIDENCE_HEAD }}
+          path: o14-referee.json
+          if-no-files-found: error
+          retention-days: 30
+
+  fidelity-hostile:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_court == 'true'
+    name: POSIX archive metadata fidelity negative O14b
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Independent chmod and authentic metadata-restoring extractor controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python benchmarks/v031_mode_fidelity_o14b.py --out o14b-result.json
+          python - <<'PY'
+          import json, os
+          r=json.load(open('o14b-result.json'))
+          assert r['source_sha']==os.environ['EVIDENCE_HEAD']
+          assert r['decision']=='SILENT_PORTABLE_MODE_PROFILES_FALSIFIED_FOR_FULL_POSIX_FIDELITY'
+          assert all(r['arm'][a]['strong_verify'] and r['arm'][a]['metadata_restore']
+                     for a in ('original','fixed_0644','mask_group_world_write'))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: o14b-fidelity-${{ env.EVIDENCE_HEAD }}
+          path: o14b-result.json
+          if-no-files-found: error
+          retention-days: 30
