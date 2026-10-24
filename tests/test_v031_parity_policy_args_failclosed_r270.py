@@ -32,7 +32,9 @@ def _run(tmp_path, *args, create=0.107, archive_bytes=1000):
 ])
 @pytest.mark.parametrize("invalid", ["nan", "NaN", "inf", "-inf"])
 def test_nonfinite_policy_arg_rejected(tmp_path, flag, invalid):
-    result = _run(tmp_path, flag, invalid)
+    # argparse treats "-inf" as an option when passed as a separate token.
+    # Use --flag=value so all four malformed values reach numeric validation.
+    result = _run(tmp_path, f"{flag}={invalid}")
     assert result.returncode == 2
     assert "must be finite" in result.stderr
     assert "Result: **PASS**" not in result.stdout
