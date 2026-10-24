@@ -492,23 +492,33 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
                 raise ValidationError(f"hardlink {path!r} has unsafe target {storage[0]!r}: {exc}") from exc
             hardlinks[canonical_path] = target_key
 
-    for path, target in hardlinks.items():
-        if target not in seen_paths:
-            raise ValidationError(f"hardlink {path!r} targets missing path {target!r}")
-        walked = {path}
-        current = target
-        while current in hardlinks:
+    # Resolve each alias edge once, even when a signed archive contains a deep
+    # but acyclic chain. Re-walking from every alias was O(N^2) and made the
+    # finite max_files bound insufficient to bound hostile preflight CPU.
+    # Memoize terminal owners only AFTER checking all traversed edges, cycles
+    # and regular-file kind; this preserves the inherited fail-closed policy.
+    resolved_owners = {}
+    for path in hardlinks:
+        current = path
+        trail = []
+        walked = set()
+        while current in hardlinks and current not in resolved_owners:
             if current in walked:
                 raise ValidationError(f"hardlink cycle involving {path!r}")
             walked.add(current)
-            current = hardlinks[current]
+            trail.append(current)
+            target = hardlinks[current]
+            if target not in seen_paths:
+                raise ValidationError(f"hardlink {current!r} targets missing path {target!r}")
+            current = target
+        owner = resolved_owners.get(current, current)
         # Portable hardlinks name regular inodes, never directories or symlinks.
-        # A signed index may otherwise pass cycle/existence checks but fail
-        # extraction only after earlier archive members have been published.
-        # Follow acyclic aliases to the terminal logical owner, regardless of
-        # row ordering; no filesystem probing or content decoding is required.
-        if file_kinds[current] != K_FILE:
-            raise ValidationError(f"hardlink {path!r} must resolve to regular file owner {current!r}")
+        # A signed index can otherwise pass existence/cycle checks yet fail
+        # extraction after earlier archive members have been published.
+        if file_kinds[owner] != K_FILE:
+            raise ValidationError(f"hardlink {path!r} must resolve to regular file owner {owner!r}")
+        for alias in trail:
+            resolved_owners[alias] = owner
 
     fsmeta = index.get("fsmeta", {})
     if not isinstance(fsmeta, dict):

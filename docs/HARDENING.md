@@ -324,3 +324,63 @@ for kinds and O(1) terminal-owner lookup to the existing cycle traversal.
 It does not fix pre-existing extract-time races, namespacing aliases or
 the existing potential O(number-of-hardlinks × chain-depth) repeated cycle
 work; these remain separate potential product costs.
+
+### Authenticated hardlink chains and strict-preflight CPU — v0.31 draft O0/O1 (not released)
+
+A finite file-count limit does **not** by itself impose a proportional CPU-work
+bound when graph edges are repeatedly traversed. The strict revision-24
+`preflight_archive` in source-exact PR #339 (`3494a58e`, validator blob
+`14df3f7492fc2db8b7dc7574868a333b4fe400c4`) re-walked every
+hardlink-alias target chain to confirm its ultimate `K_FILE` owner. N valid
+aliases arranged as a chain cause ~N(N+1)/2 owner-pointer inspections versus
+N for independent star aliases.
+
+Independent real Builder archives with both authenticated index copies and
+unchanged physical content were measured in PR #342 [O0 run 40084916000]
+(https://github.com/FCMO-AI/.CMPCT/actions/runs/40084916000),
+exact source `c6a5592aa1027b6003278a4e85aa88389fcaa241`. Five-repeat
+median strict preflight at 4096 aliases: **730.438 ms chain** vs **16.489 ms
+star**, a **44.30× chain/star** ratio; at 2048 aliases: 185.027 vs 8.369 ms.
+Raw timing, complete archived/index/physical bytes, corpus hashes and source
+identity reside in
+[artifact 12556257687](https://github.com/FCMO-AI/.CMPCT/actions/runs/40084916000/artifacts/12556257687).
+These are research product-cost observations, **not** release benchmark credit.
+
+A second authentic signed adversary, a hardlink chain ending at a nonexistent
+terminal target, caused an uncaught `KeyError` rather than the documented
+`ValidationError` in the unmodified preflight. Source-bound [negative O1
+run 40085228916](https://github.com/FCMO-AI/.CMPCT/actions/runs/40085228916)
+preserves this failure and nine passing new controls (plus inherited preflight
+tests); no evaluator was weakened.
+
+PR #342 proposes a bounded **iterative** terminal-owner memo, caching only
+after checking each traversed edge, cycle and terminal regular-owner type.
+The initial O1 product-head `966b995ac0553ecc33cfc2486492b5a7dfc5461b`
+passed all **18** focused authentic signed-graph and inherited topology tests
+in [run 40085358527](https://github.com/FCMO-AI/.CMPCT/actions/runs/40085358527).
+Its contribution remains **draft**. A separate same-runner identical-archive
+baseline-vs-candidate ABBA was completed at exact head
+`173247bd7640ceea87e93b498d0df183f759b7e2`:
+[O1 run 40085624179](https://github.com/FCMO-AI/.CMPCT/actions/runs/40085624179),
+[raw source-bound artifact 12556773652](https://github.com/FCMO-AI/.CMPCT/actions/runs/40085624179/artifacts/12556773652)
+(ZIP SHA-256 `734f434282d64d6e793cc68b50305f711ead7d29904904bfb9bf5e9b550bdfbc`).
+Both authentic archive variants were read by the *actual* source-exact old and
+new `preflight_archive` in the same installed runtime, alternating ABBA.
+For the **4096-alias chain**, median old/new was **683.797/16.427 ms
+(41.63× faster)**; for 2048, **173.241/8.286 ms (20.91×)**.
+The **4096-alias star control regressed** from **14.992 to 16.041 ms**
+(~7% relative, +1.049 ms); smaller star controls also carried ~6–7%
+relative overhead. This is **negative product-cost evidence** to preserve, not
+a loss to hide or a reason to alter thresholds. Independent `tracemalloc`
+for chain-4096 reported Python peak traced allocations 2,926,795 B
+baseline vs 2,918,691 B candidate; this is not process peak RSS or an
+all-platform memory guarantee. All **18** focused signed-graph + inherited
+strict-tree tests passed on that exact head. General CI release-provenance,
+broader portability, complete product timing/RSS and final-head promotion
+checks remain mandatory. The general Reader, native ABI, frozen r24 format
+and public v0.30.0 release are unchanged; **no merge/release authorized**.
+
+A future hardening rule should distinguish **object-count budgets** from
+**work-amplification budgets** for any archive-controlled ownership/reference
+graph. Do not protect the CPU budget by silently rejecting legitimate deep
+acyclic hardlink chains when an O(N) algorithm can validate them exactly.
