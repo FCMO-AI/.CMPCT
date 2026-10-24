@@ -1,0 +1,98 @@
+# ci-lane: fast
+name: CMPCT v0.31 staged-byte readback fault O19
+
+on:
+  pull_request:
+    paths:
+      - 'tests/native_signed_index_stage_o19.c'
+      - 'tests/native_stage_fault_o19.c'
+      - 'tests/native_stage_readback_fault_o19.py'
+      - 'tests/native_anonymous_stage_procfd_o19b.py'
+      - 'docs/v031-research/NATIVE_ANONYMOUS_STAGE_O19B_HOST_PREREG.md'
+      - 'docs/v031-research/NATIVE_ANONYMOUS_STAGE_O19B_HOST_RESULT.md'
+      - 'docs/v031-research/NATIVE_STAGE_READBACK_O19_PREREG.md'
+      - 'docs/v031-research/NATIVE_STAGE_READBACK_O19_RESULT.md'
+      - '.github/workflows/v031-native-stage-readback-o19.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-native-o19-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  staged-readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Exact parent and immutable native source custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 5cdbd00af01a3caa35c18357ac2e859b6cc05f02 HEAD
+          test "$(git hash-object tests/native_signed_index_stage_o18.c)" = "f9c5af105827f5b08d19dfdf130f1b821ae5cd1d"
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "ce12c76d9f4901af1e2b95d5d88883ffb2a72d2e"
+          test "$(git hash-object native/cmpct-core/include/cmpct.h)" = "dc6b689febd383618abe31d4d2ea3ccda7fb1d3b"
+          git ls-files --error-unmatch docs/v031-research/NATIVE_STAGE_READBACK_O19_PREREG.md tests/native_stage_fault_o19.c tests/native_signed_index_stage_o19.c tests/native_stage_readback_fault_o19.py
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Build exact shared native Reader and both research C consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[test]'
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
+          cargo test --locked --manifest-path native/cmpct-core/Cargo.toml
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+          for variant in o18 o19; do
+            cc -std=c11 -O2 -Wall -Wextra -Werror -I. \
+              tests/native_signed_index_stage_${variant}.c \
+              -Lnative/cmpct-core/target/release -lcmpct_core -lcrypto \
+              -Wl,-rpath,"$PWD/native/cmpct-core/target/release" \
+              -o "/tmp/cmpct-stage-${variant}"
+          done
+          cc -std=c11 -O2 -fPIC -shared -Wall -Wextra -Werror \
+            tests/native_stage_fault_o19.c -ldl -o /tmp/cmpct-stage-fault-o19.so
+      - name: Real Builder CDC × successful-write and late-link physical mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cmpct-o19"
+          python tests/native_stage_readback_fault_o19.py \
+            /tmp/cmpct-stage-o18 /tmp/cmpct-stage-o19 \
+            /tmp/cmpct-stage-fault-o19.so \
+            "$RUNNER_TEMP/cmpct-o19/result.json" \
+            2>&1 | tee "$RUNNER_TEMP/cmpct-o19/run.log"
+          git rev-parse HEAD > "$RUNNER_TEMP/cmpct-o19/source.sha"
+          sha256sum "$RUNNER_TEMP/cmpct-o19/result.json" \
+            tests/native_signed_index_stage_o19.c \
+            tests/native_stage_fault_o19.c \
+            tests/native_stage_readback_fault_o19.py \
+            docs/v031-research/NATIVE_STAGE_READBACK_O19_PREREG.md \
+            > "$RUNNER_TEMP/cmpct-o19/sha256sums.txt"
+      - name: Independent O_TMPFILE/proc-fd host portability discriminator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/native_anonymous_stage_procfd_o19b.py "$RUNNER_TEMP/cmpct-o19/anonymous-stage.json"
+          sha256sum "$RUNNER_TEMP/cmpct-o19/anonymous-stage.json" tests/native_anonymous_stage_procfd_o19b.py \
+            >> "$RUNNER_TEMP/cmpct-o19/sha256sums.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-stage-readback-o19-${{ github.run_id }}
+          path: ${{ runner.temp }}/cmpct-o19/
+          retention-days: 30
+          if-no-files-found: warn
