@@ -17,6 +17,7 @@ weakening current release policy.
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -30,8 +31,32 @@ def load(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("schema") != "cmpct-zip-parity-v1":
         raise ValueError(f"{path}: unsupported benchmark schema {data.get('schema')!r}")
-    if not isinstance(data.get("corpora"), dict):
-        raise ValueError(f"{path}: missing corpora")
+    corpora = data.get("corpora")
+    if not isinstance(corpora, dict) or not corpora:
+        raise ValueError(f"{path}: benchmark must contain at least one corpus")
+
+    # Footnote: a missing/nonfinite measurement must never become a green release gate.
+    # Python treats NaN comparisons as false, casts bools to ints, and truncates
+    # fractional bytes. Validate the *actual compared evidence* before applying
+    # the unchanged zero-byte size and 5%+3ms timing promotion rules.
+    for name, row in corpora.items():
+        if not isinstance(name, str) or not name or not isinstance(row, dict):
+            raise ValueError(f"{path}: malformed corpus name or record {name!r}")
+        for layer in LAYERS:
+            metric = row.get(layer)
+            metric = metric.get("cmpct") if isinstance(metric, dict) else None
+            if not isinstance(metric, dict):
+                raise ValueError(f"{path}: {name}/{layer}: missing CMPCT measurements")
+            size = metric.get("bytes")
+            if type(size) is not int or size <= 0:
+                raise ValueError(f"{path}: {name}/{layer}/bytes: expected positive integral archive bytes")
+            for field in TIMING_FIELDS:
+                seconds = metric.get(field)
+                if (type(seconds) not in (int, float)
+                        or not math.isfinite(seconds) or seconds <= 0):
+                    raise ValueError(
+                        f"{path}: {name}/{layer}/{field}: expected finite positive measured seconds"
+                    )
     return data
 
 
