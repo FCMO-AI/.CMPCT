@@ -1510,4 +1510,54 @@ mod tests {
         assert!(canonical_path("a//b").is_err());
         assert!(canonical_path("/absolute").is_err());
     }
+    #[test]
+    fn rejects_signed_nested_duplicate_map_without_interpreting_root_first() {
+        let owner = Value::Map(vec![
+            (Value::from("owner"), Value::from(0u64)),
+            (Value::from("owner"), Value::from(1001u64)),
+        ]);
+        let root = Value::Map(vec![
+            (Value::from("v"), Value::from(24u64)),
+            (Value::from("fsmeta"), owner),
+        ]);
+        assert!(reject_ambiguous_index_maps(&root).is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_binary_key_and_nontext_key() {
+        let binary_alias = Value::Map(vec![
+            (Value::Binary(b"future".to_vec()), Value::from(1u64)),
+            (Value::Binary(b"future".to_vec()), Value::from(2u64)),
+        ]);
+        assert!(reject_ambiguous_index_maps(&binary_alias).is_err());
+        let int_key = Value::Map(vec![(Value::from(7u64), Value::from(1u64))]);
+        assert!(reject_ambiguous_index_maps(&int_key).is_err());
+    }
+
+    #[test]
+    fn accepts_distinct_text_binary_domains_and_wide_file_array() {
+        let root = Value::Map(vec![
+            (Value::from("same"), Value::from(1u64)),
+            (Value::Binary(b"same".to_vec()), Value::from(2u64)),
+            (
+                Value::from("files"),
+                Value::Array((0..20_000).map(|_| Value::Nil).collect()),
+            ),
+        ]);
+        assert!(reject_ambiguous_index_maps(&root).is_ok());
+    }
+
+    #[test]
+    fn rejects_deeply_nested_ambiguous_map_iteratively() {
+        let mut current = Value::Map(vec![
+            (Value::from("k"), Value::from(1u64)),
+            (Value::from("k"), Value::from(2u64)),
+        ]);
+        for _ in 0..128 {
+            current = Value::Array(vec![current]);
+        }
+        let root = Value::Map(vec![(Value::from("test"), current)]);
+        assert!(reject_ambiguous_index_maps(&root).is_err());
+    }
+
 }
