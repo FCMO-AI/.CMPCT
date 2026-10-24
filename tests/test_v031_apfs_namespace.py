@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from cmpct.codec import K_DIR
+from cmpct.codec import K_DIR, K_FILE, K_HARDLINK, S_BLOB
 from cmpct.reader import CMPCT
 
 
@@ -79,3 +79,34 @@ def test_nonmac_two_spellings_remain_distinct(tmp_path: Path) -> None:
     assert (dest / NFC).is_dir()
     assert (dest / NFD).is_dir()
     assert os.stat(dest / NFC).st_ino != os.stat(dest / NFD).st_ino
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="requires real Mac APFS alias semantics")
+def test_mac_hardlink_source_alias_must_be_real_archive_member(tmp_path: Path) -> None:
+    # O2 source-exact negative: unlike a member path, a hardlink source name is
+    # not currently checked by the O1 normalized-member preflight. On APFS NFD
+    # resolves to the NFC owner's inode even though NFD is absent from the index.
+    archive = object.__new__(CMPCT)
+    archive.files = [
+        [NFC, K_FILE, 0o644, 0, 7, b"", [S_BLOB, 0]],
+        ["alias", K_HARDLINK, 0o644, 0, 7, b"", [NFD]],
+    ]
+    archive.read = lambda name: b"payload"
+    dest = tmp_path / "out"
+    with pytest.raises(IOError, match="(?:hardlink|macOS|logical)"):
+        archive.extractall(dest, metadata=False)
+    assert dest.is_dir() and list(dest.iterdir()) == []
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="requires real Mac destination")
+def test_mac_hardlink_valid_exact_owner_control(tmp_path: Path) -> None:
+    archive = object.__new__(CMPCT)
+    archive.files = [
+        [NFC, K_FILE, 0o644, 0, 7, b"", [S_BLOB, 0]],
+        ["alias", K_HARDLINK, 0o644, 0, 7, b"", [NFC]],
+    ]
+    archive.read = lambda name: b"payload"
+    dest = tmp_path / "out"
+    archive.extractall(dest, metadata=False)
+    assert (dest / NFC).read_bytes() == (dest / "alias").read_bytes() == b"payload"
+    assert os.path.samefile(dest / NFC, dest / "alias")
