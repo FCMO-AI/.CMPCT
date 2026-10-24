@@ -125,3 +125,13 @@ def test_real_windows_hardlink_owner_cannot_change_drive_authority(tmp_path: Pat
         ar.extractall(destination, metadata=False)
     assert destination.exists()
     assert list(destination.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX namespace can represent Win32-reserved names")
+def test_real_posix_extractor_keeps_legal_windows_incompatible_names(tmp_path: Path) -> None:
+    ar = object.__new__(CMPCT)
+    names = ["a:stream", "NUL.txt", "Case", "case", "trailing."]
+    ar.files = [[name, K_DIR, 0o755, 0, 0, b"", None] for name in names]
+    destination = tmp_path / "out"
+    ar.extractall(destination, metadata=False)
+    assert sorted(p.name for p in destination.iterdir()) == sorted(names)
