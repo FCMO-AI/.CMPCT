@@ -130,6 +130,8 @@ jobs:
   desktop-package-evidence:
     needs: [installed-package, python-compatibility]
     runs-on: ubuntu-24.04
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -145,12 +147,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint > "$RUNNER_TEMP/desktop-package-fingerprint.json"
+          # This is a *prospective* v0.31 candidate. The immutable historical
+          # v0.30 release-lock CLI cannot certify a changed, unreleased tree.
+          python tools/check_v031_candidate_fingerprint.py --output "$RUNNER_TEMP/desktop-package-fingerprint.json" > "$RUNNER_TEMP/desktop-package-fingerprint-summary.json"
           FP="$(python - <<'PYFP'
           import json, os, pathlib
           data=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'desktop-package-fingerprint.json').read_text())
-          value=data.get('candidate_fingerprint')
-          assert isinstance(value,str) and len(value)==64,value
+          # Do not allow a valid fingerprint from a different PR/head to certify
+          # the wheels built in this run.
+          assert data.get('source_sha') == os.environ['EVIDENCE_HEAD'], data.get('source_sha')
+          assert data.get('schema') == 'cmpct-v031-candidate-source-receipt-v1'
+          value=data.get('fingerprint')
+          assert isinstance(value,str) and len(value)==64 and all(c in '0123456789abcdef' for c in value),value
           print(value)
           PYFP
           )"
@@ -160,9 +168,11 @@ jobs:
           from pathlib import Path
           root=Path('installed-evidence')
           expected={'ubuntu-24.04','macos-14','windows-2025'}
+          expected_head=os.environ['EVIDENCE_HEAD']
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==expected_head
           found={}
           for os_name in expected:
-              matches=[p for p in root.iterdir() if p.is_dir() and p.name.startswith('installed-native-'+os_name+'-')]
+              matches=[p for p in root.iterdir() if p.is_dir() and p.name==f'installed-native-{os_name}-{expected_head}']
               assert len(matches)==1,(os_name,matches)
               found[os_name]=matches[0]
           platform={}
@@ -188,9 +198,10 @@ jobs:
                   'wheel_sha256':hashlib.sha256(wheel.read_bytes()).hexdigest(),
               }
           evidence={
-              'schema':'cmpct-v030-desktop-package-evidence-v1',
+              'schema':'cmpct-v031-desktop-package-evidence-v1',
+              'candidate_source_receipt_schema':'cmpct-v031-candidate-source-receipt-v1',
               'candidate_fingerprint':os.environ['FP'].strip(),
-              'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+              'candidate_sha':expected_head,
               'facts':{
                   'sdist_first_wheel_build':True,
                   'linux_clean_install_green':True,
