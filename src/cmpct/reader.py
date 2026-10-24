@@ -79,19 +79,16 @@ class CMPCT:
             kind,payload,prev=g
             if kind==0:
                 idx=msgpack.unpackb(payload,raw=False,object_pairs_hook=unique_map_pairs)
-                for delta in reversed(chain):
-                    for b in delta.get('blobs',[]):idx['blobs'].append(b)
-                    for op in delta.get('ops',[]):
-                        if op[0]=='put':
-                            row=op[1];done=False
-                            for i,x in enumerate(idx['files']):
-                                if x[0]==row[0]:idx['files'][i]=row;done=True;break
-                            if not done:idx['files'].append(row)
-                        elif op[0]=='del':idx['files']=[x for x in idx['files'] if x[0]!=op[1]]
-                        elif op[0]=='ren':
-                            for x in idx['files']:
-                                if x[0]==op[1]:x[0]=op[2];break
-                    idx['files'].sort(key=lambda x:x[0])
+                if chain:
+                    # The strict preflight and ordinary Reader must resolve signed journal operations
+                    # with identical first-match put/rename and all-match delete semantics. Reuse its
+                    # bounded positional replay rather than maintaining a quadratic second interpreter.
+                    # Lazy import keeps checkpoint-only Reader opens free of validator import overhead.
+                    from .validation import ParserLimits, _apply_delta
+                    limits = ParserLimits.from_env()
+                    for delta in reversed(chain):
+                        _apply_delta(idx, delta, limits)
+                        idx['files'].sort(key=lambda row: row[0])
                 return idx,depth
             if kind!=1:return None
             chain.append(msgpack.unpackb(payload,raw=False,object_pairs_hook=unique_map_pairs));depth+=1;pos=prev
