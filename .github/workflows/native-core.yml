@@ -214,6 +214,8 @@ jobs:
         run: python tests/native_pack_abi.py native/cmpct-core/target/release/libcmpct_core.so
       - name: Independent fixed-byte S_PACK native ABI gate
         run: python tests/native_pack_golden_abi.py
+      - name: Authenticated hostile S_PACK index native ABI gate
+        run: python tests/native_pack_auth_index_abi.py
       - name: Committed golden Zstd-dictionary ABI gate
         run: python tests/native_dictionary_golden_abi.py
       - name: Committed WAV-FLAC native component gate
