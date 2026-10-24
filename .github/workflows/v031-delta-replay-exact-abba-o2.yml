@@ -5,6 +5,7 @@ on:
     paths:
       - 'benchmarks/v031_signed_delta_replay_exact_abba_o2.py'
       - 'docs/v031-research/2026-10-24-signed-delta-replay-source-exact-abba-o2-prereg.md'
+      - 'docs/v031-research/2026-10-24-signed-delta-replay-source-exact-abba-o2-result.md'
       - '.github/workflows/v031-delta-replay-exact-abba-o2.yml'
   workflow_dispatch:
 permissions:
