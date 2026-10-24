@@ -202,3 +202,46 @@ Windows prefix checker repeatedly joins entire prefixes, with quadratic-in-depth
 byte work; bounded node-ID ownership is a promising *mechanism-level* future
 control, not yet a tested product improvement. Nothing in this draft grants
 merge/release authority.
+
+
+### Signed non-directory ancestor extraction — v0.31 draft PR #338
+
+A revision-24 archive can carry two **SHA-256-consistent indexes** that
+individually describe readable regular files `parent.bin` and
+`parent.bin/child.bin`, although those two logical members cannot both be
+materialized on a filesystem. Neither the original canonical path duplicate
+guard nor platform-specific Win32/APFS alias checks rejected this
+**kind-of-ancestor** inconsistency. A real Builder-created r24 archive with
+only its indexed child path mutated and both index commitments regenerated
+preserves every physical blob byte and lets `CMPCT.read` return both exact
+contents. This proves signed byte integrity is not tree-topology proof.
+
+Immutable O0 preregistration: commit `6698eab2e3705d962f67b47d2695c7cf61c3defd`;
+test-only baseline `02efed57cdf074ef3f888d1efb403ff12f22cd57`.
+[GitHub Actions baseline 40078750750](https://github.com/FCMO-AI/.CMPCT/actions/runs/40078750750)
+has **two genuine negative assertions (partial `out/parent.bin` publication)
+and two positive controls on each of Ubuntu, macOS and Windows**. Failing
+assertions and immutable original tests are preserved.
+
+Draft fix `e929f3ec65fe88fc8d20b0e26b4b28e13e64b88d` inserts a bounded
+component-trie check in the existing `extractall` prewrite pass. A proper
+ancestor whose index entry has kind `K_FILE` or `K_HARDLINK` now fails
+before materializing archive members. **The original unchanged same-input
+court passed 4/4 per host on genuine Ubuntu, macOS and Windows** in
+[exact-head Actions 40078888706](https://github.com/FCMO-AI/.CMPCT/actions/runs/40078888706).
+At that exact implementation HEAD, original Win32, APFS, tri-platform union,
+Native Core and Continuous Fuzzing workflows also report SUCCESS; general
+and full parity release evidence are separate and must be checked independently.
+
+The distinction matters: `CMPCT.read` may legitimately read individually
+correct members from an archive whose *aggregate* namespace cannot be
+extracted. This check is extraction policy, not an on-disk revision change.
+A separate question remains whether strict `preflight_archive` must refuse
+the same tree. Costs: trie additional work/space scale with total path
+components; no valid complete-product ABBA/RSS result is claimed. The
+extractor can still create the requested destination root before this
+check, and unrelated failure paths can still partially extract. Existing
+destination symlinks, concurrent inode/path rebinding, network filesystems,
+source snapshot races, mount pivots, and platform-specific collation are
+**not** solved by this lexical preflight. PR #338 remains draft, not
+merged or released; do not weaken the inherited release/parity court.
