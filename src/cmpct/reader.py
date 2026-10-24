@@ -64,7 +64,7 @@ class CMPCT:
         # Authenticating a footer requires decoding, so first honor the same
         # resource ceilings as strict preflight *before* archive-supplied sizes
         # reach the decompressor or a large encoded read.
-        from .validation import ParserLimits, ResourceLimitError
+        from .resource_limits import ParserLimits, ResourceLimitError
         limits=limits or ParserLimits.from_env()
         if footer_pos<0:return None
         self.f.seek(footer_pos);fb=self.f.read(FTR.size)
@@ -86,7 +86,7 @@ class CMPCT:
         if len(payload)!=us or sha(payload)!=ph:return None
         return kind,payload,prev
     def _index_from_footer(self,footer_pos:int):
-        from .validation import ParserLimits, ResourceLimitError
+        from .resource_limits import ParserLimits, ResourceLimitError
         limits=ParserLimits.from_env()
         chain=[];pos=footer_pos;depth=0;seen=set()
         while pos and pos not in seen:
@@ -102,7 +102,7 @@ class CMPCT:
                     # with identical first-match put/rename and all-match delete semantics. Reuse its
                     # bounded positional replay rather than maintaining a quadratic second interpreter.
                     # Lazy import keeps checkpoint-only Reader opens free of validator import overhead.
-                    from .validation import ParserLimits, _apply_delta
+                    from .validation import _apply_delta
                     limits = ParserLimits.from_env()
                     for delta in reversed(chain):
                         _apply_delta(idx, delta, limits)
