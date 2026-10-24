@@ -1,0 +1,70 @@
+# ci-lane: fast
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT independent S_PACK conformance court
+
+on:
+  pull_request:
+    paths:
+      - "tests/conformance/v24-pack.json"
+      - "tests/conformance/generate_v24_pack_golden.py"
+      - "tests/test_v031_pack_fixed_golden.py"
+      - "tests/native_pack_golden_abi.py"
+      - ".github/workflows/v031-pack-fixed-golden.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-pack-fixed-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  fixed-pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact candidate source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact source identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          mkdir -p pack-evidence
+          {
+            echo "source_sha=$EVIDENCE_HEAD"
+            sha256sum tests/conformance/v24-pack.json
+            sha256sum tests/conformance/generate_v24_pack_golden.py
+            sha256sum tests/test_v031_pack_fixed_golden.py
+          } | tee pack-evidence/source.txt
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install authentic CMPCT package and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd libzstd1
+          python -m pip install -e '.[test]'
+      - name: Independent frozen-byte regenerability
+        run: |
+          python tests/conformance/generate_v24_pack_golden.py \
+            2>&1 | tee pack-evidence/generator.txt
+      - name: Authentic Python Reader and preflight conformance
+        run: |
+          set -o pipefail
+          python -m pytest -q -vv tests/test_v031_pack_fixed_golden.py \
+            2>&1 | tee pack-evidence/pytest.txt
+      - name: Upload exact-head receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-fixed-pack-${{ env.EVIDENCE_HEAD }}
+          path: pack-evidence/
+          if-no-files-found: error
+          retention-days: 90
