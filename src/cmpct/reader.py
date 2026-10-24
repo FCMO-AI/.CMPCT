@@ -6,11 +6,13 @@ from __future__ import annotations
 import base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, mmap, os, shutil, stat, struct, sys, tempfile, threading, time, zipfile, zlib
 from pathlib import Path
 import msgpack
+import ntpath
 
 from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
-from .path_policy import canonical_logical_path
+from .path_policy import canonical_logical_path, macos_comparison_component, canonical_windows_extraction_key
+from .msgpack_policy import unique_map_pairs
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -76,7 +78,7 @@ class CMPCT:
             if g is None:return None
             kind,payload,prev=g
             if kind==0:
-                idx=msgpack.unpackb(payload,raw=False)
+                idx=msgpack.unpackb(payload,raw=False,object_pairs_hook=unique_map_pairs)
                 for delta in reversed(chain):
                     for b in delta.get('blobs',[]):idx['blobs'].append(b)
                     for op in delta.get('ops',[]):
@@ -92,7 +94,7 @@ class CMPCT:
                     idx['files'].sort(key=lambda x:x[0])
                 return idx,depth
             if kind!=1:return None
-            chain.append(msgpack.unpackb(payload,raw=False));depth+=1;pos=prev
+            chain.append(msgpack.unpackb(payload,raw=False,object_pairs_hook=unique_map_pairs));depth+=1;pos=prev
         return None
     def _latest_generation(self):
         # Scan backward for the newest valid commit footer. A partial append after an older footer
@@ -118,7 +120,7 @@ class CMPCT:
             self.latest_footer_pos=latest[1];self.delta_depth=latest[2];return latest[0],HDR.size+cs
         ic=self.f.read(cs);ib=zd(ic,us)
         if sha(ib)!=ih:raise IOError('both CMPCT indexes unavailable/corrupt')
-        self.latest_footer_pos=0;self.delta_depth=0;return msgpack.unpackb(ib,raw=False),HDR.size+cs
+        self.latest_footer_pos=0;self.delta_depth=0;return msgpack.unpackb(ib,raw=False,object_pairs_hook=unique_map_pairs),HDR.size+cs
     def _inflate(self,comp:bytes,usize:int)->bytes:
         if _ld is None or self._inflater is None:
             raw=zlib.decompress(comp,-15)
@@ -447,14 +449,103 @@ class CMPCT:
         if max_bytes is not None and total>max_bytes:raise IOError(f'archive expands to {total} bytes, above limit {max_bytes}')
 
         # Validate every logical path once and reject aliases/symlink pivots before writing anything.
-        canonical_rows=[];seen=set();syms=set()
+        canonical_rows=[];seen=set();windows_seen=set();windows_prefix_spelling={};syms=set()
+        # Node IDs make host-normalized prefix checks linear in archive path components,
+        # rather than repeatedly materializing O(depth²) full prefix strings.
+        macos_prefixes={};macos_next_node=0
         for row in self.files:
             rel=row[0]
             try:key,parts=canonical_logical_path(rel)
             except ValueError as exc:raise IOError(f'unsafe archive path: {rel!r}: {exc}') from exc
             if key in seen:raise IOError(f'duplicate canonical archive path: {rel!r}')
+            if os.name == 'nt':
+                # Win32 accepts drive-relative paths and alternate data streams that a POSIX
+                # component check cannot confine. Reject every member before creating one.
+                try:windows_key=canonical_windows_extraction_key(parts)
+                except ValueError as exc:raise IOError(f'unsafe Windows archive path: {rel!r}: {exc}') from exc
+                if windows_key in windows_seen:raise IOError(f'duplicate Windows archive path: {rel!r}')
+                # An implicit parent can also alias another member's explicit parent:
+                # Dir/a and dir/b are different logical POSIX trees but one Win32 tree.
+                for depth in range(1,len(parts)+1):
+                    raw_prefix='/'.join(parts[:depth])
+                    folded_prefix='/'.join(part.casefold() for part in parts[:depth])
+                    prior=windows_prefix_spelling.get(folded_prefix)
+                    if prior is not None and prior!=raw_prefix:
+                        raise IOError(f'ambiguous Windows parent case alias: {rel!r}')
+                    windows_prefix_spelling[folded_prefix]=raw_prefix
+                windows_seen.add(windows_key)
+                if row[1]==K_HARDLINK:
+                    # Hardlink owners are source paths too. A forged drive-relative owner
+                    # must not escape merely because the *alias* name was safe.
+                    try:
+                        _,target_parts=canonical_logical_path(row[6][0])
+                        canonical_windows_extraction_key(target_parts)
+                    except (ValueError, IndexError, TypeError) as exc:
+                        raise IOError(f'unsafe Windows hardlink target in {rel!r}') from exc
+            if sys.platform=='darwin':
+                # APFS/HFS+ can map two different Unicode spellings (NFC/NFD) or
+                # case variants onto the same directory entry. Reject the entire
+                # ambiguous archive before writing any member, preserving Linux's
+                # byte-distinct archive namespace and revision-24 wire format.
+                macos_parent=0
+                for part in parts:
+                    try:comparison=macos_comparison_component(part)
+                    except ValueError as exc:raise IOError(f'unsafe macOS archive path: {rel!r}: {exc}') from exc
+                    normalized=(macos_parent,comparison)
+                    prior=macos_prefixes.get(normalized)
+                    if prior is not None:
+                        previous_part,macos_parent=prior
+                        if previous_part!=part:
+                            raise IOError(f'ambiguous macOS archive path: {rel!r}')
+                    else:
+                        macos_next_node+=1
+                        macos_prefixes[normalized]=(part,macos_next_node)
+                        macos_parent=macos_next_node
             seen.add(key);canonical_rows.append((row,key,parts))
             if row[1]==K_SYMLINK:syms.add(key)
+        if os.name == 'nt':
+            # Win32 case-insensitive name resolution must not invent a missing
+            # archive hardlink owner: the authenticated logical spelling, not
+            # whichever physical alias the host finds, controls link identity.
+            # All paths were parsed above; seen contains every exact logical key.
+            for row, key, parts in canonical_rows:
+                if row[1] == K_HARDLINK:
+                    try:
+                        source_key, _ = canonical_logical_path(row[6][0])
+                    except (ValueError, TypeError, IndexError) as exc:
+                        raise IOError(f'unsafe Windows hardlink source: {row[0]!r}') from exc
+                    if source_key not in seen:
+                        raise IOError(f'missing logical Windows hardlink owner: {row[0]!r}')
+        if sys.platform=='darwin':
+            # Archive hardlinks name LOGICAL owners, not whatever physical APFS path
+            # happens to resolve after normalization. The explicit validator already
+            # checks logical membership; ordinary extraction must not bypass it.
+            macos_logical_owners={key for _,key,_ in canonical_rows}
+            for row,key,parts in canonical_rows:
+                if row[1]==K_HARDLINK:
+                    try:source_key,_=canonical_logical_path(row[6][0])
+                    except (ValueError,TypeError,IndexError) as exc:
+                        raise IOError(f'unsafe macOS hardlink source: {row[0]!r}') from exc
+                    if source_key not in macos_logical_owners:
+                        raise IOError(f'missing logical macOS hardlink owner: {row[0]!r}')
+        # An authenticated logical tree can describe a file and its descendant as two
+        # individually valid entries, though no filesystem can materialize both. Without
+        # this preflight, extraction publishes the first file and fails on the child,
+        # leaving a partial tree. A component trie keeps the check O(total path parts)
+        # rather than rescanning every candidate ancestor against every member.
+        namespace_root={}
+        for row, key, parts in canonical_rows:
+            node=namespace_root
+            for component in parts:
+                node=node.setdefault(component,{})
+            node[None]=row[1]  # None is not a valid logical path component.
+        for row, key, parts in canonical_rows:
+            node=namespace_root
+            for component in parts[:-1]:
+                node=node[component]
+                if node.get(None) in (K_FILE,K_HARDLINK):
+                    raise IOError(f'non-directory archive ancestor of {row[0]!r}')
+
         clean=[]
         for row,key,parts in canonical_rows:
             rel=row[0]
@@ -489,6 +580,15 @@ class CMPCT:
                 if safe_symlinks:
                     tp=Path(target)
                     if tp.is_absolute() or any(x=='..' for x in tp.parts):raise IOError(f'unsafe symlink target in {rel!r}: {target!r}')
+                    if os.name == 'nt':
+                        # Win32 treats root-relative (\\victim) and drive-relative (D:victim)
+                        # targets as outside the selected directory; pathlib.is_absolute()
+                        # alone does not reject root-relative paths.
+                        if ntpath.isabs(target) or target.startswith(('\\', '/')):
+                            raise IOError(f'unsafe Windows rooted symlink target in {rel!r}: {target!r}')
+                        target_parts=tuple(p for p in target.replace('\\', '/').split('/') if p not in ('', '.'))
+                        try:canonical_windows_extraction_key(target_parts)
+                        except ValueError as exc:raise IOError(f'unsafe Windows symlink target in {rel!r}: {target!r}') from exc
                 try:os.unlink(full)
                 except FileNotFoundError:pass
                 os.symlink(target,full)
