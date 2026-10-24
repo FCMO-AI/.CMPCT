@@ -46,6 +46,16 @@ The presence of this code is **not yet release authority**. T01 stays open until
 
 ---
 
+## O17 native metadata union — RESEARCH DRAFT, not released
+
+PR O17 (branch `agent/phased2-v031-native-topology-indexsha-union-o17-20261024`) combines the **unchanged, sourced O12** indexed logical SHA query from [PR #340](https://github.com/FCMO-AI/.CMPCT/pull/340) with the **O14** terminal hardlink owner ordinal/validated graph in [PR #349](https://github.com/FCMO-AI/.CMPCT/pull/349), both atop authenticated PACK and MessagePack behavior inherited from [PR #326](https://github.com/FCMO-AI/.CMPCT/pull/326). The O12 function and C declaration are imported without semantic edits; the O14 graph and existing Reader/Builder/format remain untouched.
+
+The preregistered *new* claim is same-handle, real-Builder **composition**: an S_CDC owner with a committed logical SHA can be streamed in fixed chunks and compared to the expected signed-index digest while an actual hardlink to that owner is identified by native entry ordinal on the same open handle. Independent distinct owners, RAW missing-hash, non-file, invalid-argument, and real Zstd PACK read controls must remain correct. Source-exact parent test files O12 and O14 and native PACK golden remain separate independent controls. See `docs/v031-research/NATIVE_TOPOLOGY_INDEXSHA_UNION_O17_PREREG.md`, `tests/native_topology_indexsha_o17.py`, and `.github/workflows/v031-native-topology-indexsha-o17.yml`; results are **unmeasured until exact-head CI runs**.
+
+**Truth boundary:** `cmpct_entry_logical_sha256` does not synthesize digests absent from the authenticated index; direct RAW and hardlink aliases remain unsupported for this query. The native owner ordinal does not publish an inode. This union is not a new signed source-snapshot protocol, not a portable/filesystem-safe extractor, and receives zero size, latency, memory or release credit. Source-corruption races, full-payload authentication of direct RAW, staged publication, multi-platform ABIs and full-product performance remain unresolved.
+
+---
+
 ## Experimental native hardlink owner graph (v0.31 O14 — draft, NOT released)
 
 Source-exact candidate [PR #349](https://github.com/FCMO-AI/.CMPCT/pull/349), stacked on [PR #326](https://github.com/FCMO-AI/.CMPCT/pull/326), addresses an **information boundary**, not a compression or throughput benchmark. [PR #343](https://github.com/FCMO-AI/.CMPCT/pull/343) O13/O13b proved that valid revision-24 source trees with different hardlink inode owners can produce identical published native C observations: the r24 index retains the hardlink owner path, but the native Entry previously treated that storage tuple as unsupported and did not expose the relationship.
