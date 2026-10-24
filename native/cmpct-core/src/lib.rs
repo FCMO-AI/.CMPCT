@@ -1546,6 +1546,60 @@ pub unsafe extern "C" fn cmpct_entry_read_range(
     }
 }
 
+/// Return an equality-only physical PACK owner key for admission to verified native batching.
+///
+/// This is an authenticated-index metadata hint, not a proof of physical source freshness.
+/// Only same-handle keys may be compared: the next batch independently checks SHA-256.
+/// Reject RAW and all non-Zstd/non-PACK entries rather than causing hidden full-block reads.
+///
+/// # Safety
+/// `archive` must be a live `cmpct_open` handle; `out_owner` must point to a writable
+/// `usize` and must not alias storage mutated by another thread during the call.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_entry_pack_owner(
+    archive: *const Archive,
+    index: usize,
+    out_owner: *mut usize,
+) -> c_int {
+    let Some(out_owner) = out_owner.as_mut() else {
+        return CmpctStatus::Null as c_int;
+    };
+    // Match the explicit batch's fail-zero output contract, even on null archive.
+    *out_owner = 0;
+    let Some(archive) = archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
+    let Some(entry) = archive.entries.get(index) else {
+        return CmpctStatus::Range as c_int;
+    };
+    let Storage::Pack {
+        index: owner,
+        offset,
+        length,
+    } = &entry.storage
+    else {
+        return CmpctStatus::Unsupported as c_int;
+    };
+    let Some(blob) = archive.blobs.get(*owner) else {
+        return CmpctStatus::Format as c_int;
+    };
+    if blob.codec != CODEC_ZSTD {
+        return CmpctStatus::Unsupported as c_int;
+    }
+    if blob.usize > MAX_PACK_BATCH_BYTES as u64 || blob.csize > MAX_PACK_BATCH_BYTES as u64 {
+        return CmpctStatus::Limit as c_int;
+    }
+    if *length != entry.size
+        || offset
+            .checked_add(*length)
+            .is_none_or(|end| end > blob.usize)
+    {
+        return CmpctStatus::Format as c_int;
+    }
+    *out_owner = *owner;
+    CmpctStatus::Ok as c_int
+}
+
 /// Copy several ranges from the same physical Zstd S_PACK in one authenticated operation.
 ///
 /// The output is the concatenation of ranges in request order. All request metadata and complete

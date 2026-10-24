@@ -154,3 +154,16 @@ The important property is provenance: fixed bytes are acceptance targets, not re
 The native CLI should continue to be benchmarked against mature ZIP tools using CLI-vs-CLI/process-start semantics; do not mix its results with in-process library measurements.
 
 No r24 item above requires a format revision unless implementing it reveals that revision-24 bytes are insufficient to express the required reader semantics. The provisional r25 layer is separately governed by `docs/FORMAT.md`, `docs/V030_RELEASE_GATES.md`, `docs/V030_CANONICAL_PRODUCT_ARCHITECTURE.md` and the strict v0.30 release lock.
+
+
+### Opt-in physical owner discovery (v0.31 research O5; unpromoted)
+
+The proposed C ABI `cmpct_entry_pack_owner` returns an equality-only grouping token
+for authenticated-index Zstd micro-PACK members admissible to the existing 16-MiB
+explicit batch. The token is scoped strictly to one open native archive handle;
+no index byte layout, codec truth or persistent physical identity is exported.
+Noneligible entries keep the existing selective-reader fallback. The query
+is metadata only, not live-payload authentication: actual
+`cmpct_pack_read_batch` continues to revalidate all source bytes at use time.
+It adds no persistent cache or r24 format change. Do not claim consumer/full-product
+speedup until an actual consumer groups via this API and charged measurements pass.
