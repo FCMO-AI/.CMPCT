@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: cmpct-signed-symlink-crosshost-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
