@@ -37,3 +37,8 @@ The base PR #304 alone should already pass Writer tests but lacks bounded salvag
 3. Land isolated source-lock and interaction tests; preserve old owner tests unedited.
 4. Execute hosted focused and full general tests; request the Windows hosted product court as triggered by ordinary PR machinery when available.
 5. Reconcile CI and source identities; do not claim full green when a required job is omitted. No merge/release.
+
+
+## Pre-implementation source-audit correction (2026-10-23; before composed product source)
+
+The eight PR #266 prospective fingerprint source files are **already present byte-for-byte** on Writer PR #304: each matching Git blob agrees with PR #302. Therefore no source overlay of those eight files is warranted, and doing so would only duplicate already-satisfied custody. The correct minimal union instead preserves #304's prospective source receipt unchanged, adds #293's bounded salvage source+CLI+specialized tests, and reconciles the shared `transactions.py` and `docs/HARDENING.md` surfaces explicitly. PR #302's experiment-specific workflow is not transplanted because its narrower original-source guards do not describe the merged Writer transaction module. This amendment narrows the earlier prospective method without changing its scientific hypothesis, acceptance criteria, or evidence strength.
