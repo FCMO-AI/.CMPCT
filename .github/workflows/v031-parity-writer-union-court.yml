@@ -1,0 +1,153 @@
+# ci-lane: fast
+# Source-locked evidence court for independent PR311 product × PR320 parity-admission integration.
+# Does not substitute for the canonical release-parity performance job.
+name: CMPCT v031 source-exact Writer x parity admission court
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/v031-parity-writer-union-court.yml'
+      - '.github/workflows/zip-parity.yml'
+      - 'tools/classify_zip_parity_scope.py'
+      - 'tests/test_v031_zip_parity_scope.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-writer-parity-court-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  source-exact-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify each imported owner's unchanged Git blobs
+        run: |
+          set -euo pipefail
+          mkdir -p test-artifacts
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          expected = {
+              'src/cmpct/transactions.py': 'a3b9c3375ed19f0b37d40ee47ead7b5d5b8905ee',
+              'src/cmpct/reader.py': 'c548a2ae4d650e928eb46ed1c2431423e49765b5',
+              'src/cmpct/cli.py': '94bcd91af4ec8fa8282e3b1900d3c1d07a7a3235',
+              'docs/V031_CANDIDATE_FINGERPRINT.json': 'f806d96dba4750dead6746e078e596e848e6f201',
+              'docs/V030_RELEASE_LOCK.json': '988a7b05ad4e0833fac0453de74133b38f890f87',
+              '.github/workflows/v031-zip-scope-court.yml': '4ac716423c26d565dbb847b8430da60d8b472599',
+              '.github/workflows/zip-parity.yml': 'f77ba07cb6ee8dfa0c8cef0be7135a536a872efb',
+              'docs/v031-research/2026-10-24-parity-full-pr-impact-prereg.md': '0b5af9b48f69eb42560da597488152efc8ecb65f',
+              'tests/test_performance_base_native_wiring.py': 'b413285c3e633c6ebd4ba9dd7be9ca276171a418',
+              'tests/test_v031_zip_parity_scope.py': '74b9b43b80cd489e97cc65d27cbc27e8f8daa876',
+              'tools/check_ci_topology.py': '1a2143ff517608379769d46749650bf7d006d35e',
+              'tools/classify_zip_parity_scope.py': 'c7107c71733077a062c424cbf3ee4b94039bff13',
+          }
+          receipt = {}
+          for path, wanted in expected.items():
+              actual = subprocess.check_output(['git','hash-object',path], text=True).strip()
+              receipt[path] = dict(expected=wanted,actual=actual,match=(wanted==actual))
+              assert actual == wanted, f'Owner blob drift: {path} {wanted} != {actual}'
+          Path('test-artifacts/source-lock.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          print(f'SOURCE-LOCK PASS: {len(expected)} independent owner blob identities')
+          PY
+          git diff --exit-code
+      - name: Evaluate real PR tree admission, not final-commit shortcut
+        if: github.event_name == 'pull_request'
+        env:
+          EVENT_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          python tools/classify_zip_parity_scope.py --event pull_request --head "$EVIDENCE_HEAD" --base "$EVENT_BASE" | tee test-artifacts/real-pr-scope.txt
+          grep -Fxq 'run_performance=true' test-artifacts/real-pr-scope.txt
+          grep -Fxq 'scope_basis=pr-merge-base' test-artifacts/real-pr-scope.txt
+      - name: Run original real-Git-DAG classifier falsifiers and native custody wiring
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_v031_zip_parity_scope.py -v 2>&1 | tee test-artifacts/zip-scope-test.log
+          python - <<'PY' | tee test-artifacts/native-wiring-test.log
+          import runpy
+          ns = runpy.run_path('tests/test_performance_base_native_wiring.py')
+          tests = sorted(k for k in ns if k.startswith('test_'))
+          assert len(tests) == 2, tests
+          for test in tests:
+              ns[test]()
+              print(test, 'PASS')
+          PY
+          python tools/check_ci_topology.py .github/workflows/zip-parity.yml .github/workflows/v031-parity-writer-union-court.yml
+      - name: Install authentic CMPCT test package
+        run: python -m pip install -e '.[test]'
+      - name: Run preserved Writer and bounded-salvage installed-product controls
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/test_v031_salvage_writer_union_r265.py tests/test_recover_blob_candidates.py tests/test_v031_posix_writer_lease.py tests/test_v031_writer_reader_snapshot_composition.py --junitxml=test-artifacts/linux-product.xml 2>&1 | tee test-artifacts/linux-product.log
+      - name: Preserve source-exact evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v031-writer-parity-linux-court
+          path: test-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  source-exact-windows:
+    runs-on: windows-2022
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind unchanged inherited Windows Writer product source
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path 'test-artifacts' | Out-Null
+          if ((git rev-parse HEAD) -ne $env:EVIDENCE_HEAD) { throw 'exact-head mismatch' }
+          $expected = @{
+            'src/cmpct/transactions.py' = 'a3b9c3375ed19f0b37d40ee47ead7b5d5b8905ee'
+            'src/cmpct/reader.py' = 'c548a2ae4d650e928eb46ed1c2431423e49765b5'
+            'src/cmpct/cli.py' = '94bcd91af4ec8fa8282e3b1900d3c1d07a7a3235'
+            'tools/classify_zip_parity_scope.py' = 'c7107c71733077a062c424cbf3ee4b94039bff13'
+          }
+          foreach ($path in $expected.Keys) {
+            $actual = git hash-object $path
+            if ($actual -ne $expected[$path]) { throw "owner source drift: $path $actual" }
+          }
+          "HEAD=$env:EVIDENCE_HEAD" | Out-File -Encoding utf8 'test-artifacts/source-lock.txt'
+      - name: Install authentic Windows CMPCT product
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw 'pip bootstrap failure' }
+          python -m pip install -e . pytest
+          if ($LASTEXITCODE -ne 0) { throw 'package install failure' }
+      - name: Run real installed Windows salvage and Writer controls
+        shell: pwsh
+        run: |
+          python -m pytest --noconftest -q tests/test_v031_salvage_writer_union_r265.py tests/test_recover_blob_candidates.py tests/test_v031_windows_writer_product_o3.py 2>&1 | Tee-Object -FilePath 'test-artifacts/windows-product.log'
+          if ($LASTEXITCODE -ne 0) { throw 'Windows inherited source court failed' }
+      - name: Preserve exact-head Windows receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v031-writer-parity-windows-court
+          path: test-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
