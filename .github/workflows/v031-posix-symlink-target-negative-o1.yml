@@ -1,0 +1,52 @@
+# ci-lane: fast
+name: CMPCT v031 POSIX signed metadata negatives O1
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_posix_byte_tree_o1.py'
+      - 'benchmarks/v031_posix_symlink_target_negative_o1.py'
+      - 'benchmarks/v031_posix_hardlink_xattr_negative_o1.py'
+      - '.github/workflows/v031-posix-symlink-target-negative-o1.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  negative-target-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate exact research source and execute both falsifiers
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee /tmp/posix-negative-head.txt
+          python -m pip install msgpack==1.1.2
+          python benchmarks/v031_posix_symlink_target_negative_o1.py | tee /tmp/posix-symlink-negative.json
+          python benchmarks/v031_posix_hardlink_xattr_negative_o1.py | tee /tmp/posix-hardlink-negative.json
+          python - <<'PY'
+          import json
+          symlink=json.load(open("/tmp/posix-symlink-negative.json"))
+          assert symlink["status"]=="FALSIFIED"
+          assert all(len(symlink["cases"][name])==4 for name in ("typed","escaped"))
+          assert "not demonstrated shipping CMPCT" in symlink["scope"]
+          hardlink=json.load(open("/tmp/posix-hardlink-negative.json"))
+          assert hardlink["status"]=="FALSIFIED"
+          assert all(hardlink["result"][name]["owner_xattrs"]=="CHANGED_BY_ALIAS" for name in ("typed","escaped"))
+          assert "not proven CMPCT flaw" in hardlink["scope"]
+          PY
+      - name: Preserve exact-head negative research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: posix-signed-metadata-negatives-research-only
+          path: /tmp/posix-*-negative.json
+          if-no-files-found: warn
