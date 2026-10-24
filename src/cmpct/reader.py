@@ -11,6 +11,7 @@ from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
 from .path_policy import canonical_logical_path
+from .validation import _validate_fsmeta
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -372,7 +373,9 @@ class CMPCT:
             uid,gid=over.get(i,common)
             if hasattr(os,'chown') and (uid or gid):
                 try:os.chown(full,uid,gid,follow_symlinks=False)
-                except (OSError,PermissionError):pass
+                # A valid archived uid/gid may exceed this host's os.chown range.
+                # Treat it like unsupported ownership, not an extraction failure after writes.
+                except (OSError,OverflowError):pass
             if i in xam and hasattr(os,'setxattr'):
                 for name,value in xam[i]:
                     try:os.setxattr(full,name,value,follow_symlinks=False)
@@ -387,6 +390,9 @@ class CMPCT:
         directory tree once, then writes members using plain OS paths. This changes no archive
         semantics; it only removes Python/filesystem bookkeeping from the hot loop.
         """
+        # A digest-consistent index can still contain invalid fsmeta. Fail closed before mkdir,
+        # payload writes, or restoration; preflight_archive uses this same bounded grammar.
+        _validate_fsmeta(self.fsmeta, len(self.files))
         dest=Path(dest);dest.mkdir(parents=True,exist_ok=True);dest_s=os.fspath(dest)
         total=sum(x[4] for x in self.files if x[1]!=K_DIR)
         if max_bytes is not None and total>max_bytes:raise IOError(f'archive expands to {total} bytes, above limit {max_bytes}')
@@ -481,6 +487,8 @@ class CMPCT:
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
                 except OSError:pass
     def verify(self):
+        # A logical-content pass alone must not certify malformed filesystem declarations.
+        _validate_fsmeta(self.fsmeta, len(self.files))
         n=0
         for row in self.files:
             if row[1]==K_DIR:continue

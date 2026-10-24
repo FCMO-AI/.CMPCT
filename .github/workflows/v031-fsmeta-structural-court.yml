@@ -1,0 +1,55 @@
+# ci-lane: fast
+name: v031 authenticated fsmeta structural court
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-fsmeta-structural-preflight-20261024
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v031-fsmeta-court-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  fsmeta:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact source HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+      - name: Bind test source to exact HEAD
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual CMPCT reference package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Hostile signed-index rejection and valid-control court
+        run: |
+          mkdir -p fsmeta-evidence
+          set -o pipefail
+          python -m pytest -vv tests/test_v031_fsmeta_structural_preflight.py 2>&1 | tee fsmeta-evidence/pytest.txt
+      - name: Record immutable test and product identities
+        if: always()
+        run: |
+          mkdir -p fsmeta-evidence
+          git rev-parse HEAD > fsmeta-evidence/source.sha
+          git hash-object src/cmpct/validation.py > fsmeta-evidence/validator.blob
+          git hash-object src/cmpct/reader.py > fsmeta-evidence/reader.blob
+          git hash-object tests/test_v031_fsmeta_structural_preflight.py > fsmeta-evidence/tests.blob
+      - name: Preserve original negative and corrected positive evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-fsmeta-${{ github.sha }}
+          path: fsmeta-evidence/
+          if-no-files-found: error

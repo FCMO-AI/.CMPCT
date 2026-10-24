@@ -35,6 +35,14 @@ The initial defaults are intentionally generous for legitimate pre-1.0 archives 
 
 A future normative specification must distinguish format maxima from implementation policy limits.
 
+## v0.31 candidate: filesystem-metadata grammar before extraction
+
+Draft [PR #303](https://github.com/FCMO-AI/.CMPCT/pull/303) strengthens the existing revision-24 `fsmeta` validator without adding a field or changing serialized archives. Index hash consistency alone does not prove a valid metadata grammar: historical preflight checked only nonempty row shape and a file reference, allowing malformed nested `xattrs` or short/duplicated `owner_overrides` through to post-materialization restoration.
+
+The candidate makes explicit `[file_index, uid, gid]` owner-override rows and `[file_index, [[name: str, value: bytes], ...]]` xattr rows; each indexed file may appear once per metadata family and each name once per file; xattr names must be nonempty NUL-free text. A bounded shared check runs in the structural preflight and at the beginning of `CMPCT.extractall()` (before destination creation) and `CMPCT.verify()`. Existing valid UTF-8 xattr semantics and destination-unsupported xattr restoration remain unchanged. Original negative exact-head evidence: [run 40043890554](https://github.com/FCMO-AI/.CMPCT/actions/runs/40043890554), 11 malformed index cases accepted by the previous preflight, while the valid control passed. This is source-bound candidate evidence, not shipping or release authority.
+
+Limitations: ordinary `CMPCT(...)` open and ordinary partial reads still do not run this full validation; the Native ABI needs a separate semantic parity test, and non-UTF-8 POSIX xattr names are a distinct format design question (Issue #252). No new metadata grammar should be presumed valid on all platforms merely because the Python reference checks it.
+
 ## Fixed revision-24 conformance vectors
 
 The first committed golden archive set lives at `tests/conformance/v24-direct-codecs.json`. It contains fixed byte-for-byte revision-24 archives for direct RAW, ordinary Zstd and raw Deflate members, together with archive SHA-256, logical SHA-256 and known byte-range answers.
