@@ -125,7 +125,7 @@ def test_signed_hardlink_parent_cannot_leave_partial_output(tmp_path: Path) -> N
     # logical alias alongside a physical child whose path crosses that alias.
     base = _physical_source(tmp_path)
     hostile = tmp_path / "hardlink_parent.cmpct"
-    child = "alias.bin/child.bin"
+    child = "z_alias.bin/child.bin"
 
     def mutate(index):
         parent = next(row for row in index["files"] if row[0] == "parent.bin")
@@ -134,7 +134,7 @@ def test_signed_hardlink_parent_cannot_leave_partial_output(tmp_path: Path) -> N
             if row[0] == "child.bin":
                 row[0] = child
         index["files"].append([
-            "alias.bin", K_HARDLINK, parent[2], parent[3],
+            "z_alias.bin", K_HARDLINK, parent[2], parent[3],
             parent[4], None, ["parent.bin"],
         ])
         index["files"].sort(key=lambda row: row[0])
@@ -142,7 +142,7 @@ def test_signed_hardlink_parent_cannot_leave_partial_output(tmp_path: Path) -> N
     _signed_reindex(base, hostile, mutate)
     with CMPCT(hostile) as reader:
         assert reader.read("parent.bin") == b"PARENT-EXACT-ONE"
-        assert reader.read("alias.bin") == b"PARENT-EXACT-ONE"
+        assert reader.read("z_alias.bin") == b"PARENT-EXACT-ONE"
         assert reader.read(child) == b"CHILD-EXACT-TWO"
         out = tmp_path / "out"
         with pytest.raises(OSError, match="non-directory archive ancestor"):
@@ -157,7 +157,7 @@ def test_signed_valid_hardlink_alias_preserves_inode_sharing(tmp_path: Path) -> 
     def mutate(index):
         parent = next(row for row in index["files"] if row[0] == "parent.bin")
         index["files"].append([
-            "alias.bin", K_HARDLINK, parent[2], parent[3],
+            "z_alias.bin", K_HARDLINK, parent[2], parent[3],
             parent[4], None, ["parent.bin"],
         ])
         index["files"].sort(key=lambda row: row[0])
@@ -166,7 +166,7 @@ def test_signed_valid_hardlink_alias_preserves_inode_sharing(tmp_path: Path) -> 
     with CMPCT(signed) as reader:
         out = tmp_path / "out"
         reader.extractall(out, metadata=False)
-        assert (out / "alias.bin").read_bytes() == b"PARENT-EXACT-ONE"
+        assert (out / "z_alias.bin").read_bytes() == b"PARENT-EXACT-ONE"
         assert (out / "child.bin").read_bytes() == b"CHILD-EXACT-TWO"
         import os
-        assert os.path.samefile(out / "parent.bin", out / "alias.bin")
+        assert os.path.samefile(out / "parent.bin", out / "z_alias.bin")
