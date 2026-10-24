@@ -6,6 +6,7 @@ on:
     paths:
       - 'benchmarks/v031_verify_extract_source_lifetime_o23.py'
       - 'docs/v031-research/2026-10-24-strong-extract-source-lifetime-o23-prereg.md'
+      - 'docs/v031-research/2026-10-24-strong-extract-source-lifetime-o23b-prereg.md'
       - 'docs/v031-research/2026-10-24-strong-extract-source-lifetime-o23-result.md'
       - '.github/workflows/v031-verified-source-lifetime-o23.yml'
   workflow_dispatch:
@@ -60,7 +61,7 @@ jobs:
           record=json.loads(Path("benchmark-artifacts/o23-source-lifetime.json").read_text())
           assert record["status"]=="PASS"
           assert record["all_fundamental_controls"]=="PASS"
-          assert set(record["cases"])=={"micro_pack", "direct_raw"}
+          assert set(record["cases"])=={"micro_pack", "direct_raw", "small_raw", "large_pack"}
           for case in record["cases"].values():
               assert case["first_strong_verify"]=="PASS"
               assert case["fresh_mutant_strong_verify"]=="REJECT_EXACT_PHYSICAL_SHA"
@@ -73,6 +74,7 @@ jobs:
                   "OTHER_UNEXPECTED_BYTES"
               )
           print("O23 valid scientific observation:", record["decision"])
+          print("O23b crossed causal observation:", record["o23b_decision"])
           for name, case in record["cases"].items():
               print(name, case["same_handle_extraction"],
                     "cached owner indices", case["same_handle_cache_indices_after_verify"])
