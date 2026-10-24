@@ -1,0 +1,14 @@
+# O19b — Linux anonymous stage identity versus same-UID proc-fd reopening
+Date: 2026-10-24 UTC. Scoped **hosted replication prediction**, made AFTER one local-container feasibility result; do not represent it as blind prereregistration of the original observation. No CMPCT product or format changes.
+
+Local unprivileged (`uid=65534`) container tests found: a directory opened by its owner accepted `O_TMPFILE` and `linkat(AT_EMPTY_PATH)` without a temporary pathname, yet a **different child process running under the same UID** successfully reopened the unlinked inode through `/proc/<parent pid>/fd/<stage fd>` with `O_RDWR` and changed its first byte. This differs materially from the false assumption “no basename implies no same-UID mutation.” This was infrastructure-only/local evidence, not hosted product verification.
+
+**Question:** does Ubuntu-24.04 GitHub-hosted Linux similarly permit anonymous TMPFILE creation/link publication while showing that same-UID proc-fd inspection can open and mutate the unlinked inode? `O_TMPFILE` support, procfs ptrace policy, and link capability vary by kernel/mount/user; this is a host-specific portability/threat-boundary probe, not a universal guarantee.
+
+Controls: prove directory has zero entries before publication; create one anonymous mode-0600 inode, write `ABCDEFGH`, spawn a separate same-UID process which attempts `os.open('/proc/{ppid}/fd/{fd}', O_RDWR)`, flips first byte, closes; record access permitted/denied with errno; then attempt `linkat(AT_EMPTY_PATH)` via libc ctypes or a strict C test and read final bytes independently. If TMPFILE is unsupported, report UNSUPPORTED rather than fabricating success. If procfd is denied, record the kernel scope, not “secured everywhere.”
+
+Prediction from local observation: hosted Linux will allow both anonymous-stage creation and same-UID proc-fd reopen; output becomes `ZBCDEFGH` despite no staging pathname. **Disproof/qualification:** any host denial, incorrect syscall identity, file visible before publish, failure to mutate before final name, or inability to link. The result cannot establish realistic unauthorized attacker reachability, since same UID/process privileges may itself be out of threat model.
+
+Economics: syscall-level feasibility only, no complete CMPCT archives, no size/time/RSS proof. This is an alternative ownership frame queued alongside O19 result; if confirmed, `O_TMPFILE` alone cannot justify a broad “same-UID adversary cannot mutate stage” claim. Tests of host-specific hardening, source identity and final-directory durability still required.
+
+Do not change the established O19 C/Python oracle, product sources, protected workflows, `docs/discovery/STATE.json`, format or promotion gates. A new independent small Python test and optional hosted step may publish a bounded diagnostic receipt.
