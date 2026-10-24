@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/cmpct/validation.py'
       - 'tests/test_v031_hardlink_graph_budget.py'
+      - 'experiments/v031_hardlink_chain_preflight_abba.py'
       - '.github/workflows/v031-hardlink-graph-o1.yml'
       - 'docs/v031-research/2026-10-24-hardlink-chain-preflight-o1-prereg.md'
   workflow_dispatch:
@@ -40,11 +41,19 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest --noconftest -q -rs tests/test_v031_hardlink_graph_budget.py tests/test_v031_signed_tree_preflight.py 2>&1 | tee hardlink-graph-o1.log
+      - name: Same-runner source-exact signed-archive ABBA and allocation probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -u experiments/v031_hardlink_chain_preflight_abba.py 2>&1 | tee hardlink-graph-o1-abba.log
       - name: Preserve source-bound logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: hardlink-graph-o1-${{ github.sha }}
-          path: hardlink-graph-o1.log
+          path: |
+            hardlink-graph-o1.log
+            hardlink-graph-o1-abba.log
+            hardlink-graph-o1-abba.json
           if-no-files-found: warn
           retention-days: 30
