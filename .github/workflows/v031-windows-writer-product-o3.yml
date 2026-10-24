@@ -8,6 +8,7 @@ on:
       - 'src/cmpct/transactions.py'
       - 'tests/test_v031_windows_writer_product_o3.py'
       - 'docs/v031-research/2026-10-23-windows-writer-product-o3-prereg.md'
+      - 'docs/PORTABILITY.md'
       - '.github/workflows/v031-windows-writer-product-o3.yml'
   workflow_dispatch:
 permissions:
