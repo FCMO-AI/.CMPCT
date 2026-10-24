@@ -39,14 +39,43 @@ def load_manifest(path: Path = MANIFEST) -> dict:
     return value
 
 
+def _tracked_paths(root: Path) -> set[str]:
+    """Admit only the Git index's tracked source roster, never generated build files.
+
+    This intentionally selects *membership* from Git, not content: the fingerprint
+    must still hash the actual worktree bytes so dirty tracked source cannot
+    masquerade as the current HEAD. The caller must be at the repository root.
+    """
+    top = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=root, capture_output=True, text=True, check=False,
+    )
+    if top.returncode or Path(top.stdout.strip()).resolve() != root:
+        raise ValueError("candidate fingerprint requires Git repository root")
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--full-name", "-z"],
+        cwd=root, capture_output=True, check=False,
+    )
+    if result.returncode:
+        raise ValueError("cannot read canonical Git-tracked source roster")
+    # Git -z returns literal bytes and slash-separated names. An undecodable
+    # source name has no stable UTF-8 identity in the present manifest contract.
+    paths = [part.decode("utf-8") for part in result.stdout.split(b"\x00") if part]
+    if len(set(paths)) != len(paths):
+        raise ValueError("ambiguous duplicated Git index source path")
+    return set(paths)
+
+
 def fingerprint(manifest: dict, *, root: Path = ROOT) -> tuple[str, list[str]]:
     """Hash exact path names and full source bytes using canonical globstar semantics.
 
-    Include path identities so a rename/removal changes the result. Reject symlinks,
-    external references, and generated Android artifacts instead of trusting a
-    runner's mutable workspace as the source tree.
+    Include path identities so a rename/removal changes the result. Intersect
+    globbed worktree paths with the Git-tracked roster before admitting them;
+    hash checked-out bytes, never just HEAD blobs. Reject tracked symlinks and
+    external references without absorbing untracked native build artifacts.
     """
     root = root.resolve()
+    tracked = _tracked_paths(root)
     found: dict[str, Path] = {}
     for pattern in manifest["fingerprint_globs"]:
         if not isinstance(pattern, str) or "\\" in pattern or "\x00" in pattern:
@@ -59,6 +88,8 @@ def fingerprint(manifest: dict, *, root: Path = ROOT) -> tuple[str, list[str]]:
             if not path.is_file() and not path.is_symlink():
                 continue
             relative = path.relative_to(root).as_posix()
+            if relative not in tracked:
+                continue
             if relative.startswith("integrations/android/") and (
                 "/build/" in relative or "/jniLibs/" in relative
             ):

@@ -1,0 +1,141 @@
+# ci-lane: fast
+name: CMPCT v0.31 Git-Tracked Source Custody O11
+on:
+  pull_request:
+    paths:
+      - 'tools/check_v031_candidate_fingerprint.py'
+      - 'tests/test_v031_candidate_fingerprint.py'
+      - 'tests/test_v031_tracked_source_custody_o11.py'
+      - 'docs/v031-research/2026-10-24-tracked-source-custody-o11-prereg.md'
+      - '.github/workflows/v031-tracked-source-custody-o11.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-tracked-custody-o11-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  clean-vs-generated:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+      - name: Verify exact source, set Python
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Preserve actual historic glob-only baseline source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o11-evidence
+          git show 93e9a00fd352ac567e9b069654aa145148370d42:tools/check_v031_candidate_fingerprint.py > o11-evidence/old_glob_only.py
+      - name: Record clean fingerprints and canonical member roster
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, importlib.util, json, os, pathlib
+          from tools import check_v031_candidate_fingerprint as new
+          root = pathlib.Path.cwd()
+          spec = importlib.util.spec_from_file_location("old_glob_only", root/"o11-evidence/old_glob_only.py")
+          old = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(old)
+          m = new.load_manifest()
+          nd, nr = new.fingerprint(m, root=root)
+          od, orows = old.fingerprint(m, root=root)
+          assert (nd, nr) == (od, orows), "clean worktree differs even before building"
+          (root/"o11-evidence/clean.json").write_text(json.dumps({"source_sha": os.environ["EVIDENCE_HEAD"], "new": nd, "old": od, "paths": nr, "per_file_sha256": {p: hashlib.sha256((root/p).read_bytes()).hexdigest() for p in nr}}, indent=2))
+          print("O11_CLEAN_SAME_HEAD", nd, len(nr))
+          PY
+      - name: Reproduce native target pollution then require tracked roster to stay fixed
+        shell: bash
+        run: |
+          python - <<'PY'
+          import glob, pathlib
+          out=pathlib.Path("native/cmpct-core/target/release/build/serde-probe/out")
+          out.mkdir(parents=True,exist_ok=True)
+          (out/"private.rs").write_text("// O11 synthetic untracked build output\n")
+          (out/"flag_check.c").write_text("/* O11 untracked */\n")
+          (out/"zstd.h").write_text("/* O11 untracked */\n")
+          assert any("serde-probe" in x for x in glob.glob("native/**/*.rs",recursive=True))
+          PY
+          python - <<'PY'
+          import importlib.util,json,os,pathlib
+          from tools import check_v031_candidate_fingerprint as new
+          root=pathlib.Path.cwd()
+          spec=importlib.util.spec_from_file_location("old_glob_only",root/"o11-evidence/old_glob_only.py")
+          old=importlib.util.module_from_spec(spec);spec.loader.exec_module(old)
+          m=new.load_manifest()
+          new_sha,new_rows=new.fingerprint(m,root=root)
+          old_sha,old_rows=old.fingerprint(m,root=root)
+          clean=json.loads((root/"o11-evidence/clean.json").read_text())
+          assert new_sha==clean["new"] and new_rows==clean["paths"],"tracked-source custody changed on untracked native build"
+          assert old_sha!=clean["old"] and len(old_rows)>len(new_rows),"historic glob-only false-positive not reproduced"
+          data={"source_sha":os.environ["EVIDENCE_HEAD"],"clean_sha":clean["new"],"after_generated_sha":new_sha,"clean_paths":len(clean["paths"]),"after_generated_paths":len(new_rows),"old_clean_sha":clean["old"],"old_after_generated_sha":old_sha,"old_after_generated_paths":len(old_rows),"decision":"TRACKED_CUSTODY_PASS_OLD_GLOB_CONTAMINATED"}
+          (root/"o11-evidence/verdict.json").write_text(json.dumps(data,indent=2))
+          print("O11_GENERATED_RUST_NEGATIVE_AND_TRACKED_FIX_PASS",json.dumps(data))
+          PY
+      - name: Execute original and independent hostile custody tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install pytest
+          python -m pytest --noconftest -q -rs tests/test_v031_candidate_fingerprint.py tests/test_v031_tracked_source_custody_o11.py 2>&1 | tee o11-evidence/pytest.txt
+          exit "${PIPESTATUS[0]}"
+      - name: Preserve exact-head stdout and raw provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracked-source-custody-o11-${{ matrix.os }}-${{ github.sha }}
+          path: o11-evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+  cross-host-clean-byte-differential:
+    needs: clean-vs-generated
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tracked-source-custody-o11-*
+          path: evidence-by-host
+      - name: Distinguish identical Git paths from host-dependent worktree bytes
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          roots=list(Path("evidence-by-host").glob("*/clean.json"))
+          if len(roots)!=3:
+              raise SystemExit(f"missing source custody host evidence: {roots}")
+          receipts={p.parent.name: json.loads(p.read_text()) for p in roots}
+          names=sorted(receipts)
+          first=receipts[names[0]]
+          report={"hosts": {h: {"source_sha": receipts[h]["source_sha"], "fingerprint": receipts[h]["new"], "count": len(receipts[h]["paths"])} for h in names}, "roster_equal": all(receipts[h]["paths"]==first["paths"] for h in names)}
+          all_paths=sorted(set().union(*(set(receipts[h]["per_file_sha256"]) for h in names)))
+          changed=[p for p in all_paths if len({receipts[h]["per_file_sha256"].get(p) for h in names})>1]
+          report.update({"different_worktree_byte_paths":len(changed),"first_25":changed[:25],"interpretation":"Cross-host file byte drift is NOT proof of source mutation; preserve as an independent checkout-filter gap."})
+          Path("o11-cross-host-evidence.json").write_text(json.dumps(report,indent=2))
+          print("O11_CROSS_HOST_WORKTREE_BYTE_DIFFERENTIAL",json.dumps(report))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tracked-source-custody-o11-crosshost
+          path: o11-cross-host-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
