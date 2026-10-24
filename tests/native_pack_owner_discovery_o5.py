@@ -59,7 +59,13 @@ def real_builder(lib, home):
     for i in range(512):
         (root / f"entry-{i:05d}.txt").write_bytes(source_bytes(i))
     (root / "subfolder").mkdir()
-    (root / "subfolder" / "nonpack.bin").write_bytes(os.urandom(70000))
+    # Deterministic high-entropy non-PACK control: preserve source fingerprint across runners.
+    # Do not let unrelated os.urandom() change the product evidence input every activation.
+    nonpack_bytes = b"".join(
+        hashlib.sha256(f"native-owner-o5-nonpack-{i}".encode()).digest()
+        for i in range(2200)
+    )[:70000]
+    (root / "subfolder" / "nonpack.bin").write_bytes(nonpack_bytes)
     archive = home / "real.cmpct"
     Builder(root, workers=1, reproducible=True).build(archive)
     archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
