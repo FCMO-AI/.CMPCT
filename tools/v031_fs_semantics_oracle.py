@@ -103,6 +103,13 @@ def semantic_tree_digest_v1(
                         ((before.st_dev, before.st_ino) != (st.st_dev, st.st_ino)
                          and os.name != 'nt')):
                         raise ValueError("file changed identity before read")
+                    if os.name == "nt":
+                        # Windows CRT fstat may expose inode IDs unlike stat().
+                        # The path ID is checked at both observation boundaries;
+                        # this does not establish a filesystem snapshot.
+                        fresh = os.stat(item.path, follow_symlinks=False)
+                        if (fresh.st_dev, fresh.st_ino) != (st.st_dev, st.st_ino):
+                            raise ValueError("file path identity changed before read")
                     content = hashlib.sha256()
                     total = 0
                     while True:
@@ -117,6 +124,11 @@ def semantic_tree_digest_v1(
                         raise ValueError("file changed identity or size during read")
                 finally:
                     os.close(fd)
+                if os.name == "nt":
+                    latest = os.stat(item.path, follow_symlinks=False)
+                    if ((latest.st_dev, latest.st_ino) != (st.st_dev, st.st_ino)
+                            or latest.st_size != total):
+                        raise ValueError("file path identity or size changed during read")
                 # Some platforms/filesystems do not expose usable file IDs.
                 # A zero-valued inode could conflate all independent files, so
                 # fail closed instead of claiming hardlink fidelity.
