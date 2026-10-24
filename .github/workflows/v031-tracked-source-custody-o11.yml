@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import importlib.util, json, os, pathlib
+          import hashlib, importlib.util, json, os, pathlib
           from tools import check_v031_candidate_fingerprint as new
           root = pathlib.Path.cwd()
           spec = importlib.util.spec_from_file_location("old_glob_only", root/"o11-evidence/old_glob_only.py")
@@ -56,7 +56,7 @@ jobs:
           nd, nr = new.fingerprint(m, root=root)
           od, orows = old.fingerprint(m, root=root)
           assert (nd, nr) == (od, orows), "clean worktree differs even before building"
-          (root/"o11-evidence/clean.json").write_text(json.dumps({"source_sha": os.environ["EVIDENCE_HEAD"], "new": nd, "old": od, "paths": nr}, indent=2))
+          (root/"o11-evidence/clean.json").write_text(json.dumps({"source_sha": os.environ["EVIDENCE_HEAD"], "new": nd, "old": od, "paths": nr, "per_file_sha256": {p: hashlib.sha256((root/p).read_bytes()).hexdigest() for p in nr}}, indent=2))
           print("O11_CLEAN_SAME_HEAD", nd, len(nr))
           PY
       - name: Reproduce native target pollution then require tracked roster to stay fixed
@@ -100,5 +100,42 @@ jobs:
         with:
           name: tracked-source-custody-o11-${{ matrix.os }}-${{ github.sha }}
           path: o11-evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+  cross-host-clean-byte-differential:
+    needs: clean-vs-generated
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tracked-source-custody-o11-*
+          path: evidence-by-host
+      - name: Distinguish identical Git paths from host-dependent worktree bytes
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          roots=list(Path("evidence-by-host").glob("*/clean.json"))
+          if len(roots)!=3:
+              raise SystemExit(f"missing source custody host evidence: {roots}")
+          receipts={p.parent.name: json.loads(p.read_text()) for p in roots}
+          names=sorted(receipts)
+          first=receipts[names[0]]
+          report={"hosts": {h: {"source_sha": receipts[h]["source_sha"], "fingerprint": receipts[h]["new"], "count": len(receipts[h]["paths"])} for h in names}, "roster_equal": all(receipts[h]["paths"]==first["paths"] for h in names)}
+          all_paths=sorted(set().union(*(set(receipts[h]["per_file_sha256"]) for h in names)))
+          changed=[p for p in all_paths if len({receipts[h]["per_file_sha256"].get(p) for h in names})>1]
+          report.update({"different_worktree_byte_paths":len(changed),"first_25":changed[:25],"interpretation":"Cross-host file byte drift is NOT proof of source mutation; preserve as an independent checkout-filter gap."})
+          Path("o11-cross-host-evidence.json").write_text(json.dumps(report,indent=2))
+          print("O11_CROSS_HOST_WORKTREE_BYTE_DIFFERENTIAL",json.dumps(report))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tracked-source-custody-o11-crosshost
+          path: o11-cross-host-evidence.json
           if-no-files-found: warn
           retention-days: 30
