@@ -33,12 +33,15 @@ class CMPCT:
             # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This
             # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map
             # one-to-one onto a destination filesystem.
-            canonical_seen=set();canonical_names={};hardlink_aliases=[];short_rows=[]
+            # One canonical ownership map replaces the previous duplicate set + dict;
+            # this preserves the no-hardlink opening memory class while resolving
+            # authenticated backslash target spellings without a second index.
+            canonical_names={};hardlink_aliases=[];short_rows=[]
             try:
                 for row in self.files:
                     key,_=canonical_logical_path(row[0])
-                    if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
-                    canonical_seen.add(key);canonical_names[key]=row[0]
+                    if key in canonical_names:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
+                    canonical_names[key]=row[0]
                     if len(row)<7:short_rows.append(row[0])
                     elif row[1]==K_HARDLINK:hardlink_aliases.append(row[0])
             except ValueError as exc:
