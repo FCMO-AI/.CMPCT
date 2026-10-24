@@ -1,0 +1,93 @@
+# ci-lane: fast
+name: CMPCT v0.31 O11 native owner-bounded cohort court
+
+on:
+  pull_request:
+    paths:
+      - 'tests/native_owner_bounded_o11.c'
+      - 'tests/native_owner_bounded_o11.py'
+      - 'docs/v031-research/NATIVE_OWNER_COHORT_O11_PREREG.md'
+      - 'docs/v031-research/NATIVE_OWNER_COHORT_O11_RESULT.md'
+      - 'tests/native_pack_consumer_o7.c'
+      - 'tests/native_pack_stream_o10.c'
+      - 'tests/native_pack_process_rss_o10.h'
+      - 'native/cmpct-core/src/lib.rs'
+      - 'native/cmpct-core/include/cmpct.h'
+      - '.github/workflows/v031-native-owner-bounded-o11.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-native-owner-o11-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  owner-bounded-o11:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Exact-head source and prereg custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch \
+            docs/v031-research/NATIVE_OWNER_COHORT_O11_PREREG.md \
+            tests/native_owner_bounded_o11.c \
+            tests/native_owner_bounded_o11.py \
+            tests/native_pack_consumer_o7.c \
+            tests/native_pack_stream_o10.c \
+            tests/native_pack_process_rss_o10.h \
+            native/cmpct-core/include/cmpct.h
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Build single exact-head native Rust ABI and three C controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+          for pair in \
+            "tests/native_pack_consumer_o7.c:eager" \
+            "tests/native_pack_stream_o10.c:stream" \
+            "tests/native_owner_bounded_o11.c:owner"; do
+            source="${pair%%:*}"
+            label="${pair##*:}"
+            cc -std=c11 -D_POSIX_C_SOURCE=200809L -O2 -Wall -Wextra -Werror \
+              -include tests/native_pack_process_rss_o10.h -I. "$source" \
+              -Lnative/cmpct-core/target/release -lcmpct_core \
+              -Wl,-rpath,"$PWD/native/cmpct-core/target/release" \
+              -o "/tmp/cmpct-native-o11-$label"
+          done
+      - name: Hosted same-archive four-arm ABBA with independent full SHA and symlink canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cmpct-native-o11"
+          python tests/native_owner_bounded_o11.py \
+            /tmp/cmpct-native-o11-eager \
+            /tmp/cmpct-native-o11-stream \
+            /tmp/cmpct-native-o11-owner \
+            "$RUNNER_TEMP/cmpct-native-o11/result.json" \
+            | tee "$RUNNER_TEMP/cmpct-native-o11/log.txt"
+          sha256sum "$RUNNER_TEMP/cmpct-native-o11/result.json" > \
+            "$RUNNER_TEMP/cmpct-native-o11/result.sha256"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-owner-bounded-o11-${{ github.run_id }}
+          path: ${{ runner.temp }}/cmpct-native-o11/
+          if-no-files-found: warn
+          retention-days: 30
