@@ -1,0 +1,39 @@
+# v0.31 prospective cross-owner salvage × cooperative Writer composition
+
+Status: preregistered engineering/scientific court; not release authority.
+Date: 2026-10-23 (America/Mexico_City).
+
+## Immutable inputs and authority
+- Target: `FCMO-AI/.CMPCT`; ship checkpoint v0.30.0 / format revision 24. No format, comparator, base, threshold, historical v0.30 lock, or release change.
+- Owner A (Windows + POSIX transaction-wide Writer + Reader stack): PR #304 exact `fdb752b9e9ac72af74a44575b926e24ecacd812e`, `src/cmpct/transactions.py` blob `fd8d922ae5a6e77ab7e01bf599da16a14aca1cff`.
+- Owner B (bounded unverified forensic candidate scanner): PR #293 exact `d311391903a50a3c18260c5404b19611d0434b1d`, `src/cmpct/transactions.py` blob `94c25029fdd167c00871aabbe8fe90fbe7490026`. Owns `src/cmpct/cli.py`, scanner tests, hardening, and focused workflows.
+- Owner C (prospective v0.31 fingerprint and inherited four-red fix): PR #302 exact `2825253a2b40386df173b7f5497abffbe6539f91`, source-locked additive to B. Owns exact eight PR #266 blobs plus composition prereg/workflow.
+- GitHub truth at start includes PR #309/#310 Windows contention research: do not reimplement Windows lease or relax their liveness limits.
+
+## Problem
+Each owner has positive separate evidence. They do not share one installed source. PR #302 and #304 are currently divergent in `transactions.py`: one includes bounded salvage, the other cooperative Writer lease. Promoting either by overwriting the other would silently lose a property. Latest general Test success on #302 (819) and on #304 (inherited Reader/Writer stack) cannot be combined by narration.
+
+## Prospective hypothesis
+Preserving Writer code **byte-for-byte outside the original `recover_blob_records` function**, preserving salvage candidate iteration **byte-for-byte from PR #293**, and taking the other owner paths at their original Git blob IDs yields an integrated v0.31 branch where:
+1. POSIX/Windows cooperative Writer behavior and its existing focused courts remain unchanged;
+2. forensic candidate enumeration and streaming CLI preserve all offsets and explicitly label claims `unverified` and generation membership `unknown`;
+3. prospective candidate identity removes inherited four release-epoch failures without modifying v0.30 historical custody;
+4. source-bound tests and full general tests work on **one installed candidate**;
+5. ordinary creation/extraction bytes retain their inherited behavior (no compression or performance win claimed).
+
+## Strongest simpler control and alternative explanation
+The base PR #304 alone should already pass Writer tests but lacks bounded salvage; PR #302 alone passes salvage/prospective identity but lacks current Writer lease. A narrow snapshot-only source audit can prove no conflict, but cannot prove runtime interoperability. Equal-looking tests on two separate SHAs prove nothing about the union. The strongest simple control is byte-identity of owner subregions *plus* real installed product tests.
+
+## Decision/kill
+- Any change to Writer lease code outside the original recovery section; or any semantic modification inside the salvaged scanner is a provenance failure.
+- Any actual lost update, Windows lease safety regression, destination/file escape, wrong candidate offsets, corrupted candidate classification, four inherited release custody failures, or in-place lock/version rewrite blocks promotion.
+- Any current baseline timing or archive-size loss belongs in explicit debt; green tests do not grant release/performance credit.
+- If source exact merging is unsafe, preserve independent owner branches and do not force-merge.
+- Publish raw exact-head check status, including skipped/pending runs, and explicitly classify any Windows contention limit already documented by PR #309.
+
+## Execution order
+1. Commit this preregistration before code or new union tests.
+2. Compose exact B/C owner blobs on top of A's HEAD using Git-tree overlays. Handle the single physical collision in `transactions.py` by splicing the exact B salvage candidate section over the A legacy recovery function.
+3. Land isolated source-lock and interaction tests; preserve old owner tests unedited.
+4. Execute hosted focused and full general tests; request the Windows hosted product court as triggered by ordinary PR machinery when available.
+5. Reconcile CI and source identities; do not claim full green when a required job is omitted. No merge/release.
