@@ -162,10 +162,14 @@ def test_strict_preflight_rejects_signed_hardlink_to_directory_owner(tmp_path: P
         index["files"].sort(key=lambda row: row[0])
 
     _resign(original, hostile, mutate)
-    with CMPCT(hostile) as reader:
-        assert reader.read("normal.bin") == b"CONTROL-REGULAR"
-        with pytest.raises(OSError):
-            reader.extractall(tmp_path / "out", metadata=False)
+    # Ordinary Reader now rejects invalid signed hardlink topology at construction,
+    # before a caller can publish any leaf. Preserve the original hostile archive
+    # and the independent strict-preflight refusal below; the stronger stage is
+    # intentional, not permission to remove the adversarial assertion.
+    with pytest.raises(OSError, match="hardlink.*regular"):
+        with CMPCT(hostile):
+            pass
+    assert not (tmp_path / "out").exists()
 
     # Before O1 correction, strict preflight only checks existence/cycles, not kind.
     with pytest.raises(ValidationError, match="hardlink.*regular"):
