@@ -1,13 +1,13 @@
-import json
-from pathlib import Path
+"""Prospective candidate custody must include historical-engine materialization dependencies.
 
-ROOT = Path(__file__).resolve().parents[1]
-LOCK = ROOT / 'docs' / 'V030_RELEASE_LOCK.json'
-HELPER = 'tools/materialize_performance_base_native.py'
+V030_RELEASE_LOCK.json is immutable published evidence, not an editable v0.31 candidate manifest.
+"""
+from tools import check_v031_candidate_fingerprint as candidate
+
+HELPER = "tools/materialize_performance_base_native.py"
 
 
-def test_historical_native_materializer_is_release_fingerprinted():
-    manifest = json.loads(LOCK.read_text())
-    assert HELPER in manifest['fingerprint_globs'], (
-        'release-critical historical-engine ownership helper must be part of candidate identity'
-    )
+def test_historical_native_materializer_is_prospectively_fingerprinted() -> None:
+    manifest = candidate.load_manifest()
+    _identity, rows = candidate.fingerprint(manifest)
+    assert HELPER in rows, "historical-engine helper must invalidate v0.31 candidate receipts"
