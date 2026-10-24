@@ -197,10 +197,13 @@ def main():
         finally:
             lib.cmpct_close(handle)
 
-    unsigned_court_sha = unsigned_row_court(base, output, lib, raw)\n\n    result = {
+        unsigned_court_sha = unsigned_row_court(base, output, lib, raw)
+
+    result = {
         "schema": "cmpct-native-authenticated-stream-sha-o12-v1",
         "source_head_binding": "verified by workflow checkout EVIDENCE_HEAD",
-        "archive_sha256": hashlib.sha256(original).hexdigest(),\n        "missing_row_sha_archive_sha256": unsigned_court_sha,
+        "archive_sha256": hashlib.sha256(original).hexdigest(),
+        "missing_row_sha_archive_sha256": unsigned_court_sha,
         "cases": cases,
         "controls": {
             "real_direct_raw_codec": True,
@@ -208,7 +211,8 @@ def main():
             "native_bounded_stream_output_hashes_match": True,
             "directory_invalid_index_and_null_fail_zero": True,
             "mutated_RAW_payload_ranged_reads_must_mismatch_signed_SHA": True,
-            "restored_source_accepts_again": True,\n            "missing_signed_row_SHA_does_not_fallback_to_physical_header": True,
+            "restored_source_accepts_again": True,
+            "missing_signed_row_SHA_does_not_fallback_to_physical_header": True,
         },
         "decision": "NARROW_ABI_CAPABILITY_POSITIVE_NOT_PRODUCT_EXTRACTOR",
     }
