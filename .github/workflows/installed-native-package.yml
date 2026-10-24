@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT installed native package
 
 on:
@@ -6,19 +7,62 @@ on:
     paths:
       - "pyproject.toml"
       - "MANIFEST.in"
-      - "native/cmpct-core/**"
+      - "src/**"
+      - "native/**"
       - "tests/installed_native_package_smoke.py"
+      - "tools/check_v031_candidate_fingerprint.py"
+      - "docs/V031_CANDIDATE_FINGERPRINT.json"
       - ".github/workflows/installed-native-package.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Obsolete PR heads may cancel their matrix: only current source can certify a
+# prospective desktop receipt. The cheap scope job prevents 18 wasted runners
+# when a long-lived product PR's newest commit is unrelated to packaging.
+concurrency:
+  group: cmpct-installed-package-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   CMPCT_WHEEL_PYTHON_TAG: cp310.cp311.cp312.cp313.cp314
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_package: ${{ steps.scope.outputs.run_package }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Classify exact latest-commit package dependency impact
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ] || ! git cat-file -e 'HEAD^' 2>/dev/null; then
+            echo 'run_package=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Deep-lane scheduling scope is the newest commit, not accumulated PR
+          # paths. A missing parent/diff fails closed rather than silently skipping.
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\\n' "$changed"
+          if printf '%s\\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
+            echo 'run_package=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_package=false' >> "$GITHUB_OUTPUT"
+          fi
+
   installed-package:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_package == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +75,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -101,7 +145,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
@@ -130,12 +174,10 @@ jobs:
   desktop-package-evidence:
     needs: [installed-package, python-compatibility]
     runs-on: ubuntu-24.04
-    env:
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
