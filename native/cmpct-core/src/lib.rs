@@ -1566,13 +1566,14 @@ pub unsafe extern "C" fn cmpct_pack_read_batch(
     capacity: usize,
     out_read: *mut usize,
 ) -> c_int {
-    let Some(archive) = archive.as_ref() else {
-        return CmpctStatus::Null as c_int;
-    };
     let Some(out_read) = out_read.as_mut() else {
         return CmpctStatus::Null as c_int;
     };
+    // Establish the failure output contract even when the archive pointer is null.
     *out_read = 0;
+    let Some(archive) = archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
     if count > MAX_PACK_BATCH_RANGES || capacity > MAX_PACK_BATCH_BYTES {
         return CmpctStatus::Limit as c_int;
     }
