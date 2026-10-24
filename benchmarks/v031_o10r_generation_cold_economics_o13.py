@@ -2,7 +2,7 @@
 """O13: price O10R signed-generation policy versus source-exact O9 cold Reader economics.
 
 Research instrument only: uses real Builder + signed r24 checkpoint/journal,
-and loads actual historical and O10R Reader source in independent processes.
+and loads exact historical O9 Reader source versus installed O10R in independent processes.
 No timing claim from an oracle, simulation or different corpus.
 """
 from __future__ import annotations
@@ -57,7 +57,7 @@ def worker(version: str, archive: Path, historical: Path, count: int) -> None:
     else:
         import importlib.util
         import cmpct  # noqa: F401 -- establishes package namespace for relative imports
-        name = "cmpct._reader_o13_source_exact_o3"
+        name = "cmpct._reader_o13_source_exact_o9"
         spec = importlib.util.spec_from_file_location(name, historical)
         if spec is None or spec.loader is None:
             raise RuntimeError("historical Reader loader unavailable")
@@ -139,7 +139,7 @@ def main() -> None:
         "comparison_scope": "O9 Reader-only substitution with O10R installed dependency closure",
         "limitation": "historical Reader uses dynamic package-namespaced loader; not a full O9 wheel",
         "baseline_reader_blob": BASE_BLOB, "candidate_reader_blob": blob,
-        "credit": "installed O9 Reader vs exact O9 Reader source-only substitution; not whole package A/B nor release parity",
+        "credit": "installed O10R Reader vs exact O9 Reader source-only substitution; not whole package A/B nor release parity",
         "os": platform.platform(), "python": sys.version,
         "start_boundary": "worker t0 just before loading Reader module",
         "total_process_wall_boundary": "parent subprocess.run includes Python startup and exit",
@@ -153,7 +153,7 @@ def main() -> None:
             ["git", "hash-object", "--stdin"], input=raw,
         ).decode().strip()
         assert old_blob == BASE_BLOB, (old_blob, BASE_BLOB)
-        historical = root / "reader_o13_o3_source.py"
+        historical = root / "reader_o13_o9_source.py"
         historical.write_bytes(raw)
 
         # Parent's imports/build are never inside child timing boundaries.
