@@ -100,10 +100,10 @@ def run_trial(binary: Path, archive: Path, dest: Path, mode: str,
              sorted(set(expected) - set(produced))[:5],
              sorted(set(produced) - set(expected))[:5])
         )
-    return dict(
-        cohort=cohort, round=round_no, trial=trial_no, mode=mode,
-        wall_ms=wall_ms, child_cpu_ms=cpu_ms, **reply,
-    )
+    return {
+        "cohort": cohort, "round": round_no, "trial": trial_no,
+        "wall_ms": wall_ms, "child_cpu_ms": cpu_ms, **reply,
+    }
 
 
 def main() -> None:
