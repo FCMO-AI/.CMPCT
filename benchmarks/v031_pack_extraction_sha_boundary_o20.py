@@ -46,8 +46,17 @@ def court() -> dict:
             with CMPCT(archive) as reader:
                 try:
                     reader.verify()
-                except (OSError, ValueError):
+                except (OSError, ValueError) as exc:
                     verified = False
+                    # An unrelated parse, I/O, resource or API error cannot be
+                    # counted as the expected physical identity rejection.
+                    expected_reason = (
+                        "physical PACK SHA-256 verification failure"
+                        if packed else "SHA-256 verification failure"
+                    )
+                    assert expected_reason in str(exc), (
+                        f"{label}: rejection is not the registered SHA cause: {exc!r}"
+                    )
                 else:
                     verified = True
                 assert verified is expected_verified, (
