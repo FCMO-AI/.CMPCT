@@ -78,6 +78,25 @@ typedef struct CmpctPackRange {
     size_t length;
 } CmpctPackRange;
 
+/*
+ * Identify whether entry_index belongs to a bounded, codec-Zstd S_PACK that is
+ * eligible for cmpct_pack_read_batch. On success, out_owner is an opaque equality
+ * key: two entries with the same key on ONE LIVE ARCHIVE HANDLE share a physical
+ * owner. Keys must not be persisted or compared across handles/generations.
+ * This query reads authenticated index metadata only; it does not read, decode,
+ * or authenticate the current physical payload. Batch calls reauthenticate.
+ *
+ * Unsupported (RAW, non-PACK or non-Zstd) -> CMPCT_ERR_UNSUPPORTED;
+ * oversized source -> CMPCT_ERR_LIMIT; invalid index -> CMPCT_ERR_RANGE.
+ * A valid out_owner is set to zero on ALL errors, including null archive.
+ * The caller must provide valid, nonaliasing pointers for the live invocation.
+ */
+int32_t cmpct_entry_pack_owner(
+    const CmpctArchive *archive,
+    size_t entry_index,
+    size_t *out_owner
+);
+
 int32_t cmpct_pack_read_batch(
     const CmpctArchive *archive,
     const CmpctPackRange *requests,
