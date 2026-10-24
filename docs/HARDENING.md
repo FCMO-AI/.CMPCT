@@ -81,6 +81,41 @@ This intentionally solves only host-independent lexical aliasing. Unicode normal
 
 The explicit preflight command is intentional for this first increment: it creates one testable, fuzzable safety boundary without silently adding latency to every existing reader hot path before the cost is measured.
 
+### macOS APFS/HFS+ destination aliasing — v0.31 draft candidate, not shipping
+
+The revision-24 **logical index** is byte-distinct for `café` (NFC) and
+`cafe\u0301` (NFD). Apple's APFS comparison is normalization-insensitive even when
+case-sensitive; common default APFS also treats many case variants as the same directory
+entry. A portable lexical path key therefore cannot itself guarantee a one-to-one
+**physical** extraction tree on macOS. This is a destination policy, not a reason to
+normalize or rewrite archived POSIX paths. Primary host semantics:
+https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/APFS_Guide/FAQ/FAQ.html
+
+Exact unmodified development-source macOS-26.6.2 ARM64 evidence: PR #334, run
+`40072645196`, HEAD `3487ad223a3c26f22464863a4a1f15d5b3fe7f22`. Actual
+NFC/NFD `samefile` alias was observed; three product `extractall` courts failed
+because the reference extractor accepted two physical aliases instead of refusing
+the tree. Ubuntu controls passed. The preregistration and test source predate the
+product modification and remain unchanged.
+
+Candidate `src/cmpct/path_policy.py::macos_comparison_component` uses
+NFD→casefold→NFD and strict UTF-8 encode. `CMPCT.extractall` applies a parent-node-ID
+prefix ownership map before any member writes on `sys.platform == 'darwin'`, rejecting
+conflicting original component spellings at the same normalized prefix. The first
+candidate run `40072814609` passed **8/8 run Mac tests** (plus one skipped) and
+**3/3 Ubuntu tests** (six skipped); the exact candidate source is
+`edf81a6da61b5d4cdd3291944922e374f1c1fc66`. Linux remains byte-distinct.
+
+Explicit limitations: Python's current Unicode tables are not the complete native
+Apple Unicode-9.0 comparison algorithm; case-sensitive APFS may legitimately accept
+some case-distinct names rejected by this conservative policy; destination symlinks,
+reparse points, concurrent filesystem mutations, mountpoints and preexisting aliases
+are not solved. The current court runs the **real Reader extraction method** on
+directory-only preconstructed rows and does not prove an authenticated full Builder/
+Reader roundtrip or platform-wide release fitness. Host CPU/RSS and official ABBA
+economics remain pending. Until reconciled with the Reader owners and promotion
+gates, this is an unmerged safety candidate only.
+
 ## Native direct/map-decode safety boundary
 
 The shared Rust reader has bounded bridges for ordinary direct Zstd/WAV-FLAC/raw Deflate/Zstd-dictionary, fixed/CDC/sparse maps, micro-solid `S_PACK` slices, and the independently gated stored-payload plus retained-Deflate-mode-1 virtual-ZIP recipes. A direct compressed/reconstructed object cannot allocate/decode above 256 MiB and must match physical framing, exact logical length and blob SHA-256 before a slice is returned. WAV/FLAC additionally requires codec metadata to parse cleanly and agree with FLAC stream channel/rate/bit-depth before reconstruction succeeds. Fixed/CDC maps are checked for valid blob references, declared-length agreement and exact logical-size accounting before use; selective reads decode only intersecting chunks, and complete reads additionally verify the logical whole-file SHA-256.
