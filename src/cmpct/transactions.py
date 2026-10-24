@@ -276,20 +276,59 @@ def append_rename(archive:Path,old:str,new:str):
     op=['ren',old,new];checkpoint=_index_after_op(idx,op) if depth>=63 else None
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
 
+def _iter_blob_header_candidates(archive:Path):
+    """Enumerate *unverified* framed blob-header candidates, even if indexes are damaged.
+
+    This is forensic discovery, not content recovery or authentication. Header CRC/SHA fields are
+    *claims*, not checks; candidates need not belong to any committed generation. Full Reader
+    verification and any future authenticated salvage remain separate operations.
+    """
+    # Footnote: read_bytes() allocated the entire archive, including sparse holes. A single
+    # reusable readinto buffer of 1 MiB + BHDR.size-1 keeps scan memory bounded without
+    # redundant block copies; the overlap preserves full headers across window boundaries.
+    # Framing/offset behavior stays equivalent to the permissive historical candidate scan.
+    window=1024*1024;overlap=BHDR.size-1
+    carry_len=0;position=0
+    with open(archive,'rb') as f:
+        source_size=os.fstat(f.fileno()).st_size
+        # Avoid charging a 1 MiB buffer to tiny forensic inputs. The initial file
+        # extent is the I/O budget; neither buffer capacity nor bytes read can grow
+        # with concurrent append operations.
+        buf=bytearray(min(window,source_size)+overlap)
+        # A concurrently growing source must not turn a forensic scan into an unbounded
+        # tail follower. The open inode is fixed; the initial size limits I/O, not content
+        # identity. This still makes no immutable-snapshot or authentication claim.
+        while position<source_size:
+            n=min(window,source_size-position)
+            got=f.readinto(memoryview(buf)[carry_len:carry_len+n])
+            if not got:break
+            active=carry_len+got;origin=position-carry_len;p=0
+            while True:
+                i=buf.find(BMAGIC,p,active)
+                if i<0 or i+BHDR.size>active:break
+                try:
+                    m,c,fl,res,us,cs,ml,rcrc,rh=BHDR.unpack_from(buf,i)
+                    offset=origin+i;end=offset+BHDR.size+ml+cs
+                    if end<=source_size:
+                        yield {'offset':offset,'codec':c,'usize':us,'csize':cs,
+                                    'crc32':rcrc,'sha256':bytes(rh).hex(),
+                                    'verification':'unverified',
+                                    'generation_membership':'unknown'}
+                except (struct.error,ValueError,OverflowError):
+                    pass
+                p=i+1
+            carry_len=min(overlap,active)
+            buf[:carry_len]=buf[active-carry_len:active]
+            position+=got
+
+
 def recover_blob_records(archive:Path):
-    # Last-resort content salvage independent of either index. It returns valid self-hashed blobs;
-    # names require an index, but content remains recoverable even after severe metadata damage.
-    data=Path(archive).read_bytes();out=[];p=0
-    while True:
-        i=data.find(BMAGIC,p)
-        if i<0:break
-        if i+BHDR.size<=len(data):
-            try:
-                m,c,fl,res,us,cs,ml,rcrc,rh=BHDR.unpack_from(data,i);end=i+BHDR.size+ml+cs
-                if end<=len(data):out.append({'offset':i,'codec':c,'usize':us,'csize':cs,'crc32':rcrc,'sha256':bytes(rh).hex()})
-            except Exception:pass
-        p=i+1
-    return out
+    """Return legacy list-shaped forensic header candidates (never authenticated content).
+
+    For arbitrarily many framed candidates, consume _iter_blob_header_candidates instead;
+    materializing a Python list necessarily uses memory proportional to result count.
+    """
+    return list(_iter_blob_header_candidates(archive))
 
 def compact_archive(src:Path,dst:Path):
     # Compaction is deliberately simple and conservative in the prototype: reconstruct the exact
