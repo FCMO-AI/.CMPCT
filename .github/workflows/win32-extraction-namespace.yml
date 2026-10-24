@@ -1,0 +1,56 @@
+# ci-lane: fast
+name: CMPCT Win32 Extraction Namespace Court
+
+on:
+  pull_request:
+    paths:
+      - src/cmpct/path_policy.py
+      - src/cmpct/reader.py
+      - tests/test_v031_windows_member_namespace.py
+      - .github/workflows/win32-extraction-namespace.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-win32-names-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  namespace:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Reject stale source binding
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install CMPCT and pytest
+        run: python -m pip install -e ".[test]"
+      - name: Run unchanged lexical controls and Win32 physical admission
+        # The global conftest imports historical research engines whose Linux-only libzstd.so
+        # dependency is irrelevant to these two independent product/namespace test modules.
+        # --noconftest runs every unchanged assertion without loading that unrelated engine.
+        run: python -m pytest -q --noconftest tests/test_path_policy.py tests/test_v031_windows_member_namespace.py
+      - name: Preserve real product/host identity
+        if: always()
+        shell: bash
+        run: |
+          echo "SOURCE=$(git rev-parse HEAD)"
+          python -c "import os, platform, sys; print('HOST', os.name, platform.platform(), sys.version)"
