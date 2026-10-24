@@ -33,15 +33,19 @@ class CMPCT:
             # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This
             # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map
             # one-to-one onto a destination filesystem.
-            canonical_seen=set();hardlink_aliases=[]
+            canonical_seen=set();canonical_names={};hardlink_aliases=[];short_rows=[]
             try:
                 for row in self.files:
                     key,_=canonical_logical_path(row[0])
                     if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
-                    canonical_seen.add(key)
-                    if row[1]==K_HARDLINK:hardlink_aliases.append(row[0])
+                    canonical_seen.add(key);canonical_names[key]=row[0]
+                    if len(row)<7:short_rows.append(row[0])
+                    elif row[1]==K_HARDLINK:hardlink_aliases.append(row[0])
             except ValueError as exc:
                 raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
+            # Keep canonical-duplicate error priority on deliberately short hostile rows;
+            # otherwise never admit incomplete row shapes to graph resolution.
+            if short_rows:raise IOError(f'malformed CMPCT logical row: {short_rows[0]!r}')
             # Strict preflight already checks authenticated hardlink owner graphs, but ordinary
             # Reader opens historically skipped that court. A signed self-cycle could then recurse
             # forever during read(), and a valid long chain could exceed Python's call stack.
@@ -61,7 +65,13 @@ class CMPCT:
                     if (not isinstance(link,list) or len(link)!=1
                             or not isinstance(link[0],str)):
                         raise IOError(f'hardlink has invalid target: {node!r}')
-                    node=link[0]
+                    # The signed target is a logical path, not a raw string dictionary key.
+                    # Strict preflight canonicalizes backslashes as separators; use that
+                    # same key here while retaining each real row's original spelling.
+                    try:target_key,_=canonical_logical_path(link[0])
+                    except ValueError as exc:
+                        raise IOError(f'unsafe hardlink target: {node!r}: {exc}') from exc
+                    node=canonical_names.get(target_key,link[0])
                 owner=self._hardlink_owners.get(node,node)
                 resolved=self.by.get(owner)
                 if resolved is None or resolved[1]!=K_FILE:
@@ -734,21 +744,14 @@ class CMPCT:
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
                 except OSError:pass
-        # Resolve each link through its in-archive dependency graph. Explicit iterative resolution
-        # avoids recursion limits and quadratic retry loops on long alias chains. Hardlinks may only
-        # terminate at real regular files, never directories or symlinks.
-        owner_cache={}
+        # Opening has already validated all authenticated owner graphs and mapped every
+        # alias to one terminal regular row. Reuse that identity during extraction:
+        # a second raw-spelling traversal disagrees with canonical signed targets.
         for alias,(row,parts,full) in deferred_hardlinks.items():
-            node=alias;chain=[];active=set()
-            while node in deferred_hardlinks and node not in owner_cache:
-                if node in active:raise IOError(f'cyclic hardlink target: {node}')
-                active.add(node);chain.append(node)
-                node=deferred_hardlinks[node][0][6][0]
-            owner=owner_cache.get(node,node)
+            owner=self._hardlink_owners[alias]
             source=materialized.get(owner)
             if source is None or source[0][1]!=K_FILE:
                 raise IOError(f'hardlink has no materialized regular owner: {alias!r} -> {owner!r}')
-            for name in chain:owner_cache[name]=owner
             target=source[2]
             if not os.path.isfile(target) or os.path.islink(target):
                 raise IOError(f'hardlink owner not materialized safely: {owner!r}')
