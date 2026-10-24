@@ -8,6 +8,7 @@ on:
       - 'src/cmpct/reader.py'
       - 'src/cmpct/validation.py'
       - 'tests/test_v031_fsmeta_sharedleaf_composition.py'
+      - 'benchmarks/v031_fsmeta_sharedleaf_abba.py'
       - 'tests/test_v031_fsmeta_structural_preflight.py'
       - '.github/workflows/v031-fsmeta-sharedleaf-composition.yml'
   workflow_dispatch:
@@ -40,6 +41,8 @@ jobs:
           git hash-object tests/test_v031_fsmeta_structural_preflight.py > fsmeta-sharedleaf-evidence/fsmeta-tests.blob
           git hash-object tests/test_v031_fsmeta_sharedleaf_composition.py > fsmeta-sharedleaf-evidence/composition-tests.blob
           git hash-object tests/test_v031_atomic_shared_leaf_optin.py > fsmeta-sharedleaf-evidence/atomic-tests.blob
+          git hash-object benchmarks/v031_fsmeta_sharedleaf_abba.py > fsmeta-sharedleaf-evidence/abba-script.blob
+          test "$(git hash-object benchmarks/v031_fsmeta_sharedleaf_abba.py)" = "e600a901965939c424e6cf06394cfbc62a06cfca"
           test "$(git hash-object tests/test_v031_fsmeta_structural_preflight.py)" = "91acd4efe6a9f0e63538107cb4973e93013521b6"
           test "$(git hash-object tests/test_v031_fsmeta_sharedleaf_composition.py)" = "8dccaf916d632033f5b03d6329662ab0eb7795f0"
           test "$(git hash-object tests/test_v031_atomic_shared_leaf_optin.py)" = "7a144568e8e5eec331ab6b80f93432aacc03c7af"
@@ -56,6 +59,16 @@ jobs:
             tests/test_v031_fsmeta_structural_preflight.py \
             tests/test_v031_atomic_shared_leaf_optin.py \
             tests/test_v031_destination_hardlink_leaf_alias.py 2>&1 | tee fsmeta-sharedleaf-evidence/owner-pytest.txt
+      - name: Same-archive genuine Reader validator-ablation ABBA research
+        run: python benchmarks/v031_fsmeta_sharedleaf_abba.py
+      - name: Preserve raw ABBA timings and allocation observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-fsmeta-sharedleaf-abba-${{ github.sha }}
+          path: benchmark-artifacts/v031_fsmeta_sharedleaf_abba.json
+          if-no-files-found: warn
+          retention-days: 90
       - name: Preserve raw exact-head evidence even on negative court
         if: always()
         uses: actions/upload-artifact@v4
