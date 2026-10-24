@@ -1,4 +1,4 @@
-# ci-lane: research
+# ci-lane: fast
 name: CMPCT v0.31 authenticated delta replay O0
 on:
   pull_request:
