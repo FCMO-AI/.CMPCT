@@ -76,3 +76,21 @@ def test_unbound_batch_size_rejected(tmp_path: Path) -> None:
     m = fixture(tmp_path)
     with pytest.raises(ValueError, match="batch size"):
         o12.compute(m, root=tmp_path, batch_size=10**9)
+
+
+def test_custom_git_clean_filter_is_rejected_before_hashed_content(tmp_path: Path) -> None:
+    # O12b preregistered the malicious-config negative before this test.
+    # Different Git-local clean commands would change a Git object ID even
+    # though the source bytes and Git HEAD are identical.
+    m = fixture(tmp_path)
+    (tmp_path / ".gitattributes").write_text("*.py filter=flaky\n*.bin binary\n")
+    git(tmp_path, "config", "filter.flaky.clean", "cat")
+    with pytest.raises(ValueError, match="unsupported Git source filter"):
+        o12.compute(m, root=tmp_path)
+
+
+def test_working_tree_encoding_transform_is_explicitly_excluded(tmp_path: Path) -> None:
+    m = fixture(tmp_path)
+    (tmp_path / ".gitattributes").write_text("*.py working-tree-encoding=UTF-16\n*.bin binary\n")
+    with pytest.raises(ValueError, match="unsupported Git source filter"):
+        o12.compute(m, root=tmp_path)
