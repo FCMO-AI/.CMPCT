@@ -1,4 +1,5 @@
 # ci-lane: fast
+# O31 inherits O28 exact-owner courts and adds canonical signed owner parity.
 name: CMPCT v031 hardlink + static destination union O28
 on:
   pull_request:
@@ -6,6 +7,9 @@ on:
       - 'src/cmpct/reader.py'
       - 'tests/test_reader_hardlink_graph_o25.py'
       - 'tests/test_v031_hardlink_static_destination_union_o28.py'
+      - 'tests/test_v031_hardlink_canonical_owner_o31.py'
+      - 'tests/test_v031_signed_tree_preflight.py'
+      - 'tests/test_v031_reader_open_failure_resource_ownership.py'
       - 'tests/test_v031_destination_static_symlink_preflight.py'
       - 'tests/test_v031_static_destination_o10r_union_o27.py'
       - '.github/workflows/v031-hardlink-static-dest-union-o28.yml'
@@ -37,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          test "$(git hash-object src/cmpct/reader.py)" = "c7850c08c7bb27563955c6e2294b8c17c140d0a2"
+          test "$(git hash-object src/cmpct/reader.py)" = "de9accf6607aca7cf70dfe71d7b299a02e298a2d"
           test "$(git hash-object tests/test_reader_hardlink_graph_o25.py)" = "db38f7024b2f960b66c4d387c2cd942111cf9007"
           test "$(git hash-object tests/test_v031_destination_static_symlink_preflight.py)" = "f55bd39b449a0d43af25658733ae14f8cd583ffa"
           test "$(git hash-object tests/test_v031_static_destination_o10r_union_o27.py)" = "$(git rev-parse '34a2059491fcd38bc09231cba178ec8541f74fdb:tests/test_v031_static_destination_o10r_union_o27.py')"
@@ -54,9 +58,9 @@ jobs:
           set -euo pipefail
           mkdir -p o28-evidence
           if [ "${{ runner.os }}" = "Windows" ]; then
-            python -m pytest --noconftest -q -rs tests/test_reader_hardlink_graph_o25.py tests/test_v031_hardlink_static_destination_union_o28.py 2>&1 | tee o28-evidence/pytest.log
+            python -m pytest --noconftest -q -rs tests/test_reader_hardlink_graph_o25.py tests/test_v031_hardlink_static_destination_union_o28.py tests/test_v031_hardlink_canonical_owner_o31.py tests/test_v031_signed_tree_preflight.py tests/test_v031_reader_open_failure_resource_ownership.py 2>&1 | tee o28-evidence/pytest.log
           else
-            python -m pytest --noconftest -q -rs tests/test_reader_hardlink_graph_o25.py tests/test_v031_destination_static_symlink_preflight.py tests/test_v031_static_destination_o10r_union_o27.py tests/test_v031_hardlink_static_destination_union_o28.py 2>&1 | tee o28-evidence/pytest.log
+            python -m pytest --noconftest -q -rs tests/test_reader_hardlink_graph_o25.py tests/test_v031_destination_static_symlink_preflight.py tests/test_v031_static_destination_o10r_union_o27.py tests/test_v031_hardlink_static_destination_union_o28.py tests/test_v031_hardlink_canonical_owner_o31.py tests/test_v031_signed_tree_preflight.py tests/test_v031_reader_open_failure_resource_ownership.py 2>&1 | tee o28-evidence/pytest.log
           fi
           exit "${PIPESTATUS[0]}"
       - name: Preserve results
