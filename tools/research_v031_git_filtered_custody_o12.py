@@ -22,6 +22,38 @@ SCHEMA = "cmpct-v031-git-filtered-worktree-o12-v1"
 _OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
 
 
+def _reject_external_git_filters(root: Path, rows: list[str]) -> None:
+    """Refuse mutable host-configured executable/encoding transforms.
+
+    Git check-attr --all reports only effective attributes, unlike querying
+    an individual attribute where missing and literal 'filter=unspecified'
+    are indistinguishable. Null framing protects unusual tracked path names.
+    This must happen *before* the first filtered Git hash-object invocation.
+    """
+    request = b"".join(path.encode("utf-8") + b"\x00" for path in rows)
+    proc = subprocess.run(
+        ["git", "check-attr", "--stdin", "-z", "--all"],
+        input=request, cwd=root, capture_output=True, check=False,
+    )
+    if proc.returncode:
+        raise ValueError("cannot audit effective Git source filter attributes")
+    if proc.stdout and not proc.stdout.endswith(b"\x00"):
+        raise ValueError("malformed Git source attribute response")
+    fields = proc.stdout.split(b"\x00")[:-1] if proc.stdout else []
+    if len(fields) % 3:
+        raise ValueError("malformed Git source attribute triplets")
+    admitted = set(rows)
+    for pos in range(0, len(fields), 3):
+        try:
+            path, attr, value = (field.decode("utf-8") for field in fields[pos:pos + 3])
+        except UnicodeError as exc:
+            raise ValueError("undecodable Git source attributes") from exc
+        if path not in admitted:
+            raise ValueError("Git returned attributes for an unknown source")
+        if attr in {"filter", "working-tree-encoding"} and value != "unset":
+            raise ValueError(f"unsupported Git source filter attribute: {path}: {attr}")
+            
+    
 def compute(manifest: dict, *, root: Path = raw.ROOT, batch_size: int = 96) -> dict:
     if not 1 <= batch_size <= 128:
         raise ValueError("invalid bounded Git hash-object batch size")
@@ -37,6 +69,7 @@ def compute(manifest: dict, *, root: Path = raw.ROOT, batch_size: int = 96) -> d
     # arguments to hash-object (WITHOUT --no-filters). -- prevents option paths.
     # Never hash HEAD:index blobs here: that silently hides unstaged source edits.
     t1 = time.perf_counter_ns()
+    _reject_external_git_filters(root, rows)
     for start in range(0, len(rows), batch_size):
         batch = rows[start:start + batch_size]
         proc = subprocess.run(
