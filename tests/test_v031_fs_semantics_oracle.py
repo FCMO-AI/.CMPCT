@@ -79,6 +79,19 @@ class SemanticTreeDigestCourt(unittest.TestCase):
             self.hardlink(root / "original", root / "alias")
         self.assertEqual(sha(self.left), sha(self.right))
 
+    def test_equal_link_counts_with_different_partition_membership(self):
+        # Every path has byte-identical payload, and each tree has two
+        # two-member hardlink groups; only the equivalence classes differ.
+        for p in ("a", "c"):
+            (self.left / p).write_bytes(b"same")
+        self.hardlink(self.left / "a", self.left / "b")
+        self.hardlink(self.left / "c", self.left / "d")
+        for p in ("a", "b"):
+            (self.right / p).write_bytes(b"same")
+        self.hardlink(self.right / "a", self.right / "c")
+        self.hardlink(self.right / "b", self.right / "d")
+        self.assertNotEqual(sha(self.left), sha(self.right))
+
     def test_nested_hardlink_equivalence_is_path_order_independent(self):
         for root in (self.left, self.right):
             (root / "nested").mkdir()
