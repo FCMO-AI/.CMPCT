@@ -27,13 +27,13 @@ from cmpct.validation import preflight_archive  # noqa: E402
 
 def mutated_index(original: bytes, zstd: Zstd, family: str, first: bool) -> bytes:
     magic, rev, flags, csize, usize, physical_size, digest = HDR.unpack_from(original)
-    assert magic == b"CMPCT24\\0" and rev == 24
+    assert magic == b"CMPCT24\0" and rev == 24
     old_index = zstd.decompress(original[HDR.size:HDR.size + csize], usize)
     assert sha(old_index) == digest
     root = msgpack.unpackb(old_index, raw=False)
-    assert len(root["files"]) == 1 and isinstance(root["fsmeta"], dict)
+    assert len(root["files"]) == 1 and isinstance(root.get("fsmeta", {}), dict)
     pack = msgpack.Packer(use_bin_type=True)
-    wire = [pack.pack_map_header(len(root) + (2 if family.startswith("root") else 0))]
+    wire = [pack.pack_map_header(len(root) + (2 if family.startswith("root") else (0 if "fsmeta" in root else 1)))]
     if family.startswith("root"):
         key = 7 if family == "root-int" else b"ignored-extension"
         values = (0, 1) if first else (1, 0)
@@ -55,6 +55,16 @@ def mutated_index(original: bytes, zstd: Zstd, family: str, first: bool) -> byte
             ordered = [extra_owner, base_owner] if first else [base_owner, extra_owner]
             wire.extend([pack.pack("owner"), pack.pack(ordered[0]),
                          pack.pack("owner"), pack.pack(ordered[1])])
+    if family == "nested-owner" and "fsmeta" not in root:
+        # Independent goldens may omit optional filesystem metadata.
+        # Add an otherwise valid fsmeta object, then duplicate owner.
+        wire.extend([
+            pack.pack("fsmeta"), pack.pack_map_header(4),
+            pack.pack("owner"), pack.pack([0, 0] if first else [1001, 1002]),
+            pack.pack("owner"), pack.pack([1001, 1002] if first else [0, 0]),
+            pack.pack("owner_overrides"), pack.pack([]),
+            pack.pack("xattrs"), pack.pack([]),
+        ])
     new_index = b"".join(wire)
     assert new_index != old_index
     # Ordinary decoder silently selects one value: the signed bytes are
@@ -70,7 +80,7 @@ def mutated_index(original: bytes, zstd: Zstd, family: str, first: bool) -> byte
     forged = (
         HDR.pack(magic, rev, flags, len(new_compressed), len(new_index), physical_size, h)
         + new_compressed + physical + new_compressed
-        + FTR.pack(b"CMPTF24\\0", 0, 1, 0, 0, len(new_compressed), len(new_index), 0, h)
+        + FTR.pack(b"CMPTF24\0", 0, 1, 0, 0, len(new_compressed), len(new_index), 0, h)
     )
     assert forged[HDR.size + len(new_compressed):HDR.size + len(new_compressed) + physical_size] == physical
     assert forged[-FTR.size - len(new_compressed):-FTR.size] == new_compressed
