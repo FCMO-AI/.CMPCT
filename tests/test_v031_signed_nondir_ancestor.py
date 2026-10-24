@@ -12,7 +12,7 @@ import msgpack
 import pytest
 
 from cmpct.builder import Builder
-from cmpct.codec import FMAGIC, FTR, HDR, K_DIR, MAGIC, sha, zc, zd
+from cmpct.codec import FMAGIC, FTR, HDR, K_DIR, K_HARDLINK, MAGIC, sha, zc, zd
 from cmpct.reader import CMPCT
 
 
@@ -117,3 +117,56 @@ def test_original_builder_archive_and_directory_parent_preserved(tmp_path: Path)
         reader.extractall(out, metadata=False)
         assert (out / "folder" / "nested.txt").read_bytes() == b"VALID-NESTED"
         assert (out / "folder.txt").read_bytes() == b"VALID-SIBLING"
+
+
+def test_signed_hardlink_parent_cannot_leave_partial_output(tmp_path: Path) -> None:
+    # Held-out O1: an archive hardlink is a real *file*, never a directory.
+    # Construct a genuine physical r24 file pair, then authenticate an added
+    # logical alias alongside a physical child whose path crosses that alias.
+    base = _physical_source(tmp_path)
+    hostile = tmp_path / "hardlink_parent.cmpct"
+    child = "alias.bin/child.bin"
+
+    def mutate(index):
+        parent = next(row for row in index["files"] if row[0] == "parent.bin")
+        assert parent[1] != K_DIR
+        for row in index["files"]:
+            if row[0] == "child.bin":
+                row[0] = child
+        index["files"].append([
+            "alias.bin", K_HARDLINK, parent[2], parent[3],
+            parent[4], None, ["parent.bin"],
+        ])
+        index["files"].sort(key=lambda row: row[0])
+
+    _signed_reindex(base, hostile, mutate)
+    with CMPCT(hostile) as reader:
+        assert reader.read("parent.bin") == b"PARENT-EXACT-ONE"
+        assert reader.read("alias.bin") == b"PARENT-EXACT-ONE"
+        assert reader.read(child) == b"CHILD-EXACT-TWO"
+        out = tmp_path / "out"
+        with pytest.raises(OSError, match="non-directory archive ancestor"):
+            reader.extractall(out, metadata=False)
+        assert out.is_dir() and list(out.iterdir()) == []
+
+
+def test_signed_valid_hardlink_alias_preserves_inode_sharing(tmp_path: Path) -> None:
+    base = _physical_source(tmp_path)
+    signed = tmp_path / "hardlink_valid.cmpct"
+
+    def mutate(index):
+        parent = next(row for row in index["files"] if row[0] == "parent.bin")
+        index["files"].append([
+            "alias.bin", K_HARDLINK, parent[2], parent[3],
+            parent[4], None, ["parent.bin"],
+        ])
+        index["files"].sort(key=lambda row: row[0])
+
+    _signed_reindex(base, signed, mutate)
+    with CMPCT(signed) as reader:
+        out = tmp_path / "out"
+        reader.extractall(out, metadata=False)
+        assert (out / "alias.bin").read_bytes() == b"PARENT-EXACT-ONE"
+        assert (out / "child.bin").read_bytes() == b"CHILD-EXACT-TWO"
+        import os
+        assert os.path.samefile(out / "parent.bin", out / "alias.bin")
