@@ -99,9 +99,7 @@ def build_archive(root: Path, output: Path):
             assert target in ("a.bin", "b.bin")
         # Capture only decision-relevant ground truth; never use private
         # Python rows to fabricate the native ABI observations.
-        assert bytes(rows["a.bin"][5]) == bytes(rows["b.bin"][5]) or (
-            rows["a.bin"][5] is None and rows["b.bin"][5] is None
-        )
+        assert rows["a.bin"][5] == rows["b.bin"][5]
     return target
 
 
