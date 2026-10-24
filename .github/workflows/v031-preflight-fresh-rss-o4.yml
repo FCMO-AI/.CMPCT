@@ -5,6 +5,8 @@ on:
     paths:
       - 'benchmarks/v031_preflight_fresh_process_rss_o4.py'
       - 'docs/v031-research/2026-10-24-preflight-fresh-process-rss-o4-prereg.md'
+      - 'docs/v031-research/2026-10-24-preflight-fresh-process-rss-o4-result.md'
+      - 'docs/v031-research/2026-10-24-preflight-fresh-process-rss-o5-prereg.md'
       - '.github/workflows/v031-preflight-fresh-rss-o4.yml'
   workflow_dispatch:
 permissions:
@@ -44,6 +46,27 @@ jobs:
           mkdir -p fresh-rss-o4-artifacts
           python -u benchmarks/v031_preflight_fresh_process_rss_o4.py --out fresh-rss-o4-artifacts --repeats 5 --sizes 512 2048 4096 2>&1 | tee fresh-rss-o4-artifacts/console.log
           sha256sum fresh-rss-o4-artifacts/fresh-process-rss-o4.json | tee fresh-rss-o4-artifacts/receipt.sha256
+      - name: Measure one prospectively registered larger-N O5 signed corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p fresh-rss-o5-artifacts
+          python -u - <<'PY' 2>&1 | tee fresh-rss-o5-artifacts/console.log
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, str(Path('benchmarks').resolve()))
+          from v031_preflight_fresh_process_rss_o4 import run_parent
+          run_parent(Path('fresh-rss-o5-artifacts'), 5, (16384,))
+          PY
+          sha256sum fresh-rss-o5-artifacts/fresh-process-rss-o4.json | tee fresh-rss-o5-artifacts/receipt.sha256
+      - name: Preserve O5 larger-N positive or negative signed memory evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-fresh-rss-o5-${{ github.sha }}
+          path: fresh-rss-o5-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
       - name: Preserve both positive and negative evidence
         if: always()
         uses: actions/upload-artifact@v4
