@@ -97,3 +97,30 @@ def test_pack_corrupt_physical_data_is_rejected(tmp_path, golden, index):
     with CMPCT(path) as reader:
         with pytest.raises((IOError, OSError, ValueError, RuntimeError)):
             reader.read("alpha.txt")
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_authenticated_but_out_of_bounds_pack_slice_is_rejected(tmp_path, golden, index):
+    """Structural bounds must survive an adversary who recomputes BOTH authenticated indexes."""
+    import msgpack
+
+    from cmpct.codec import FTR, FMAGIC, HDR, MAGIC, sha, zc, zd
+
+    vec = golden[index]
+    wire = base64.b64decode(vec["archive_base64"], validate=True)
+    _magic, revision, flags, ci, ui, data_span, _digest = HDR.unpack_from(wire)
+    index_data = msgpack.unpackb(zd(wire[HDR.size:HDR.size + ci], ui), raw=False)
+    target = next(row for row in index_data["files"] if row[0] == "omega.bin")
+    target[6][2] = vec["packed_blob_uncompressed_bytes"] - target[4] + 1
+    packed = msgpack.packb(index_data, use_bin_type=True)
+    enc = zc(packed, 12)
+    physical_record = wire[HDR.size + ci:HDR.size + ci + data_span]
+    forged = (
+        HDR.pack(MAGIC, revision, flags, len(enc), len(packed), len(physical_record), sha(packed))
+        + enc + physical_record + enc
+        + FTR.pack(FMAGIC, 0, 1, 0, 0, len(enc), len(packed), 0, sha(packed))
+    )
+    path = tmp_path / "authenticated-invalid-pack.cmpct"
+    path.write_bytes(forged)
+    with pytest.raises(IOError, match="pack slice exceeds blob"):
+        preflight_archive(path)
