@@ -324,3 +324,47 @@ for kinds and O(1) terminal-owner lookup to the existing cycle traversal.
 It does not fix pre-existing extract-time races, namespacing aliases or
 the existing potential O(number-of-hardlinks × chain-depth) repeated cycle
 work; these remain separate potential product costs.
+
+### Authenticated hardlink chains and strict-preflight CPU — v0.31 draft O0/O1 (not released)
+
+A finite file-count limit does **not** by itself impose a proportional CPU-work
+bound when graph edges are repeatedly traversed. The strict revision-24
+`preflight_archive` in source-exact PR #339 (`3494a58e`, validator blob
+`14df3f7492fc2db8b7dc7574868a333b4fe400c4`) re-walked every
+hardlink-alias target chain to confirm its ultimate `K_FILE` owner. N valid
+aliases arranged as a chain cause ~N(N+1)/2 owner-pointer inspections versus
+N for independent star aliases.
+
+Independent real Builder archives with both authenticated index copies and
+unchanged physical content were measured in PR #342 [O0 run 40084916000]
+(https://github.com/FCMO-AI/.CMPCT/actions/runs/40084916000),
+exact source `c6a5592aa1027b6003278a4e85aa88389fcaa241`. Five-repeat
+median strict preflight at 4096 aliases: **730.438 ms chain** vs **16.489 ms
+star**, a **44.30× chain/star** ratio; at 2048 aliases: 185.027 vs 8.369 ms.
+Raw timing, complete archived/index/physical bytes, corpus hashes and source
+identity reside in
+[artifact 12556257687](https://github.com/FCMO-AI/.CMPCT/actions/runs/40084916000/artifacts/12556257687).
+These are research product-cost observations, **not** release benchmark credit.
+
+A second authentic signed adversary, a hardlink chain ending at a nonexistent
+terminal target, caused an uncaught `KeyError` rather than the documented
+`ValidationError` in the unmodified preflight. Source-bound [negative O1
+run 40085228916](https://github.com/FCMO-AI/.CMPCT/actions/runs/40085228916)
+preserves this failure and nine passing new controls (plus inherited preflight
+tests); no evaluator was weakened.
+
+PR #342 proposes a bounded **iterative** terminal-owner memo, caching only
+after checking each traversed edge, cycle and terminal regular-owner type.
+The initial O1 product-head `966b995ac0553ecc33cfc2486492b5a7dfc5461b`
+passed all **18** focused authentic signed-graph and inherited topology tests
+in [run 40085358527](https://github.com/FCMO-AI/.CMPCT/actions/runs/40085358527).
+Its contribution remains **draft**. Same-runner identical-archive baseline
+vs candidate ABBA, peak Python allocations, final exact-head inherited CI
+and broader portability/release comparisons must be examined independently
+before any performance or promotion claim. The general Reader, native ABI,
+frozen r24 format and public v0.30.0 release are unchanged.
+
+A future hardening rule should distinguish **object-count budgets** from
+**work-amplification budgets** for any archive-controlled ownership/reference
+graph. Do not protect the CPU budget by silently rejecting legitimate deep
+acyclic hardlink chains when an O(N) algorithm can validate them exactly.
