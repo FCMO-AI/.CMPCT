@@ -55,10 +55,10 @@ jobs:
       - name: Build actual native C ABI at exact candidate HEAD
         working-directory: native/cmpct-core
         run: cargo build --release --locked
-      - name: Reproduce preregistered negative O2 court
+      - name: Verify correction against frozen 18-case O2 negatives
         run: |
           set -o pipefail
-          python tests/native_nested_map_parity_oracle.py --phase negative             2>&1 | tee nested-map-evidence/court.txt
+          python tests/native_nested_map_parity_oracle.py --phase fixed             2>&1 | tee nested-map-evidence/court.txt
       - name: Preserve exact-head native/Python evidence
         if: always()
         uses: actions/upload-artifact@v6
