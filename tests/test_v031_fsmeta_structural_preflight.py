@@ -103,7 +103,7 @@ def test_reader_rejects_bad_fsmeta_without_any_explicit_preflight(ordinary_archi
     """Independent write-boundary test; do not rely on preflight's exception to mask Reader."""
     mutated = _authenticated_fsmeta_mutation(
         ordinary_archive,
-        lambda meta: meta.update(xattrs=[[0, [["user.bad", "not-bytes"]]]),
+        lambda meta: meta.update(xattrs=[[0, [["user.bad", "not-bytes"]]]]),
         tmp_path / "reader-only.cmpct",
     )
     output = tmp_path / "uncreated"
