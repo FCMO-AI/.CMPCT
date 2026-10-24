@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""O34b: one-row retrospective product-byte attribution, not a promotion rerun.
+"""O34b/O34c: one-row source-bound physical-byte attribution, not a promotion rerun.
 
 This instrument isolates the hostile tiny-files fixture that independently falsified the
 frozen compact-r24 promotion gate in O34.  It measures genuine r24, unchanged shipping
@@ -69,14 +69,31 @@ def _prepare_one_exact_workload(root: Path) -> dict:
 def _child(mode: str, workload: Path, archive: Path, result: Path) -> None:
     archive.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
-    if mode == "genuine_r24":
+    if mode in ("genuine_r24", "genuine_r24_small_pack"):
         from cmpct.builder import Builder
         from cmpct.reader import CMPCT
-        Builder(workload).build(archive)
+        builder = Builder(workload)
+        metadata = {"selected": mode, "format_revision": 24}
+        if mode == "genuine_r24_small_pack":
+            # One-factor causal control: same canonical Builder, only the bounded
+            # shipping pack-target budget. No encoder heuristic retuning.
+            largest = max(
+                (p.stat().st_size for p in workload.rglob("*")
+                 if p.is_file() and not p.is_symlink()),
+                default=0,
+            )
+            previous = int(builder.micro_pack_target)
+            builder.micro_pack_target = min(2 * 1024 * 1024, 8 * largest) if largest else previous
+            metadata.update({
+                "max_regular_member_bytes": largest,
+                "original_micro_pack_target_bytes": previous,
+                "bounded_micro_pack_target_bytes": builder.micro_pack_target,
+                "isolation": "ONLY-micro_pack_target-changed",
+            })
+        builder.build(archive)
         with CMPCT(archive) as reader:
             verified_count = reader.verify()
         ok = verified_count >= 0
-        metadata = {"selected": "genuine-r24-builder", "format_revision": 24}
     else:
         # Separate *fresh* processes are vital. Candidate import deliberately patches
         # shared product-module globals, which would contaminate an in-process A/B.
@@ -125,7 +142,7 @@ def _parent(work_root: Path, output: Path) -> None:
     workload = source / NAME
 
     rows = {}
-    for mode in ("genuine_r24", "shipping_v030", "frozen_compact"):
+    for mode in ("genuine_r24", "genuine_r24_small_pack", "shipping_v030", "frozen_compact"):
         archive = work_root / "archives" / f"{mode}.cmpct"
         receipt = work_root / f"{mode}.json"
         subprocess.run(
@@ -153,17 +170,20 @@ def _parent(work_root: Path, output: Path) -> None:
         "source_owner_sha": SOURCE,
         "original_o34_run": 40138113211,
         "full_frozen_promotion_decision": "NO_PROMOTION_FROM_O34_PRODUCT_BYTE_LOSS",
-        "scope": "one historical-identity source tree, three fresh process archives",
+        "scope": "one historical-identity source tree, four fresh process archives; one-factor pack-budget isolation",
         "input": input_identity,
         "rows": rows,
         "candidate_minus_genuine_r24_bytes": candidate - base,
         "shipping_minus_genuine_r24_bytes": released - base,
         "candidate_minus_shipping_bytes": candidate - released,
+        "small_pack_minus_genuine_bytes": rows["genuine_r24_small_pack"]["archive_bytes"] - base,
+        "shipping_minus_small_pack_bytes": released - rows["genuine_r24_small_pack"]["archive_bytes"],
         "one_row_attribution": verdict,
         "notes": [
             "This post-hoc single row cannot replace the 15+15 frozen matrix.",
             "No uncontrolled one-run wall number grants a performance claim.",
-            "All three physically complete archive sizes are counted.",
+            "All four physically complete archive sizes are counted.",
+            "The fourth arm changes only Builder.micro_pack_target; it is a local causal probe, not shipping-equivalent.",
             "Shared loss is not necessarily caused by compact policy.",
         ],
         "release_credit": False,
@@ -177,7 +197,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--work-root", type=Path)
     p.add_argument("--output", type=Path)
-    p.add_argument("--child-mode", choices=("genuine_r24", "shipping_v030", "frozen_compact"))
+    p.add_argument("--child-mode", choices=("genuine_r24", "genuine_r24_small_pack", "shipping_v030", "frozen_compact"))
     p.add_argument("--source", type=Path)
     p.add_argument("--archive", type=Path)
     p.add_argument("--child-result", type=Path)
