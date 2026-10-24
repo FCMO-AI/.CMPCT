@@ -1,0 +1,108 @@
+{
+  "schema": "cmpct-v031-bdc-r24-opaque-envelope-o16-v1",
+  "record_kind": "research_negative_noncanonical_not_release",
+  "original_prereg_commit": "df055d684857a748ed4c1fd722eef1328e21328e",
+  "source_head": "f131e9ba19fdd3a9801be0e1c8f45536b4dd701f",
+  "frozen_owner_head": "a34b050933b2f946fcf5fb1a4a7d02f58f777c0f",
+  "frozen_scientific_run": 39925132930,
+  "stronger_control_run": 39929731385,
+  "hosted_run_id": 40098303164,
+  "hosted_run_url": "https://github.com/FCMO-AI/.CMPCT/actions/runs/40098303164",
+  "hosted_job_id": 120885072047,
+  "hosted_run_conclusion": "success",
+  "artifact_id": 12560874620,
+  "artifact_url": "https://github.com/FCMO-AI/.CMPCT/actions/runs/40098303164/artifacts/12560874620",
+  "evidence_note": "Raw court JSON recovered directly from exact-head Actions job log and reproduced below; unchanged source identities enforced by workflow. Full physical bytes are from actual real CMPCT Builder and Reader.",
+  "decision": "RETIRE_OPAQUE_ENVELOPE_STRICT_EXTERNAL_WIN_ROUTE",
+  "format_change": false,
+  "original_filesystem_exposed_in_r24": false,
+  "prereg": "docs/v031-research/2026-10-24-bdc-r24-envelope-o16-prereg.md",
+  "process_peak_rss_kib_upper_bound": 100220,
+  "product_credit": false,
+  "release_credit": false,
+  "rows": [
+    {
+      "claim_boundary": "research-only opaque carrier; original filesystem NOT directly exposed by r24",
+      "name": "01_shifted_versions",
+      "original_external_slack_bytes": 6685,
+      "pinned_original_zstd19_bytes": 1694674,
+      "r24_real_opaque_envelope": {
+        "archive_bytes": 1689515,
+        "archive_sha256": "e5841d6e4f8e142e7bda00c75f196200814e8a3d92efc0d7edd8e50356954389",
+        "builder_stats": {
+          "bytes": 1689515,
+          "data_bytes": 1688437,
+          "encode_workers": 1,
+          "index_comp": 471,
+          "index_raw": 637,
+          "logical_bytes": 1687989,
+          "logical_files": 1,
+          "recipes": 0,
+          "reproducible": false,
+          "unique_blobs": 7
+        },
+        "decoded_original_manifest_identical": true,
+        "inner_byte_identical": true,
+        "net_physical_carry_bytes": 1526,
+        "verified_members": 1
+      },
+      "remaining_external_slack_bytes": 5159,
+      "sibling_original": {
+        "bytes": 1687989,
+        "sha256": "6f15c582a4c448524f112e5a74d832401004895c30a3e53723684d3d921b2b30"
+      },
+      "strict_size_win_vs_pinned_zstd19": true,
+      "timings_single_process_diagnostic_only": {
+        "combined_cpu_s": 0.473912562,
+        "combined_wall_s": 0.47394330900002046,
+        "copy_plus_r24_builder_cpu_s": 0.009430932999999975,
+        "copy_plus_r24_builder_wall_s": 0.009426928000010548,
+        "sibling_construct_cpu_s": 0.464481629,
+        "sibling_construct_wall_s": 0.4645163810000099
+      },
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd"
+    },
+    {
+      "claim_boundary": "research-only opaque carrier; original filesystem NOT directly exposed by r24",
+      "name": "03_boundary_churn",
+      "original_external_slack_bytes": 256,
+      "pinned_original_zstd19_bytes": 73097,
+      "r24_real_opaque_envelope": {
+        "archive_bytes": 73765,
+        "archive_sha256": "6c59efdceb9e2acb766227abacf4c5f2041dc5cc7c17ce6e09c6e9ef49fd0d8f",
+        "builder_stats": {
+          "bytes": 73765,
+          "data_bytes": 72905,
+          "encode_workers": 1,
+          "index_comp": 362,
+          "index_raw": 447,
+          "logical_bytes": 72841,
+          "logical_files": 1,
+          "recipes": 0,
+          "reproducible": false,
+          "unique_blobs": 1
+        },
+        "decoded_original_manifest_identical": true,
+        "inner_byte_identical": true,
+        "net_physical_carry_bytes": 924,
+        "verified_members": 1
+      },
+      "remaining_external_slack_bytes": -668,
+      "sibling_original": {
+        "bytes": 72841,
+        "sha256": "da20e529c5acd391e1ea26ab3101e1d6a1960c8216f5438e998cbc27489c78ae"
+      },
+      "strict_size_win_vs_pinned_zstd19": false,
+      "timings_single_process_diagnostic_only": {
+        "combined_cpu_s": 0.09651255500000011,
+        "combined_wall_s": 0.09653022700001657,
+        "copy_plus_r24_builder_cpu_s": 0.0012293740000000053,
+        "copy_plus_r24_builder_wall_s": 0.0012291410000102587,
+        "sibling_construct_cpu_s": 0.0952831810000001,
+        "sibling_construct_wall_s": 0.09530108600000631
+      },
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d"
+    }
+  ],
+  "status": "CORRECT_OPAQUE_ENVELOPE"
+}
