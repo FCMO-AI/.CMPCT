@@ -6,11 +6,12 @@ from __future__ import annotations
 import base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, mmap, os, shutil, stat, struct, sys, tempfile, threading, time, zipfile, zlib
 from pathlib import Path
 import msgpack
+import ntpath
 
 from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
-from .path_policy import canonical_logical_path
+from .path_policy import canonical_logical_path, canonical_windows_extraction_key
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -392,12 +393,36 @@ class CMPCT:
         if max_bytes is not None and total>max_bytes:raise IOError(f'archive expands to {total} bytes, above limit {max_bytes}')
 
         # Validate every logical path once and reject aliases/symlink pivots before writing anything.
-        canonical_rows=[];seen=set();syms=set()
+        canonical_rows=[];seen=set();windows_seen=set();windows_prefix_spelling={};syms=set()
         for row in self.files:
             rel=row[0]
             try:key,parts=canonical_logical_path(rel)
             except ValueError as exc:raise IOError(f'unsafe archive path: {rel!r}: {exc}') from exc
             if key in seen:raise IOError(f'duplicate canonical archive path: {rel!r}')
+            if os.name == 'nt':
+                # Win32 accepts drive-relative paths and alternate data streams that a POSIX
+                # component check cannot confine. Reject every member before creating one.
+                try:windows_key=canonical_windows_extraction_key(parts)
+                except ValueError as exc:raise IOError(f'unsafe Windows archive path: {rel!r}: {exc}') from exc
+                if windows_key in windows_seen:raise IOError(f'duplicate Windows archive path: {rel!r}')
+                # An implicit parent can also alias another member's explicit parent:
+                # Dir/a and dir/b are different logical POSIX trees but one Win32 tree.
+                for depth in range(1,len(parts)+1):
+                    raw_prefix='/'.join(parts[:depth])
+                    folded_prefix='/'.join(part.casefold() for part in parts[:depth])
+                    prior=windows_prefix_spelling.get(folded_prefix)
+                    if prior is not None and prior!=raw_prefix:
+                        raise IOError(f'ambiguous Windows parent case alias: {rel!r}')
+                    windows_prefix_spelling[folded_prefix]=raw_prefix
+                windows_seen.add(windows_key)
+                if row[1]==K_HARDLINK:
+                    # Hardlink owners are source paths too. A forged drive-relative owner
+                    # must not escape merely because the *alias* name was safe.
+                    try:
+                        _,target_parts=canonical_logical_path(row[6][0])
+                        canonical_windows_extraction_key(target_parts)
+                    except (ValueError, IndexError, TypeError) as exc:
+                        raise IOError(f'unsafe Windows hardlink target in {rel!r}') from exc
             seen.add(key);canonical_rows.append((row,key,parts))
             if row[1]==K_SYMLINK:syms.add(key)
         clean=[]
@@ -432,6 +457,15 @@ class CMPCT:
                 if safe_symlinks:
                     tp=Path(target)
                     if tp.is_absolute() or any(x=='..' for x in tp.parts):raise IOError(f'unsafe symlink target in {rel!r}: {target!r}')
+                    if os.name == 'nt':
+                        # Win32 treats root-relative (\\victim) and drive-relative (D:victim)
+                        # targets as outside the selected directory; pathlib.is_absolute()
+                        # alone does not reject root-relative paths.
+                        if ntpath.isabs(target) or target.startswith(('\\', '/')):
+                            raise IOError(f'unsafe Windows rooted symlink target in {rel!r}: {target!r}')
+                        target_parts=tuple(p for p in target.replace('\\', '/').split('/') if p not in ('', '.'))
+                        try:canonical_windows_extraction_key(target_parts)
+                        except ValueError as exc:raise IOError(f'unsafe Windows symlink target in {rel!r}: {target!r}') from exc
                 try:os.unlink(full)
                 except FileNotFoundError:pass
                 os.symlink(target,full)

@@ -79,6 +79,14 @@ Resolved in the current revision-24 implementation: preflight, ordinary reader o
 
 This intentionally solves only host-independent lexical aliasing. Unicode normalization, platform case-folding, Windows reserved names/device paths and other host-specific rules still belong in the normative specification and platform policy layer; they must not be guessed independently by each handler.
 
+### Candidate Win32 destination-name policy (2026-10-24, unmerged PR #332)
+
+Research/product candidate [PR #332](https://github.com/FCMO-AI/.CMPCT/pull/332) addresses a **destination-specific** trust boundary, not the portable revision-24 wire grammar. On Win32, an archive member such as `D:outside` is drive-relative (a standard `ntpath.join(C-root, D:outside)` changes drive authority); `name:stream` may denote an NTFS alternate stream rather than a regular file. Win32 also reserves ordinary device names and may alias trailing-dot/space or case-distinct names. See Microsoft's [Naming Files, Paths, and Namespaces](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file).
+
+The candidate checks archive member path components **before** extraction writes on Windows, including hardlink source spellings, and applies a conservative casefold/prefix-collision policy. `safe_symlinks=True` additionally rejects drive-relative and other Windows-unsafe symlink targets at their own creation step. Ordinary POSIX extraction and portable archive parsing remain unchanged; Linux legitimately supports names such as `a:stream` or `NUL.txt`.
+
+**Claim limits:** this is draft-only until an exact-head hosted Windows court passes. It is not a comprehensive model of NTFS upcase/8.3 aliasing, reparse points, case-sensitive directory flags or concurrent pathname substitutions (Issue #265). Casefold admission is intentionally conservative, and symlink-target checking is not transaction-wide rollback if a later symlink is invalid. The Windows-only prefix map adds memory/work proportional to admitted namespace structure; benchmark before promotion. Do not relabel this as an already released or universally secure extraction boundary.
+
 The explicit preflight command is intentional for this first increment: it creates one testable, fuzzable safety boundary without silently adding latency to every existing reader hot path before the cost is measured.
 
 ## Native direct/map-decode safety boundary
