@@ -1,0 +1,69 @@
+# ci-lane: fast
+name: CMPCT v0.31 native hardlink topology ABI O13
+
+on:
+  pull_request:
+    paths:
+      - 'tests/native_link_topology_abi_o13.py'
+      - 'tests/native_link_topology_distinct_o13b.py'
+      - 'docs/v031-research/NATIVE_HARDLINK_ABI_TOPOLOGY_O13_PREREG.md'
+      - 'docs/v031-research/NATIVE_HARDLINK_ABI_TOPOLOGY_O13B_PREREG.md'
+      - '.github/workflows/v031-native-hardlink-abi-o13.yml'
+      - 'native/cmpct-core/src/lib.rs'
+      - 'native/cmpct-core/include/cmpct.h'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-native-hardlink-o13-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  native-hardlink-observability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Source and preregistration custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch tests/native_link_topology_abi_o13.py tests/native_link_topology_distinct_o13b.py docs/v031-research/NATIVE_HARDLINK_ABI_TOPOLOGY_O13_PREREG.md docs/v031-research/NATIVE_HARDLINK_ABI_TOPOLOGY_O13B_PREREG.md native/cmpct-core/Cargo.lock
+          test -s docs/v031-research/NATIVE_HARDLINK_ABI_TOPOLOGY_O13_PREREG.md
+          sha256sum docs/v031-research/NATIVE_HARDLINK_ABI_TOPOLOGY_O13_PREREG.md docs/v031-research/NATIVE_HARDLINK_ABI_TOPOLOGY_O13B_PREREG.md
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Build inherited product from exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+      - name: Independently falsify native hardlink graph observability
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cmpct-native-hardlink-o13"
+          python tests/native_link_topology_abi_o13.py "$RUNNER_TEMP/cmpct-native-hardlink-o13/result.json" | tee "$RUNNER_TEMP/cmpct-native-hardlink-o13/log.txt"
+          python tests/native_link_topology_distinct_o13b.py "$RUNNER_TEMP/cmpct-native-hardlink-o13/heldout_o13b.json" | tee "$RUNNER_TEMP/cmpct-native-hardlink-o13/heldout_o13b.log"
+          sha256sum "$RUNNER_TEMP/cmpct-native-hardlink-o13/result.json" "$RUNNER_TEMP/cmpct-native-hardlink-o13/heldout_o13b.json" > "$RUNNER_TEMP/cmpct-native-hardlink-o13/result.sha256"
+          git rev-parse HEAD > "$RUNNER_TEMP/cmpct-native-hardlink-o13/source.sha"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-hardlink-o13-${{ github.run_id }}
+          path: ${{ runner.temp }}/cmpct-native-hardlink-o13/
+          if-no-files-found: warn
+          retention-days: 30
