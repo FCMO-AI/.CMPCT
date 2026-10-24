@@ -22,9 +22,15 @@ def _stage(root: Path, *paths: str) -> None:
 
 
 def test_historical_release_lock_is_unmodified() -> None:
-    content = (ROOT / "docs/V030_RELEASE_LOCK.json").read_bytes()
-    blob = b"blob " + str(len(content)).encode("ascii") + b"\0" + content
-    assert hashlib.sha1(blob).hexdigest() == HISTORICAL_V030_LOCK_GIT_BLOB
+    # Windows may check out text as CRLF even though Git stores canonical LF.
+    # Hash *the actual checked-out file* through its Git clean attributes:
+    # unlike git show HEAD:path, this still detects dirty substantive edits.
+    path = "docs/V030_RELEASE_LOCK.json"
+    actual = subprocess.run(
+        ["git", "hash-object", f"--path={path}", path],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    assert actual == HISTORICAL_V030_LOCK_GIT_BLOB
 
 
 def test_prospective_identity_covers_original_four_red_custody_sources() -> None:
