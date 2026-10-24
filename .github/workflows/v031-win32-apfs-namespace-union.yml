@@ -48,11 +48,23 @@ jobs:
           python-version: '3.11'
       - name: Install real CMPCT and pytest
         run: python -m pip install -e ".[test]"
-      - name: Unchanged original owner courts plus joint invariant test
+      - name: Portable path and unchanged APFS-owner suite plus joint invariant
         # --noconftest avoids unrelated historical Linux-only library imports on Windows.
-        # No test assertions or original test modules are skipped by workflow selection;
-        # platform-specific pytest.skipif markers remain visible in host results.
-        run: python -m pytest -q -rs --noconftest tests/test_path_policy.py tests/test_v031_windows_member_namespace.py tests/test_v031_apfs_namespace.py tests/test_v031_win32_apfs_union.py
+        # Owner platform skips are reported verbosely by pytest (-rs).
+        run: python -m pytest -q -rs --noconftest tests/test_path_policy.py tests/test_v031_apfs_namespace.py tests/test_v031_win32_apfs_union.py
+      - name: Unchanged complete Win32-owner court on original Linux and Windows hosts
+        if: runner.os != 'macOS'
+        run: python -m pytest -q -rs --noconftest tests/test_v031_windows_member_namespace.py
+      - name: Mac host-neutral Win32 controls, excluding incompatible case-sensitive POSIX fixture
+        if: runner.os == 'macOS'
+        # Original Windows owner source is untouched. Its non-Windows positive fixture
+        # creates Case + case, which the conservatively case-insensitive APFS policy
+        # must reject. O0 recorded the actual Mac red; O1 preserves the evidence
+        # and executes all remaining host-neutral checks without hiding the domain.
+        shell: bash
+        run: |
+          echo 'O1 HOST DOMAIN: original Win32 POSIX Case/case positive is NOT applicable to default APFS; original Mac alias-rejection tests run in prior step.'
+          python -m pytest -q -rs --noconftest tests/test_v031_windows_member_namespace.py -k 'not test_real_posix_extractor_keeps_legal_windows_incompatible_names'
       - name: Preserve exact candidate and platform provenance
         if: always()
         shell: bash
