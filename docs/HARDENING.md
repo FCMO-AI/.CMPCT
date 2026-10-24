@@ -358,11 +358,27 @@ after checking each traversed edge, cycle and terminal regular-owner type.
 The initial O1 product-head `966b995ac0553ecc33cfc2486492b5a7dfc5461b`
 passed all **18** focused authentic signed-graph and inherited topology tests
 in [run 40085358527](https://github.com/FCMO-AI/.CMPCT/actions/runs/40085358527).
-Its contribution remains **draft**. Same-runner identical-archive baseline
-vs candidate ABBA, peak Python allocations, final exact-head inherited CI
-and broader portability/release comparisons must be examined independently
-before any performance or promotion claim. The general Reader, native ABI,
-frozen r24 format and public v0.30.0 release are unchanged.
+Its contribution remains **draft**. A separate same-runner identical-archive
+baseline-vs-candidate ABBA was completed at exact head
+`173247bd7640ceea87e93b498d0df183f759b7e2`:
+[O1 run 40085624179](https://github.com/FCMO-AI/.CMPCT/actions/runs/40085624179),
+[raw source-bound artifact 12556773652](https://github.com/FCMO-AI/.CMPCT/actions/runs/40085624179/artifacts/12556773652)
+(ZIP SHA-256 `734f434282d64d6e793cc68b50305f711ead7d29904904bfb9bf5e9b550bdfbc`).
+Both authentic archive variants were read by the *actual* source-exact old and
+new `preflight_archive` in the same installed runtime, alternating ABBA.
+For the **4096-alias chain**, median old/new was **683.797/16.427 ms
+(41.63× faster)**; for 2048, **173.241/8.286 ms (20.91×)**.
+The **4096-alias star control regressed** from **14.992 to 16.041 ms**
+(~7% relative, +1.049 ms); smaller star controls also carried ~6–7%
+relative overhead. This is **negative product-cost evidence** to preserve, not
+a loss to hide or a reason to alter thresholds. Independent `tracemalloc`
+for chain-4096 reported Python peak traced allocations 2,926,795 B
+baseline vs 2,918,691 B candidate; this is not process peak RSS or an
+all-platform memory guarantee. All **18** focused signed-graph + inherited
+strict-tree tests passed on that exact head. General CI release-provenance,
+broader portability, complete product timing/RSS and final-head promotion
+checks remain mandatory. The general Reader, native ABI, frozen r24 format
+and public v0.30.0 release are unchanged; **no merge/release authorized**.
 
 A future hardening rule should distinguish **object-count budgets** from
 **work-amplification budgets** for any archive-controlled ownership/reference
