@@ -1,0 +1,158 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# Exact-source evidence route for the immutable PR #217 / PR #212 compact-r24 question.
+# This workflow is not a release gate or an encoder-policy change.
+name: CMPCT v0.31 compact-r24 frozen full matrix O34
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-compact-r24-frozen-matrix-hosted-o34-20261024
+    paths:
+      - '.github/workflows/v031-compact-r24-frozen-matrix-o34.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-compact-r24-o34-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  frozen-matrix:
+    name: Exact-head immutable compression and product-parity court
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Verify exact HEAD, owner ancestry and frozen source custody
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          source = "b878f40a540162ab977776d7f90c3502d2749588"
+          owner = "e235686d2a9fd4757c5478526600f410e59c6eb8"
+          git = lambda *args: subprocess.check_output(["git", *args], text=True).strip()
+          assert git("merge-base", "--is-ancestor", source, "HEAD") == ""
+          assert git("merge-base", "--is-ancestor", owner, "HEAD") == ""
+          expected_changed = {
+              "benchmarks/history/2026-09-30-v030-compact-r24-full-matrix-prereg.json",
+              "benchmarks/history/2026-10-01-v030-pr212-matrix-route-audit.json",
+              ".github/workflows/v031-compact-r24-frozen-matrix-o34.yml",
+          }
+          assert set(git("diff", "--name-only", source, "HEAD").splitlines()) == expected_changed
+          prereg = json.loads(Path("benchmarks/history/2026-09-30-v030-compact-r24-full-matrix-prereg.json").read_text())
+          assert prereg["source_head"] == source
+          assert prereg["decision"] == "run exactly one unchanged 15-row compression/product-parity matrix after re-proving corrected nested-child custody"
+          assert prereg["frozen_gates"] == {
+              "accepted_v029_bytes": 137499525,
+              "workloads_regressed": 0,
+              "workloads_improved_min": 3,
+              "saving_vs_v029_bytes_min": 687783,
+              "max_selected_member_read_amplification": 8,
+              "canonical_product_regressions": 0,
+          }
+          bound = {
+              "process_prebuild": "experiments/entropygraph_v030_r24_process_prebuild.py",
+              "process_shipping": "experiments/entropygraph_v030_r24_process_shipping.py",
+              "candidate_prebuild": "experiments/entropygraph_v030_r24_compact_candidate_prebuild.py",
+              "compact_facade": "experiments/entropygraph_v030_release_product_compact_r24.py",
+              "launcher": "tools/run_v030_compact_candidate.py",
+              "ablation_harness": "benchmarks/v030_release_ablation_product.py",
+          }
+          for label, name in bound.items():
+              actual = git("hash-object", name)
+              expected = prereg["custody_blobs"][label]
+              assert actual == expected, (name, actual, expected)
+          print("Exact owner, original frozen science and unchanged comparator contracts: PASS", flush=True)
+          PY
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install public frozen-corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Verify CI topology and focused product-child custody before matrix
+        run: |
+          set -euo pipefail
+          python tools/check_ci_topology.py .github/workflows/v031-compact-r24-frozen-matrix-o34.yml
+          python -m pytest -q             tests/test_v030_compact_r24_child_effective_policy_custody.py             tests/test_v030_compact_r24_candidate_facade_child_custody.py             tests/test_v030_compact_r24_incremental_backups_parity.py
+      - name: Execute EXACTLY ONE unchanged full 15-row historical + real-product court
+        id: matrix
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          set +e
+          python -u tools/run_v030_compact_candidate.py             benchmarks/v030_release_ablation_product.py             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/compact-r24-work"             --output "$GITHUB_WORKSPACE/benchmark-artifacts/compact-r24-full-matrix.json"             > benchmark-artifacts/matrix-stdout.log 2>&1
+          code=$?
+          set -e
+          echo "$code" > benchmark-artifacts/matrix-exit-code.txt
+          cat benchmark-artifacts/matrix-stdout.log
+          exit "$code"
+      - name: Independent frozen decision judge (product negative is a real red)
+        if: success()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path("benchmark-artifacts/compact-r24-full-matrix.json").read_text())
+          h=d["historical_causality"]
+          p=d["canonical_product_parity"]
+          assert d["schema"]=="cmpct-v030-release-ablation-canonical-v3", d.get("schema")
+          assert len(h["rows"]) == 15 and len(p["rows"]) == 15
+          assert h["accepted_v029_bytes"] == 137499525
+          assert h["workloads_regressed"] == 0
+          assert h["workloads_improved"] >= 3
+          assert h["saving_vs_v029_bytes"] >= 687783
+          assert h["max_selected_member_read_amplification"] <= 8
+          assert p["product_regressions"] == []
+          for row in p["rows"]:
+              assert row["r24"]["substrate_id"] == row["v030"]["substrate_id"] == "canonical-filesystem-product-v1"
+              assert row["r24"]["tree_verified"] and row["v030"]["tree_verified"]
+              assert row["r24"]["tree_sha256"] == row["v030"]["tree_sha256"]
+              assert row["v030"]["archive_bytes"] <= row["r24"]["archive_bytes"], row["name"]
+          result = {
+              "decision": "FROZEN_COMPACT_R24_MATRIX_SURVIVED",
+              "scope": "scientific compression plus product byte parity only; NOT a release",
+              "source_head": "b878f40a540162ab977776d7f90c3502d2749588",
+              "executed_head": __import__("os").environ["EVIDENCE_HEAD"],
+              "rows": len(p["rows"]),
+              "historical": {k: h[k] for k in (
+                  "accepted_v029_bytes", "combined_bytes", "workloads_improved",
+                  "workloads_regressed", "saving_vs_v029_bytes", "max_selected_member_read_amplification")},
+              "product_byte_regressions": 0,
+              "release_credit": False,
+          }
+          Path("benchmark-artifacts/decision.json").write_text(json.dumps(result,indent=2)+"\n")
+          print(json.dumps(result,indent=2))
+          PY
+      - name: Preserve raw matrix, receipts and negative evidence regardless of result
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-compact-r24-o34-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/compact-r24-full-matrix.json
+            benchmark-artifacts/matrix-stdout.log
+            benchmark-artifacts/matrix-exit-code.txt
+            benchmark-artifacts/decision.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# A green exact-source court only enables later runtime/RSS/portability/recovery review.
+# Any deterministic current-product byte regression is a scientifically decisive red.
