@@ -1506,7 +1506,9 @@ mod tests {
         assert!(canonical_path("../escape").is_err());
         assert!(canonical_path("a//b").is_err());
         assert!(canonical_path("/absolute").is_err());
-    }    #[test]
+    }
+
+    #[test]
     fn rejects_signed_nested_duplicate_map_without_interpreting_root_first() {
         let owner = Value::Map(vec![
             (Value::from("owner"), Value::from(0u64)),
