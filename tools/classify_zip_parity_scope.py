@@ -69,7 +69,13 @@ def classify(
     try:
         _git("cat-file", "-e", f"{base}^{{commit}}", cwd=cwd)
         if event == "pull_request":
-            origin = _git("merge-base", base, head, cwd=cwd).decode("ascii").strip()
+            # Criss-cross merges can produce multiple incomparable merge bases.
+            # Choosing whichever one Git returns first may hide a material
+            # source delta. Such a history cannot safely authorize SKIP.
+            merge_bases = _git("merge-base", "--all", base, head, cwd=cwd).decode("ascii").splitlines()
+            if len(merge_bases) != 1:
+                return Decision(True, "ambiguous-merge-base-fail-closed")
+            origin = merge_bases[0]
             basis = "pr-merge-base"
         else:
             origin = base
