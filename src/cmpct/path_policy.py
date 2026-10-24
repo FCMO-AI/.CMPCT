@@ -29,3 +29,24 @@ def canonical_logical_path(path: str, *, max_path_bytes: int | None = None) -> t
     if any(part in ('', '.', '..') for part in parts):
         raise ValueError('unsafe logical path component')
     return '/'.join(parts), parts
+
+
+# macOS APFS/HFS+ pathname comparison is normalization-insensitive even though the
+# revision-24 wire format deliberately preserves the original logical UTF-8 spelling.
+# Case-insensitive APFS is common; use a conservative casefold policy also on case-sensitive
+# volumes rather than risk materializing different archive members onto one physical name.
+def macos_comparison_component(part: str) -> str:
+    """A conservative macOS destination alias discriminator, not a wire-name rewrite.
+
+    Footnote: APFS uses its own Unicode-9.0 comparison tables; Python's Unicode tables may
+    differ. This rejects the known NFC/NFD and common case aliases without claiming full
+    equivalence to every native filesystem/version's comparator.
+    """
+    if not isinstance(part, str) or not part or part in (".", ".."):
+        raise ValueError("unsafe macOS path component")
+    try:
+        part.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise ValueError("unsafe macOS non-UTF-8 path component") from exc
+    import unicodedata
+    return unicodedata.normalize("NFD", unicodedata.normalize("NFD", part).casefold())
