@@ -1,0 +1,71 @@
+# ci-lane: fast
+name: CMPCT v0.31 native bounded authenticated staging O18
+
+on:
+  pull_request:
+    paths:
+      - 'tests/native_signed_index_stage_o18.c'
+      - 'tests/native_signed_index_stage_o18.py'
+      - 'docs/v031-research/NATIVE_SIGNED_INDEX_STAGE_O18_PREREG.md'
+      - 'docs/v031-research/NATIVE_SIGNED_INDEX_STAGE_O18_RESULT.md'
+      - '.github/workflows/v031-native-signed-index-stage-o18.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-native-o18-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  authenticated-stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Source-exact read-only native parent, immutable prereg and checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor c2b61c5290382c3df5eb92c6381b83b1ba0e02d0 HEAD
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "ce12c76d9f4901af1e2b95d5d88883ffb2a72d2e"
+          test "$(git hash-object native/cmpct-core/include/cmpct.h)" = "dc6b689febd383618abe31d4d2ea3ccda7fb1d3b"
+          test "$(git hash-object tests/native_hardlink_owner_o14.py)" = "1c553ed572a4ae5bcb676745e24085f416993628"
+          git ls-files --error-unmatch             native/cmpct-core/Cargo.lock             docs/v031-research/NATIVE_SIGNED_INDEX_STAGE_O18_PREREG.md             tests/native_signed_index_stage_o18.c             tests/native_signed_index_stage_o18.py
+          sha256sum docs/v031-research/NATIVE_SIGNED_INDEX_STAGE_O18_PREREG.md
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Build native library and strict research-only OpenSSL C client
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[test]'
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
+          cargo test --locked --manifest-path native/cmpct-core/Cargo.toml
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+          cc -std=c11 -O2 -Wall -Wextra -Werror             -I. tests/native_signed_index_stage_o18.c             -Lnative/cmpct-core/target/release -lcmpct_core -lcrypto             -Wl,-rpath,"$PWD/native/cmpct-core/target/release"             -o /tmp/cmpct-native-stage-o18
+      - name: CDC staged commit, contradictory resealed index, direct RAW and hostile root
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cmpct-o18"
+          python tests/native_signed_index_stage_o18.py /tmp/cmpct-native-stage-o18             "$RUNNER_TEMP/cmpct-o18/result.json"             2>&1 | tee "$RUNNER_TEMP/cmpct-o18/run.log"
+          git rev-parse HEAD > "$RUNNER_TEMP/cmpct-o18/source.sha"
+          sha256sum "$RUNNER_TEMP/cmpct-o18/result.json"             tests/native_signed_index_stage_o18.c             tests/native_signed_index_stage_o18.py             docs/v031-research/NATIVE_SIGNED_INDEX_STAGE_O18_PREREG.md             > "$RUNNER_TEMP/cmpct-o18/sha256sums.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-signed-stage-o18-${{ github.run_id }}
+          path: ${{ runner.temp }}/cmpct-o18/
+          retention-days: 30
+          if-no-files-found: warn
