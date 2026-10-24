@@ -1,0 +1,63 @@
+# ci-lane: fast
+name: CMPCT v031 POSIX byte-tree strict O2 scientific repair
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_posix_byte_tree_strict_o2.py'
+      - 'benchmarks/v031_posix_byte_tree_o1.py'
+      - '.github/workflows/v031-posix-byte-tree-strict-o2.yml'
+      - 'docs/v031-research/2026-10-24-posix-byte-o2-repair-prereg.md'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  strict-physically-materialized:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 11
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prospective exact source and strict POSIX bytes oracle
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee /tmp/posix-o2-head.txt
+          python -m pip install msgpack==1.1.2
+          python benchmarks/v031_posix_byte_tree_strict_o2.py | tee /tmp/posix-o2-utf8.json
+          python - <<'PY'
+          import json
+          x=json.load(open("/tmp/posix-o2-utf8.json"))
+          assert x["status"]=="PASS" and set(x["positive"])=={"mixed","utf8","portable"}
+          assert all(x["positive"][mode][grammar]["state"]=="PASS" for mode in x["positive"] for grammar in ("typed","escaped"))
+          assert all(len(x["new_signed_rejections"][grammar])==6 for grammar in ("typed","escaped"))
+          assert "detached O2" in x["tier"]
+          PY
+      - name: Assert strict-byte repair under actual ASCII filesystem encoding
+        env:
+          LC_ALL: C
+          PYTHONUTF8: '0'
+          PYTHONCOERCECLOCALE: '0'
+        run: |
+          set -euo pipefail
+          python -c 'import sys; assert sys.getfilesystemencoding()=="ascii",sys.getfilesystemencoding()'
+          python benchmarks/v031_posix_byte_tree_strict_o2.py | tee /tmp/posix-o2-ascii.json
+          python - <<'PY'
+          import json
+          x=json.load(open("/tmp/posix-o2-ascii.json"))
+          assert x["status"]=="PASS"
+          assert all(len(x["new_signed_rejections"][g])==6 for g in ("typed","escaped"))
+          PY
+      - name: Preserve independent O2 research receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: posix-byte-tree-o2-strict-research-only
+          path: /tmp/posix-o2-*.json
+          if-no-files-found: warn
