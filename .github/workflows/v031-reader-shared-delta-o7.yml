@@ -39,6 +39,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           python - <<'PY'
+          import os
           import subprocess
           from pathlib import Path
           baseline = "5f6c1462e30686687ea13cc2507c9702f13df116"
@@ -53,8 +54,14 @@ jobs:
           old_end = old.index("                return idx,depth", old_start)
           new_start = new.index("                if chain:", new.index("def _index_from_footer("))
           new_end = new.index("                return idx,depth", new_start)
-          assert old[:old_start] == new[:new_start], "Unreviewed Reader drift before replay"
-          assert old[old_end:] == new[new_end:], "Unreviewed Reader drift after replay"
+          # SHA custody is authoritative on all platforms. Windows git.exe text
+          # stdout may transform EOL in a source slicing comparison; retain the
+          # independent prefix/suffix structural proof on Unix, and enforce the
+          # exact reviewed Git blob (stronger than textual slices) everywhere.
+          assert blob("src/cmpct/reader.py") == "6de2edcf5b804e224a1c651ca77361af5667dc2e"
+          if os.name != "nt":
+              assert old[:old_start] == new[:new_start], "Unreviewed Reader drift before replay"
+              assert old[old_end:] == new[new_end:], "Unreviewed Reader drift after replay"
           assert "from .validation import ParserLimits, _apply_delta" in new[new_start:new_end]
           assert "_apply_delta(idx, delta, limits)" in new[new_start:new_end]
           assert "idx['files'].sort(key=lambda row: row[0])" in new[new_start:new_end]
