@@ -1,0 +1,82 @@
+# ci-lane: fast
+name: CMPCT v0.31 dual authenticated preflight CPU-owner composition O3
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/validation.py'
+      - 'tests/test_v031_delta_replay_indexed_o1.py'
+      - 'benchmarks/v031_signed_delta_replay_o0.py'
+      - 'docs/v031-research/2026-10-24-preflight-delta-hardlink-source-union-o3-prereg.md'
+      - '.github/workflows/v031-preflight-delta-hardlink-union-o3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-preflight-dual-owner-o3-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  dual-signed-validator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+      - name: Verify exact-owner source transplant and checked-out HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+          def show(ref):
+              return subprocess.check_output(['git','show',f'{ref}:src/cmpct/validation.py']).decode()
+          hard=show('a480d7ae2f1480f15e73eda2b04e48b1a75e66b1')
+          delta=show('fb887d8610dced551acf5a84778ba539d08dac59')
+          historic=show('4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b')
+          def seg(s,a,b):
+              return s[s.index(a):s.index(b,s.index(a))]
+          old=seg(hard,'def _apply_delta(', '\ndef _index_from_footer(')
+          assert old == seg(historic,'def _apply_delta(', '\ndef _index_from_footer(')
+          transplanted=seg(delta,'def _apply_delta_indexed(', '\ndef _index_from_footer(')
+          expected=hard.replace('from dataclasses import dataclass\n', 'from dataclasses import dataclass\nimport heapq\n').replace(old,transplanted)
+          actual=Path('src/cmpct/validation.py').read_text()
+          assert actual==expected, 'unexpected product source changes outside two frozen-owner blocks'
+          print('O3_SOURCE_EXACT_UNION_PASS', flush=True)
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic CMPCT product package
+        run: python -m pip install -e ".[test]"
+      - name: Run both owners and inherited signed-tree adversarial tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dual-owner-o3-artifacts
+          python -m pytest --noconftest -q -rs tests/test_v031_delta_replay_indexed_o1.py tests/test_v031_hardlink_graph_budget.py tests/test_v031_signed_tree_preflight.py 2>&1 | tee dual-owner-o3-artifacts/product-court.log
+      - name: Preserve original signed journal O0 product corpus under combined validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -u benchmarks/v031_signed_delta_replay_o0.py --out dual-owner-o3-artifacts --repeats 5 2>&1 | tee dual-owner-o3-artifacts/replay-court.log
+      - name: Preserve valid signed hardlink chain/star cost and identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -u experiments/v031_hardlink_chain_preflight_o0.py 2>&1 | tee dual-owner-o3-artifacts/hardlink-court.log
+          if [ -f hardlink-chain-o0-evidence.json ]; then cp hardlink-chain-o0-evidence.json dual-owner-o3-artifacts/; fi
+          sha256sum dual-owner-o3-artifacts/delta-o0-receipt.json | tee dual-owner-o3-artifacts/receipt.sha256
+      - name: Preserve positive or negative source-bound evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-dual-owner-o3-${{ github.sha }}
+          path: dual-owner-o3-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
