@@ -221,6 +221,11 @@ impl Archive {
                 "trailing bytes after root index object".into(),
             ));
         }
+        // The authenticated r24 index is not unambiguous merely because its
+        // root map is. Python's MessagePack object_pairs_hook visits nested
+        // maps as well, and rejects non-text map keys at ordinary Reader open.
+        // Traverse every value before returning any native file tree.
+        reject_ambiguous_index_maps(&index)?;
         let blobs = parse_blobs(&index, data_span)?;
         let dict_blob = parse_dictionary_blob(&index, &blobs)?;
         let entries = parse_entries(&index, &blobs)?;
@@ -823,6 +828,74 @@ fn le_u32(bytes: &[u8]) -> u32 {
 
 fn le_u64(bytes: &[u8]) -> u64 {
     u64::from_le_bytes(bytes.try_into().expect("fixed-width header slice"))
+}
+
+/// Validate every authenticated MessagePack map against the Python Reader
+/// grammar *before* selecting fields. A SHA-256 authenticates the ambiguous
+/// bytes too; choosing first/last duplicate at any depth is not integrity.
+///
+/// The walker is iterative: memory tracks nesting depth rather than the
+/// breadth of a multi-million-entry file table. Keys borrow from the decoded
+/// index, so only small HashSet bookkeeping is allocated for each map.
+/// Python's ordinary Reader accepts text and binary keys but refuses other
+/// MessagePack map-key types (strict_map_key=True).
+fn reject_ambiguous_index_maps(index: &Value) -> Result<(), CmpctError> {
+    if index.as_map().is_none() {
+        return Err(CmpctError::Schema("root index is not a map".into()));
+    }
+    enum Frame<'a> {
+        Node(&'a Value),
+        Array(std::slice::Iter<'a, Value>),
+        Map(std::slice::Iter<'a, (Value, Value)>),
+    }
+    let mut frames = vec![Frame::Node(index)];
+    while let Some(frame) = frames.pop() {
+        match frame {
+            Frame::Node(Value::Map(pairs)) => {
+                let mut seen = HashSet::with_capacity(pairs.len().min(256));
+                for (key, _) in pairs {
+                    // Keep text and bytes in distinct domains. Python also
+                    // treats str and bytes map keys as distinct even when the
+                    // underlying UTF-8 bytes coincide.
+                    let typed_key = match key {
+                        Value::String(s) => {
+                            let text = s.as_str().ok_or_else(|| {
+                                CmpctError::Schema("invalid UTF-8 index map key".into())
+                            })?;
+                            (0u8, text.as_bytes())
+                        }
+                        Value::Binary(b) => (1u8, b.as_slice()),
+                        _ => {
+                            return Err(CmpctError::Schema(
+                                "non-text/non-binary MessagePack index map key".into(),
+                            ))
+                        }
+                    };
+                    if !seen.insert(typed_key) {
+                        return Err(CmpctError::Schema(
+                            "duplicate MessagePack index map key".into(),
+                        ));
+                    }
+                }
+                frames.push(Frame::Map(pairs.iter()));
+            }
+            Frame::Node(Value::Array(items)) => frames.push(Frame::Array(items.iter())),
+            Frame::Node(_) => {}
+            Frame::Array(mut it) => {
+                if let Some(item) = it.next() {
+                    frames.push(Frame::Array(it));
+                    frames.push(Frame::Node(item));
+                }
+            }
+            Frame::Map(mut it) => {
+                if let Some((_, value)) = it.next() {
+                    frames.push(Frame::Map(it));
+                    frames.push(Frame::Node(value));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn map_field<'a>(value: &'a Value, key: &str) -> Result<&'a Value, CmpctError> {
@@ -1663,5 +1736,55 @@ mod tests {
         assert!(canonical_path("../escape").is_err());
         assert!(canonical_path("a//b").is_err());
         assert!(canonical_path("/absolute").is_err());
+    }
+
+    #[test]
+    fn rejects_signed_nested_duplicate_map_without_interpreting_root_first() {
+        let owner = Value::Map(vec![
+            (Value::from("owner"), Value::from(0u64)),
+            (Value::from("owner"), Value::from(1001u64)),
+        ]);
+        let root = Value::Map(vec![
+            (Value::from("v"), Value::from(24u64)),
+            (Value::from("fsmeta"), owner),
+        ]);
+        assert!(reject_ambiguous_index_maps(&root).is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_binary_key_and_nontext_key() {
+        let binary_alias = Value::Map(vec![
+            (Value::Binary(b"future".to_vec()), Value::from(1u64)),
+            (Value::Binary(b"future".to_vec()), Value::from(2u64)),
+        ]);
+        assert!(reject_ambiguous_index_maps(&binary_alias).is_err());
+        let int_key = Value::Map(vec![(Value::from(7u64), Value::from(1u64))]);
+        assert!(reject_ambiguous_index_maps(&int_key).is_err());
+    }
+
+    #[test]
+    fn accepts_distinct_text_binary_domains_and_wide_file_array() {
+        let root = Value::Map(vec![
+            (Value::from("same"), Value::from(1u64)),
+            (Value::Binary(b"same".to_vec()), Value::from(2u64)),
+            (
+                Value::from("files"),
+                Value::Array((0..20_000).map(|_| Value::Nil).collect()),
+            ),
+        ]);
+        assert!(reject_ambiguous_index_maps(&root).is_ok());
+    }
+
+    #[test]
+    fn rejects_deeply_nested_ambiguous_map_iteratively() {
+        let mut current = Value::Map(vec![
+            (Value::from("k"), Value::from(1u64)),
+            (Value::from("k"), Value::from(2u64)),
+        ]);
+        for _ in 0..128 {
+            current = Value::Array(vec![current]);
+        }
+        let root = Value::Map(vec![(Value::from("test"), current)]);
+        assert!(reject_ambiguous_index_maps(&root).is_err());
     }
 }
