@@ -1,0 +1,77 @@
+# ci-lane: fast
+name: CMPCT v0.31 native verified PACK batch O3
+
+on:
+  pull_request:
+    paths:
+      - 'native/cmpct-core/src/lib.rs'
+      - 'tests/native_pack_batch_abi.py'
+      - 'docs/v031-research/NATIVE_PACK_OPERATION_BATCH_O3_PREREG.md'
+      - 'docs/NATIVE_CORE.md'
+      - '.github/workflows/v031-native-pack-batch-o3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-native-pack-batch-o3-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  native-pack-batch-o3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind installed exact-source independent controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch \
+            native/cmpct-core/Cargo.lock \
+            native/cmpct-core/src/lib.rs \
+            tests/conformance/v24-pack.json \
+            tests/native_pack_golden_abi.py \
+            tests/native_pack_batch_abi.py \
+            docs/v031-research/NATIVE_PACK_OPERATION_BATCH_O3_PREREG.md
+          sha256sum native/cmpct-core/Cargo.lock tests/conformance/v24-pack.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Build exact-source native product
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+      - name: Original independent physical S_PACK conformance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/native_pack_golden_abi.py
+      - name: Hostile and performance paired native batch court
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cmpct-pack-batch-o3"
+          python tests/native_pack_batch_abi.py "$RUNNER_TEMP/cmpct-pack-batch-o3/result.json" \
+            | tee "$RUNNER_TEMP/cmpct-pack-batch-o3/log.txt"
+          sha256sum "$RUNNER_TEMP/cmpct-pack-batch-o3/result.json" \
+            > "$RUNNER_TEMP/cmpct-pack-batch-o3/result.sha256"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-pack-batch-o3-${{ github.run_id }}
+          path: ${{ runner.temp }}/cmpct-pack-batch-o3/
+          if-no-files-found: warn
+          retention-days: 30
