@@ -4,6 +4,18 @@ Status: **released interoperability floor r24; provisional shared r24/r25 portab
 
 `native/cmpct-core/` remains the mature memory-safe revision-24 read-only foundation. `native/cmpct-portable/` is the provisional v0.30 shared dispatcher that places genuine r24 fallback and the fixed canonical revision-25 profiles behind one native process/C ABI surface. Platform shells must not grow independent parsers when either shared native layer can supply the required operation.
 
+## Proposed v0.31 O12 authenticated-index logical SHA query — DRAFT / NOT RELEASED
+
+Research draft [PR #340](https://github.com/FCMO-AI/.CMPCT/pull/340), stacked on native owner [PR #326](https://github.com/FCMO-AI/.CMPCT/pull/326), adds `cmpct_entry_logical_sha256(archive, entry_index, out_digest)` to the read-only revision-24 C ABI. The output is exactly 32 caller-owned bytes from an already parsed, SHA-256-committed **index file-row logical digest**. It is metadata-only: no whole-file read, physical decoding, destination write, or persistent snapshot is implied.
+
+Scope correction after failed hosted O12 RAW control: the canonical Builder omits the stored logical row SHA for direct RAW and direct text (only CHUNKS/CDC/SPARSE rows retain it). The O12 metadata query therefore correctly returns UNSUPPORTED on ordinary direct RAW. It can help consumers authenticate the actual streamed bytes only when the index already commits a whole-file logical digest, such as CDC and sparse members; no general RAW authentication is claimed. This closes an observability gap between an index known to contain an expected logical digest and an external streaming client that currently has no way to retrieve it. It does **not** retroactively authenticate each independent RAW range call, prevent concurrent source mutation, or substitute for quarantined output and atomic publication. Archive header SHA-256 is an unkeyed commitment; it is **not a digital signature or authorization by a trusted third party**.
+
+API fail-closed contract: success only for a regular file with an explicitly present index-row SHA. Missing row SHA or non-regular entry returns `CMPCT_ERR_UNSUPPORTED`, bad index `CMPCT_ERR_RANGE`, null argument `CMPCT_ERR_NULL`. With a valid output pointer, all errors zero its 32 bytes. It deliberately **never falls back to a mutable physical blob-header hash**. The caller owns memory and must keep the opaque archive handle alive throughout the call.
+
+The immutable scientific preregistration is `docs/v031-research/NATIVE_AUTHENTICATED_STREAM_SHA_O12_PREREG.md`; the prospective real-Builder RAW/Zstd, hostile changed-source and missing-row-SHA tests live in `tests/native_authenticated_sha_o12.py`. An exact-source CI court is in `.github/workflows/v031-native-authenticated-stream-sha-o12.yml`. This research capability receives **zero release/interoperability/general-extraction credit until its actual result and inherited release gates have been evaluated**. No revision-24 wire or existing ABI contract changes.
+
+---
+
 ## Provisional v0.30 shared portable layer
 
 The v0.30 integration branch adds `native/cmpct-portable/` as the release-facing native boundary for every representation the canonical selector may publish:
