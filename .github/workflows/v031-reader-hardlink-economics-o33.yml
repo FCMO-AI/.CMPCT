@@ -1,0 +1,126 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# O33 research-only: exact original source O28 versus O31 on six authentic r24 checkpoints.
+name: CMPCT v031 Reader hardlink cold CPU RSS O33
+on:
+  pull_request:
+    paths:
+      - 'tools/research_o33_reader_hardlink_economics.py'
+      - 'docs/v031-research/2026-10-24-o31-canonical-hardlink-economics-o33-prereg.md'
+      - 'docs/v031-research/2026-10-24-o31-canonical-hardlink-economics-o33-result.md'
+      - '.github/workflows/v031-reader-hardlink-economics-o33.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-reader-economics-o33-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  O33_O28_SOURCE: 9c9cecc6c21dc741e57188076ea43dc0ede6425b
+  O33_O31_PRODUCT_SOURCE: 0edb7bc6e832deb1b403fea50c36e655da9844fd
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.classify.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Classify newest commit only before expensive source-bound court
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          echo "$changed"
+          if echo "$changed" | grep -Eq '^(tools/research_o33_reader_hardlink_economics[.]py|[.]github/workflows/v031-reader-hardlink-economics-o33[.]yml|docs/v031-research/2026-10-24-o31-canonical-hardlink-economics-o33-prereg[.]md)$'; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_deep=false" >> "$GITHUB_OUTPUT"
+          fi
+  source-exact-economics:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Bind experimental and historic source SHA, classify true PR change surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o33-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = "de9accf6607aca7cf70dfe71d7b299a02e298a2d"
+          test "$(git rev-parse "$O33_O31_PRODUCT_SOURCE:src/cmpct/reader.py")" = "de9accf6607aca7cf70dfe71d7b299a02e298a2d"
+          test "$(git rev-parse "$O33_O28_SOURCE:src/cmpct/reader.py")" = "c7850c08c7bb27563955c6e2294b8c17c140d0a2"
+          # O33 is permitted to add an independent research instrument only.
+          if git diff --name-only "$O33_O31_PRODUCT_SOURCE" "$EVIDENCE_HEAD" -- src/cmpct | grep -q .; then
+            echo "ERROR: O33 modified product source" >&2; exit 1
+          fi
+          git diff --name-only "$O33_O31_PRODUCT_SOURCE" "$EVIDENCE_HEAD" > o33-evidence/change-surface.txt
+          git rev-parse HEAD | tee o33-evidence/head.txt
+          git hash-object src/cmpct/reader.py | tee o33-evidence/candidate-reader-blob.txt
+          git show -s --format='%H %ct %s' "$O33_O28_SOURCE" > o33-evidence/base-source.txt
+          git show -s --format='%H %ct %s' "$O33_O31_PRODUCT_SOURCE" > o33-evidence/candidate-product-source.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual CMPCT dependencies and source
+        run: python -m pip install -e '.[test]'
+      - name: Materialize exact original O28 in separate detached Git worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach --quiet "$RUNNER_TEMP/o33-base" "$O33_O28_SOURCE"
+          test "$(git -C "$RUNNER_TEMP/o33-base" rev-parse HEAD)" = "$O33_O28_SOURCE"
+          test "$(git -C "$RUNNER_TEMP/o33-base" hash-object src/cmpct/reader.py)" = "c7850c08c7bb27563955c6e2294b8c17c140d0a2"
+          test "$(git hash-object src/cmpct/reader.py)" = "de9accf6607aca7cf70dfe71d7b299a02e298a2d"
+          printf '%s\n' "$RUNNER_TEMP/o33-base/src" > o33-evidence/historical-python-source.txt
+      - name: Build historical exact-source native codec for valid A/B import parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/materialize_performance_base_native.py "$RUNNER_TEMP/o33-base" --receipt "$GITHUB_WORKSPACE/o33-evidence/base-native.json"
+          test -f "$GITHUB_WORKSPACE/o33-evidence/base-native.json"
+      - name: Independent inherited O25/O31 semantic controls (not timed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest --noconftest -q -rs tests/test_reader_hardlink_graph_o25.py tests/test_v031_hardlink_canonical_owner_o31.py 2>&1 | tee o33-evidence/semantic-control.log
+          exit "${PIPESTATUS[0]}"
+      - name: Run strict same-input ABBA fresh-process Reader economics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/research_o33_reader_hardlink_economics.py \
+            --base-source "$RUNNER_TEMP/o33-base/src" \
+            --candidate-source "$GITHUB_WORKSPACE/src" \
+            --out "$GITHUB_WORKSPACE/o33-evidence" \
+            --reps 8 2>&1 | tee o33-evidence/research.log
+          exit "${PIPESTATUS[0]}"
+      - name: Persist raw measurements and source/corpus identity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o33-reader-hardlink-economics-${{ github.sha }}
+          path: o33-evidence/
+          if-no-files-found: warn
+          retention-days: 90
