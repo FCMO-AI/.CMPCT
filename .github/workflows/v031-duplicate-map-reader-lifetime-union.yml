@@ -68,12 +68,12 @@ jobs:
           set -e
           cp /tmp/cmpct-map-open-union-candidate.py src/cmpct/reader.py
           test "$(git hash-object src/cmpct/reader.py)" = "$(git rev-parse HEAD:src/cmpct/reader.py)"
-          if [ "$status" -ne 1 ] || ! grep -q "6 failed" map-open-union-evidence/negative.txt || ! grep -q "authenticated duplicate-map rejection leaked Reader fd" map-open-union-evidence/negative.txt; then
+          if [ "$status" -ne 1 ] || ! grep -q "12 failed" map-open-union-evidence/negative.txt || ! grep -q "authenticated duplicate-map rejection leaked Reader fd" map-open-union-evidence/negative.txt; then
             cat map-open-union-evidence/negative.txt
             echo "Required source-exact negative discriminator absent"
             exit 1
           fi
-          echo "ORIGINAL_316_FAILS_6/6_RETAINED_FD_OWNERSHIP"
+          echo "ORIGINAL_316_FAILS_12/12_RETAINED_FD_OWNERSHIP"
       - name: Verify combined genuine Reader product court
         shell: bash
         run: |
