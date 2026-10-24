@@ -150,6 +150,17 @@ class SemanticTreeDigestCourt(unittest.TestCase):
         with self.assertRaises(ValueError):
             sha(self.left, max_entries=-1)
 
+    def test_wide_directory_budget_rejects_before_reading_payload(self):
+        # A limit checked *after* sorted(scandir(...)) is ineffective
+        # against a directory containing more entries than the budget.
+        for n in range(7):
+            (self.left / f"entry-{n:02d}").write_bytes(b"PAYLOAD")
+        from unittest.mock import patch
+        with patch.object(ORACLE.os, "open",
+                          side_effect=AssertionError("payload should not be opened")):
+            with self.assertRaisesRegex(ValueError, "entry budget"):
+                sha(self.left, max_entries=3)
+
     def test_root_symlink_is_not_accepted(self):
         self.symlink(self.left, "rootlink", str(self.right), is_dir=True)
         with self.assertRaisesRegex(ValueError, "real directory"):
