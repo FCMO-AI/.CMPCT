@@ -1,4 +1,5 @@
-# ci-lane: independent-science
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 # ci-cancel-policy: preserve-running-exact-receipt
 # Research-only parity; never replaces canonical r24/ZIP release gate.
 name: v031 salvage source-isolated ABBA court
@@ -17,7 +18,213 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  latest-head-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_court: ${{ steps.scope.outputs.run_court }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+      - name: Classify only the exact newest commit
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/court-head-paths.txt
+          if grep -Eq '^(\.github/workflows/v031-salvage-isolated-parity\.yml|docs/v031-research/SALVAGE_V031_SOURCE_ISOLATED_PARITY_PREREG\.md)
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CANDIDATE_PARENT: 2825253a2b40386df173b7f5497abffbe6539f91
+      CONTROL_HEAD: c5ea5b97a86bf9d0bffe9dad54c5fd2a6f0b6fb1
+      CMPCT_PARITY_REPS: "3"
+      CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-salvage-isolated-corpus
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+
+      - name: Bind exact code and distinct control
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p parity-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git cat-file -e "$CANDIDATE_PARENT^{commit}"
+          if ! git cat-file -e "$CONTROL_HEAD^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$CONTROL_HEAD"
+          fi
+          git worktree add --detach /tmp/cmpct-salvage-control "$CONTROL_HEAD"
+          git diff --name-only "$CANDIDATE_PARENT" HEAD > parity-evidence/current-branch-changes.txt
+          if grep -Ev '^(docs/v031-research/SALVAGE_V031_SOURCE_ISOLATED_PARITY_PREREG.md|\.github/workflows/v031-salvage-isolated-parity.yml)$' parity-evidence/current-branch-changes.txt; then
+            echo "Candidate differs from frozen #302 runtime parent" >&2
+            exit 1
+          fi
+          for p in src/cmpct/builder.py src/cmpct/reader.py benchmarks/zip_parity_bench.py benchmarks/universal_bench.py tools/check_performance_regression.py tools/aggregate_parity_runs.py; do
+            cmp "$p" "/tmp/cmpct-salvage-control/$p"
+            sha256sum "$p" >> parity-evidence/identical-runtime-sources.txt
+          done
+          ! cmp -s src/cmpct/transactions.py /tmp/cmpct-salvage-control/src/cmpct/transactions.py
+          {
+            echo "candidate=$EVIDENCE_HEAD"
+            echo "runtime_parent=$CANDIDATE_PARENT"
+            echo "green_control=$CONTROL_HEAD"
+            sha256sum src/cmpct/transactions.py src/cmpct/cli.py
+            (cd /tmp/cmpct-salvage-control && sha256sum src/cmpct/transactions.py src/cmpct/cli.py)
+          } | tee parity-evidence/identities.txt
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install identical benchmark dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! sudo apt-get update; then
+            sudo rm -f /etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/azure-cli*.list
+            sudo apt-get update
+          fi
+          sudo apt-get install -y zstd xz-utils libsndfile1
+          python -m pip install -e '.[audio,test]'
+          python --version | tee parity-evidence/python.txt
+          uname -a | tee parity-evidence/host.txt
+          python -m pip freeze > parity-evidence/pip-freeze.txt
+
+      - name: Materialize control's package-owned native core with source receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/materialize_performance_base_native.py /tmp/cmpct-salvage-control \
+            --receipt parity-evidence/control-native.json | tee parity-evidence/control-native.stdout.txt
+
+      - name: Freeze one canonical release-parity input tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,os,shutil,sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / "benchmarks"))
+          import universal_bench as u
+          root=Path(os.environ["CMPCT_PARITY_CORPUS_ROOT"])
+          shutil.rmtree(root,ignore_errors=True)
+          root.mkdir(parents=True)
+          u.CORP=root
+          u.reset_rng()
+          u.make_corpora()
+          fixed_ns=1767225600*1_000_000_000
+          paths=sorted(root.rglob("*"),key=lambda p:(len(p.parts),p.as_posix()),reverse=True)
+          for p in paths:
+              try: os.utime(p,ns=(fixed_ns,fixed_ns),follow_symlinks=False)
+              except (OSError,NotImplementedError):
+                  if not p.is_symlink(): raise
+          os.utime(root,ns=(fixed_ns,fixed_ns))
+          h=hashlib.sha256();count=0;logical=0
+          for p in sorted(root.rglob("*")):
+              rel=p.relative_to(root).as_posix().encode()
+              st=p.lstat()
+              h.update(len(rel).to_bytes(4,"little"));h.update(rel)
+              h.update((st.st_mode&0o177777).to_bytes(4,"little"))
+              h.update(st.st_mtime_ns.to_bytes(8,"little",signed=True))
+              if p.is_symlink():
+                  b=os.readlink(p).encode()
+                  h.update(b"L");h.update(len(b).to_bytes(4,"little"));h.update(b)
+              elif p.is_file():
+                  count+=1;logical+=st.st_size
+                  h.update(b"F");h.update(st.st_size.to_bytes(8,"little"))
+                  with p.open("rb") as f:
+                      while True:
+                          b=f.read(1024*1024)
+                          if not b: break
+                          h.update(b)
+              elif p.is_dir():h.update(b"D")
+          manifest={"tree_sha256":h.hexdigest(),"files":count,"logical_bytes":logical,
+                    "fixed_mtime_ns":fixed_ns,
+                    "candidate":os.environ["EVIDENCE_HEAD"],"control":os.environ["CONTROL_HEAD"]}
+          Path("parity-evidence/corpus.json").write_text(json.dumps(manifest,indent=2)+"\n")
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Same-runner ABBA using unchanged canonical harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pass in base-a candidate-a candidate-b base-b; do
+            if [[ "$pass" = base* ]]; then
+              export PYTHONPATH=/tmp/cmpct-salvage-control/src
+              root=/tmp/cmpct-salvage-control
+            else
+              export PYTHONPATH="$GITHUB_WORKSPACE/src"
+              root="$GITHUB_WORKSPACE"
+            fi
+            EXPECT_SOURCE="$root" python - <<'PY'
+          import os
+          from pathlib import Path
+          import cmpct.builder,cmpct.reader
+          root=Path(os.environ["EXPECT_SOURCE"]).resolve()
+          for mod in (cmpct.builder,cmpct.reader):
+              p=Path(mod.__file__).resolve()
+              assert root in p.parents,(root,p)
+          PY
+            echo "Running $pass against $root"
+            (cd benchmarks && python zip_parity_bench.py) > "parity-evidence/$pass.stdout.txt"
+            cp benchmarks/_parity_work/out/zip-parity.json "parity-evidence/$pass.json"
+          done
+
+      - name: Aggregate and validate measured data before interpreting any gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/aggregate_parity_runs.py --out parity-evidence/base.json parity-evidence/base-a.json parity-evidence/base-b.json
+          python tools/aggregate_parity_runs.py --out parity-evidence/candidate.json parity-evidence/candidate-a.json parity-evidence/candidate-b.json
+          python - <<'PY'
+          import json,math
+          from pathlib import Path
+          docs={side:json.loads(Path("parity-evidence/"+side+".json").read_text()) for side in ("base","candidate")}
+          expected={"tiny","source","media","binary","dedup_links","sparse","nested","combined"}
+          for side,data in docs.items():
+              assert data["schema"]=="cmpct-zip-parity-v1"
+              assert set(data["corpora"])==expected,(side,data["corpora"].keys())
+              for corpus,row in data["corpora"].items():
+                  assert type(row["logical_bytes"]) is int and row["logical_bytes"]>=0
+                  for layer in ("library","cli"):
+                      for fmt in ("cmpct","zip"):
+                          v=row[layer][fmt]
+                          assert type(v["bytes"]) is int and v["bytes"]>0,(side,corpus,layer,fmt)
+                          for key in ("create_s_median","extract_s_median"):
+                              t=v[key]
+                              assert type(t) in (int,float) and math.isfinite(t) and t>0,(side,corpus,layer,fmt,key)
+          for corpus in expected:
+              assert docs["base"]["corpora"][corpus]["logical_bytes"]==docs["candidate"]["corpora"][corpus]["logical_bytes"]
+          print("Eight corpora, two layers, valid finite measurements and shared logical sizes: PASS")
+          PY
+          python tools/check_performance_regression.py --base parity-evidence/base.json --candidate parity-evidence/candidate.json --summary parity-evidence/diagnostic.md | tee parity-evidence/comparator.txt
+
+      - name: Retain raw measurements even if a test or comparator fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-salvage-isolated-parity-${{ github.event.pull_request.head.sha }}
+          path: parity-evidence/
+          retention-days: 30
+          if-no-files-found: warn
+ /tmp/court-head-paths.txt; then
+            echo 'run_court=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_court=false' >> "$GITHUB_OUTPUT"
+          fi
+
   same-runner-court:
+    needs: latest-head-scope
+    if: needs.latest-head-scope.outputs.run_court == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 55
     env:
