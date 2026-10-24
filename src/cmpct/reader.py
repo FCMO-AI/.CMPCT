@@ -744,14 +744,29 @@ class CMPCT:
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
                 except OSError:pass
-        # Opening has already validated all authenticated owner graphs and mapped every
-        # alias to one terminal regular row. Reuse that identity during extraction:
-        # a second raw-spelling traversal disagrees with canonical signed targets.
+        # A caller can mutate the exposed index rows after Reader construction.
+        # Recheck current alias graph before publishing hardlink leaves, preserving
+        # the inherited post-open cycle refusal (not just the initially signed graph).
+        # Resolve targets by the same canonical key as strict preflight/Reader open.
+        owner_cache={}
+        canonical_to_raw={key:row[0] for row,key,_ in canonical_rows} if deferred_hardlinks else {}
         for alias,(row,parts,full) in deferred_hardlinks.items():
-            owner=self._hardlink_owners[alias]
+            node=alias;chain=[];active=set()
+            while node in deferred_hardlinks and node not in owner_cache:
+                if node in active:raise IOError(f'cyclic hardlink target: {node}')
+                active.add(node);chain.append(node)
+                target_name=deferred_hardlinks[node][0][6][0]
+                try:target_key,_=canonical_logical_path(target_name)
+                except (ValueError,TypeError) as exc:
+                    raise IOError(f'unsafe hardlink target: {target_name!r}') from exc
+                node=canonical_to_raw.get(target_key,target_name)
+            owner=owner_cache.get(node,node)
+            if owner!=self._hardlink_owners[alias]:
+                raise IOError(f'hardlink owner graph changed after Reader open: {alias!r}')
             source=materialized.get(owner)
             if source is None or source[0][1]!=K_FILE:
                 raise IOError(f'hardlink has no materialized regular owner: {alias!r} -> {owner!r}')
+            for name in chain:owner_cache[name]=owner
             target=source[2]
             if not os.path.isfile(target) or os.path.islink(target):
                 raise IOError(f'hardlink owner not materialized safely: {owner!r}')
