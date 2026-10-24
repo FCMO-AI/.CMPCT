@@ -1,0 +1,69 @@
+# ci-lane: fast
+name: CMPCT v031 hardlink + static destination union O28
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_reader_hardlink_graph_o25.py'
+      - 'tests/test_v031_hardlink_static_destination_union_o28.py'
+      - 'tests/test_v031_destination_static_symlink_preflight.py'
+      - 'tests/test_v031_static_destination_o10r_union_o27.py'
+      - '.github/workflows/v031-hardlink-static-dest-union-o28.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-reader-union-o28-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  exact-source-three-platform-court:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Bind exact union source, unchanged O25 and O27 owner suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = "c7850c08c7bb27563955c6e2294b8c17c140d0a2"
+          test "$(git hash-object tests/test_reader_hardlink_graph_o25.py)" = "db38f7024b2f960b66c4d387c2cd942111cf9007"
+          test "$(git hash-object tests/test_v031_destination_static_symlink_preflight.py)" = "f55bd39b449a0d43af25658733ae14f8cd583ffa"
+          test "$(git hash-object tests/test_v031_static_destination_o10r_union_o27.py)" = "$(git rev-parse '34a2059491fcd38bc09231cba178ec8541f74fdb:tests/test_v031_static_destination_o10r_union_o27.py')"
+          git rev-parse HEAD
+          git hash-object src/cmpct/reader.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install real CMPCT implementation
+        run: python -m pip install -e '.[test]'
+      - name: Run original O25, O27 and combined O28 authentic archive courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o28-evidence
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            python -m pytest --noconftest -q -rs tests/test_reader_hardlink_graph_o25.py tests/test_v031_hardlink_static_destination_union_o28.py 2>&1 | tee o28-evidence/pytest.log
+          else
+            python -m pytest --noconftest -q -rs tests/test_reader_hardlink_graph_o25.py tests/test_v031_destination_static_symlink_preflight.py tests/test_v031_static_destination_o10r_union_o27.py tests/test_v031_hardlink_static_destination_union_o28.py 2>&1 | tee o28-evidence/pytest.log
+          fi
+          exit "${PIPESTATUS[0]}"
+      - name: Preserve results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o28-hardlink-dest-${{ matrix.os }}-${{ github.sha }}
+          path: o28-evidence/
+          if-no-files-found: warn
+          retention-days: 30
