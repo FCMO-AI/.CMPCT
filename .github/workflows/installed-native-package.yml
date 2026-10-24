@@ -12,6 +12,8 @@ on:
       - "tests/installed_native_package_smoke.py"
       - "tests/installed_native_signed_symlink_smoke.py"
       - "tools/v031_signed_symlink_crosshost_o2.py"
+      - "tools/verify_v031_installed_signed_receipt.py"
+      - "tests/test_v031_installed_signed_receipt_custody_r278.py"
       - "tools/check_v031_candidate_fingerprint.py"
       - "docs/V031_CANDIDATE_FINGERPRINT.json"
       - ".github/workflows/installed-native-package.yml"
@@ -56,7 +58,7 @@ jobs:
           # paths. A missing parent/diff fails closed rather than silently skipping.
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tests/installed_native_signed_symlink_smoke[.]py$|tools/v031_signed_symlink_crosshost_o2[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(src/|native/|pyproject[.]toml$|MANIFEST[.]in$|tests/installed_native_package_smoke[.]py$|tests/installed_native_signed_symlink_smoke[.]py$|tools/v031_signed_symlink_crosshost_o2[.]py$|tools/verify_v031_installed_signed_receipt[.]py$|tests/test_v031_installed_signed_receipt_custody_r278[.]py$|tools/check_v031_candidate_fingerprint[.]py$|docs/V031_CANDIDATE_FINGERPRINT[.]json$|[.]github/workflows/installed-native-package[.]yml$)'; then
             echo 'run_package=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_package=false' >> "$GITHUB_OUTPUT"
@@ -249,6 +251,7 @@ jobs:
           python - <<'PY'
           import hashlib, json, os, subprocess
           from pathlib import Path
+          from tools.verify_v031_installed_signed_receipt import validate_installed_signed_receipt
           root=Path('installed-evidence')
           expected={'ubuntu-24.04','macos-14','windows-2025'}
           expected_head=os.environ['EVIDENCE_HEAD']
@@ -268,12 +271,12 @@ jobs:
               assert len(dep_files)==1,(os_name,dep_files)
               assert len(signed_files)==1,(os_name,signed_files)
               signed=json.loads(signed_files[0].read_text())
-              assert signed['schema']=='cmpct-v031-installed-wheel-signed-symlink-o3-v1'
-              assert signed['source_sha']==expected_head
-              assert signed['required_prewrite_negatives']==(4 if os_name=='windows-2025' else 2)
-              assert signed['physical_safe_symlink_restored']==(os_name!='windows-2025')
-              assert len(signed['fixture_manifest_sha256'])==64
-              assert sum(x['result']=='prewrite_rejected' for x in signed['results'])==signed['required_prewrite_negatives']
+              # Counts alone can falsely certify duplicated negatives while
+              # omitting another hostile case or the physical POSIX positive.
+              # This independent consumer validates all five exact cases.
+              manifest_sha=validate_installed_signed_receipt(
+                  signed, expected_head=expected_head, platform=os_name
+              )
               assert len(wheels)==1,(os_name,wheels)
               s=json.loads(smoke_files[0].read_text())
               assert s['representative_archive_create_read_extract'] is True
@@ -286,7 +289,7 @@ jobs:
               platform[os_name]={
                   'archive_sha256':s['representative_archive_sha256'],
                   'dict_vector_sha256':s['dict_vector_sha256'],
-                  'installed_signed_fixture_sha256':signed['fixture_manifest_sha256'],
+                  'installed_signed_fixture_sha256':manifest_sha,
                   'installed_prewrite_negatives':signed['required_prewrite_negatives'],
                   'installed_safe_relative_symlink_physical':signed['physical_safe_symlink_restored'],
                   'wheel_name':wheel.name,
