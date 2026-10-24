@@ -1543,7 +1543,7 @@ pub unsafe extern "C" fn cmpct_entry_read_range(
 /// # Safety
 /// `archive` must be a live `cmpct_open` handle; `requests` must point to `count` readable
 /// `CmpctPackRange` objects when count > 0. `buffer` must be writable for `capacity` bytes
-/// when capacity > 0, and neither that region nor `out_read` may overlap `requests`.
+/// when capacity > 0. `requests`, `buffer`, and `out_read` must be pairwise disjoint;
 /// `out_read` must point to a writable `usize`. The caller must not concurrently close `archive`.
 #[no_mangle]
 pub unsafe extern "C" fn cmpct_pack_read_batch(
