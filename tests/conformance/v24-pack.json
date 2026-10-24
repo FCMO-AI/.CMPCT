@@ -1,117 +1,117 @@
 {
-  "schema": "cmpct-v24-independent-pack-golden-v1",
   "format_revision": 24,
   "generation_provenance": {
-    "method": "independently assembled struct/MessagePack revision-24 wire; no CMPCT Builder or Reader imports",
-    "python": "3.11",
-    "msgpack": "1.1.2",
     "index_and_zstd_codec": "system libzstd level 12",
-    "purpose": "fixed cross-implementation byte oracle for S_PACK shared-blob slices and offsets"
+    "method": "independently assembled struct/MessagePack revision-24 wire; no CMPCT Builder or Reader imports",
+    "msgpack": "1.1.2",
+    "purpose": "fixed cross-implementation byte oracle for S_PACK shared-blob slices and offsets",
+    "python": "3.11"
   },
+  "schema": "cmpct-v24-independent-pack-golden-v1",
   "vectors": [
     {
-      "packed_blob_sha256": "a0c9257d2eaf83c659a4d8f45afaa6bd78e7543710cca33cce5ef9dba9fd523a",
-      "packed_blob_uncompressed_bytes": 181,
+      "archive_base64": "Q01QQ1QyNAAYAAAAxgAAAAAAAADnAAAAAAAAAPUAAAAAAAAAus25yOdUJe/KBHBV9lt6vh+6wOdiNah1zQ6/Mwe0SMootS/9IOftBQDSCikrcEt1XPug8QSjTQkmJ4Sj2fMOFXlLkuQihNDSuJPIePq/46iJ+e+D4jKUAhW/qRtc6lUUEAxs5JgfuJXtNYze4nQtYTw4T+qXIYjD5/9W2Os5uRGdC1WHyRNCvBb2WXIImzjv+kUczrIdTwpVSSbJFKLBnwifS5HIlGcFiNU4zdTPsgYsxYjFqAY8JoxOAGToV78kyOjaRhKuhfVwhg1dAo0IhgkAL/AsFwKUEWAFVGvALmhPp4N8O8tDTUE0AAAAALUAAAAAAAAAtQAAAAAAAAAAAAAAfcFgUqDJJX0ur4PGWaTY9Fr6pr1451Q3EMyjPM5e+dup/VI6YWxwaGE6IGNvbnRlbnQgaXMgbm90IHRoZSBpbmRleAphbHBoYTogY29udGVudCBpcyBub3QgdGhlIGluZGV4CklOVEVSU1RJQ0U6Tk9ULUEtTE9HSUNBTC1NRU1CRVIAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eAENNQTQA//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPiZW5kLW9mLXBhY2tlZC1kYXRhCii1L/0g5+0FANIKKStwS3Vc+6DxBKNNCSYnhKPZ8w4VeUuS5CKE0NK4k8h4+r/jqIn574PiMpQCFb+pG1zqVRQQDGzkmB+4le01jN7idC1hPDhP6pchiMPn/1bY6zm5EZ0LVYfJE0K8FvZZcgibOO/6RRzOsh1PClVJJskUosGfCJ9LkciUZwWI1TjN1M+yBizFiMWoBjwmjE4AZOhXvyTI6NpGEq6F9XCGDV0CjQiGCQAv8CwXApQRYAVUa8AuaE+ng3w7y0NNUFRGMjQAAAEAAMYAAAAAAAAA5wAAAAAAAAAAAAAAAAAAALrNucjnVCXvygRwVfZber4fusDnYjWodc0OvzMHtEjK",
+      "archive_bytes": 777,
+      "archive_sha256": "bd2557edc2c5db84ba125c6ba33627ddc72dd740c38a5c4744c0686c48c441cf",
       "files": {
         "alpha-copy.txt": {
-          "size": 64,
+          "hex": "616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a",
           "sha256": "f04e6103dd461363a2c80814409814e88f209410611b7eacd035c0a85db61e0f",
-          "hex": "616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a"
+          "size": 64
         },
         "alpha.txt": {
-          "size": 64,
+          "hex": "616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a",
           "sha256": "f04e6103dd461363a2c80814409814e88f209410611b7eacd035c0a85db61e0f",
-          "hex": "616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a"
+          "size": 64
         },
         "omega.bin": {
-          "size": 67,
+          "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e00434d413400fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2",
           "sha256": "ab8d50c098bc0f7254c4e5cafb74600c489ec84d9df9223af10da7475e5eba41",
-          "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e00434d413400fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2"
+          "size": 67
         },
         "zeta.txt": {
-          "size": 19,
+          "hex": "656e642d6f662d7061636b65642d646174610a",
           "sha256": "86526c43e44f1a4444b6dcf40e4899bebe2d6ef8d91397b55caa867c23863599",
-          "hex": "656e642d6f662d7061636b65642d646174610a"
+          "size": 19
         }
       },
+      "name": "pack-raw",
+      "packed_blob_compressed_bytes": 181,
+      "packed_blob_sha256": "a0c9257d2eaf83c659a4d8f45afaa6bd78e7543710cca33cce5ef9dba9fd523a",
+      "packed_blob_uncompressed_bytes": 181,
+      "physical_codec": 0,
       "ranges": [
         {
-          "name": "omega.bin",
-          "offset": 4,
+          "hex": "0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e0043",
           "length": 29,
-          "hex": "0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e0043"
+          "name": "omega.bin",
+          "offset": 4
         },
         {
-          "name": "alpha-copy.txt",
-          "offset": 7,
+          "hex": "636f6e74656e74206973206e6f74207468",
           "length": 17,
-          "hex": "636f6e74656e74206973206e6f74207468"
+          "name": "alpha-copy.txt",
+          "offset": 7
         },
         {
-          "name": "zeta.txt",
-          "offset": 3,
+          "hex": "2d6f662d7061636b65642d6461",
           "length": 13,
-          "hex": "2d6f662d7061636b65642d6461"
+          "name": "zeta.txt",
+          "offset": 3
         }
-      ],
-      "name": "pack-raw",
-      "physical_codec": 0,
-      "archive_sha256": "bd2557edc2c5db84ba125c6ba33627ddc72dd740c38a5c4744c0686c48c441cf",
-      "archive_bytes": 777,
-      "packed_blob_compressed_bytes": 181,
-      "archive_base64": "Q01QQ1QyNAAYAAAAxgAAAAAAAADnAAAAAAAAAPUAAAAAAAAAus25yOdUJe/KBHBV9lt6vh+6wOdiNah1zQ6/Mwe0SMootS/9IOftBQDSCikrcEt1XPug8QSjTQkmJ4Sj2fMOFXlLkuQihNDSuJPIePq/46iJ+e+D4jKUAhW/qRtc6lUUEAxs5JgfuJXtNYze4nQtYTw4T+qXIYjD5/9W2Os5uRGdC1WHyRNCvBb2WXIImzjv+kUczrIdTwpVSSbJFKLBnwifS5HIlGcFiNU4zdTPsgYsxYjFqAY8JoxOAGToV78kyOjaRhKuhfVwhg1dAo0IhgkAL/AsFwKUEWAFVGvALmhPp4N8O8tDTUE0AAAAALUAAAAAAAAAtQAAAAAAAAAAAAAAfcFgUqDJJX0ur4PGWaTY9Fr6pr1451Q3EMyjPM5e+dup/VI6YWxwaGE6IGNvbnRlbnQgaXMgbm90IHRoZSBpbmRleAphbHBoYTogY29udGVudCBpcyBub3QgdGhlIGluZGV4CklOVEVSU1RJQ0U6Tk9ULUEtTE9HSUNBTC1NRU1CRVIAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eAENNQTQA//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPiZW5kLW9mLXBhY2tlZC1kYXRhCii1L/0g5+0FANIKKStwS3Vc+6DxBKNNCSYnhKPZ8w4VeUuS5CKE0NK4k8h4+r/jqIn574PiMpQCFb+pG1zqVRQQDGzkmB+4le01jN7idC1hPDhP6pchiMPn/1bY6zm5EZ0LVYfJE0K8FvZZcgibOO/6RRzOsh1PClVJJskUosGfCJ9LkciUZwWI1TjN1M+yBizFiMWoBjwmjE4AZOhXvyTI6NpGEq6F9XCGDV0CjQiGCQAv8CwXApQRYAVUa8AuaE+ng3w7y0NNUFRGMjQAAAEAAMYAAAAAAAAA5wAAAAAAAAAAAAAAAAAAALrNucjnVCXvygRwVfZber4fusDnYjWodc0OvzMHtEjK"
+      ]
     },
     {
-      "packed_blob_sha256": "a0c9257d2eaf83c659a4d8f45afaa6bd78e7543710cca33cce5ef9dba9fd523a",
-      "packed_blob_uncompressed_bytes": 181,
+      "archive_base64": "Q01QQ1QyNAAYAAAAxwAAAAAAAADnAAAAAAAAAOYAAAAAAAAA6LMcGhwiC4Bx8QsPdBudNXUg/AnFKwZQ+1sITRi0dLcotS/9IOf1BQDSSikrgEtzxwI0Gu63hfpo6NBEAM0NQWJrSWaRPV+kI0ki58qMpXC41ecZtXXtFBS7qdnbh6MgGBBYh083aBuZ6wedQdlaunBwlo9fjiYRl/9LTddSMgQ+FqoNkqcDaCnss+TRrDzf2lEizrEbywld5oVx6QODQ/BBFhNxMc8Jk6rxNKaGmi1gCVIqRxVAUnFUYsnQp75BiLCxdcS3FZXE+XVkBUAgFgIJAC/wLBcClBFgBVRrwC5oT6eDfDvLQ01BNAEAAAC1AAAAAAAAAKYAAAAAAAAAAAAAAH3BYFKgySV9Lq+Dxlmk2PRa+qa9eOdUNxDMozzOXvnbqf1SOii1L/0gte0EAFQJYWxwaGE6IGNvbnRlbnQgaXMgbm90IHRoZSBpbmRleApJTlRFUlNUSUNFOk5PVC1BLUxPR0lDQUwtTUVNQkVSAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHgBDTUE0AP/+/fz7+vn49/b19PPy8fDv7u3s6+rp6Ofm5eTj4mVuZC1vZi1wYWNrZWQtZGF0YQoBABi4egIotS/9IOf1BQDSSikrgEtzxwI0Gu63hfpo6NBEAM0NQWJrSWaRPV+kI0ki58qMpXC41ecZtXXtFBS7qdnbh6MgGBBYh083aBuZ6wedQdlaunBwlo9fjiYRl/9LTddSMgQ+FqoNkqcDaCnss+TRrDzf2lEizrEbywld5oVx6QODQ/BBFhNxMc8Jk6rxNKaGmi1gCVIqRxVAUnFUYsnQp75BiLCxdcS3FZXE+XVkBUAgFgIJAC/wLBcClBFgBVRrwC5oT6eDfDvLQ01QVEYyNAAAAQAAxwAAAAAAAADnAAAAAAAAAAAAAAAAAAAA6LMcGhwiC4Bx8QsPdBudNXUg/AnFKwZQ+1sITRi0dLc=",
+      "archive_bytes": 764,
+      "archive_sha256": "ced012e93917ac3c1e011aa503a601ff448237db88b4c4e920454a3cf3e6425c",
       "files": {
         "alpha-copy.txt": {
-          "size": 64,
+          "hex": "616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a",
           "sha256": "f04e6103dd461363a2c80814409814e88f209410611b7eacd035c0a85db61e0f",
-          "hex": "616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a"
+          "size": 64
         },
         "alpha.txt": {
-          "size": 64,
+          "hex": "616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a",
           "sha256": "f04e6103dd461363a2c80814409814e88f209410611b7eacd035c0a85db61e0f",
-          "hex": "616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a616c7068613a20636f6e74656e74206973206e6f742074686520696e6465780a"
+          "size": 64
         },
         "omega.bin": {
-          "size": 67,
+          "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e00434d413400fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2",
           "sha256": "ab8d50c098bc0f7254c4e5cafb74600c489ec84d9df9223af10da7475e5eba41",
-          "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e00434d413400fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2"
+          "size": 67
         },
         "zeta.txt": {
-          "size": 19,
+          "hex": "656e642d6f662d7061636b65642d646174610a",
           "sha256": "86526c43e44f1a4444b6dcf40e4899bebe2d6ef8d91397b55caa867c23863599",
-          "hex": "656e642d6f662d7061636b65642d646174610a"
+          "size": 19
         }
       },
+      "name": "pack-zstd",
+      "packed_blob_compressed_bytes": 166,
+      "packed_blob_sha256": "a0c9257d2eaf83c659a4d8f45afaa6bd78e7543710cca33cce5ef9dba9fd523a",
+      "packed_blob_uncompressed_bytes": 181,
+      "physical_codec": 1,
       "ranges": [
         {
-          "name": "omega.bin",
-          "offset": 4,
+          "hex": "0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e0043",
           "length": 29,
-          "hex": "0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e0043"
+          "name": "omega.bin",
+          "offset": 4
         },
         {
-          "name": "alpha-copy.txt",
-          "offset": 7,
+          "hex": "636f6e74656e74206973206e6f74207468",
           "length": 17,
-          "hex": "636f6e74656e74206973206e6f74207468"
+          "name": "alpha-copy.txt",
+          "offset": 7
         },
         {
-          "name": "zeta.txt",
-          "offset": 3,
+          "hex": "2d6f662d7061636b65642d6461",
           "length": 13,
-          "hex": "2d6f662d7061636b65642d6461"
+          "name": "zeta.txt",
+          "offset": 3
         }
-      ],
-      "name": "pack-zstd",
-      "physical_codec": 1,
-      "archive_sha256": "ced012e93917ac3c1e011aa503a601ff448237db88b4c4e920454a3cf3e6425c",
-      "archive_bytes": 764,
-      "packed_blob_compressed_bytes": 166,
-      "archive_base64": "Q01QQ1QyNAAYAAAAxwAAAAAAAADnAAAAAAAAAOYAAAAAAAAA6LMcGhwiC4Bx8QsPdBudNXUg/AnFKwZQ+1sITRi0dLcotS/9IOf1BQDSSikrgEtzxwI0Gu63hfpo6NBEAM0NQWJrSWaRPV+kI0ki58qMpXC41ecZtXXtFBS7qdnbh6MgGBBYh083aBuZ6wedQdlaunBwlo9fjiYRl/9LTddSMgQ+FqoNkqcDaCnss+TRrDzf2lEizrEbywld5oVx6QODQ/BBFhNxMc8Jk6rxNKaGmi1gCVIqRxVAUnFUYsnQp75BiLCxdcS3FZXE+XVkBUAgFgIJAC/wLBcClBFgBVRrwC5oT6eDfDvLQ01BNAEAAAC1AAAAAAAAAKYAAAAAAAAAAAAAAH3BYFKgySV9Lq+Dxlmk2PRa+qa9eOdUNxDMozzOXvnbqf1SOii1L/0gte0EAFQJYWxwaGE6IGNvbnRlbnQgaXMgbm90IHRoZSBpbmRleApJTlRFUlNUSUNFOk5PVC1BLUxPR0lDQUwtTUVNQkVSAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHgBDTUE0AP/+/fz7+vn49/b19PPy8fDv7u3s6+rp6Ofm5eTj4mVuZC1vZi1wYWNrZWQtZGF0YQoBABi4egIotS/9IOf1BQDSSikrgEtzxwI0Gu63hfpo6NBEAM0NQWJrSWaRPV+kI0ki58qMpXC41ecZtXXtFBS7qdnbh6MgGBBYh083aBuZ6wedQdlaunBwlo9fjiYRl/9LTddSMgQ+FqoNkqcDaCnss+TRrDzf2lEizrEbywld5oVx6QODQ/BBFhNxMc8Jk6rxNKaGmi1gCVIqRxVAUnFUYsnQp75BiLCxdcS3FZXE+XVkBUAgFgIJAC/wLBcClBFgBVRrwC5oT6eDfDvLQ01QVEYyNAAAAQAAxwAAAAAAAADnAAAAAAAAAAAAAAAAAAAA6LMcGhwiC4Bx8QsPdBudNXUg/AnFKwZQ+1sITRi0dLc="
+      ]
     }
   ]
 }
