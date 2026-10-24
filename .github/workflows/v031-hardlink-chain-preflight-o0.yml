@@ -1,0 +1,51 @@
+# ci-lane: fast
+name: CMPCT v0.31 hardlink-chain strict preflight O0
+on:
+  pull_request:
+    paths:
+      - 'experiments/v031_hardlink_chain_preflight_o0.py'
+      - '.github/workflows/v031-hardlink-chain-preflight-o0.yml'
+      - 'docs/v031-research/2026-10-24-hardlink-chain-preflight-amplification-o0-prereg.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-hardlink-preflight-o0-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  hardlink-chain-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Prove checked-out exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "O0_EXACT_HEAD=$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic CMPCT package
+        run: python -m pip install -e ".[test]"
+      - name: Execute unchanged research cost court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -u experiments/v031_hardlink_chain_preflight_o0.py 2>&1 | tee hardlink-chain-o0.log
+      - name: Preserve raw source-bound evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardlink-preflight-o0-${{ github.sha }}
+          path: |
+            hardlink-chain-o0.log
+            hardlink-chain-o0-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
