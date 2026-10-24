@@ -8,6 +8,8 @@ on:
     paths:
       - 'src/cmpct/reader.py'
       - '.github/workflows/v031-reader-exact-owner-product-o38.yml'
+      - '.github/workflows/installed-native-package.yml'
+      - '.github/workflows/v031-hardlink-static-dest-union-o28.yml'
       - 'docs/v031-research/2026-10-24-o31-exact-hit-productization-o38-prereg.md'
   workflow_dispatch:
 permissions:
@@ -45,7 +47,7 @@ jobs:
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if echo "$changed" | grep -Eq '^(src/cmpct/reader[.]py|[.]github/workflows/v031-reader-exact-owner-product-o38[.]yml|docs/v031-research/2026-10-24-o31-exact-hit-productization-o38-prereg[.]md)$'; then
+          if echo "$changed" | grep -Eq '^(src/cmpct/reader[.]py|[.]github/workflows/v031-reader-exact-owner-product-o38[.]yml|[.]github/workflows/installed-native-package[.]yml|[.]github/workflows/v031-hardlink-static-dest-union-o28[.]yml|docs/v031-research/2026-10-24-o31-exact-hit-productization-o38-prereg[.]md)$'; then
             echo "run_deep=true" >> "$GITHUB_OUTPUT"
           else
             echo "run_deep=false" >> "$GITHUB_OUTPUT"
