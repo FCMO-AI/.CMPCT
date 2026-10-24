@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/cmpct/validation.py'
       - 'tests/test_v031_delta_replay_indexed_o1.py'
+      - 'tests/test_v031_signed_delta_hardlink_union_o6.py'
       - 'tests/test_v031_signed_tree_preflight.py'
       - 'tests/test_v031_hardlink_graph_budget.py'
       - 'tests/test_v031_signed_graph_differential_r273.py'
@@ -89,6 +90,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python -m pytest --noconftest -q -rs tests/test_v031_signed_delta_hardlink_union_o6.py 2>&1 | tee o6-evidence/signed-journal-hardlink-o6c.log
           python -u benchmarks/v031_signed_delta_replay_o0.py --out o6-evidence --repeats 5 2>&1 | tee o6-evidence/replay-court.log
           python -u benchmarks/v031_reader_signed_delta_open_o6.py --out o6-evidence --repeats 5 2>&1 | tee o6-evidence/reader-open-o6b.log
           sha256sum o6-evidence/delta-o0-receipt.json o6-evidence/reader-open-o6b-receipt.json | tee o6-evidence/receipt.sha256
