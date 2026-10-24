@@ -36,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          test "$(git hash-object tests/test_v031_reader_open_failure_resource_ownership.py)" = "7e75fffaa"
+          test "$(git hash-object tests/test_v031_reader_open_failure_resource_ownership.py)" = "7e75fffaa4e7337463390299edbd18ef3bb7fe7b"
           test "$(git rev-parse 1ed92767e6438d9bb8835ddc7ae27160440c2014:src/cmpct/reader.py)" = "9b49bcb4d5fa50b393ddcec6b280dec8cdc5e126"
           mkdir -p map-open-union-evidence
           {
