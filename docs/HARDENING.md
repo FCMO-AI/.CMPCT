@@ -106,6 +106,22 @@ candidate run `40072814609` passed **8/8 run Mac tests** (plus one skipped) and
 **3/3 Ubuntu tests** (six skipped); the exact candidate source is
 `edf81a6da61b5d4cdd3291944922e374f1c1fc66`. Linux remains byte-distinct.
 
+A second prospective Mac-specific discriminator exposed a **distinct link-owner hole**:
+even after the O1 guard, a hardlink could name `cafe\\u0301` as its source
+although only the NFC `café` owner existed in the logical archive.
+APFS resolved the physically equivalent missing source and extraction succeeded.
+O2 preregistration commit `cf4665193f28626b76c2139bf6112bd28f5760c3`
+preceded unchanged test commit `b1f1d7dfb0c8bb9dc6554d018cfba569fc6a4cae`;
+hosted run `40073080938` recorded **one genuine macOS product assertion
+failure** (`DID NOT RAISE OSError`, 9 other passed), with Linux controls green.
+The standalone structural preflight already requires a hardlink's exact
+logical owner to exist. O2 therefore mirrors that existing rule during
+ordinary Mac extraction, before touching any file. Candidate source
+`138368dd0eabd160d7c65aa993fd9b26e31c9821` passed source-exact
+unchanged O0/O1/O2 courts in hosted run `40073261470`: **10 Mac passed /
+1 skipped**, **3 Ubuntu passed / 8 skipped**. The valid exact-owner hardlink
+control reconstructs shared inode and content correctly.
+
 Explicit limitations: Python's current Unicode tables are not the complete native
 Apple Unicode-9.0 comparison algorithm; case-sensitive APFS may legitimately accept
 some case-distinct names rejected by this conservative policy; destination symlinks,
