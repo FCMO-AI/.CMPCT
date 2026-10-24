@@ -6,6 +6,7 @@ on:
     paths:
       - 'tests/native_pack_stream_o10.c'
       - 'tests/native_pack_stream_o10.py'
+      - 'tests/native_pack_process_rss_o10.h'
       - 'docs/v031-research/NATIVE_BOUNDED_STREAM_O10_PREREG.md'
       - 'tests/native_pack_consumer_o7.c'
       - 'native/cmpct-core/src/lib.rs'
@@ -39,6 +40,7 @@ jobs:
           git ls-files --error-unmatch \
             tests/native_pack_stream_o10.c \
             tests/native_pack_stream_o10.py \
+            tests/native_pack_process_rss_o10.h \
             tests/native_pack_consumer_o7.c \
             docs/v031-research/NATIVE_BOUNDED_STREAM_O10_PREREG.md \
             native/cmpct-core/include/cmpct.h
@@ -54,10 +56,10 @@ jobs:
           python -m pip install -e '.[test]'
           cargo fmt --manifest-path native/cmpct-core/Cargo.toml -- --check
           cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
-          cc -std=c11 -O2 -Wall -Wextra -Werror -I. tests/native_pack_consumer_o7.c \
+          cc -std=c11 -O2 -Wall -Wextra -Werror -include tests/native_pack_process_rss_o10.h -I. tests/native_pack_consumer_o7.c \
             -Lnative/cmpct-core/target/release -lcmpct_core \
             -Wl,-rpath,"$PWD/native/cmpct-core/target/release" -o /tmp/cmpct-native-eager-o10
-          cc -std=c11 -O2 -Wall -Wextra -Werror -I. tests/native_pack_stream_o10.c \
+          cc -std=c11 -O2 -Wall -Wextra -Werror -include tests/native_pack_process_rss_o10.h -I. tests/native_pack_stream_o10.c \
             -Lnative/cmpct-core/target/release -lcmpct_core \
             -Wl,-rpath,"$PWD/native/cmpct-core/target/release" -o /tmp/cmpct-native-stream-o10
       - name: Same-source measured ABBA and symlink canary
