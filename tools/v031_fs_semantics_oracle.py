@@ -69,8 +69,16 @@ def semantic_tree_digest_v1(
         nonlocal next_group
         # Sorting each directory by filesystem bytes makes traversal independent
         # of readdir order while retaining POSIX non-UTF-8 spelling exactly.
+        # Enforce the global cap WHILE enumerating. Calling sorted(it)
+        # first would materialize an arbitrarily wide hostile directory
+        # before the post-sort per-entry budget could reject it.
+        children = []
         with os.scandir(directory) as it:
-            children = sorted(it, key=lambda item: os.fsencode(item.name))
+            for item in it:
+                if len(children) >= max_entries - entries:
+                    raise ValueError("filesystem oracle entry budget exceeded")
+                children.append(item)
+        children.sort(key=lambda item: os.fsencode(item.name))
         for item in children:
             name = os.fsencode(item.name)
             if not name or name in (b".", b".."):
