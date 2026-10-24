@@ -8,6 +8,7 @@ creating a destination. No changes to frozen format bytes or benchmark threshold
 from __future__ import annotations
 
 from copy import deepcopy
+import os
 
 import msgpack
 import pytest
@@ -121,3 +122,26 @@ def test_reader_verify_refuses_structurally_invalid_fsmeta(ordinary_archive, tmp
     with CMPCT(mutated) as reader:
         with pytest.raises(ValidationError, match="fsmeta"):
             reader.verify()
+
+def test_real_filesystem_xattr_is_preserved_when_supported(tmp_path):
+    """Positive control against rejecting Builder-produced nonempty metadata."""
+    if not all(hasattr(os, name) for name in ("setxattr", "getxattr", "listxattr")):
+        pytest.skip("filesystem xattr API not available")
+    source = tmp_path / "positive-src"
+    source.mkdir()
+    original = source / "payload.bin"
+    original.write_bytes(b"\x00" * 128 + b"exact-original")
+    try:
+        os.setxattr(original, "user.cmpct_posix_test", b"\x00\xff\x10")
+    except OSError as exc:
+        pytest.skip(f"filesystem does not support user xattrs: {exc}")
+    archive = tmp_path / "positive.cmpct"
+    Builder(source, workers=1).build(archive)
+    assert preflight_archive(archive)["files"] == 1
+    destination = tmp_path / "positive-out"
+    with CMPCT(archive) as reader:
+        assert reader.verify() == 1
+        reader.extractall(destination, metadata=True)
+    copied = destination / "payload.bin"
+    assert copied.read_bytes() == original.read_bytes()
+    assert os.getxattr(copied, "user.cmpct_posix_test") == b"\x00\xff\x10"
