@@ -1558,6 +1558,4 @@ mod tests {
         }
         let root = Value::Map(vec![(Value::from("test"), current)]);
         assert!(reject_ambiguous_index_maps(&root).is_err());
-    }
-
-}
+    }}
