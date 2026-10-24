@@ -186,6 +186,18 @@ def source_bytes(i):
     return (prefix + motif * 14)[:768].ljust(768, b"-")
 
 
+
+def linux_proc_rchar():
+    """Linux process logical read(2) bytes; not physical storage I/O."""
+    path = Path("/proc/self/io")
+    if not path.exists():
+        return None
+    for line in path.read_text().splitlines():
+        if line.startswith("rchar:"):
+            return int(line.partition(":")[2].strip())
+    raise RuntimeError("/proc/self/io has no rchar counter")
+
+
 def product_court(lib, home):
     source = home / "stress-input"
     source.mkdir()
@@ -222,18 +234,40 @@ def product_court(lib, home):
             assert serial(lib, handle, reqs) == expected
             status, data, written = batch(lib, handle, reqs)
             assert status == 0 and data == expected and written == len(expected)
-            arms = {"serial": [], "batch": []}
+            arms = {
+                "serial": {"ms": [], "cpu_ms": [], "rchar_delta": []},
+                "batch": {"ms": [], "cpu_ms": [], "rchar_delta": []},
+            }
             for turn in range(REPS):
                 for label in (["serial", "batch", "batch", "serial"] if turn % 2 == 0
                               else ["batch", "serial", "serial", "batch"]):
+                    # O4 additive counters were prospectively registered AFTER the
+                    # immutable O3 result. Read /proc OUTSIDE the wall/CPU window.
+                    before_rchar = linux_proc_rchar()
                     t0 = time.perf_counter_ns()
+                    cpu0 = time.process_time_ns()
                     actual = (serial(lib, handle, reqs) if label == "serial"
                               else batch(lib, handle, reqs)[1])
+                    cpu1 = time.process_time_ns()
                     elapsed = time.perf_counter_ns() - t0
+                    after_rchar = linux_proc_rchar()
                     assert actual == expected
-                    arms[label].append(elapsed / 1e6)
-            raw[size] = {label: {"ms": samples, "median_ms": statistics.median(samples)}
-                         for label, samples in arms.items()}
+                    arms[label]["ms"].append(elapsed / 1e6)
+                    arms[label]["cpu_ms"].append((cpu1 - cpu0) / 1e6)
+                    if before_rchar is not None and after_rchar is not None:
+                        arms[label]["rchar_delta"].append(after_rchar - before_rchar)
+            raw[size] = {
+                label: {
+                    **samples,
+                    "median_ms": statistics.median(samples["ms"]),
+                    "median_cpu_ms": statistics.median(samples["cpu_ms"]),
+                    "median_rchar_delta": (
+                        statistics.median(samples["rchar_delta"])
+                        if samples["rchar_delta"] else None
+                    ),
+                }
+                for label, samples in arms.items()
+            }
         mixed = [(pool[0], 0, 1), (mapped[other_rows[0][0]], 0, 1)]
         status, untouched, written = batch(lib, handle, mixed)
         assert status == -7 and written == 0 and set(untouched) == {0xA5}
@@ -264,6 +298,8 @@ def main():
         fixed = fixed_court(lib, home)
         product = product_court(lib, home)
     payload = {"schema": "cmpct-native-pack-batch-o3-v1",
+               "resource_measurement": "o4-linux-process-cpu-and-proc-rchar",
+               "native_library_sha256": hashlib.sha256(LIBRARY.read_bytes()).hexdigest(),
                "fixed_independent": fixed, "builder_product": product,
                "status": "HOSTED_COURT_PASS"}
     assert len(sys.argv) == 2, "usage: python tests/native_pack_batch_abi.py RESULT_JSON"
@@ -273,7 +309,12 @@ def main():
     print(json.dumps({"status": payload["status"], "fixed": fixed,
                       "product": {k:v for k,v in product.items() if k != "raw_abba"},
                       "median_ms": {n:{k:v["median_ms"] for k,v in sample.items()}
-                                    for n,sample in product["raw_abba"].items()}}, sort_keys=True))
+                                    for n,sample in product["raw_abba"].items()},
+                      "median_cpu_ms": {n:{k:v["median_cpu_ms"] for k,v in sample.items()}
+                                       for n,sample in product["raw_abba"].items()},
+                      "median_rchar_delta": {n:{k:v["median_rchar_delta"] for k,v in sample.items()}
+                                           for n,sample in product["raw_abba"].items()}},
+                     sort_keys=True))
 
 
 if __name__ == "__main__":
