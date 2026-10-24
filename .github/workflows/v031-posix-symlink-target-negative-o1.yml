@@ -1,0 +1,46 @@
+# ci-lane: fast
+name: CMPCT v031 POSIX symlink target negative O1
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_posix_byte_tree_o1.py'
+      - 'benchmarks/v031_posix_symlink_target_negative_o1.py'
+      - '.github/workflows/v031-posix-symlink-target-negative-o1.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  negative-target-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate exact research-source and run negative counterexample
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee /tmp/posix-symlink-head.txt
+          python -m pip install msgpack==1.1.2
+          python benchmarks/v031_posix_symlink_target_negative_o1.py | tee /tmp/posix-symlink-negative.json
+          python - <<'PY'
+          import json
+          x=json.load(open("/tmp/posix-symlink-negative.json"))
+          assert x["status"] == "FALSIFIED"
+          assert all(len(x["cases"][name])==4 for name in ("typed","escaped"))
+          assert "not demonstrated shipping CMPCT" in x["scope"]
+          PY
+      - name: Preserve source-bound negative research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: posix-symlink-target-negative-research-only
+          path: /tmp/posix-symlink-*.json
+          if-no-files-found: warn
