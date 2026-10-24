@@ -145,3 +145,25 @@ def test_real_filesystem_xattr_is_preserved_when_supported(tmp_path):
     copied = destination / "payload.bin"
     assert copied.read_bytes() == original.read_bytes()
     assert os.getxattr(copied, "user.cmpct_posix_test") == b"\x00\xff\x10"
+
+def test_host_unsupported_large_owner_preserves_exact_content(ordinary_archive, tmp_path, monkeypatch):
+    """Host ownership limitations are not reason to corrupt/abort valid r24 bytes."""
+    if not hasattr(os, "chown"):
+        pytest.skip("platform lacks os.chown")
+    archive = _authenticated_fsmeta_mutation(
+        ordinary_archive,
+        lambda meta: meta.update(owner_overrides=[[0, 1 << 40, 1 << 40]]),
+        tmp_path / "large-owner.cmpct",
+    )
+    # A structurally valid cross-host declaration must survive preflight.
+    assert preflight_archive(archive)["files"] == 1
+    calls = []
+    def reject_unrepresentable(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise OverflowError("host uid_t/gid_t cannot represent archival ownership")
+    monkeypatch.setattr(os, "chown", reject_unrepresentable)
+    dest = tmp_path / "large-owner-out"
+    with CMPCT(archive) as reader:
+        reader.extractall(dest, metadata=True)
+    assert calls, "owner restoration was not exercised"
+    assert (dest / "payload.bin").read_bytes() == b"exact-content-" * 10
