@@ -37,7 +37,7 @@ def make_signed_alias_archive(source: Path, destination: Path, count: int, shape
     index = msgpack.unpackb(plain, raw=False)
     assert len(index["files"]) == 1
     owner = index["files"][0]
-    assert owner[0] == "a0000000.bin"
+    assert owner[0] == "a00000000.bin"
     rows = [owner]
     previous = owner[0]
     for i in range(count):
@@ -88,7 +88,7 @@ def main() -> None:
         root = Path(td)
         source_tree = root / "input"
         source_tree.mkdir()
-        (source_tree / "a0000000.bin").write_bytes(b"BOUNDARY-EXACT-OWNER" * 8)
+        (source_tree / "a00000000.bin").write_bytes(b"BOUNDARY-EXACT-OWNER" * 8)
         seed = root / "source.cmpct"
         Builder(source_tree, workers=1, reproducible=True).build(seed)
         for n in sizes:
