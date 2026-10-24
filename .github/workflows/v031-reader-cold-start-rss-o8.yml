@@ -1,0 +1,54 @@
+# ci-lane: fast
+name: CMPCT v0.31 Reader cold-process RSS O8
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v031_reader_cold_start_rss_o8.py'
+      - 'docs/v031-research/2026-10-24-reader-cold-start-rss-o8-prereg.md'
+      - '.github/workflows/v031-reader-cold-start-rss-o8.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-reader-cold-rss-o8-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  fresh-interpreter-source-exact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+      - name: Capture exact O7 source without reinterpreting historical code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = "6de2edcf5b804e224a1c651ca77361af5667dc2e"
+          test "$(git rev-parse 5f6c1462e30686687ea13cc2507c9702f13df116:src/cmpct/reader.py)" = "604f6a81bf03bd97a4defb4ad7a1393d01ed491f"
+          test "$(git hash-object benchmarks/v031_signed_delta_replay_o0.py)" = "02c5f506c9294130db6b0eb9c36c0a61460c3b35"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine CMPCT source product
+        run: python -m pip install -e ".[test]"
+      - name: Independent fresh-process O8 economics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o8-evidence
+          python -u benchmarks/v031_reader_cold_start_rss_o8.py --out o8-evidence --sizes 512 4096 --repeats 5 2>&1 | tee o8-evidence/experiment.log
+          sha256sum o8-evidence/reader-cold-start-rss-o8.json | tee o8-evidence/receipt.sha256
+      - name: Preserve honest positive or negative O8 observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reader-cold-start-rss-o8-${{ github.sha }}
+          path: o8-evidence/
+          if-no-files-found: warn
+          retention-days: 30
