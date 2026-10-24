@@ -245,3 +245,46 @@ destination symlinks, concurrent inode/path rebinding, network filesystems,
 source snapshot races, mount pivots, and platform-specific collation are
 **not** solved by this lexical preflight. PR #338 remains draft, not
 merged or released; do not weaken the inherited release/parity court.
+
+
+### Strict signed-tree preflight parity — v0.31 draft PR #339 (stacked on #338)
+
+The extraction-side correction in PR #338 refuses SHA-authenticated revision-24
+trees where a regular file or hardlink acts as another member's proper path
+ancestor, before publishing any archive members. The separate **strict
+structural validator** `preflight_archive()` previously checked each file row,
+canonical path aliases and hardlink cycles but did not reject the same
+unmaterializable tree. Ordinary Reader member reads remain independently valid
+on these files and must not be conflated with whole-tree extraction safety.
+
+Independent O0 prediction was frozen **before test or product source** in
+`docs/v031-research/2026-10-24-signed-tree-preflight-o0-prereg.md`
+(commit `f275dd1c5d54`). Signed inputs are created with the real r24 Builder:
+only logical index rows are mutated, both index commitments and footer are
+regenerated, and the physical blob bytes are unchanged.
+[Source-exact negative run 40080840083](https://github.com/FCMO-AI/.CMPCT/actions/runs/40080840083)
+at test-only `f86063920b4f19dfacba447a95e11788a7a26335`
+proved **5/5 preflight assertions failed (`DID NOT RAISE ValidationError`)**
+and **2/2 valid controls passed** independently on Ubuntu and macOS.
+The same files were individually readable, and #338's extractor rejected them
+without publishing file members. A Windows result must be checked separately.
+
+Candidate `src/cmpct/validation.py` change first landed in
+`5d86a2b524e35494accf21067753b0a08ff0a2db`: a single-pass,
+order-independent component trie rejects a regular/hardlink node with any
+descendants (regardless of insertion order) within the current ParserLimits.
+The fix does not invoke extraction, read payloads, alter r24 bytes, rewrite
+Reader source, or change symlink policy. The **same unchanged signed hostile
+and valid controls** must pass on the candidate's exact HEAD before this is
+counted as product evidence; CI was pending when this note was written.
+
+Resource accounting: trie work/space are O(total canonical path components)
+in the bounded decoded index. An **isolated Python model**, not CMPCT product
+measurement, observed ~9.1ms/0.35 MB for 1k, 83.7ms/3.08 MB for 10k,
+and 1,088.7ms/31.68 MB for 100k three-component rows with tracemalloc.
+These measurements are not complete-product wall, peak RSS, or release parity
+evidence. Public release, full compatibility/performance and strict destination
+containment remain independent gates. In particular, nested symlink admission,
+hardlink target type and order, existing filesystem objects and concurrent
+rebindings are separate questions; accepting a tree's **logical** topology
+never proves its **physical** extraction environment is safe.
