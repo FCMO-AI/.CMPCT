@@ -52,8 +52,8 @@ def _reject_external_git_filters(root: Path, rows: list[str]) -> None:
             raise ValueError("Git returned attributes for an unknown source")
         if attr in {"filter", "working-tree-encoding"} and value != "unset":
             raise ValueError(f"unsupported Git source filter attribute: {path}: {attr}")
-            
-    
+
+
 def compute(manifest: dict, *, root: Path = raw.ROOT, batch_size: int = 96) -> dict:
     if not 1 <= batch_size <= 128:
         raise ValueError("invalid bounded Git hash-object batch size")
