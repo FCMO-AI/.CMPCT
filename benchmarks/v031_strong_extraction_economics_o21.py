@@ -111,6 +111,9 @@ def child(archive: Path, expected_file: Path, destination: Path, mode: str) -> N
         after_verify = time.perf_counter_ns()
         reader.extractall(destination, metadata=False)
         after_extract = time.perf_counter_ns()
+    # O21b: the Reader operation ends before the independent filesystem SHA
+    # oracle. Sample CPU at this exact same boundary as operation wall.
+    cpu_after_extract = time.process_time_ns()
     observed = source_manifest(destination)
     assert observed == expected["original_manifest"], {
         "missing": sorted(set(expected["original_manifest"]) - set(observed)),
@@ -119,7 +122,8 @@ def child(archive: Path, expected_file: Path, destination: Path, mode: str) -> N
                              if observed[k] != expected["original_manifest"][k]),
     }
     after_check = time.perf_counter_ns()
-    full_cpu_ns = time.process_time_ns() - before_cpu
+    audit_inclusive_cpu_ns = time.process_time_ns() - before_cpu
+    operation_cpu_ns = cpu_after_extract - before_cpu
     print(json.dumps({
         "mode": mode,
         "open_ns": after_open - before_wall,
@@ -127,7 +131,8 @@ def child(archive: Path, expected_file: Path, destination: Path, mode: str) -> N
         "extract_ns": after_extract - after_verify,
         "check_ns": after_check - after_extract,
         "total_operation_wall_ns": after_extract - before_wall,
-        "total_operation_cpu_ns": full_cpu_ns,
+        "total_operation_cpu_ns": operation_cpu_ns,
+        "audit_inclusive_cpu_ns": audit_inclusive_cpu_ns,
         "peak_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
         "source_matches_sha256_manifest": True,
         "extracted_members": len(observed),
