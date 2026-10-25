@@ -1,0 +1,90 @@
+# ci-lane: fast
+# O78 adversarial destination semantics, not release, benchmark or format authority.
+name: CMPCT v0.31 O78 Builder destination semantics
+on:
+  push:
+    branches: ['agent/phased2-v031-o75-destination-semantics-o78-20261025']
+  pull_request:
+    paths:
+      - 'benchmarks/v031_o78_builder_destinations.py'
+      - '.github/workflows/v031-o78-builder-destinations.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-o78-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  real-builder-output:
+    name: O78 real Builder on ubuntu-24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O78_JSON: o78-evidence/result.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact source and immutable pre-result prediction
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o78-evidence
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 100bdcb6944e7429431874071612c3d2ecdc7998 HEAD
+          test "$(git rev-parse 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object src/cmpct/builder.py)" = "d92c78119e9613b2c3ae1886a8fba841dc313fca"
+          python -m py_compile benchmarks/v031_o78_builder_destinations.py
+          git rev-parse HEAD > o78-evidence/exact-head.sha
+          git hash-object benchmarks/v031_o78_builder_destinations.py > o78-evidence/instrument.blob
+      - name: Install exact real product
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Real-Builder historical versus O75 alias and metadata court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_o78_builder_destinations.py 2>&1 | tee o78-evidence/court.log
+          python - <<'PY'
+          import json
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          p=Path('o78-evidence/result.json')
+          x=json.loads(p.read_text())
+          records=x['cases']
+          assert len(records)==5,records
+          assert sum(r['status']=='PASS' for r in records)>=4
+          root=ET.Element('testsuite',name='o78-destination',tests=str(len(records)),
+              failures='0',errors='0',skipped=str(sum(r['status']=='SKIP' for r in records)))
+          for row in records:
+              case=ET.SubElement(root,'testcase',name=row['kind'])
+              if row['status']=='SKIP':
+                  ET.SubElement(case,'skipped',message=row.get('cause','unsupported'))
+          ET.ElementTree(root).write('o78-evidence/junit.xml',encoding='utf-8',xml_declaration=True)
+          print('O78: real Builder destination semantics, evaluated',len(records),'cases')
+          PY
+      - name: Final source and execution identities
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o78-evidence
+          git rev-parse HEAD > o78-evidence/final-head.sha
+          python -c "import platform,sys;print(platform.platform());print(sys.version)" > o78-evidence/platform.txt
+          sha256sum benchmarks/v031_o78_builder_destinations.py > o78-evidence/instrument.sha256
+      - name: Preserve O78 raw positive/negative artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o78-${{ github.sha }}
+          path: o78-evidence/
+          if-no-files-found: error
