@@ -28,6 +28,26 @@ from cmpct.validation import preflight_archive
 PAYLOAD = b"O35b-authenticated-mixed-owner-\x00\xfe" * 3
 
 
+def win32_volume_filesystem(path: Path) -> str:
+    """Name the filesystem; 64-bit file IDs alone are not unique on ReFS."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    get_volume = kernel.GetVolumeInformationW
+    get_volume.argtypes = [
+        wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD),
+        ctypes.POINTER(wintypes.DWORD), wintypes.LPWSTR, wintypes.DWORD,
+    ]
+    get_volume.restype = wintypes.BOOL
+    name = ctypes.create_unicode_buffer(64)
+    root = str(path.resolve().anchor)
+    if not get_volume(root, None, 0, None, None, None, name, len(name)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return name.value.upper()
+
+
 def win32_physical_id(path: Path) -> tuple[int, int, int]:
     """Independent native Win32 file identity: volume, file index, hardlink count."""
     import ctypes
@@ -150,7 +170,16 @@ def main() -> None:
         if posix_inode_check:
             assert len({(destination / name).stat().st_ino for name in names}) == 1
         win32_native_same = win32_negative_distinct = win32_samefile = win32_link_count = False
+        win32_ntfs_volume_confirmed = False
         if os.name == "nt":
+            # BY_HANDLE_FILE_INFORMATION exposes a 64-bit file index. Microsoft
+            # does not guarantee its uniqueness on ReFS (128-bit FileIdInfo).
+            # Certify this 64-bit witness ONLY on a measured NTFS volume.
+            filesystem = win32_volume_filesystem(destination / names[0])
+            win32_ntfs_volume_confirmed = filesystem == "NTFS"
+            assert win32_ntfs_volume_confirmed, (
+                f"64-bit Win32 file identity proof requires NTFS, found {filesystem!r}"
+            )
             # O43: stronger than byte equality or os.stat inode alone. All
             # aliases must share one native file identity; an equal-byte fresh
             # regular file must not accidentally satisfy the same predicate.
@@ -196,6 +225,7 @@ def main() -> None:
         "implicit_hardlink_only_parent_restored": True,
         "all_member_content_and_ranges_verified": True,
         "host_posix_inode_identity_confirmed": posix_inode_check,
+        "win32_ntfs_volume_confirmed": win32_ntfs_volume_confirmed,
         "win32_native_file_id_equal": win32_native_same,
         "win32_samefile_crosschecked": win32_samefile,
         "win32_hardlink_count_at_least_four": win32_link_count,
