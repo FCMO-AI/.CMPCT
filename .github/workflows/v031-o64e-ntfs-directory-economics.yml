@@ -50,10 +50,18 @@ jobs:
           git worktree add --detach o64e-baseline d9f9fa724c139c6281f0e2a92c66601bee912618
           test "$(git hash-object o64e-baseline/src/cmpct/builder.py)" = "7a13545c7dc22ea973f90930fae6cf053f13f1f2"
           test "$(git hash-object o64e-baseline/src/cmpct/ntfs_streams.py)" = "23207ac06797fb21322cf327e97928fdbb5241c2"
-          python -m pip install . psutil
+          python -m pip install psutil msgpack
+          # The codec requires a package-owned compiled library. Each exact Git
+          # source gets its *own* native-bearing installed wheel, not PYTHONPATH
+          # source imports that would fail before any benchmark sample.
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o64e-base-site" ./o64e-baseline
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o64e-candidate-site" .
+          test "$(git hash-object "$RUNNER_TEMP/o64e-base-site/cmpct/builder.py")" = "7a13545c7dc22ea973f90930fae6cf053f13f1f2"
+          test "$(git hash-object "$RUNNER_TEMP/o64e-candidate-site/cmpct/builder.py")" = "b02a30d4ad1b26ea8eea49e11159113caebd6006"
+          test "$(git hash-object "$RUNNER_TEMP/o64e-candidate-site/cmpct/ntfs_streams.py")" = "61d8cab1545c491da76b23ea89d4ca85d3030c5d"
           mkdir -p o64e-evidence
           python benchmarks/v031_o64_directory_admission_economics.py \
-            --baseline o64e-baseline --candidate . \
+            --baseline "$RUNNER_TEMP/o64e-base-site" --candidate "$RUNNER_TEMP/o64e-candidate-site" \
             --workspace "$RUNNER_TEMP/o64e-shared-tree" \
             --report o64e-evidence/results.json \
             2>&1 | tee o64e-evidence/results.log
