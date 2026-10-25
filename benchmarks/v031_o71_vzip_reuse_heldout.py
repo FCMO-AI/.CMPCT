@@ -30,6 +30,7 @@ CASES = (
     ("shared_repeat_levels", "repeat", (1, 6, 9), "shared", "different"),
     ("shared_text_levels", "text", (1, 6, 9), "shared", "different"),
     ("shared_mixed_levels", "mixed", (1, 6, 9), "shared", "different"),
+    ("independent_mixed_levels", "mixed", (1, 6, 9), "independent", "different"),
     ("unrelated_repeat_levels", "repeat", (1, 6, 9), "independent", "different"),
     ("shared_repeat_names", "repeat", (6, 6, 6), "shared", "different"),
     ("shared_random_levels", "random", (1, 6, 9), "shared", "different"),
@@ -53,7 +54,12 @@ def payload(family: str, index: int, ownership: str) -> bytes:
     if family == "mixed":
         # Realistic mixed entropy: long structured runs plus incompressible data.
         r = random.Random(7100 + idx)
-        prefix = (b"tenant=neutral; event=complete; status=ok\n" * 30000)[: MIB - 16384]
+        # O71b preregistered causal contrast: same entropy class and file sizes,
+        # but distinct long-range repeated patterns and distinct small random tails.
+        pattern = (f"tenant=cohort-{idx}; event=complete; status=ok\\n".encode()
+                   if ownership == "independent" else
+                   b"tenant=neutral; event=complete; status=ok\\n")
+        prefix = (pattern * 30000)[: MIB - 16384]
         return prefix.ljust(MIB - 16384, b"X") + r.randbytes(16384)
     if family == "random":
         return random.Random(7100 + idx).randbytes(MIB)
