@@ -42,3 +42,15 @@ Windows timestamp fallback via plain `os.utime(path)` is **not** automatically s
 
 ## Completion witness / audit boundaries
 Exact original source-bound 3/3 platform scientific jobs SUCCESS, 6/6 actual tests PASS, 0 skips. Product defect confirmed within test scope. Other general, native, fuzz, official performance, and new final documentation-head CI remain separate, not inferred from this receipt.
+
+## Owner-side repair discrimination without changing the frozen verdict
+The test separates three contracts that a future repair must not conflate:
+
+1. **Logical archive custody**: r24 index records the exact old timestamp and SHA-verified content. Passed on all three hosts.
+2. **Physical timestamp application**: the directory and regular file must independently report the restored mtime via host `stat` after successful default `extractall(metadata=True)`. Windows failed both while Unix passed, despite Windows supporting an explicit timestamp operation on known-safe disposable objects.
+3. **Destination capability safety**: a Windows fallback that changes timestamps through path-following syscalls must independently establish it cannot follow reparse links or mutate other objects if namespace ownership changes after preflight. The current test is **not** evidence that any such fallback is safe; a handle-pinned destination experiment would be a different question.
+
+**Cheapest owner decision:** keep the inherited portable *best-effort* contract explicitly documented, and distinguish `require_xattrs=True` from an as-yet nonexistent strict timestamp guarantee. If implementing a Windows fix, first run a small handle-based timestamp feasibility and negative namespace pivot court, then integrate original O69/O72 and static/hostile Reader controls and real parity gates. A naive unconditional `os.utime(path)` patch cannot be promoted merely because it makes this one timestamp check green.
+
+## Quality-ratchet and falsification
+The research ratchet is narrower than the product ratchet: original Reader and every semantic/evaluator/benchmark are preserved; O102 adds an independently measured counterexample that prevents future documentation or promotion from equating successful byte extraction with complete Windows filesystem fidelity. A regression-free product change must retain O69's xattr semantics, supported POSIX timestamp restoration, source-byte authentication and destination containment while repairing or transparently declining Windows physical timestamps. **Disproof:** a newer original-O69 source-exact installed Windows court that reports both source and extracted file/directory mtimes equal under the same metadata policy would falsify O102's broadest interpretation; preserve that evidence and narrow accordingly. This result does not authorize changing the frozen experiment, thresholds, format or platform policy.
