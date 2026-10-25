@@ -91,10 +91,27 @@ def source_receipt(src: Path) -> dict:
         if typ == "regular":
             key = (st.st_dev, st.st_ino)
             groups.setdefault(key, []).append(rel)
+    # In particular, Windows DirEntry.stat() can differ from os.stat() in
+    # inode/link-count completeness. Builder.scan() consumes DirEntry.stat().
+    # Preserve both observations instead of hypothesizing a codec error.
+    stat_probe = {}
+    for rel in (OWN, ALIAS, COPY):
+        p = src / rel
+        full = p.stat()
+        with os.scandir(p.parent) as entries:
+            fast = next(e.stat(follow_symlinks=False)
+                        for e in entries if e.name == p.name)
+        stat_probe[rel] = {
+            "os_stat": {"nlink": int(full.st_nlink),
+                        "dev": int(full.st_dev), "ino": int(full.st_ino)},
+            "direntry_stat": {"nlink": int(fast.st_nlink),
+                              "dev": int(fast.st_dev), "ino": int(fast.st_ino)}
+        }
     parts = sorted(tuple(sorted(v)) for v in groups.values())
     assert (ALIAS, OWN) in parts or (OWN, ALIAS) in parts, parts
     assert all(COPY not in g or len(g) == 1 for g in parts)
     return {"entries": items, "file_equivalence_groups": parts,
+            "source_stat_probe": stat_probe,
             "logical_digest": sha(json.dumps(
                 [{k: v for k, v in x.items() if k != "mode"} for x in items],
                 sort_keys=True).encode())}
@@ -117,6 +134,10 @@ def capture(arc: Path, destination: Path) -> dict:
         idx = copy.deepcopy(reader.index)
         rows = [{"path": r[0], "kind": r[1], "mode": r[2], "size": r[4]}
                 for r in idx["files"]]
+        hardlink_rows = [
+            {"alias": r[0], "target": r[6][0]}
+            for r in idx["files"] if r[1] == K_HARDLINK
+        ]
         for row in idx["files"]:
             row[2] = 0
         nonmode_hash = sha(msgpack.packb(idx, use_bin_type=True))
@@ -124,14 +145,18 @@ def capture(arc: Path, destination: Path) -> dict:
         assert (destination / rel).read_bytes() == expected, rel
     for rel in DIRECTORIES:
         assert (destination / rel).is_dir(), rel
-    assert os.path.samefile(destination / OWN, destination / ALIAS)
-    assert not os.path.samefile(destination / OWN, destination / COPY)
+    alias_same = os.path.samefile(destination / OWN, destination / ALIAS)
+    copy_distinct = not os.path.samefile(destination / OWN, destination / COPY)
+    # Do not assert here: preserve an authenticated, exact-head red receipt
+    # before failing the host, so other agents can attribute the actual cause.
     return {"archive_sha256": sha(body), "archive_bytes": len(body),
             "physical_sha256": sha(physical), "physical_bytes": len(physical),
             "index_digest_ignoring_modes": nonmode_hash,
             "index_uncompressed_bytes": raw_index_size, "index_rows": rows,
+            "encoded_hardlink_rows": hardlink_rows,
             "verified_count": verified, "roundtrip": "PASS",
-            "hardlink_alias_identity": True, "equal_bytes_independent_identity": True,
+            "hardlink_alias_identity": alias_same,
+            "equal_bytes_independent_identity": copy_distinct,
             "member_sha256": {p: sha(data) for p, data in sorted(REGULAR.items())}}
 
 
@@ -190,6 +215,18 @@ def main(out: Path) -> None:
         }
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(verdict, sort_keys=True, indent=2) + "\n")
+        if not all(
+            result["hardlink_alias_identity"] and
+            result["equal_bytes_independent_identity"]
+            for result in outcomes.values()
+        ):
+            raise AssertionError(
+                "O46_AUTHENTIC_PRODUCT_HARDLINK_PHYSICAL_IDENTITY_FAIL: "
+                "fail-closed original criterion; diagnostic receipt saved "
+                "to " + str(out) + "; index hardlink rows: " +
+                json.dumps({arm: result["encoded_hardlink_rows"]
+                            for arm, result in outcomes.items()}, sort_keys=True)
+            )
         print(json.dumps({"source_sha": head, "platform": verdict["platform"],
                           "schema": SCHEMA, "original": reference["archive_sha256"],
                           "o14": outcomes["o14_mode_only"]["archive_sha256"],
