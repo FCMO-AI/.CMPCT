@@ -55,7 +55,9 @@ jobs:
           assert not imported.is_relative_to(repo), f"not clean-installed Builder: {imported}"
           print("O47_INSTALLED_BUILDER="+str(imported))
           PY
-          python -m pytest -v tests/test_v031_win32_builder_hardlink_o47.py --junitxml=o47-pytest.xml 2>&1 | tee o47-pytest.log
+          mkdir -p o47-isolated
+          cp tests/test_v031_win32_builder_hardlink_o47.py o47-isolated/test_v031_win32_builder_hardlink_o47.py
+          python -m pytest -v o47-isolated/test_v031_win32_builder_hardlink_o47.py --junitxml=o47-pytest.xml 2>&1 | tee o47-pytest.log
       - name: Retain original negative or positive exact-head court
         uses: actions/upload-artifact@v4
         if: always()
