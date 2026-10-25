@@ -1,0 +1,94 @@
+# ci-lane: fast
+# O56: source-exact NTFS named $DATA stream fidelity research; no release credit.
+name: CMPCT v0.31 O56 installed Win32 ADS court
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-ntfs-ads-fidelity-o56-20261025'
+  pull_request:
+    paths:
+      - 'tests/test_v031_ntfs_named_streams_o56.py'
+      - '.github/workflows/v031-ntfs-ads-fidelity-o56.yml'
+      - 'src/cmpct/builder.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o56-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-installed-ntfs:
+    name: O56 real installed NTFS source fidelity (Windows)
+    runs-on: windows-2025
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O56_EVIDENCE: o56-observations.jsonl
+    steps:
+      - name: Checkout exact O50-derived source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install CPython
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind original Builder and run real installed archive/restore courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 17c96603e33b02b3f2f9e0079eec2b128f293be8 HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "21a9ec696df13961c25301654feb607a7e161a4c"
+          test "$(git hash-object tests/test_v031_ntfs_named_streams_o56.py)" = "c552def82999ca3b1fac803e8142b1450af640af"
+          git diff --exit-code 17c96603e33b02b3f2f9e0079eec2b128f293be8 HEAD -- src native benchmarks tools/check_performance_regression.py
+          echo "O56_HEAD=$(git rev-parse HEAD)"
+          echo "O56_ORIGINAL_BUILDER_BLOB=$(git hash-object src/cmpct/builder.py)"
+          python -m pip install . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import os, subprocess
+          import cmpct.builder, cmpct.reader
+          assert os.name == "nt"
+          repo = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
+          for module in (cmpct.builder, cmpct.reader):
+              installed = Path(module.__file__).resolve()
+              assert not installed.is_relative_to(repo), f"not clean-installed: {installed}"
+              print(f"O56_INSTALLED={installed}")
+          PY
+          mkdir -p o56-isolated
+          cp tests/test_v031_ntfs_named_streams_o56.py o56-isolated/
+          python -m pytest -vv o56-isolated/ --junitxml=o56-results.xml 2>&1 | tee o56-results.log
+          python - <<'PY'
+          import json, pathlib, xml.etree.ElementTree as ET
+          root=ET.parse("o56-results.xml").getroot()
+          suites=[root] if root.tag=="testsuite" else root.findall("./testsuite")
+          assert suites, root.tag
+          counts={key:sum(int(s.attrib.get(key,0)) for s in suites)
+                  for key in ("tests","errors","failures","skipped")}
+          print("O56_JUNIT="+json.dumps(counts,sort_keys=True))
+          assert counts=={"tests":3,"errors":0,"failures":0,"skipped":0}, counts
+          p=pathlib.Path("o56-observations.jsonl")
+          assert p.exists(), "no actual NTFS observations"
+          cases=[json.loads(line) for line in p.read_text(encoding="utf-8").splitlines()]
+          assert len(cases)==3, cases
+          assert sorted(x["result"] for x in cases)==["exact_regular","silent_named_stream_loss","silent_named_stream_loss"], cases
+          for x in cases:
+              print("O56_RESULT="+json.dumps(x,sort_keys=True))
+          PY
+      - name: Preserve JUnit, original observations and source-bound logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o56-installed-ntfs-${{ github.sha }}
+          path: |
+            o56-results.xml
+            o56-results.log
+            o56-observations.jsonl
+          if-no-files-found: warn
+          retention-days: 30
