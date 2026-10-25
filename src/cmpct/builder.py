@@ -4,7 +4,7 @@ from __future__ import annotations
 # evolve aggressively pre-1.0, while a frozen reader must eventually remain compatible with old
 # archives. Keep representation-selection policy here rather than teaching the reader heuristics.
 
-import base64, binascii, ctypes, ctypes.util, hashlib, io, json, os, shutil, stat, struct, subprocess, tempfile, time, zipfile, zlib
+import base64, binascii, ctypes, errno, ctypes.util, hashlib, io, json, os, shutil, stat, struct, subprocess, tempfile, time, zipfile, zlib
 from dataclasses import dataclass
 from pathlib import Path
 import msgpack
@@ -48,8 +48,9 @@ class Builder:
 
         Footnote: uid/gid are later stored as one common owner plus sparse overrides. Extended
         attributes are only emitted for paths that actually have them. This keeps normal archives tiny
-        while preserving Linux/macOS metadata that ZIP commonly drops. Unsupported filesystems simply
-        produce an empty metadata record; no archive operation depends on xattr availability.
+        while preserving Linux/macOS metadata that ZIP commonly drops. A filesystem with no xattr enumeration support
+        produces an empty record; an observed but unreadable attribute must refuse
+        publication rather than silently discard source information.
 
         Footnote: reproducible mode intentionally normalizes host-owned metadata to a portable zero
         owner/no-xattr profile. That is an explicit build-artifact mode, not the fidelity-preserving
@@ -62,10 +63,18 @@ class Builder:
         xa={}
         if hasattr(os,'listxattr'):
             try:
-                for name in os.listxattr(path,follow_symlinks=False):
-                    try:xa[name]=os.getxattr(path,name,follow_symlinks=False)
-                    except OSError:pass
-            except OSError:pass
+                names=os.listxattr(path,follow_symlinks=False)
+            except OSError as exc:
+                # Only a genuinely unsupported enumerator permits empty-xattr fallback.
+                # Permission/I-O failures cannot certify absence of source metadata.
+                if exc.errno not in (errno.ENOTSUP,errno.EOPNOTSUPP,errno.ENOSYS):
+                    raise OSError(exc.errno,f'cannot enumerate xattrs for {rel!r}; refusing lossy archive') from exc
+                names=()
+            for name in names:
+                try:xa[name]=os.getxattr(path,name,follow_symlinks=False)
+                except OSError as exc:
+                    # Once a key is observed, losing its value is not exact archival.
+                    raise OSError(exc.errno,f'cannot read xattr {name!r} for {rel!r}; refusing lossy archive') from exc
         self.meta_by_rel[rel]=(int(getattr(st,'st_uid',0)),int(getattr(st,'st_gid',0)),xa)
 
     def scan(self):
