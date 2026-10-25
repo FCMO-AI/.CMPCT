@@ -17,6 +17,8 @@ on:
       - "tools/check_performance_regression.py"
       - "tools/aggregate_parity_runs.py"
       - "tools/materialize_performance_base_native.py"
+      - "tools/v031_release_corpus_semantic_witness.py"
+      - "tests/test_v031_release_corpus_semantic_witness.py"
       - "tools/classify_zip_parity_scope.py"
       - "tools/check_ci_topology.py"
       - "pyproject.toml"
@@ -31,6 +33,8 @@ on:
       - "tools/check_performance_regression.py"
       - "tools/aggregate_parity_runs.py"
       - "tools/materialize_performance_base_native.py"
+      - "tools/v031_release_corpus_semantic_witness.py"
+      - "tests/test_v031_release_corpus_semantic_witness.py"
       - "tools/classify_zip_parity_scope.py"
       - "tools/check_ci_topology.py"
       - "pyproject.toml"
@@ -203,6 +207,13 @@ jobs:
           print(json.dumps(manifest, indent=2))
           PY
 
+      - name: Record typed physical release-corpus identity outside timed phases
+        run: |
+          set -euo pipefail
+          python tools/v031_release_corpus_semantic_witness.py "$CMPCT_RELEASE_CORPUS" \
+            --record-json benchmark-artifacts/corpus.json \
+            | tee benchmark-artifacts/corpus-semantic-before.json
+
       - name: Capture shared-runner provenance
         run: |
           CANDIDATE_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -1)"
@@ -256,6 +267,13 @@ jobs:
         run: |
           python zip_parity_bench.py > ../benchmark-artifacts/base-b.stdout.txt
           cp _parity_work/out/zip-parity.json ../benchmark-artifacts/base-b.json
+
+      - name: Fail closed if physical release input changed during ABBA
+        run: |
+          set -euo pipefail
+          python tools/v031_release_corpus_semantic_witness.py "$CMPCT_RELEASE_CORPUS" \
+            --check-json benchmark-artifacts/corpus.json \
+            | tee benchmark-artifacts/corpus-semantic-after.json
 
       - name: Aggregate symmetric ABBA runs
         run: |
