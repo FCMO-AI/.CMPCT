@@ -1,0 +1,140 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# O45 independent non-frozen scientific court; never official release promotion.
+name: CMPCT v0.31 O45 sparse allocation versus SEEK_DATA
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-sparse-allocation-proxy-o45-20261025
+    paths:
+      - '.github/workflows/v031-o45-sparse-allocation-proxy.yml'
+      - 'tools/v031_o45_sparse_allocation_proxy.py'
+      - 'docs/v031-research/2026-10-25-o45-sparse-allocation-proxy-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-o45-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  genuine-builder:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Fail-closed exact source and unchanged official evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 757577eed13bf277e003c4d3c694cc9e4f67d2c3 HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = 663ef0922992b1fbb8f19e6eea88d55c10a56044
+          test "$(git hash-object src/cmpct/codec.py)" = 29526db4203723d83523fc95d074c346b63d7587
+          test "$(git hash-object tools/v031_release_corpus_semantic_witness.py)" = 65711cf8644f4eb1863499262ae8bfd787010d2e
+          git diff --exit-code 757577eed13bf277e003c4d3c694cc9e4f67d2c3 HEAD -- \
+            src native benchmarks tests tools/v031_release_corpus_semantic_witness.py \
+            .github/workflows/zip-parity.yml tools/check_performance_regression.py
+          python - <<'PY'
+          import subprocess
+          changed = set(subprocess.check_output([
+              'git','diff','--name-only','757577eed13bf277e003c4d3c694cc9e4f67d2c3','HEAD'
+          ], text=True).splitlines())
+          allowed = {
+              'tools/v031_o45_sparse_allocation_proxy.py',
+              '.github/workflows/v031-o45-sparse-allocation-proxy.yml',
+              'docs/v031-research/2026-10-25-o45-sparse-allocation-proxy-prereg.md',
+              'docs/v031-research/2026-10-25-o45-sparse-allocation-proxy-result.md',
+          }
+          assert changed and changed.issubset(allowed), sorted(changed - allowed)
+          assert len(changed) >= 3, changed
+          print('O45_BLOB_CUSTODY=PASS')
+          PY
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install genuine source-exact CMPCT with owned native codec
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[test]'
+          python -m py_compile tools/v031_o45_sparse_allocation_proxy.py
+      - name: Run authentic five-arm source-exact archive/build/verify court
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          set +e
+          python -u -m tools.v031_o45_sparse_allocation_proxy \
+            --output benchmark-artifacts/o45-sparse-allocation.json \
+            --expected-head "$EVIDENCE_HEAD" \
+            > benchmark-artifacts/o45-run.log 2>&1
+          code=$?
+          set -e
+          cat benchmark-artifacts/o45-run.log
+          echo "$code" > benchmark-artifacts/o45-exit-code.txt
+          exit "$code"
+      - name: Independent JSON semantic and physical claim audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          raw = Path('benchmark-artifacts/o45-sparse-allocation.json')
+          assert raw.is_file() and raw.stat().st_size > 1000, 'O45 was not run'
+          report = json.loads(raw.read_text())
+          assert report['schema'] == 'cmpct-o45-source-exact-sparse-allocation-proxy-v1'
+          assert report['source_head'] == os.environ['EVIDENCE_HEAD']
+          assert report['builder_git_blob'] == '663ef0922992b1fbb8f19e6eea88d55c10a56044'
+          assert report['codec_git_blob'] == '29526db4203723d83523fc95d074c346b63d7587'
+          assert report['witness_git_blob'] == '65711cf8644f4eb1863499262ae8bfd787010d2e'
+          rows = report['cases']
+          assert [r['name'] for r in rows] == [
+              'sparse', 'sparse_repeat', 'preallocated', 'written_dense', 'sparse_restored'
+          ]
+          assert all(r['verify']=='PASS' and r['read']=='EXACT'
+                     and r['extractall']=='EXACT' for r in rows)
+          assert len({r['logical_sha256'] for r in rows}) == 1
+          assert len({r['o42_semantic_tree_sha256'] for r in rows}) == 1
+          assert len({(r['physical']['dev'],r['physical']['inode'],
+                       r['physical']['mode'],r['physical']['mtime_ns'])
+                      for r in rows}) == 1
+          assert rows[0]['storage_kind'] == 'S_SPARSE'
+          assert rows[2]['storage_kind'] != 'S_SPARSE'
+          assert rows[3]['storage_kind'] != 'S_SPARSE'
+          assert (rows[0]['full_archive_sha256'] ==
+                  rows[1]['full_archive_sha256'] ==
+                  rows[4]['full_archive_sha256'])
+          assert rows[2]['physical']['charged_bytes'] >= .75 * report['case_logical_bytes']
+          assert rows[0]['physical']['charged_bytes'] < .75 * report['case_logical_bytes']
+          assert report['preallocation_minus_sparse_archive_bytes'] == (
+              rows[2]['full_archive_bytes'] - rows[0]['full_archive_bytes'])
+          assert report['written_minus_sparse_archive_bytes'] == (
+              rows[3]['full_archive_bytes'] - rows[0]['full_archive_bytes'])
+          expected = (
+              'SUPPORTED_SAME_HOLE_TOPOLOGY_ALLOCATION_PROXY_FALSE_NEGATIVE'
+              if rows[0]['physical']['seek_data'] == rows[2]['physical']['seek_data']
+                 and rows[3]['physical']['seek_data'] == 0
+              else 'NOT_SUPPORTED_ON_THIS_HOST'
+          )
+          assert report['verdict'] == expected, (report['verdict'], expected)
+          print('O45_INDEPENDENT_AUDIT=PASS; verdict=' + expected)
+          PY
+      - name: Preserve original positive, negative and failure receipts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-o45-genuine-builder-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
+          retention-days: 90
