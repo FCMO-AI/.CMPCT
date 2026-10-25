@@ -25,3 +25,29 @@ Compare exact same source and logical output; demand all 256 byte identities in 
 No native code, compression policy, format, release, production CI gate, or Discovery Engine policy mutation in this research. PR is test/evidence only and shall remain draft. Source-state `docs/discovery/STATE.json` is staleable cache and not a lock. Before late writing inspect latest source, existing #315 and relevant concurrent PRs. The cheapest next downstream action if a large native cost survives is a bounded cache-lifetime falsifier that explicitly challenges stale-source authentication, RSS growth, mutex contention and the single-read cold path; product cache implementation is not pre-authorized.
 
 Status at preregistration: **measurement not yet executed**.
+
+
+---
+
+## Post-prereg reconciliation / retirement (append-only, 2026-10-25 UTC)
+
+**Decision: RETIRE AS DUPLICATE BEFORE IMPLEMENTATION OR RUN.** After freezing the
+original prospective question above, the complete Issue #315 discussion was recovered.
+[PR #319](https://github.com/FCMO-AI/.CMPCT/pull/319) had already executed a
+**stronger authentic installed native-C-ABI court** against the same 256-member
+S_PACK N=1/16/128/256 mechanism. Its exact-head [run #40054485632]
+(https://github.com/FCMO-AI/.CMPCT/actions/runs/40054485632) reported
+256 distinct members in a 196,608-B pack, genuine repeated Zstd decode,
+same-open source-mutation controls, and fully charged one-decode SHA oracle.
+At N=256 its observed native 42.2386 ms versus scoped research oracle
+0.2829 ms (~149.30×); original native N=1 was faster than the oracle.
+
+The frozen O85 experiment therefore **cannot** claim novelty or any additional
+scientific/product value without a materially different question. No test
+instrument, CI, code modification or PR was created for O85. Its previously
+committed preregistration stays unmodified as a useful negative example of
+why open issue comments + claimed branches, not title-only PR searches, must
+be inspected *before* preregistration. This is one transferable observation,
+not evidence sufficient to rewrite the Discovery Engine policy. The bounded
+speculative ZIP inflation question is different and proceeds independently in
+research draft PR #444, with no native S_PACK ownership collision.
