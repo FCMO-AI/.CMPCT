@@ -12,7 +12,7 @@
 
 ## Exact physical observation
 
-All pairs are actual shipping `revision-24` archives. The smaller member was read first through `CMPCT.read_range` on a fresh Reader with an empty cache; a traced `_blob` call materialized the **entire S_PACK owner** and populated the cache. The independent physical owner SHA-256 matched the authenticated BLOB record. A second new Reader performed strong whole-archive verification and byte-exact reconstruction of both members.
+All pairs are actual shipping `revision-24` archives. The smaller member was read first through `CMPCT.read_range` on a fresh Reader with an empty cache; a traced `_blob` call materialized the **entire S_PACK owner** and populated the cache. An independent SHA-256 of the fully decoded physical owner matched its stored physical blob-header digest. This is a **self-consistency** check, not third-party provenance or proof that an adversary cannot rewrite header and payload together. A second new Reader performed strong whole-archive verification and byte-exact reconstruction of both members.
 
 | Source regular member sizes (B) | Full shipping archive (B) | S_PACK uncompressed (B) | Physical owner compressed (B) | Decode amplification versus small member | Decode amplification versus largest member | Singleton-control archive (B) | Singleton size debt (B) |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -27,7 +27,7 @@ The one-factor simpler control uses the original Builder on the same source tree
 
 ## Interpretation, negatives and architectural boundary
 
-The direct formula is `decoded_owner_bytes / requested_full_file_bytes`; actual Python Reader `_blob` has to decompress a whole shared Zstd frame to recover an arbitrary member, and its cold path caches that full output. The encoder's `min(2 MiB, 8 × largest_member)` bound limits total physical owner size using a **global maximum**, not a particular member's length. Therefore heterogeneous membership allows arbitrarily high **relative** small-member decode amplification within the absolute ≤2MiB owner policy. This is a **scope distinction** in the documented locality promise; it is not an exploit, an exact latency benchmark, or a claim that O34c's tighter cap has no value.
+The direct formula is `decoded_owner_bytes / requested_full_file_bytes`; actual Python Reader `_blob` has to decompress a whole shared Zstd frame to recover an arbitrary member, and its cold path caches that full output. The encoder's `min(2 MiB, 8 × largest_member)` bound limits total physical owner size using a **global maximum**, not a particular member's length. Therefore heterogeneous membership permits relative small-member decode amplification **far above 8×** while retaining a finite absolute ≤2 MiB decoded-owner policy (a 1-byte member has a loose 2,097,152× upper bound from that cap, not an unbounded claim). This is a **scope distinction** in the documented locality promise; it is not an exploit, an exact latency benchmark, or a claim that O34c's tighter cap has no value.
 
 The measured 754 B and 800 B decode owners are individually **tiny**, so a 754× scalar alone does not establish material CPU/RSS/product urgency. More challenging heterogeneous large-owner cases, native C API, cross-platform behavior, decompression CPU, physical read bytes, selective cold I/O, index work, tail metadata, update/recovery, and full release parity remain **UNMEASURED**. Independent physical SHA on the owner was necessary because the inherited Python S_PACK `file_sha256` hashes reconstructed bytes and does not by itself prove the stored physical commitment for this test. No attempt to rewrite the original evaluation or historical thresholds was made.
 
@@ -38,3 +38,17 @@ Before proposing a seekable large-shared-context format, ask which promise is ac
 Counterfactual: source inspection already predicted a likely distinction; the only uncertain fact was whether the authentic shipping Builder actually grouped those members. One cold, source-exact positive 1/753 pair could have answered that fork, while the other three prospective shapes prevent framing a universal claim around one cherry-picked example. This is a narrowly transferable experimental-design lesson, **not** repeated evidence for editing Discovery Engine policy.
 
 **Status:** O40 scientific question **CLOSED/POSITIVE WITH SCOPED SEMANTICS**. Product: unchanged. Format: r24 unchanged. Discovery policy/state: unchanged. Merge: no. Release credit: zero. Source exact-hosted implementation plus row-level evidence: positive; all unmeasured product economics explicitly deferred.
+
+## Post-result analytical constraint: necessary single-frame locality condition
+
+This is **source-based derivation**, not an additional hosted measurement or an O40b result. For any revision-24 `S_PACK` owner P that a cold `read_range` completely decodes, define `U(P)` = total distinct uncompressed bytes in that physical owner, and `s_i>0` = the complete logical length of each nonempty member mapped to P. Its current Reader amplification per selected full member is exactly `U(P)/s_i`. Therefore a genuine ≤8× bound for **every** positive-size member requires and (for this one-owner decoded-work accounting only) is satisfied by
+
+```
+  U(P) <= 8 * min_i(s_i)       [single whole-frame S_PACK owner, s_i > 0]
+```
+
+An 8× cap using `max_i(s_i)` is insufficient whenever the group is heterogeneous. This is not resolved by merely sorting members by size: a group of several individually similar files may still exceed eight times the smallest when their **sum** exceeds the budget. In the 1/753 example, this condition allows at most eight total bytes in any solid owner containing the one-byte member; the observed 754-byte owner necessarily fails the per-file criterion while remaining excellent under the **global-largest** proxy.
+
+For `S_PACK` physical owners with zero-length logical files, ratio-based locality is undefined; a useful contract must use an absolute floor or exclude zero-length members from the denominator. This is one reason the existing global-largest policy may intentionally be the practical metric.
+
+**Architectural consequence:** keeping large shared Zstd context *and* providing cheap reconstruction of an arbitrary tiny member requires a different decode boundary (seekable independent subframes, reusable charged dictionaries, or another exact access structure) if the per-member contract is adopted. It is a **conditional no-go for one monolithic decoded owner**, not an impossibility proof against other representations. Any such design still has to pay index/dictionary bytes and recovery/authentication/portability costs and beat the stronger original product at equivalent semantics. No process-level time, RSS or physical I/O claim follows from this bound.
