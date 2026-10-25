@@ -114,7 +114,8 @@ def main() -> int:
                 exact_output = leaf.is_file() and sha_file(leaf) == payload_sha
                 opened = "O124_READER_OPENED" in stdout
                 record = {"engine": engine_name, "case": case, "returncode": rc,
-                          "source_unchanged": unchanged, "source_after_sha256": after,
+                          "source_unchanged": unchanged, "source_before_sha256": before,
+                          "source_after_sha256": after,
                           "exact_member_output": exact_output, "child_opened": opened,
                           "elapsed_s": round(time.monotonic() - t0, 3),
                           "stdout": stdout[-1400:], "stderr": stderr[-1400:]}
