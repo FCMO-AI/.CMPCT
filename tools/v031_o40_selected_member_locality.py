@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 
 from cmpct.builder import Builder
-from cmpct.codec import CODEC_ZSTD, S_PACK
+from cmpct.codec import BHDR, CODEC_ZSTD, S_PACK
 from cmpct.reader import CMPCT
 from experiments.entropygraph_v030_release_product_base import (
     R24_RELEASE_DEFLATE_REUSE_MIN_BYTES,
@@ -92,7 +92,7 @@ def observe(path: Path, expected: dict, require_shared: bool) -> dict:
         cached = reader.cache.get(owner_idx)
         if cached is None or len(cached) != owner_usize:
             raise AssertionError("measured S_PACK physical owner was not fully materialized")
-        # Codec 1 is Zstd; for RAW the whole owner is materialized but not decompressed.
+        # Independently reauthenticate the physical owner; current Reader.verify()\n        # may not compare S_PACK physical SHA in this development lineage.\n        header = BHDR.unpack_from(reader.mm, reader.record_base + reader.blobs[owner_idx][0])\n        if digest(bytes(cached)) != bytes(header[-1]).hex():\n            raise AssertionError("physical S_PACK SHA-256 mismatch")\n        # Codec 1 is Zstd; for RAW the whole owner is materialized but not decompressed.
         small_bytes = int(expected["small.txt"]["bytes"])
         large_bytes = int(expected["large.txt"]["bytes"])
         row = {
@@ -103,7 +103,7 @@ def observe(path: Path, expected: dict, require_shared: bool) -> dict:
             "owner_uncompressed_bytes": owner_usize,
             "owner_compressed_bytes": owner_csize,
             "owner_codec": owner_codec,
-            "owner_codec_is_zstd": owner_codec == CODEC_ZSTD,
+            "owner_codec_is_zstd": owner_codec == CODEC_ZSTD,\n            "physical_sha256_verified_independently": True,
             "small_full_member_bytes": small_bytes,
             "largest_member_bytes": large_bytes,
             "release_pack_target_bytes": min(2 * 1024 * 1024, 8 * large_bytes),
@@ -215,7 +215,7 @@ def main() -> None:
         ],
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(output, sort_keys=True, indent=2) + "\\n")
+    args.output.write_text(json.dumps(output, sort_keys=True, indent=2) + chr(10))
     print(json.dumps(output, sort_keys=True))
     if not valid:
         raise SystemExit("INVALID SCIENTIFIC COURT: shipping output did not exercise expected shared Zstd owner")
