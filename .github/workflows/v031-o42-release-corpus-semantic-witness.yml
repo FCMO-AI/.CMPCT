@@ -1,5 +1,5 @@
 # ci-lane: fast
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: cancel-stale-fast-courts
 # Dedicated scientific gate; this does not replace the canonical r24/ZIP parity.
 name: CMPCT v0.31 O42 physical release-corpus witness
 
@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: cmpct-v031-o42-${{ github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   o42-semantic-corpus:
