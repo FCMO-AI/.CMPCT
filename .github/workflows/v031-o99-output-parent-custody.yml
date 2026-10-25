@@ -63,8 +63,9 @@ jobs:
               p=Path(mod.__file__).resolve()
               assert not p.is_relative_to(root),("not installed",p)
           data=Path(cmpct.builder.__file__).read_bytes()
-          blob=hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest()
-          assert blob=="7400d0b0c2f8bf664e7022ae499cd0ab07b18968",blob
+          canonical=data.replace(b"\r\n",b"\n")  # Windows installed-wheel text newline normalization.
+          blob=hashlib.sha1(b"blob "+str(len(canonical)).encode()+b"\0"+canonical).hexdigest()
+          assert blob=="7400d0b0c2f8bf664e7022ae499cd0ab07b18968",("canonical source mismatch",blob)
           print("O99_INSTALLED_BUILDER="+blob,flush=True)
           PY
       - name: Execute unchanged O93 inherited correctness court plus O99 parent cases
