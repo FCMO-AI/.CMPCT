@@ -45,6 +45,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          # Source identity is read before package installation, so generated native build outputs cannot masquerade as tracked source.
+          python tools/check_v031_candidate_fingerprint.py --output o75-candidate-identity.json
           test "$(git hash-object src/cmpct/builder.py)" = "382e60983bf1e8e7595ea7112f3a5553dc33dcc0"
           test "$(git hash-object src/cmpct/codec.py)" = "dc3446b0eed82edfba9380e3885a20aa45577899"
           test "$(git hash-object tests/fixtures/o50_o47_parent_builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
@@ -95,6 +97,7 @@ jobs:
         with:
           name: o75-${{ matrix.os }}-depth-${{ matrix.depth }}
           path: |
+            o75-candidate-identity.json
             o75-identity.log
             o75-identity.xml
             o66-parent.log
