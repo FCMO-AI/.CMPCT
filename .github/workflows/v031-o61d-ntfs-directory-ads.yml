@@ -7,6 +7,8 @@ on:
       - 'agent/phased1-v031-ntfs-directory-ads-falsifier-o61d-20261025'
     paths:
       - 'tests/test_v031_ntfs_directory_ads_o61d.py'
+      - 'tests/test_v031_ntfs_empty_dir_guard_o61d2.py'
+      - 'docs/v031-research/2026-10-25-o61d2-empty-directory-guard-prereg.md'
       - '.github/workflows/v031-o61d-ntfs-directory-ads.yml'
       - 'docs/v031-research/2026-10-25-o61d-ntfs-directory-ads-prereg.md'
   workflow_dispatch:
@@ -45,6 +47,7 @@ jobs:
           test "$(git hash-object src/cmpct/ntfs_streams.py)" = "23207ac06797fb21322cf327e97928fdbb5241c2"
           test "$(git hash-object tests/test_v031_win32_ads_refusal_o57.py)" = "abd88c8c7394fac15d4d98a5f3cca0844bd8dff6"
           test "$(git hash-object tests/test_v031_ntfs_directory_ads_o61d.py)" = "644b20af1a1fde5d1ba8a6211149aa62307e4252"
+          test "$(git hash-object tests/test_v031_ntfs_empty_dir_guard_o61d2.py)" = "abb81c6ab670d35b618c0759507594cc1303a463"
           git diff --exit-code d9f9fa724c139c6281f0e2a92c66601bee912618 HEAD -- src/cmpct native benchmarks tools/check_performance_regression.py
           python -m pip install . pytest
           python - <<'PY'
@@ -59,6 +62,7 @@ jobs:
           PY
           mkdir -p o61d-isolated
           cp tests/test_v031_ntfs_directory_ads_o61d.py o61d-isolated/
+          cp tests/test_v031_ntfs_empty_dir_guard_o61d2.py o61d-isolated/
           cp tests/test_v031_win32_ads_refusal_o57.py o61d-isolated/
           python -m pytest -vv -s o61d-isolated/ --junitxml=o61d-results.xml 2>&1 | tee o61d-results.log
           python - <<'PY'
@@ -66,12 +70,14 @@ jobs:
           import xml.etree.ElementTree as ET
           root = ET.parse("o61d-results.xml").getroot()
           cases = list(root.iter("testcase"))
-          assert len(cases) == 5, ("expected O57 3 + O61D 2 actual cases", len(cases))
+          assert len(cases) == 6, ("expected O57 3 + O61D 2 + O61D2 1 actual cases", len(cases))
           issues = [(c.get("name"), e.tag) for c in cases for e in list(c)
                     if e.tag in ("failure", "error", "skipped")]
           assert not issues, ("all five actual Win32 tests must run and pass", issues)
-          assert "O61D_DEFECT_CONFIRMED" in Path("o61d-results.log").read_text(encoding="utf-8"), "falsifier did not report actual source loss"
-          print("O61D_REAL_TESTS=5 FAILURES=0 ERRORS=0 SKIPS=0", flush=True)
+          log = Path("o61d-results.log").read_text(encoding="utf-8")
+          assert "O61D_DEFECT_CONFIRMED" in log, "falsifier did not report actual source loss"
+          assert "O61D2_FALSE_REMEDY_CONFIRMED" in log, "native Win32 false-remedy experiment did not complete"
+          print("O61D_REAL_TESTS=6 FAILURES=0 ERRORS=0 SKIPS=0", flush=True)
           PY
       - name: Preserve native Windows evidence regardless of conclusion
         if: always()
