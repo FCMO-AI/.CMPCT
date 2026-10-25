@@ -1,0 +1,79 @@
+name: O126 A08 Temporal Window Scientific Court
+
+on:
+  pull_request:
+    paths:
+      - 'research/o126_a08_temporal_window_oracle.py'
+      - 'docs/v031-research/2026-10-25-o126-a08-*'
+      - '.github/workflows/v031-o126-a08-temporal-window.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o126-a08-source-court
+  cancel-in-progress: false
+
+jobs:
+  source-exact-oracle:
+    name: Linux source-locked charged temporal oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout actual PR source
+        uses: actions/checkout@v4
+      - name: Confirm exact experiment source identity
+        shell: bash
+        run: |
+          test "$(git hash-object research/o126_a08_temporal_window_oracle.py)" = "1fc307ed76d782a7bb08cb8904c7bcc0d99acd6a"
+          git rev-parse HEAD
+          python --version
+      - name: Install actual Zstd 19 baseline
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zstd
+          zstd --version
+      - name: Execute all preregistered families and independent decoder
+        shell: bash
+        run: |
+          mkdir -p reports
+          python -u research/o126_a08_temporal_window_oracle.py --output reports/o126-results.json | tee reports/o126-stdout.log
+      - name: Independent immutable-law receipt audit
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          p='reports/o126-results.json'
+          d=json.load(open(p, encoding='utf-8'))
+          assert d['schema']=='cmpct-o126-a08-v1'
+          assert d['decision'] in ('SCOPED_HEADROOM','PREDECLARED_HEADROOM_NOT_SHOWN')
+          families=d['families']
+          assert [f['family'] for f in families]==['sparse','shared_epoch','rotate','independent','heldout']
+          arms=['snapshot','solid_history','per_file_raw','per_file_xor','journal_xor','window_raw','window_xor']
+          for f in families:
+              assert [a['arm'] for a in f['arms']]==arms
+              for a in f['arms']:
+                  assert a['byte_exact_generation_count']==f['generations']
+                  assert a['sha_verified_members']==f['generations']*f['files']
+                  assert a['stored_bytes']==a['payload_bytes']+a['charged_metadata_bytes']
+                  assert len(a['sha256_packet'])==64
+              x=next(a for a in f['arms'] if a['arm']=='window_xor')
+              assert x['max_selective_decode_ratio'] <= 4
+              control=min((a for a in f['arms'] if a['arm']!='window_xor' and a['max_selective_decode_ratio']<=4),key=lambda a:a['stored_bytes'])
+              assert f['best_admissible_control']==control['arm']
+              assert f['best_any']==min(f['arms'],key=lambda a:a['stored_bytes'])['arm']
+              assert f['candidate_ge_5pct_better']==((control['stored_bytes']-x['stored_bytes'])/control['stored_bytes']>=0.05)
+          positives=all(f['candidate_ge_5pct_better'] for f in families[:2])
+          assert (d['decision']=='SCOPED_HEADROOM')==positives
+          print('O126_INDEPENDENT_RECEIPT_AUDIT=PASS')
+          PY
+      - name: Preserve raw evidence even when hypothesis fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o126-a08-raw-scientific-receipt
+          path: |
+            reports/o126-results.json
+            reports/o126-stdout.log
+          if-no-files-found: warn
