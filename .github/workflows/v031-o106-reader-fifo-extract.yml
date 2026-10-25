@@ -83,10 +83,19 @@ jobs:
           counts={key:sum(c.find(key) is not None for c in cases) for key in ("failure","error","skipped")}
           assert counts=={"failure":0,"error":0,"skipped":0},counts
           log=Path("o106-evidence/court.log").read_text()
-          assert log.count("O106_CASE=")==3, "missing raw per-case measurement"
+          rows=[json.loads(s.partition("O106_CASE=")[2])
+                for s in log.splitlines() if "O106_CASE=" in s and "case" in s]
+          assert len(rows)==3,("missing raw per-case measurements",len(rows))
+          assert {a["case"] for a in rows}=={"fresh","regular","unconnected_fifo"},rows
+          # Same *physical* archive, payload and timeout policy for A/B/C.
+          assert len({a["archive_sha256"] for a in rows})==1,("source mismatch",rows)
+          assert len({a["payload_sha256"] for a in rows})==1,("payload mismatch",rows)
+          assert {a["child_timeout_seconds"] for a in rows}=={8},rows
+          expected={"fresh":("regular","reconstructed_exact"),
+                    "regular":("regular","reconstructed_exact"),
+                    "unconnected_fifo":("fifo","timeout_expected_hypothesis")}
+          assert all((a["leaf_kind"],a["outcome"])==expected[a["case"]] for a in rows),rows
           assert "O106_REAL_READER_FIFO_TIMEOUT=CONFIRMED" in log, "failure not observed; falsify/narrow hypothesis"
-          for case in ("fresh","regular","unconnected_fifo"):
-              assert '"case": "'+case+'"' in log,("missing "+case)
           summary={"head":Path("o106-evidence/head.sha").read_text().strip(),
                    "reader_blob":Path("o106-evidence/reader.blob").read_text().strip(),
                    "builder_blob":Path("o106-evidence/builder.blob").read_text().strip(),
