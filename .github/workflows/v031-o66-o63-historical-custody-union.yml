@@ -101,7 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: o62-${{ matrix.os }}-depth-${{ matrix.depth }}
+          name: o66-${{ matrix.os }}-depth-${{ matrix.depth }}
           path: |
             o66-parent.log
             o66-parent.xml
