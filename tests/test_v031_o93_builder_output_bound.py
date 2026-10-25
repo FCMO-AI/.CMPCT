@@ -62,6 +62,45 @@ def test_o93_fresh_and_existing_output_with_reader(tmp_path):
     print("O93_REGULAR_NEW_EXISTING_READER=PASS",flush=True)
 
 
+
+def test_o93_reject_existing_regular_identity_swap_on_all_hosts(tmp_path):
+    root,leaf,data=_tree(tmp_path)
+    out=tmp_path/"existing.cmpct"
+    out.write_bytes(b"old-independent-output")
+    replacement=tmp_path/"replacement.bin"
+    witness=b"independent-concurrent-replacement"
+    replacement.write_bytes(witness)
+    prev=out.stat()
+    b=Builder(root,workers=1)
+    worker,problems=_synchronized_pivot(b,lambda:os.replace(replacement,out))
+    try:
+        with pytest.raises((ValueError,OSError),match="identity|changed"):
+            b.build(out)
+    finally:
+        worker.join(timeout=6)
+    assert not worker.is_alive() and not problems,repr(problems)
+    assert out.read_bytes()==witness and leaf.read_bytes()==data
+    assert out.stat().st_ino!=prev.st_ino
+    print("O93_REGULAR_REPLACEMENT_IDENTITY_REFUSED=PASS",flush=True)
+
+
+def test_o93_new_output_exclusive_creation_on_all_hosts(tmp_path):
+    root,leaf,data=_tree(tmp_path)
+    out=tmp_path/"new.cmpct"
+    assert not out.exists()
+    witness=b"concurrent-regular-output-must-survive"
+    b=Builder(root,workers=1)
+    worker,problems=_synchronized_pivot(b,lambda:out.write_bytes(witness))
+    try:
+        with pytest.raises(FileExistsError):
+            b.build(out)
+    finally:
+        worker.join(timeout=6)
+    assert not worker.is_alive() and not problems
+    assert out.read_bytes()==witness and leaf.read_bytes()==data
+    print("O93_EXCLUSIVE_CREATION_REGULAR_RACE_REFUSED=PASS",flush=True)
+
+
 @pytest.mark.skipif(os.name=="nt",reason="POSIX symlink/rename adversarial experiment")
 def test_o93_reject_symlink_source_pivot_preserves_one_link_bytes(tmp_path):
     root,leaf,data=_tree(tmp_path)
