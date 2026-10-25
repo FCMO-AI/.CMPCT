@@ -1,0 +1,75 @@
+name: CMPCT v0.31 O51 installed Writer descriptor source admission
+on:
+  push:
+    branches: ['agent/phased3-v031-writer-fd-source-admission-o51-20261025']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installed-source-admission:
+    name: O51 true-installed Writer source ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify exact source and build genuine installed package
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "O51_COMMIT=$(git rev-parse HEAD)"
+          test "$(git hash-object src/cmpct/transactions.py)" = "130638744d26dbf71a3ddd49b2545db9eb933ed4"
+          python -m pip install . pytest
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+          import cmpct.transactions
+          installed=Path(cmpct.transactions.__file__).resolve()
+          repo=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip())
+          assert not installed.is_relative_to(repo), installed
+          digest=subprocess.check_output(["git","hash-object",str(installed)],text=True).strip()
+          assert digest=="130638744d26dbf71a3ddd49b2545db9eb933ed4", digest
+          print("O51_INSTALLED_WRITER="+str(installed))
+          print("O51_INSTALLED_WRITER_BLOB="+digest)
+          PY
+      - name: Execute focused O51 tests isolated from unrelated conftest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o51-isolated
+          cp tests/test_v031_writer_fd_source_o51.py o51-isolated/test_v031_writer_fd_source_o51.py
+          python -m pytest -vv o51-isolated/test_v031_writer_fd_source_o51.py --junitxml=o51-results.xml 2>&1 | tee o51-results.log
+          python - <<'PY'
+          from xml.etree import ElementTree
+          doc=ElementTree.parse("o51-results.xml").getroot()
+          suite=doc if doc.tag=="testsuite" else doc.find("testsuite")
+          assert suite is not None
+          count=int(suite.attrib["tests"]); skips=int(suite.attrib.get("skipped",0))
+          fails=int(suite.attrib.get("failures",0))+int(suite.attrib.get("errors",0))
+          assert count==9,(count,skips,fails)
+          assert fails==0, (count,skips,fails)
+          import os
+          expected_skips=0 if os.name=="posix" else 6
+          assert skips==expected_skips,(skips,expected_skips)
+          print("O51_EXECUTED_CASES",count-skips,"O51_SKIPS",skips,"O51_FAILURES",fails)
+          PY
+      - name: Preserve raw JUnit and stdout on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o51-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            o51-results.xml
+            o51-results.log
+          if-no-files-found: warn
+          retention-days: 30
