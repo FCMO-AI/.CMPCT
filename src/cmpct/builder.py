@@ -307,6 +307,43 @@ class Builder:
             dc=zcd(raw,self.dictionary,12);consider(CODEC_ZSTDDICT,dc,msgpack.packb([12],use_bin_type=True))
         if best and best[0]+16 < len(raw):return best[1],best[2],best[3]
         return CODEC_RAW,raw,b''
+    @staticmethod
+    def _publish_bound_output(out:Path, payload:bytes, expected_stat):
+        """Publish through the *verified* output inode, never a second path open.
+
+        O91 proved that a post-scan symlink/FIFO pivot can otherwise clobber an
+        original source or hang. The original O90 preflight is still required;
+        fstat must match that preflight *before* the first destructive write.
+        This preserves in-place inode/hardlink/xattr semantics, not O75's
+        failure-atomicity or an atomic view of a concurrently changing tree.
+        """
+        flags=os.O_WRONLY | getattr(os,'O_BINARY',0) | getattr(os,'O_NONBLOCK',0)
+        if expected_stat is None:
+            # A previously absent output must not follow a newly planted alias.
+            flags |= os.O_CREAT | os.O_EXCL
+        fd=os.open(out,flags,0o666)
+        try:
+            opened=os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode):
+                raise ValueError('archive output changed to a nonregular file')
+            if expected_stat is not None and (opened.st_dev,opened.st_ino)!=(expected_stat.st_dev,expected_stat.st_ino):
+                raise ValueError('archive output identity changed after admission')
+            # fdopen(closefd=False) lets us verify the pinned descriptor after
+            # flush; no second pathname open (or O_TRUNC) precedes this check.
+            with os.fdopen(fd,'wb',closefd=False) as stream:
+                stream.truncate(0)
+                stream.write(payload)
+                stream.flush()
+            size=os.fstat(fd).st_size
+            if size!=len(payload):
+                raise OSError('short write while publishing CMPCT archive')
+            final=os.stat(out)
+            if (final.st_dev,final.st_ino)!=(opened.st_dev,opened.st_ino):
+                raise OSError('archive output pathname changed during publication')
+            return size
+        finally:
+            os.close(fd)
+
     def build(self,out:Path):
         # A selected output is not a source member; reject recursive in-tree
         # builds and pre-existing aliases before any output mutation (O81).
@@ -326,6 +363,7 @@ class Builder:
             # create its missing target in an unrelated directory (O90).
             if os.path.islink(out):
                 raise ValueError('archive output must not be a dangling symlink')
+            out_stat=None
             self._protected_output_inode=None
         else:
             # Output-kind admission must precede costly source scanning. Opening
@@ -394,5 +432,6 @@ class Builder:
         ib=msgpack.packb(index,use_bin_type=True);ic=zc(ib,12);ih=sha(ib);data=b''.join(records)
         header=HDR.pack(MAGIC,VERSION,0,len(ic),len(ib),len(data),ih)
         footer=FTR.pack(FMAGIC,0,1,0,0,len(ic),len(ib),0,ih)
-        out=Path(out);out.write_bytes(header+ic+data+ic+footer)
-        return {'bytes':out.stat().st_size,'logical_bytes':sum(x[4] for x in files if x[1]!=K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':len(data),'encode_workers':self.encode_workers,'reproducible':self.reproducible}
+        out=Path(out)
+        published_size=self._publish_bound_output(out,header+ic+data+ic+footer,out_stat)
+        return {'bytes':published_size,'logical_bytes':sum(x[4] for x in files if x[1]!=K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':len(data),'encode_workers':self.encode_workers,'reproducible':self.reproducible}
