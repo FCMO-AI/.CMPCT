@@ -15,7 +15,7 @@ import pytest
 from cmpct.builder import Builder
 
 
-POSIX_XATTR = pytest.mark.skipif(
+# Only the actual kernel roundtrip requires the host-native xattr API.\n# All other cases inject an API on each platform to test the same failure policy.\nPOSIX_XATTR = pytest.mark.skipif(
     not hasattr(os, "listxattr") or not hasattr(os, "getxattr"),
     reason="POSIX extended-attribute enumeration API unavailable",
 )
@@ -34,23 +34,21 @@ def list_one(_path, *, follow_symlinks=False):
     return ["user.cmpct_o65"]
 
 
-@POSIX_XATTR
 def test_listed_xattr_values_are_recorded_exactly(tmp_path, monkeypatch):
     root, _ = source(tmp_path)
-    monkeypatch.setattr(os, "listxattr", list_one)
+    monkeypatch.setattr(os, "listxattr", list_one, raising=False)
 
     def get_value(_path, name, *, follow_symlinks=False):
         assert name == "user.cmpct_o65"
         assert follow_symlinks is False
         return b"\x00O65\xff"
 
-    monkeypatch.setattr(os, "getxattr", get_value)
+    monkeypatch.setattr(os, "getxattr", get_value, raising=False)
     builder = Builder(root, workers=1)
     builder.scan()
     assert builder.meta_by_rel["payload.bin"][2] == {"user.cmpct_o65": b"\x00O65\xff"}
 
 
-@POSIX_XATTR
 @pytest.mark.parametrize(
     ("stage", "error"),
     [
@@ -75,14 +73,13 @@ def test_errors_that_could_hide_metadata_refuse_publish(tmp_path, monkeypatch, s
     def forbidden_get(_path, _name, *, follow_symlinks=False):
         raise OSError(error, "observed value unreadable")
 
-    monkeypatch.setattr(os, "listxattr", forbidden_list)
-    monkeypatch.setattr(os, "getxattr", forbidden_get)
+    monkeypatch.setattr(os, "listxattr", forbidden_list, raising=False)
+    monkeypatch.setattr(os, "getxattr", forbidden_get, raising=False)
     with pytest.raises(OSError):
         Builder(root, workers=1).build(output)
     assert output.read_bytes() == sentinel
 
 
-@POSIX_XATTR
 @pytest.mark.parametrize("error", sorted({errno.ENOTSUP, getattr(errno, "EOPNOTSUPP", errno.ENOTSUP), errno.ENOSYS}))
 def test_unsupported_attribute_enumeration_keeps_historical_empty_metadata(tmp_path, monkeypatch, error):
     root, _ = source(tmp_path)
@@ -90,7 +87,7 @@ def test_unsupported_attribute_enumeration_keeps_historical_empty_metadata(tmp_p
     def unsupported(_path, *, follow_symlinks=False):
         raise OSError(error, "filesystem has no supported xattr interface")
 
-    monkeypatch.setattr(os, "listxattr", unsupported)
+    monkeypatch.setattr(os, "listxattr", unsupported, raising=False)
     builder = Builder(root, workers=1)
     builder.scan()
     assert builder.meta_by_rel["payload.bin"][2] == {}
@@ -100,10 +97,9 @@ def test_reproducible_mode_explicitly_normalizes_xattrs_without_probing(tmp_path
     root, _ = source(tmp_path)
     # The reproducible-byte-build contract deliberately discards host xattrs.
     # A doomed enumeration must not be attempted in this mode.
-    if hasattr(os, "listxattr"):
-        def forbidden(_path, **_kwargs):
-            raise AssertionError("reproducible mode must not enumerate xattrs")
-        monkeypatch.setattr(os, "listxattr", forbidden)
+    def forbidden(_path, **_kwargs):
+        raise AssertionError("reproducible mode must not enumerate xattrs")
+    monkeypatch.setattr(os, "listxattr", forbidden, raising=False)
     builder = Builder(root, workers=1, reproducible=True)
     builder.scan()
     assert builder.meta_by_rel["payload.bin"] == (0, 0, {})
