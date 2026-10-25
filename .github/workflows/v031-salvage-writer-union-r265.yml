@@ -38,7 +38,7 @@ jobs:
           set -euo pipefail
           mkdir -p test-artifacts
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          test "$(git hash-object src/cmpct/transactions.py)" = "a3b9c3375ed19f0b37d40ee47ead7b5d5b8905ee"
+          test "$(git hash-object src/cmpct/transactions.py)" = "79ea9e423d155b106f40cd0811075c69ff04f105"
           test "$(git hash-object src/cmpct/cli.py)" = "94bcd91af4ec8fa8282e3b1900d3c1d07a7a3235"
           test "$(git hash-object src/cmpct/reader.py)" = "c548a2ae4d650e928eb46ed1c2431423e49765b5"
           test "$(git hash-object docs/HARDENING.md)" = "574e9eb1dfcf2d9724482b767088e325e2fb37ad"
@@ -83,7 +83,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "test-artifacts" | Out-Null
           if ((git rev-parse HEAD) -ne $env:EVIDENCE_HEAD) { throw 'exact-head mismatch' }
-          if ((git hash-object src/cmpct/transactions.py) -ne 'a3b9c3375ed19f0b37d40ee47ead7b5d5b8905ee') { throw 'merged source drift' }
+          if ((git hash-object src/cmpct/transactions.py) -ne '79ea9e423d155b106f40cd0811075c69ff04f105') { throw 'merged source drift' }
           if ((git hash-object src/cmpct/cli.py) -ne '94bcd91af4ec8fa8282e3b1900d3c1d07a7a3235') { throw 'salvage CLI drift' }
           if ((git hash-object src/cmpct/reader.py) -ne 'c548a2ae4d650e928eb46ed1c2431423e49765b5') { throw 'Reader source drift' }
           @("HEAD=$env:EVIDENCE_HEAD", "transactions=$(git hash-object src/cmpct/transactions.py)") | Out-File -Encoding utf8 "test-artifacts/sources.txt"
