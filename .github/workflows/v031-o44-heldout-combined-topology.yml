@@ -54,7 +54,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
-          # Research-only test has no dependency on the repository-wide product conftest.\n          # The inherited full General Tests court still runs independently on this PR.\n          python -m pytest --noconftest -q tests/test_heldout_physical_tree_o44.py \
+          # Research-only tests omit the product conftest, not the product General Tests court.
+          python -m pytest --noconftest -q tests/test_heldout_physical_tree_o44.py \
             2>&1 | tee benchmark-artifacts/o44-focused-tests.log
       - name: Generate actual universal source and non-frozen held-out combined
         shell: bash
