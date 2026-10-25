@@ -204,3 +204,33 @@ def test_symlink_target_fifo_cannot_block_open_or_publish(tmp_path):
     cp = _cli(archive, link, timeout=3)
     assert cp.returncode != 0
     _assert_unchanged(archive, original_sha)
+
+
+def test_stable_regular_update_matches_original_source_read_stat_archive_bytes(tmp_path):
+    """Same exact r24 source tree; compare only old vs new source-admission primitives."""
+    from cmpct import transactions
+
+    initial = _archive(tmp_path)
+    baseline = tmp_path / "old-primitive.cmpct"
+    candidate = tmp_path / "opened-fd.cmpct"
+    baseline.write_bytes(initial.read_bytes())
+    candidate.write_bytes(initial.read_bytes())
+    update = tmp_path / "payload.bin"
+    update.write_bytes(bytes((i * 41 + 19) & 255 for i in range(10_001)))
+
+    # Faithfully retain historical expression semantics without depending on CI having
+    # fetched the unrelated, old commit into a shallow checkout. The complete Writer,
+    # codec, target/source trees and update API are otherwise identical in this A/B.
+    original_source_primitive = transactions._read_regular_update_source
+    def historical_read_stat(src):
+        return Path(src).read_bytes(), Path(src).stat()
+    try:
+        transactions._read_regular_update_source = historical_read_stat
+        transactions.append_update(baseline, "initial.bin", update)
+    finally:
+        transactions._read_regular_update_source = original_source_primitive
+    transactions.append_update(candidate, "initial.bin", update)
+    assert baseline.read_bytes() == candidate.read_bytes(), "stable-source archive bytes changed"
+    with CMPCT(candidate) as reader:
+        assert reader.read("initial.bin") == update.read_bytes()
+        assert reader.verify() >= 1
