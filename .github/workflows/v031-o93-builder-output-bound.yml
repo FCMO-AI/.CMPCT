@@ -82,7 +82,7 @@ jobs:
           from pathlib import Path
           import json,sys,xml.etree.ElementTree as ET
           cases=list(ET.parse("o93-evidence/junit.xml").getroot().iter("testcase"))
-          expected_total=63 if sys.platform.startswith("linux") else 64
+          expected_total=65 if sys.platform.startswith("linux") else 66
           expected_skips=7 if sys.platform.startswith("linux") else 8 if sys.platform=="darwin" else 21
           counts={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
           counts["total"]=len(cases)
@@ -101,6 +101,8 @@ jobs:
               assert "O90_REAL_PRODUCT_SYMLINK_FIFO_REJECTION=PASS" in log
           assert "O90_O84_COMPLETE_ARCHIVE_PARITY=" in log
           assert "O93_REGULAR_NEW_EXISTING_READER=PASS" in log
+          assert "O93_REGULAR_REPLACEMENT_IDENTITY_REFUSED=PASS" in log
+          assert "O93_EXCLUSIVE_CREATION_REGULAR_RACE_REFUSED=PASS" in log
           if sys.platform != "win32":
               for tag in ("O93_REAL_POSTSCAN_SOURCE_PIVOT_REFUSED=PASS", "O93_REAL_POSTSCAN_FIFO_NONBLOCK=PASS", "O93_ABSENT_PATH_EXCLUSIVE_CREATION=PASS", "O93_INPLACE_INODE_HARDLINK_XATTR=PASS", "O93_READONLY_OUTPUT_REFUSED=PASS"):
                   assert tag in log,tag
