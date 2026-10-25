@@ -1,0 +1,20 @@
+# O129 — A12 cross-framed exact Deflate physical-root result
+
+**2026-10-25 UTC | Decision: NARROW / no product implementation warranted in the measured regimes.** Independent, prospectively recorded lower-rung Foundry result on canonical v0.31 base `4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b`. Released v0.30.0 / format revision 24 unchanged. The preregistration preceded instrument implementation: commit `a93c46244270d5805b5ea4ff35b7b800b0852242`. No Reader, Builder, format, release record, or frozen benchmark modified.
+
+## Exact question and stronger control
+Can identical physical RFC1951 bodies wrapped as RFC1952 gzip, RFC1950 zlib and raw Deflate share one exact stored body plus literal wrappers and fully charged metadata, and beat solid Zstd-19 on the exact same complete files? This is separate from historical ZIP exact raw-Deflate reuse and gzip inverse edges; the prior art is not a new invention.
+
+## Direct independent local measurements
+Source `tools/research/o129_framed_deflate_oracle.py`, blob `f43363d8f91110995b4daff009c9344fdbb698ae`. Source SHA-256 `f901eaf1f163b14e9a2a20395eba171f18679fa204f4ada988c7cbdcb2e37c91`. Local JSON output SHA-256 `2b094e24c871c9cd26fa143fa8a62cfa529fe62c932846b7ae1521120270fa55` on Python 3.11 with actual `zstd -19` CLI v1.5.7; hashes bind this local run, not universal exact-host CI.
+
+- **96 cases**: six structurally different families (telemetry, records, entropy, mixed, unrelated, multi_level) × seeds 41/101/2026/4096 × 1/2/4/8 views. **48 positive-cohort cases** (first four families, 2/4/8 views): five cases save **1–15 B** versus the strongest charged control; **none saves >=1%**. All five marginal wins are high-entropy; telemetry/records/mixed show 0 wins.
+- Unrelated and altered compression-level controls **0/16 wins each**. Five malformed/hostile input samples rejected. Accepted inputs reconstruct exact bytes; depth 1, peak modeled single-member physical/decode amplification **1.00119×**.
+- Strongest comparator is `min(same-input solid Zstd-19, per-file min(direct original bytes, actual Zstd-19))`, not only solid or independently compressed members. A first control that omitted literal original bytes generated spurious positive impressions on already-compressed inputs; the strengthened control removed them. Baseline is allowed to win.
+- Cost charge: `48` B global; shared member index `2+len(UTF8 path)+8+8+32` B/member; candidate extra descriptor 12 B/view and 40 B/unique root; original gzip/zlib wrapper bytes preserved literally. Root bytes are physically stored once at minimum raw or real Zstd-19 cost. This is an explicit model, **not a real CMPCT archive**.
+
+## Strongest negative / decision
+An actual same-input solid Zstd-19 stream exploits repeated compressed-body spans without paying extra root/view tax; independent direct-storage fallback avoids penalizing incompressible bodies. Five 1–15-byte advantages are too small to justify new format/Reader complexity. **NARROW the cross-wrapper root family in tested regimes; no universal impossibility claim.** Reopen only with a materially different representation/ownership model or broad held-out >1% complete, fully charged headroom versus both controls.
+
+## Limits and next action
+O0/O1 representation/economic science only. No real CMPCT Builder/Reader/archive, pack/unpack benchmark, host cross-platform suite, full auth/recovery, peak RSS or write/search admission economics. `read_amp` is modeled, not observed product physical I/O. The source-exact workflow `.github/workflows/v031-o129-a12-framed-deflate.yml` runs the 96-case oracle on hosted Linux and preserves original JSON/custody; do not claim hosted SUCCESS before it completes. Return to product convergence owned by #336/#266/#473 and adjacent independently owned lanes. A useful prospective discriminator is: **price same-input solid and direct literal storage before building a new explicit cross-view root mechanism**. One family does not warrant Discovery Engine policy modification.
