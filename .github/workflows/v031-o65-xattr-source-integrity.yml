@@ -1,0 +1,116 @@
+# ci-lane: fast
+# O65 — xattr source exactness must fail closed only on information-loss errors.
+name: CMPCT v0.31 O65 Xattr Source Integrity
+on:
+  push:
+    branches: ['agent/phased2-v031-o65-posix-xattr-read-failclosed-20261025']
+  pull_request:
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'tests/test_v031_o65_xattr_capture.py'
+      - '.github/workflows/v031-o65-xattr-source-integrity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-o65-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  installed-xattr-admission:
+    name: O65 source-bound installed ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O65_PARENT: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
+      O65_BUILDER_BLOB: 7f222458adc1c4aae65fa24650a8fc0c7b0c1b18
+      O65_TEST_BLOB: f637e81d3dae27cff2053d41af02ceb39e35e49d
+    steps:
+      - name: Checkout exact candidate with original source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Source and scope custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O65_PARENT" HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "$O65_BUILDER_BLOB"
+          test "$(git hash-object tests/test_v031_o65_xattr_capture.py)" = "$O65_TEST_BLOB"
+          test "$(git show "$O65_PARENT:src/cmpct/builder.py" | git hash-object --stdin)" = 663ef0922992b1fbb8f19e6eea88d55c10a56044
+          git diff --exit-code "$O65_PARENT" HEAD -- src/cmpct/codec.py src/cmpct/reader.py src/cmpct/transactions.py native benchmarks docs/FORMAT.md tools/check_performance_regression.py
+          test -f docs/v031-research/2026-10-25-o65-xattr-read-integrity-prereg.md
+      - name: Install actual CMPCT and pytest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install . pytest
+      - name: Isolate focused tests and verify installed package provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o65-court o65-evidence
+          cp tests/test_v031_o65_xattr_capture.py o65-court/test_o65.py
+          python - <<'PY'
+          import cmpct.builder, cmpct.codec, cmpct.reader, subprocess
+          from pathlib import Path
+          repo=Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip())
+          for mod in (cmpct.builder,cmpct.codec,cmpct.reader):
+              path=Path(mod.__file__).resolve()
+              assert not path.is_relative_to(repo), ('non-installed path',path)
+              print('O65_INSTALLED',mod.__name__,path)
+          PY
+      - name: Execute source-admission adversaries
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -vv -s -ra o65-court/test_o65.py --junitxml=o65-evidence/junit.xml 2>&1 | tee o65-evidence/pytest.log
+      - name: Fail closed on administrative green with missing tests
+        shell: bash
+        run: |
+          python - <<'PY'
+          from xml.etree import ElementTree as ET
+          import sys
+          root=ET.parse('o65-evidence/junit.xml').getroot()
+          suite=root if root.tag=='testsuite' else root.find('testsuite')
+          assert suite is not None
+          cases=suite.findall('.//testcase')
+          failed=sum(bool(c.findall('failure') or c.findall('error')) for c in cases)
+          skipped=sum(bool(c.findall('skipped')) for c in cases)
+          passed=len(cases)-failed-skipped
+          posix=sys.platform!='win32'
+          print('O65_JUNIT',{'platform':sys.platform,'tests':len(cases),'pass':passed,'skip':skipped,'fail':failed})
+          assert failed==0 and len(cases)>=9
+          if posix:
+              assert passed>=9 and skipped==0
+          else:
+              assert passed>=1 and skipped>=8
+          PY
+      - name: Persist exact proof artifacts even on failure
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o65-evidence
+          git rev-parse HEAD > o65-evidence/head.sha
+          git hash-object src/cmpct/builder.py > o65-evidence/builder.blob
+          git hash-object tests/test_v031_o65_xattr_capture.py > o65-evidence/tests.blob
+          git diff "$O65_PARENT" HEAD --stat > o65-evidence/changed-files.txt
+      - name: Upload test and provenance receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o65-${{ matrix.os }}-${{ github.sha }}
+          path: o65-evidence/
+          if-no-files-found: error
