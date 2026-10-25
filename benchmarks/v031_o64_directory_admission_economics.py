@@ -1,7 +1,8 @@
 """O64-E: fresh-process *genuine-product* Windows directory admission economics.
 
-Same source tree and engine environment; compare exact historical O57 worktree
-against O64 candidate worktree. No change to official benchmark/corpus/policy.
+Same source tree and environment; compare separately installed real wheels
+from exact O57 and O64 Git source, including their package-owned native libraries.
+No change to official benchmark/corpus/policy.
 """
 from __future__ import annotations
 import argparse
@@ -65,7 +66,7 @@ def _sample(args: argparse.Namespace) -> None:
     from cmpct.builder import Builder
 
     module_path = Path(cmpct.builder.__file__).resolve()
-    expected = (Path(args.source).resolve() / "src" / "cmpct" / "builder.py")
+    expected = (Path(args.source).resolve() / "cmpct" / "builder.py")
     assert module_path == expected, (module_path, expected)
     source_root = Path(args.tree).resolve()
     archive = Path(args.output).resolve()
@@ -109,7 +110,7 @@ def _drive(args: argparse.Namespace) -> None:
                 out = outputs / f"{name}-{label}-{serial}.cmpct"
                 src = args.baseline if label == "base" else args.candidate
                 env = os.environ.copy()
-                env["PYTHONPATH"] = str(Path(src).resolve() / "src")
+                env["PYTHONPATH"] = str(Path(src).resolve())
                 cmd = [
                     sys.executable, script, "--sample", "--tree", str(root),
                     "--output", str(out), "--label", label,
