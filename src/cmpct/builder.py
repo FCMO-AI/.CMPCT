@@ -87,10 +87,12 @@ class Builder:
                 st=e.stat(follow_symlinks=False)
                 # An external output can be hardlinked to a source member. Publishing to
                 # that name would overwrite the member's real inode on a successful build.
-                if (self._protected_output_inode is not None and
-                        stat.S_ISREG(st.st_mode) and
-                        (st.st_dev,st.st_ino)==self._protected_output_inode):
-                    raise ValueError(f'archive output is a hardlink to source member: {rel!r}')
+                if self._protected_output_inode is not None and stat.S_ISREG(st.st_mode):
+                    # CPython's Windows DirEntry.stat can report zero physical identity.
+                    # Only destinations with multiple links need this extra Win32 stat.
+                    identity_st = os.stat(e.path,follow_symlinks=False) if os.name=='nt' else st
+                    if (identity_st.st_dev,identity_st.st_ino)==self._protected_output_inode:
+                        raise ValueError(f'archive output is a hardlink to source member: {rel!r}')
                 mode=stat.S_IMODE(st.st_mode);self._capture_fs_meta(e.path,rel,st)
                 if stat.S_ISLNK(st.st_mode):
                     b=os.readlink(e.path).encode();ref=self.add_content(b,'.symlink')
@@ -275,18 +277,23 @@ class Builder:
         root_path=os.path.realpath(os.fspath(self.root))
         output_path=os.path.realpath(os.fspath(out))
         try:
-            if os.path.commonpath([root_path,output_path])==root_path:
-                raise ValueError('archive output must be outside the source root')
-        except ValueError as exc:
-            # Windows permits different volumes; commonpath cannot compare those.
-            if 'archive output must be outside' in str(exc):
-                raise
+            within_root=os.path.commonpath([root_path,output_path])==root_path
+        except ValueError:
+            # Different Windows volumes cannot have a shared physical ancestor.
+            within_root=False
+        if within_root:
+            raise ValueError('archive output must be outside the source root')
         try:
             out_stat=os.stat(out)
         except FileNotFoundError:
             self._protected_output_inode=None
         else:
-            self._protected_output_inode=(out_stat.st_dev,out_stat.st_ino)
+            # A single-link external target cannot also be a distinct source name.
+            # Normal independent destinations therefore pay no per-entry inode test.
+            if stat.S_ISREG(out_stat.st_mode) and out_stat.st_nlink>1:
+                self._protected_output_inode=(out_stat.st_dev,out_stat.st_ino)
+            else:
+                self._protected_output_inode=None
         self.scan();self._build_micro_packs();self._prepare_deflate_reuse();self._train_dictionary()
         # Candidate compression is parallel but materialization is not. ``Executor.map`` yields results
         # in the exact sorted-hash input order, so worker scheduling cannot perturb blob ids, offsets or
