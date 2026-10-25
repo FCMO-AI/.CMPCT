@@ -154,6 +154,9 @@ def main() -> None:
             # O43: stronger than byte equality or os.stat inode alone. All
             # aliases must share one native file identity; an equal-byte fresh
             # regular file must not accidentally satisfy the same predicate.
+            assert all(not (destination / name).is_symlink() for name in names), (
+                "a symlink may resolve to the same file ID without being a hardlink"
+            )
             identities = [win32_physical_id(destination / name) for name in names]
             win32_native_same = len({pair[:2] for pair in identities}) == 1
             assert win32_native_same, identities
