@@ -115,6 +115,16 @@ cross-platform rules:
 - metadata remains authenticated even when a destination filesystem/user cannot apply uid/gid/xattrs or
   exact timestamps; host application of those attributes is best-effort and must never fabricate values.
 
+For callers who require confirmation that **archived extended attributes** were applied, the
+Python Reader provides an **opt-in** `CMPCT.extractall(destination, require_xattrs=True)`.
+It reports a missing `setxattr` API before creating the destination and raises an `IOError`
+if applying an archived xattr fails. `require_xattrs=True, metadata=False` is invalid.
+The default `require_xattrs=False` preserves historical portable best-effort behavior.
+This option is deliberately **not** a whole-tree transactional extraction or an all-metadata
+fidelity guarantee: after a late xattr error, payloads may already have been written, and uid/gid,
+ACLs and timestamps retain their separate documented semantics. No revision-24 format bytes change.
+
+
 Footnote: validation and materialization are separate trust boundaries. The shared native materializer
 repeats the portable link-target rule immediately before `symlink()` and restores signed timestamps with
 checked add/sub around the Unix epoch, so an archive cannot become unsafe or semantically different merely

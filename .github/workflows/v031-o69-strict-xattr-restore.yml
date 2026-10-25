@@ -1,0 +1,111 @@
+# ci-lane: fast
+name: CMPCT O69 installed strict-xattr restoration court
+
+on:
+  pull_request:
+    paths:
+      - "src/cmpct/reader.py"
+      - "tests/test_v031_o69_strict_xattr_restore.py"
+      - ".github/workflows/v031-o69-strict-xattr-restore.yml"
+      - "docs/PORTABILITY.md"
+      - "docs/v031-research/2026-10-25-o69-optin-xattr-restoration-prereg.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o69-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-installed:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind execution to exact candidate
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install actual CMPCT package
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install . pytest
+      - name: Confirm tested module is installed, not repository import
+        shell: bash
+        run: |
+          python - <<'PY'
+          import cmpct, pathlib
+          path = pathlib.Path(cmpct.__file__).resolve()
+          assert "site-packages" in str(path).lower(), path
+          print("installed_cmpct:", path)
+          PY
+      - name: Run authentic archive / adversarial restoration court
+        shell: bash
+        run: |
+          mkdir -p o69-artifacts
+          # The broad tests/conftest.py imports historical experimental codecs and host libzstd.
+          # This installed-product court does not exercise those experiments: copy the exact
+          # testcase bytes into an isolated directory, preserving the original SHA-256.
+          cp tests/test_v031_o69_strict_xattr_restore.py o69-artifacts/test_v031_o69_strict_xattr_restore.py
+          python - <<'PY'
+          import hashlib, pathlib
+          a = pathlib.Path("tests/test_v031_o69_strict_xattr_restore.py").read_bytes()
+          b = pathlib.Path("o69-artifacts/test_v031_o69_strict_xattr_restore.py").read_bytes()
+          assert hashlib.sha256(a).digest() == hashlib.sha256(b).digest()
+          print("exact test SHA-256:", hashlib.sha256(a).hexdigest())
+          PY
+          python -m pytest -q o69-artifacts/test_v031_o69_strict_xattr_restore.py --junitxml=o69-artifacts/junit.xml
+      - name: Independently audit executed JUnit counts
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys, xml.etree.ElementTree as ET
+          root = ET.parse("o69-artifacts/junit.xml").getroot()
+          suite = root if root.tag == "testsuite" else root.find("testsuite")
+          assert suite is not None, "missing JUnit suite"
+          tests = int(suite.attrib.get("tests", -1))
+          failed = int(suite.attrib.get("failures", -1))
+          errors = int(suite.attrib.get("errors", -1))
+          skipped = int(suite.attrib.get("skipped", -1))
+          assert tests == 7, (tests, "did not execute all prospective cases")
+          assert failed == 0 and errors == 0, (failed, errors)
+          expected_skips = 0 if sys.platform.startswith("linux") else 1
+          assert skipped == expected_skips, (skipped, expected_skips)
+          receipts = {
+              "head": pathlib.Path(".git/HEAD").read_text().strip(),
+              "host": sys.platform,
+              "tests": tests,
+              "failures": failed,
+              "errors": errors,
+              "skipped": skipped,
+          }
+          pathlib.Path("o69-artifacts/receipt.json").write_text(json.dumps(receipts, indent=2) + "\n")
+          print(json.dumps(receipts, sort_keys=True))
+          PY
+      - name: Preserve result even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o69-strict-xattr-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o69-artifacts/
+          if-no-files-found: warn
+
+# Scientific scope: an explicit opt-in Reader xattr-application receipt, not a
+# proof of transactional tree publication, universal OS xattr support, or full
+# metadata fidelity. The default portable path and r24 archive bytes are unchanged.
