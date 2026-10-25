@@ -81,7 +81,7 @@ jobs:
           from pathlib import Path
           import json,sys,xml.etree.ElementTree as ET
           cases=list(ET.parse("o90-evidence/junit.xml").getroot().iter("testcase"))
-          expected_total=56 if sys.platform.startswith("linux") else 57
+          expected_total=57 if sys.platform.startswith("linux") else 58 if sys.platform=="darwin" else 57
           expected_skips=7 if sys.platform.startswith("linux") else 8 if sys.platform=="darwin" else 15
           counts={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
           counts["total"]=len(cases)
