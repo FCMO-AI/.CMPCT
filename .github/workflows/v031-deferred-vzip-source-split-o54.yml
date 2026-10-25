@@ -1,6 +1,6 @@
 # ci-lane: fast
 # O54: source-exact independent research falsifier. Not a release/performance gate.
-name: CMPCT v0.31 O54 Deferred VZIP Split-Read Scientific Court
+name: CMPCT v0.31 O54+O55 Source Cohesion and Reference Oracle
 on:
   push:
     branches:
@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - 'tests/test_v031_deferred_vzip_source_split_o54.py'
+      - 'tests/test_v031_vzip_single_snapshot_o55.py'
       - '.github/workflows/v031-deferred-vzip-source-split-o54.yml'
   workflow_dispatch:
 
@@ -64,7 +65,8 @@ jobs:
           PY
           mkdir -p o54-isolated
           cp tests/test_v031_deferred_vzip_source_split_o54.py o54-isolated/
-          python -m pytest -vv -s o54-isolated/test_v031_deferred_vzip_source_split_o54.py --junitxml=o54-results.xml 2>&1 | tee o54-results.log
+          cp tests/test_v031_vzip_single_snapshot_o55.py o54-isolated/
+          python -m pytest -vv -s o54-isolated/ --junitxml=o54-results.xml 2>&1 | tee o54-results.log
           python - <<'PY'
           import xml.etree.ElementTree as ET
           root=ET.parse("o54-results.xml").getroot()
@@ -72,7 +74,7 @@ jobs:
           assert suites, root.tag
           vals={k:sum(int(x.attrib.get(k,0)) for x in suites) for k in ("tests","failures","errors","skipped")}
           print("O54_JUNIT_COUNTS="+str(vals))
-          assert vals=={"tests":3,"failures":0,"errors":0,"skipped":0}, vals
+          assert vals=={"tests":7,"failures":0,"errors":0,"skipped":0}, vals
           PY
       - name: Preserve original outputs regardless of result
         if: always()
@@ -83,5 +85,6 @@ jobs:
             o54-results.log
             o54-results.xml
             o54-result.json
+            o55-result.json
           if-no-files-found: warn
           retention-days: 30
