@@ -1,0 +1,97 @@
+# ci-lane: fast
+# O67: observational full-Builder economic A/B. NOT the official parity gate.
+name: CMPCT v0.31 O67 O60 versus O63 complete-Builder economics
+
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-o63-product-economics-o67-20261025'
+  pull_request:
+    paths:
+      - 'tools/o67_o63_full_builder_economics.py'
+      - '.github/workflows/v031-o67-o63-product-economics.yml'
+      - 'src/cmpct/builder.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o67-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  genuine-full-builder-abba:
+    name: O67 Ubuntu 3.11 physical-source full-Builder ABBA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O60_SHA: c88a6bc29b9ec8738e23aab788b7c09ab0390e79
+      O63_SHA: 18e32cae012f5dca9fc47f10d194f8b81005c85c
+    steps:
+      - name: Checkout exact research source with actual historical O60 ancestor
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind source identities and create independent installed environments
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O63_SHA" HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "382e60983bf1e8e7595ea7112f3a5553dc33dcc0"
+          test "$(git hash-object src/cmpct/codec.py)" = "dc3446b0eed82edfba9380e3885a20aa45577899"
+          mkdir -p o67-evidence/raw
+          git worktree add --detach "$RUNNER_TEMP/o67-o60-source" "$O60_SHA"
+          test "$(git hash-object "$RUNNER_TEMP/o67-o60-source/src/cmpct/builder.py")" = "bda9d7f8005e276ba891aac75ae50eabe67bd431"
+          test "$(git hash-object "$RUNNER_TEMP/o67-o60-source/src/cmpct/codec.py")" = "dc3446b0eed82edfba9380e3885a20aa45577899"
+          python -m venv "$RUNNER_TEMP/o67-base-venv"
+          python -m venv "$RUNNER_TEMP/o67-candidate-venv"
+          "$RUNNER_TEMP/o67-base-venv/bin/python" -m pip install "$RUNNER_TEMP/o67-o60-source"
+          "$RUNNER_TEMP/o67-candidate-venv/bin/python" -m pip install .
+          git rev-parse HEAD > o67-evidence/research-head.txt
+          git rev-parse "$O60_SHA" > o67-evidence/baseline-head.txt
+          git hash-object tools/o67_o63_full_builder_economics.py > o67-evidence/instrument-blob.txt
+      - name: Generate one deterministic physical corpus shared by both candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/o67_o63_full_builder_economics.py --create --root "$RUNNER_TEMP/o67-source" --out o67-evidence/corpus.json
+      - name: Execute source-bound fresh-process ABBA and verify each complete archive
+        shell: bash
+        env:
+          O67_CHECKOUT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          roles=(base candidate candidate base)
+          for kind in late early accepted ordinary multiple_late; do
+            for rep in 0 1 2 3; do
+              for slot in 0 1 2 3; do
+                role="${roles[$slot]}"
+                if [ "$role" = base ]; then
+                  py="$RUNNER_TEMP/o67-base-venv/bin/python"
+                else
+                  py="$RUNNER_TEMP/o67-candidate-venv/bin/python"
+                fi
+                "$py" tools/o67_o63_full_builder_economics.py --sample --case "$kind"                   --root "$RUNNER_TEMP/o67-source/$kind"                   --role "$role" --repetition "$rep" --slot "$slot"                   --out "o67-evidence/raw/${kind}-r${rep}-s${slot}-${role}.json"
+              done
+            done
+          done
+          python tools/o67_o63_full_builder_economics.py --report             --root o67-evidence/raw --out o67-evidence/result.json
+          test "$(find o67-evidence/raw -name '*.json' -type f | wc -l)" -eq 80
+          echo "O67_FULL_BUILDER_ABBA_EVIDENCE_COMPLETE"
+      - name: Preserve raw result and diagnostics regardless of result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o67-source-bound-${{ github.sha }}
+          path: o67-evidence/
+          if-no-files-found: warn
+          retention-days: 30
