@@ -1,0 +1,114 @@
+# ci-lane: fast
+# O64: installed three-platform directory ADS admission on exact O57 product parent.
+name: CMPCT v0.31 O64 Win32 directory named-stream product court
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o64-win32-directory-ads-admission-20261025'
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/ntfs_streams.py'
+      - 'tests/test_v031_ntfs_directory_admission_o64.py'
+      - 'tests/test_v031_ntfs_empty_dir_guard_o61d2.py'
+      - '.github/workflows/v031-win32-directory-ads-o64.yml'
+      - 'docs/v031-research/2026-10-25-o64-ntfs-directory-admission-prereg.md'
+  pull_request:
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/ntfs_streams.py'
+      - 'tests/test_v031_ntfs_directory_admission_o64.py'
+      - 'tests/test_v031_ntfs_empty_dir_guard_o61d2.py'
+      - '.github/workflows/v031-win32-directory-ads-o64.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o64-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-dir-ads:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install CPython 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Check provenance, install candidate and run original plus new controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor d9f9fa724c139c6281f0e2a92c66601bee912618 HEAD
+          test "$(git hash-object tests/test_v031_win32_ads_refusal_o57.py)" = "abd88c8c7394fac15d4d98a5f3cca0844bd8dff6"
+          test "$(git hash-object tests/test_v031_ntfs_empty_dir_guard_o61d2.py)" = "abb81c6ab670d35b618c0759507594cc1303a463"
+          test "$(git hash-object tests/test_v031_win32_builder_hardlink_o47.py)" = "6c00ae49eea075957453d6d7238d988add6eedee"
+          test "$(git hash-object tests/test_v031_special_entries_o48.py)" = "d4a22da7d634a5dd6a1e1fb132ed1ceae2249ab6"
+          test "$(git hash-object tests/test_v031_builder_composition_o50.py)" = "44f66dcf220231c1271d56bbff26da290d32d20c"
+          test "$(git hash-object tests/test_v031_builder_parent_parity_o50.py)" = "5b7e2bc50971ca5801038b3598d2e2af36235074"
+          # O64-E adds only a separate explicitly named *research* benchmark.
+          # Keep frozen parity and historical records immutable; do not classify
+          # additive independent instrumentation as changed official comparators.
+          git diff --exit-code d9f9fa724c139c6281f0e2a92c66601bee912618 HEAD -- src/cmpct/reader.py src/cmpct/transactions.py native benchmarks/universal_bench.py benchmarks/history tools/check_performance_regression.py
+          echo "O64_EXECUTED_HEAD=$(git rev-parse HEAD)"
+          echo "O64_BUILDER_BLOB=$(git hash-object src/cmpct/builder.py)"
+          echo "O64_HELPER_BLOB=$(git hash-object src/cmpct/ntfs_streams.py)"
+          python -m pip install . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import cmpct.builder, cmpct.reader, cmpct.ntfs_streams
+          root=Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
+          for module in (cmpct.builder, cmpct.reader, cmpct.ntfs_streams):
+              p=Path(module.__file__).resolve()
+              assert not p.is_relative_to(root), ("candidate imported from checkout, not installed wheel", p)
+              print("O64_INSTALLED_MODULE="+str(p), flush=True)
+          PY
+          mkdir -p o64-isolated
+          cp tests/test_v031_win32_builder_hardlink_o47.py o64-isolated/
+          cp tests/test_v031_special_entries_o48.py o64-isolated/
+          cp tests/test_v031_builder_composition_o50.py o64-isolated/
+          cp tests/test_v031_builder_parent_parity_o50.py o64-isolated/
+          cp tests/test_v031_win32_ads_refusal_o57.py o64-isolated/
+          cp tests/test_v031_ntfs_empty_dir_guard_o61d2.py o64-isolated/
+          cp tests/test_v031_ntfs_directory_admission_o64.py o64-isolated/
+          python -m pytest -vv -s o64-isolated/ --junitxml=o64-results.xml 2>&1 | tee o64-results.log
+          python - <<'PY'
+          import os, json
+          import xml.etree.ElementTree as ET
+          root=ET.parse("o64-results.xml").getroot()
+          cases=list(root.iter("testcase"))
+          counts={k:sum(int(bool(c.find(k) is not None)) for c in cases)
+                  for k in ("failure","error","skipped")}
+          counts["tests"]=len(cases)
+          print("O64_JUNIT="+json.dumps(counts,sort_keys=True),flush=True)
+          assert counts["tests"] == 20, ("expected 14 inherited + O61D2 1 + O64 5",counts)
+          assert counts["skipped"] == (6 if os.name=="nt" else 7), counts
+          assert counts["failure"] == counts["error"] == 0, counts
+          print("O64_REAL_PASS="+str(counts["tests"]-counts["skipped"]),flush=True)
+          PY
+      - name: Preserve exact-source logs and JUnit even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o64-installed-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            o64-results.xml
+            o64-results.log
+          if-no-files-found: warn
+          retention-days: 30

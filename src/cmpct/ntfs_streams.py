@@ -10,12 +10,16 @@ from __future__ import annotations
 import os
 
 
-def refuse_unsupported_named_streams(path: str | os.PathLike[str]) -> None:
-    """Fail closed when an NTFS regular file carries a nondefault data stream.
+def refuse_unsupported_named_streams(
+    path: str | os.PathLike[str], *, directory: bool = False
+) -> None:
+    """Refuse NTFS named $DATA streams that revision 24 cannot reconstruct.
 
-    The check is a no-op on non-Windows platforms. On Windows, use the native
-    directory/stream enumerator rather than ordinary stat/read or colon-name
-    heuristics: named streams are not separate files in os.scandir().
+    Regular-file admission (the backward-compatible default) expects the
+    ordinary unnamed ::$DATA stream. A *directory* normally has no unnamed
+    data stream: an empty FindFirstStreamW enumeration (ERROR_HANDLE_EOF) is
+    valid there, but a named stream must fail closed. Both modes are no-ops
+    on non-Windows. This is a static inventory check, not a race-proof snapshot.
     """
     if os.name != "nt":
         return
@@ -46,14 +50,18 @@ def refuse_unsupported_named_streams(path: str | os.PathLike[str]) -> None:
     invalid = ctypes.c_void_p(-1).value
     if handle is None or handle == invalid:
         err = ctypes.get_last_error()
+        # O61-D2 confirmed that empty NTFS *directories* produce EOF before
+        # the first stream; regular files must still have their default stream.
+        if directory and err == 38:  # ERROR_HANDLE_EOF
+            return
         raise OSError(err, f"cannot enumerate NTFS source streams: {file_name!r}")
 
     try:
         while True:
-            # The one unnamed stream is already represented by the regular
-            # K_FILE row. Every other stream name requires unsupported source
-            # semantics and must not be silently omitted from a 'success'.
-            if data.cStreamName != "::$DATA":
+            # K_FILE represents only its unnamed stream. K_DIR represents no
+            # stream at all. Never silently publish a complete-looking r24
+            # archive after discovering any directory stream (or named file stream).
+            if directory or data.cStreamName != "::$DATA":
                 raise OSError(f"unsupported NTFS named stream on source "
                               f"{file_name!r}: {data.cStreamName!r}; "
                               f"refusing lossy archive")
