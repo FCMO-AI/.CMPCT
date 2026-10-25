@@ -408,6 +408,25 @@ class CMPCT:
                     if '/'.join(parts[:i]) in syms:raise IOError(f'archive symlink used as parent path: {rel!r}')
             clean.append((row,parts,os.path.join(dest_s,*parts)))
 
+        # Footnote: extraction is also an archive *reader*. An output pathname can be the
+        # very same physical inode as our still-open source archive (including hardlinks and
+        # symlinks to it). A later O_TRUNC/unlink would destroy the input while mmap is live.
+        # Refuse static aliases before *any* destination mutation, across storage types.
+        # This is not a concurrent rename/symlink race barrier; descriptor-bound publication
+        # remains separate work. Never use a pathname string equality as an inode proof.
+        source_stat = os.fstat(self.f.fileno())
+        source_inode = (source_stat.st_dev, source_stat.st_ino)
+        for _row, _parts, _full in clean:
+            if _row[1] == K_DIR:
+                continue
+            try:
+                # Following existing leaf symlinks is essential: O_TRUNC follows them too.
+                destination_stat = os.stat(_full)
+            except FileNotFoundError:
+                continue
+            if (destination_stat.st_dev, destination_stat.st_ino) == source_inode:
+                raise IOError(f'extraction destination aliases open source archive: {_row[0]!r}')
+
         # Build all directories first. Parents are guaranteed to exist before regular-file writes,
         # eliminating hundreds of redundant stat/mkdir calls on large source trees.
         dirs=[]
