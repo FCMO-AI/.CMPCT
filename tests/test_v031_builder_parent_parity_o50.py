@@ -42,7 +42,17 @@ def _exact_parent_builder():
     else:
         # The fixture is the unedited historical source file, not a new Builder
         # implementation. Its blob identity is verified below on every use.
-        src = (root / "tests/fixtures/o50_o47_parent_builder.py").read_bytes()
+        # A Git checkout may apply CRLF conversion on Windows. Read the
+        # immutable indexed blob, not transformed working-tree text, so the
+        # source is byte-identical across supported platforms.
+        fixture_ref = "HEAD:tests/fixtures/o50_o47_parent_builder.py"
+        frozen_blob = subprocess.check_output(
+            ["git", "rev-parse", fixture_ref], cwd=root, text=True).strip()
+        assert frozen_blob == _PARENT_BUILDER_BLOB, (
+            "frozen fixture index custody", frozen_blob, _PARENT_BUILDER_BLOB
+        )
+        src = subprocess.check_output(
+            ["git", "cat-file", "blob", frozen_blob], cwd=root)
         custody = "frozen-exact-blob"
     blob = hashlib.sha1(
         b"blob " + str(len(src)).encode("ascii") + b"\0" + src
