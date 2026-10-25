@@ -61,7 +61,10 @@ jobs:
           test "$(git hash-object tests/test_v031_special_entries_o48.py)" = "d4a22da7d634a5dd6a1e1fb132ed1ceae2249ab6"
           test "$(git hash-object tests/test_v031_builder_composition_o50.py)" = "44f66dcf220231c1271d56bbff26da290d32d20c"
           test "$(git hash-object tests/test_v031_builder_parent_parity_o50.py)" = "5b7e2bc50971ca5801038b3598d2e2af36235074"
-          git diff --exit-code d9f9fa724c139c6281f0e2a92c66601bee912618 HEAD -- src/cmpct/reader.py src/cmpct/transactions.py native benchmarks tools/check_performance_regression.py
+          # O64-E adds only a separate explicitly named *research* benchmark.
+          # Keep frozen parity and historical records immutable; do not classify
+          # additive independent instrumentation as changed official comparators.
+          git diff --exit-code d9f9fa724c139c6281f0e2a92c66601bee912618 HEAD -- src/cmpct/reader.py src/cmpct/transactions.py native benchmarks/universal_bench.py benchmarks/history tools/check_performance_regression.py
           echo "O64_EXECUTED_HEAD=$(git rev-parse HEAD)"
           echo "O64_BUILDER_BLOB=$(git hash-object src/cmpct/builder.py)"
           echo "O64_HELPER_BLOB=$(git hash-object src/cmpct/ntfs_streams.py)"
