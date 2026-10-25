@@ -1,0 +1,115 @@
+# ci-lane: fast
+# O108: research-only storage-path FIFO availability differential; no product repair.
+name: CMPCT v0.31 O108 Reader storage FIFO differential
+
+on:
+  push:
+    branches: ['agent/phased2-v031-o108-reader-storage-fifo-court-20261025']
+  pull_request:
+    paths:
+      - '.github/workflows/v031-o108-reader-storage-fifo.yml'
+      - 'tests/test_v031_o108_reader_storage_fifo_court.py'
+      - 'docs/v031-research/2026-10-25-o108-reader-storage-fifo-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o108-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-reader-storage-fifo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source and committed preregistration
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify source identity and independently install CMPCT
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b HEAD
+          git merge-base --is-ancestor fcba42de69b191a11f968e92ff3770f48efbf787 HEAD
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          mkdir -p o108-evidence
+          git rev-parse HEAD > o108-evidence/head.sha
+          git hash-object src/cmpct/reader.py > o108-evidence/reader.blob
+          git hash-object src/cmpct/builder.py > o108-evidence/builder.blob
+          git hash-object tests/test_v031_o108_reader_storage_fifo_court.py > o108-evidence/test.blob
+          python -m pip install --disable-pip-version-check . pytest
+          python - <<'PY'
+          import cmpct.reader,cmpct.builder
+          import subprocess
+          from pathlib import Path
+          root=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip()).resolve()
+          for mod in (cmpct.reader,cmpct.builder):
+              location=Path(mod.__file__).resolve()
+              assert not location.is_relative_to(root),(location,root)
+              print("O108_INSTALLED="+str(location),flush=True)
+          PY
+      - name: Run 12 real Reader cases with killable direct-write children
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_v031_o108_reader_storage_fifo_court.py o108-evidence/
+          python -m pytest -vv -s o108-evidence/test_v031_o108_reader_storage_fifo_court.py --junitxml=o108-evidence/junit.xml 2>&1 | tee o108-evidence/court.log
+      - name: Independent mandatory-observation audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,xml.etree.ElementTree as ET
+          from pathlib import Path
+          cases=list(ET.parse("o108-evidence/junit.xml").getroot().iter("testcase"))
+          assert len(cases)==12,("not all 3*4 test cases ran",len(cases))
+          counts={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
+          assert counts=={"failure":0,"error":0,"skipped":0},counts
+          log=Path("o108-evidence/court.log").read_text()
+          rows=[json.loads(line.partition("O108_CASE=")[2])
+                for line in log.splitlines() if "O108_CASE=" in line and '"mode"' in line]
+          assert len(rows)==12,("missing physical per-trial records",len(rows))
+          expected={(m,l) for m in ("blob","cdc","sparse") for l in ("fresh","regular","fifo","symlink_fifo")}
+          assert {(r["mode"],r["leaf"]) for r in rows}==expected,rows
+          for mode in ("blob","cdc","sparse"):
+              subset=[r for r in rows if r["mode"]==mode]
+              assert len({r["archive_sha"] for r in subset})==1,(mode,"archive drift")
+              assert len({r["source_sha"] for r in subset})==1,(mode,"source drift")
+          for r in rows:
+              negative=r["mode"]!="cdc" and r["leaf"] in ("fifo","symlink_fifo")
+              assert r["outcome"]==("direct_write_fifo_timeout" if negative else "exact_regular"),r
+              assert r["child_result"]==("timeout" if negative else "exit"),r
+              assert r["deadline_seconds"]==8,r
+          receipt={
+              "head":Path("o108-evidence/head.sha").read_text().strip(),
+              "reader_blob":Path("o108-evidence/reader.blob").read_text().strip(),
+              "builder_blob":Path("o108-evidence/builder.blob").read_text().strip(),
+              "test_blob":Path("o108-evidence/test.blob").read_text().strip(),
+              "cases":12,"passed":12,"skipped":0,"failed":0,
+              "expected_observed_timeouts":4,
+              "scope":"one-host installed Reader science; FIFO availability defect not repaired",
+              "observations":rows
+          }
+          Path("o108-evidence/result.json").write_text(json.dumps(receipt,indent=2,sort_keys=True)+"\n")
+          print("O108_AUDIT="+json.dumps({k:v for k,v in receipt.items() if k!="observations"},sort_keys=True))
+          PY
+      - name: Preserve raw successful and failed observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o108-${{ env.EVIDENCE_HEAD }}
+          path: o108-evidence/
+          retention-days: 30
+          if-no-files-found: warn
