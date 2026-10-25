@@ -50,7 +50,10 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git merge-base --is-ancestor 29d9688ae6bff6d1eccc27f019893866abe5b5c3 HEAD
-          test "$(git hash-object src/cmpct/builder.py)" = "21a9ec696df13961c25301654feb607a7e161a4c"
+          # Keep the O50 original source pin on its immutable parent; this child
+          # deliberately changes Builder and must bind its own product source too.
+          test "$(git show 17c96603e33b02b3f2f9e0079eec2b128f293be8:src/cmpct/builder.py | git hash-object --stdin)" = "21a9ec696df13961c25301654feb607a7e161a4c"
+          test "$(git hash-object src/cmpct/builder.py)" = "bda9d7f8005e276ba891aac75ae50eabe67bd431"
           test "$(git hash-object tests/test_v031_win32_builder_hardlink_o47.py)" = "6c00ae49eea075957453d6d7238d988add6eedee"
           test "$(git hash-object tests/test_v031_special_entries_o48.py)" = "d4a22da7d634a5dd6a1e1fb132ed1ceae2249ab6"
           test "$(git hash-object tests/test_v031_builder_composition_o50.py)" = "44f66dcf220231c1271d56bbff26da290d32d20c"
