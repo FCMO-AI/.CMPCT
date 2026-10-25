@@ -26,9 +26,15 @@ jobs:
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
           clean: true
+          # Source-exact historical controls (O50/O81/O90) compare authentic Git objects.
+          # A one-commit checkout turns missing history into false product-test failures.
+          fetch-depth: 0
 
-      - name: Bind regression evidence to exact head
-        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Bind regression evidence to exact head and complete historical custody
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
