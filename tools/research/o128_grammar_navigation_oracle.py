@@ -58,14 +58,14 @@ def v(number):
 def parse_varints(raw):
     result=[]; i=0
     while i<len(raw):
-        value=0; shift=0
+        start=i; value=0; shift=0
         while True:
             if i>=len(raw) or shift>=42: raise ValueError('malformed varint')
             b=raw[i]; i+=1
             value|=(b&127)<<shift
             if not b&128: break
             shift+=7
-        assert v(value)==raw[sum(len(v(x)) for x in result):i], 'noncanonical varint'
+        assert v(value)==raw[start:i], 'noncanonical varint'
         result.append(value)
     return result
 
