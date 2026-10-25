@@ -49,7 +49,9 @@ jobs:
           # Prove historical O50 ownership on the actual parent as well as
           # this source-changing O60 descendant. The original tests remain intact.
           test "$(git show 17c96603e33b02b3f2f9e0079eec2b128f293be8:src/cmpct/builder.py | git hash-object --stdin)" = "21a9ec696df13961c25301654feb607a7e161a4c"
-          test "$(git hash-object src/cmpct/builder.py)" = "bda9d7f8005e276ba891aac75ae50eabe67bd431"
+          # O63: retain immutable O60 source custody while pinning candidate separately
+          test "$(git show c88a6bc29b9ec8738e23aab788b7c09ab0390e79:src/cmpct/builder.py | git hash-object --stdin)" = "bda9d7f8005e276ba891aac75ae50eabe67bd431"
+          test "$(git hash-object src/cmpct/builder.py)" = "382e60983bf1e8e7595ea7112f3a5553dc33dcc0"
           python -m pip install . pytest
           python - <<'PY'
           from pathlib import Path
