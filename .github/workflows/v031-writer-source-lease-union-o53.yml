@@ -52,7 +52,8 @@ jobs:
           test "$(git hash-object src/cmpct/transactions.py)" = "79ea9e423d155b106f40cd0811075c69ff04f105"
           test "$(git hash-object tests/test_v031_writer_fd_source_o51.py)" = "b6e7a75f900171b85647a6d7ef06bd765101e041"
           test "$(git hash-object tests/test_v031_salvage_writer_union_r265.py)" = "15d536c08bd5d428e6ef2f77871ba5f7e465215f"
-          test "$(git hash-object tests/test_v031_writer_source_lease_union_o53.py)" = "d866cb988c6c08f4f909b2aa397c954da5cded82"
+          test "$(git hash-object tests/o53_frozen_311_transactions.py)" = "a3b9c3375ed19f0b37d40ee47ead7b5d5b8905ee"
+          test "$(git hash-object tests/test_v031_writer_source_lease_union_o53.py)" = "bf58817ec76812ac8552d523c89325b5b3de33f4"
           test "$(git hash-object src/cmpct/reader.py)" = "c548a2ae4d650e928eb46ed1c2431423e49765b5"
           test "$(git hash-object src/cmpct/cli.py)" = "94bcd91af4ec8fa8282e3b1900d3c1d07a7a3235"
           git diff --exit-code c1e75370281ca6b721ef10edf1ed15e6c5ef48f7 HEAD -- src/cmpct/reader.py src/cmpct/builder.py src/cmpct/cli.py native benchmarks/zip_parity_bench.py tools/check_performance_regression.py
@@ -80,6 +81,7 @@ jobs:
           cp tests/test_v031_writer_fd_source_o51.py o53-isolated/
           cp tests/test_v031_salvage_writer_union_r265.py o53-isolated/
           cp tests/test_v031_writer_source_lease_union_o53.py o53-isolated/
+          cp tests/o53_frozen_311_transactions.py o53-isolated/
           python -m pytest -vv --noconftest o53-isolated/ --junitxml=o53-result.xml 2>&1 | tee o53-results.log
           python - <<'PY'
           import os
