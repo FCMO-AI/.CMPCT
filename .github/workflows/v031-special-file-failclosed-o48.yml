@@ -1,0 +1,60 @@
+name: CMPCT v0.31 O48 unsupported-special entries
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-special-file-failclosed-o48-20261025'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o48-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  special-entry-admission:
+    name: O48 installed-tree exactness ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install source and execute original focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'O48_HEAD=%s\n' "$(git rev-parse HEAD)"
+          printf 'O48_BUILDER_BLOB=%s\n' "$(git hash-object src/cmpct/builder.py)"
+          python -m pip install . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import cmpct.builder
+          root = Path(subprocess.check_output(
+              ["git","rev-parse","--show-toplevel"], text=True).strip())
+          imported = Path(cmpct.builder.__file__).resolve()
+          assert not imported.is_relative_to(root), f"Builder is checkout-local: {imported}"
+          print("O48_INSTALLED_BUILDER=" + str(imported))
+          PY
+          mkdir -p o48-isolated
+          cp tests/test_v031_special_entries_o48.py o48-isolated/test_v031_special_entries_o48.py
+          python -m pytest -vv o48-isolated/test_v031_special_entries_o48.py --junitxml=o48-pytest.xml 2>&1 | tee o48-pytest.log
+      - name: Retain original test outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o48-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            o48-pytest.xml
+            o48-pytest.log
+          if-no-files-found: warn
+          retention-days: 30
