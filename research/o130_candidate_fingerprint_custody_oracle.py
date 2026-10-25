@@ -91,6 +91,9 @@ def run() -> dict:
         # Independent, differently rooted included-content control.
         source.write_text("#!/usr/bin/env python3\nprint('o130 mutated content')\n", encoding="utf-8")
         git(root, "add", "--", "tools/sample.py")
+        # Keep the previously committed executable Git mode after a content-stage;
+        # the fixture worktree itself began as a non-executable file.
+        git(root, "update-index", "--chmod=+x", "--", "tools/sample.py")
         git(root, "commit", "-qm", "o130 change included script contents")
         cases.append(observed(root, manifest, "included_content_mutation"))
 
