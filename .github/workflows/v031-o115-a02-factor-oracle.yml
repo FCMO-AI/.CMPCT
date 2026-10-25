@@ -1,0 +1,79 @@
+name: v0.31 O115 A02 orthogonal factors oracle
+on:
+  pull_request:
+    paths:
+      - 'research/o115_a02_factor_oracle.py'
+      - 'docs/v031-research/2026-10-25-o115-a02-factor-oracle-*'
+      - '.github/workflows/v031-o115-a02-factor-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v031-o115-a02-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  charged-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Check out exact PR commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify source and prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee o115-head.txt
+          python --version
+          zstd --version
+          sha256sum research/o115_a02_factor_oracle.py
+          test -f docs/v031-research/2026-10-25-o115-a02-factor-oracle-prereg.md
+          git status --porcelain
+      - name: Execute four charged, exactly reconstructed models
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o115-evidence
+          python research/o115_a02_factor_oracle.py --out o115-evidence/result.json | tee o115-evidence/stdout.log
+          cp o115-head.txt o115-evidence/head.txt
+          sha256sum research/o115_a02_factor_oracle.py o115-evidence/result.json > o115-evidence/sha256sums.txt
+      - name: Independently audit model accounting without replacing outcome
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          p='o115-evidence/result.json'
+          d=json.load(open(p))
+          assert d['status']=='RESEARCH_ONLY'
+          expected={'crossed':(64,4096),'correlated':(64,4096),'heldout':(96,8192),'noise':(64,4096)}
+          assert {r['family'] for r in d['results']}==set(expected)
+          for r in d['results']:
+              n,w=expected[r['family']]
+              assert (r['objects'],r['object_size'])==(n,w)
+              assert r['verification']=='ALL_FIVE_RECONSTRUCT_AND_SHA256_PASS'
+              m=r['fully_charged_models']
+              assert set(m)=={'S_solid','I_individual','R_root_individual','G_root_solid_residual','F_factor_oracle'}
+              for key,row in m.items():
+                  assert row['exact'] and row['bytes']==row['payload_bytes']+row['metadata_bytes'],(r['family'],key)
+                  assert row['selected_logical_decode_bytes']>=w
+              best=min(row['bytes'] for key,row in m.items() if key!='F_factor_oracle')
+              assert best==r['best_control_bytes']
+              assert m['F_factor_oracle']['bytes']==r['factor_bytes']
+              assert r['factor_beats_best_control']==(r['factor_bytes']<best)
+              print('AUDIT',r['family'],'F',r['factor_bytes'],'BEST',best,'F_WINS',r['factor_beats_best_control'])
+          print('O115_CHARGED_ORACLE_AUDIT_PASS')
+          PY
+      - name: Preserve direct evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o115-a02-exact-head-evidence-${{ runner.os }}
+          path: |
+            o115-evidence/
+            o115-head.txt
+          if-no-files-found: warn
