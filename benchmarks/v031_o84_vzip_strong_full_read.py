@@ -153,7 +153,10 @@ def main():
             # Simulate a hostile authenticated hardlink cycle in index rows, without using
             # recursion or modifying committed on-disk format. A real forged signed index
             # remains a separate threat contract.
-            if alias is not None:
+            if alias is not None and reader.by[alias][1]==3:
+                # Only a K_HARDLINK row carries a target path in storage[0].
+                # Windows' original v0.31 Builder may represent the two names as
+                # independent regular files even when os.link succeeded.
                 alias_row=reader.by[alias]
                 saved_target=alias_row[6][0]
                 alias_row[6][0]=alias
@@ -161,6 +164,9 @@ def main():
                     expect_raises(IOError,lambda:reader.read_vzip_verified(alias),"hardlink self-cycle")
                 finally:
                     alias_row[6][0]=saved_target
+                report["hardlink_cycle_test"]="executed"
+            else:
+                report["hardlink_cycle_test"]="not_applicable_no_indexed_hardlink"
             report["archive_bytes"]=archive.stat().st_size
             report["archive_sha256"]=sha(archive.read_bytes())
             fast_samples=_samples(lambda:reader.read("sample.zip"))
