@@ -92,7 +92,11 @@ jobs:
           failures = int(suite.get("failures", -1))
           errors = int(suite.get("errors", -1))
           skipped = int(suite.get("skipped", -1))
-          assert count == 23, f"lost expected test collection: {count}"
+          # O65's original errno-parametrized ENOTSUP/EOPNOTSUPP control
+          # has two unique unsupported errnos on Linux, three on macOS/Windows.
+          # The extra non-Linux case is a real executed test, not a skip.
+          expected_count = 23 if sys.platform.startswith("linux") else 24
+          assert count == expected_count, f"lost expected test collection: {count}/{expected_count}"
           assert failures == errors == 0, (failures, errors)
           expected_skips = 0 if sys.platform.startswith("linux") else 3
           assert skipped == expected_skips, (skipped, expected_skips)
