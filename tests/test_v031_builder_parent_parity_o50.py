@@ -27,11 +27,28 @@ _PARENT_BUILDER_BLOB = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
 def _exact_parent_builder():
     root = Path(subprocess.check_output(
         ["git", "rev-parse", "--show-toplevel"], text=True).strip())
-    src = subprocess.check_output(
-        ["git", "show", f"{_PARENT_SHA}:src/cmpct/builder.py"], cwd=root)
-    blob = subprocess.check_output(
-        ["git", "hash-object", "--stdin"], input=src, cwd=root, text=False).decode().strip()
-    assert blob == _PARENT_BUILDER_BLOB, (blob, _PARENT_BUILDER_BLOB)
+    # O59: generic Tests intentionally uses a shallow checkout, unlike the O50
+    # hosted court. Prefer the actual immutable parent commit when it exists;
+    # fall back ONLY if the commit object itself is missing. An existing commit
+    # with a missing historical source path must still fail, not be concealed.
+    exists = subprocess.run(
+        ["git", "cat-file", "-e", f"{_PARENT_SHA}^{{commit}}"],
+        cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        check=False).returncode == 0
+    if exists:
+        src = subprocess.check_output(
+            ["git", "show", f"{_PARENT_SHA}:src/cmpct/builder.py"], cwd=root)
+        custody = "git-parent"
+    else:
+        # The fixture is the unedited historical source file, not a new Builder
+        # implementation. Its blob identity is verified below on every use.
+        src = (root / "tests/fixtures/o50_o47_parent_builder.py").read_bytes()
+        custody = "frozen-exact-blob"
+    blob = hashlib.sha1(
+        b"blob " + str(len(src)).encode("ascii") + b"\0" + src
+    ).hexdigest()
+    assert blob == _PARENT_BUILDER_BLOB, (custody, blob, _PARENT_BUILDER_BLOB)
+    print("O50_PARENT_SOURCE_CUSTODY", custody, blob)
     # A distinct module namespace avoids monkeypatching the installed production
     # Builder. Relative imports still use the real, installed cmpct.codec/Reader.
     mod = types.ModuleType("cmpct._o50_parent_builder")
