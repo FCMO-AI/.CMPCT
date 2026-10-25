@@ -1,0 +1,107 @@
+# ci-lane: fast
+# O71 is a source-bound scientific counterexample hunt, never a release gate.
+name: CMPCT v0.31 O71 Cross-Object VZIP Held-Out Oracle
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o71-vzip-reuse-heldout-oracle-20261025'
+  pull_request:
+    paths:
+      - 'benchmarks/v031_o71_vzip_reuse_heldout.py'
+      - '.github/workflows/v031-o71-vzip-reuse-heldout.yml'
+      - 'docs/v031-research/2026-10-25-o71-vzip-reuse-heldout-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o71-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scientific-oracle:
+    name: O71 authentic installed Builder cross-object A/B (Ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O63_PARENT: 18e32cae012f5dca9fc47f10d194f8b81005c85c
+      O71_PREREG_SHA: 98c32b5e955a57f4143a886cdf4e8f1be134b059
+      O71B_PREREG_SHA: 83fc27518f45663c399d1f16809b9601880a9fec
+      CMPCT_O71_REPORT: o71-evidence/o71-raw.json
+    steps:
+      - name: Resolve exact measured source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Protect prospective science and intact product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O63_PARENT" HEAD
+          git merge-base --is-ancestor "$O71_PREREG_SHA" HEAD
+          git merge-base --is-ancestor "$O71B_PREREG_SHA" HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = 382e60983bf1e8e7595ea7112f3a5553dc33dcc0
+          test "$(git hash-object src/cmpct/codec.py)" = dc3446b0eed82edfba9380e3885a20aa45577899
+          git diff --exit-code "$O63_PARENT" HEAD -- src native tests benchmarks/history
+          test -f docs/v031-research/2026-10-25-o71-vzip-reuse-heldout-prereg.md
+          test -f docs/v031-research/2026-10-25-o71b-entropy-matched-independent-prereg.md
+          python -m py_compile benchmarks/v031_o71_vzip_reuse_heldout.py
+      - name: Install original O63 product package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Execute seven held-out cohorts on actual revision-24 Builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o71-evidence
+          python benchmarks/v031_o71_vzip_reuse_heldout.py 2>&1 | tee o71-evidence/experiment.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('o71-evidence/o71-raw.json').read_text())
+          assert report['experiment']=='O71'
+          assert len(report['cases'])==8
+          assert sum(len(c['observations']) for c in report['cases'])==48
+          for c in report['cases']:
+              assert len(c['observations'])==6
+              assert {x['mode'] for x in c['observations']}=={'virtual','opaque'}
+              sha={m['name']:m['zip_sha256'] for m in c['members']}
+              assert all(o['source_sha256']==sha for o in c['observations'])
+              assert all(o['archive_bytes']>0 for o in c['observations'])
+          assert report['o71b']['disposition'] in (
+              'ORIGINAL_SHARED_WIN_DID_NOT_REPLICATE',
+              'INDEPENDENT_MIXED_STILL_WINS_CAUSAL_STORY_INSUFFICIENT',
+              'EXACT_CONTENT_IDENTITY_SUPPORTED_WITHIN_MATCHED_ENTROPY_FAMILY')
+          print('O71B_REAL_PRODUCT_BUILD_OBSERVATIONS=48; outcome='+
+                report['scientific_decision']+'; science-only')
+          PY
+      - name: Preserve exact source and both positive/negative receipts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o71-evidence
+          git rev-parse HEAD > o71-evidence/source.sha
+          git hash-object src/cmpct/builder.py > o71-evidence/builder.blob
+          git hash-object src/cmpct/codec.py > o71-evidence/codec.blob
+          git hash-object benchmarks/v031_o71_vzip_reuse_heldout.py > o71-evidence/instrument.blob
+          git diff --stat "$O63_PARENT" HEAD > o71-evidence/diff-stat.txt
+      - name: Upload immutable scientific evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o71-heldout-raw-${{ github.sha }}
+          path: o71-evidence/
+          if-no-files-found: error
