@@ -88,7 +88,10 @@ def test_o86_large_zip_falls_back_and_roundtrips_real_builder(tmp_path, monkeypa
         assert reader.read("large.zip") == original
         assert reader.verify() == 1
         extracted = tmp_path / "extracted"
-        reader.extractall(extracted)
+        # The original O63 Reader attempts os.utime(..., follow_symlinks=False) when
+        # metadata=True; stock Windows runners do not provide that operation.
+        # This case tests exact file bytes, not cross-host timestamp restoration.
+        reader.extractall(extracted, metadata=False)
         assert (extracted / "large.zip").read_bytes() == original
     print("O86_LIMITED_RECEIPT", receipt)
     # Immutable input physical content: even an extreme ZIP is reconstructed byte-for-byte.
