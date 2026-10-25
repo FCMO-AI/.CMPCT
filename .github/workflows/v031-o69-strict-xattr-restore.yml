@@ -1,4 +1,4 @@
-# ci-lane: research
+# ci-lane: fast
 name: CMPCT O69 installed strict-xattr restoration court
 
 on:
@@ -13,6 +13,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-o69-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   source-exact-installed:
