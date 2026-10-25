@@ -1,0 +1,79 @@
+# ci-lane: fast
+name: CMPCT v0.31 O128 A07 Grammar Navigation Oracle
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-a07-grammar-navigation-o128-20261025
+    paths:
+      - 'tools/research/o128_grammar_navigation_oracle.py'
+      - 'docs/v031-research/2026-10-25-o128-*'
+      - '.github/workflows/v031-o128-a07-grammar-navigation.yml'
+  pull_request:
+    paths:
+      - 'tools/research/o128_grammar_navigation_oracle.py'
+      - 'docs/v031-research/2026-10-25-o128-*'
+      - '.github/workflows/v031-o128-a07-grammar-navigation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o128-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  lower-rung-a07-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run exact-head charged A07 oracle, preserving original outcomes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          mkdir -p o128-evidence
+          python tools/research/o128_grammar_navigation_oracle.py > o128-evidence/oracle.json
+          python - <<'PY'
+          import json, hashlib, subprocess
+          from pathlib import Path
+          x=json.loads(Path("o128-evidence/oracle.json").read_text())
+          assert x["schema"]=="cmpct-o128-a07-grammar-navigation-r0"
+          assert len(x["results"])==16
+          assert set((r["family"],r["seed"]) for r in x["results"]) == {
+              (f,s) for f in ("motifs","rotations","independent_refs","opaque")
+              for s in (31,101,2026,4096)
+          }
+          assert all(r["max_grammar_cold_decode_amplification"]<=8 for r in x["results"])
+          assert all(r["input_bytes"]==16*64*256 for r in x["results"])
+          assert not x["product_credit"] and not x["official_benchmark"]
+          print("O128_REPRODUCED_16_CASES=PASS")
+          print("O128_DECISION="+x["byte_headroom_decision"])
+          print("O128_RAW_SHA256="+hashlib.sha256(Path("o128-evidence/oracle.json").read_bytes()).hexdigest())
+          PY
+          {
+            git rev-parse HEAD
+            git rev-parse HEAD:tools/research/o128_grammar_navigation_oracle.py
+            git rev-parse HEAD:docs/v031-research/2026-10-25-o128-a07-self-index-grammar-prereg.md
+            python --version
+            sha256sum o128-evidence/oracle.json
+          } > o128-evidence/custody.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cmpct-o128-a07-exact-head-oracle
+          path: o128-evidence/
+          if-no-files-found: error
+          retention-days: 45
