@@ -1,0 +1,95 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-stale-fast-courts
+# Research-only; does not change frozen parity corpora or official release comparators.
+name: CMPCT v0.31 O44 held-out combined topology
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-heldout-combined-topology-o44-20261025
+    paths:
+      - '.github/workflows/v031-o44-heldout-combined-topology.yml'
+      - 'benchmarks/heldout_physical_tree.py'
+      - 'benchmarks/heldout_combined_topology_o44.py'
+      - 'tests/test_heldout_physical_tree_o44.py'
+      - 'docs/v031-research/2026-10-25-o44-heldout-combined-topology-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-o44-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  hosted-actual-generator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Bind source and exclude frozen-evidence modifications
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 36c5c737c2896b9ad9ee68c491ff921fbd36aaa4 HEAD
+          git diff --exit-code 36c5c737c2896b9ad9ee68c491ff921fbd36aaa4 HEAD -- \
+            src native benchmarks/universal_bench.py benchmarks/zip_parity_bench.py \
+            tools/check_performance_regression.py .github/workflows/zip-parity.yml
+          test "$(git hash-object benchmarks/universal_bench.py)" = 2668948a64a03fc7f2b7c97fd97c8e0696aa9bee
+          git rev-parse HEAD
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+      - name: Run isolated structural counterexamples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          # Research-only tests omit the product conftest, not the product General Tests court.
+          python -m pytest --noconftest -q \
+            --junitxml=benchmark-artifacts/o44-pytest.xml \
+            tests/test_heldout_physical_tree_o44.py \
+            2>&1 | tee benchmark-artifacts/o44-focused-tests.log
+          # Fail closed if the test command ever gets commented out again.
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          report = Path("benchmark-artifacts/o44-pytest.xml")
+          assert report.is_file() and report.stat().st_size > 0, "research tests did not execute"
+          root = ET.parse(report).getroot()
+          suites = [root] if root.tag == "testsuite" else root.findall("./testsuite")
+          assert suites, "missing pytest testsuite"
+          tests = sum(int(s.get("tests", 0)) for s in suites)
+          failures = sum(int(s.get("failures", 0)) for s in suites)
+          errors = sum(int(s.get("errors", 0)) for s in suites)
+          skips = sum(int(s.get("skipped", 0)) for s in suites)
+          assert tests >= 6 and failures == errors == skips == 0, (tests, failures, errors, skips)
+          assert len(root.findall(".//testcase")) >= 6, "missing test case receipts"
+          print(f"O44_REAL_TESTS={tests} FAILURES={failures} ERRORS={errors} SKIPS={skips}")
+          PY
+      - name: Generate actual universal source and non-frozen held-out combined
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m benchmarks.heldout_combined_topology_o44 --generate \
+            --output benchmark-artifacts/o44-actual-generator.json \
+            2>&1 | tee benchmark-artifacts/o44-actual-generator.log
+          python -m py_compile benchmarks/heldout_physical_tree.py benchmarks/heldout_combined_topology_o44.py
+          printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/o44-head.txt
+      - name: Preserve original evidence and failures
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-o44-actual-generator-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
+          retention-days: 90
