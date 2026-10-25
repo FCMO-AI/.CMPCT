@@ -1,0 +1,70 @@
+# ci-lane: deep
+# O79 is a research-only source-exact hosted oracle; r24 product/release untouched.
+name: CMPCT v0.31 O79 VZIP whole-recipe SHA authenticated range
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-o79-vzip-whole-recipe-sha-range-oracle-20261025'
+  pull_request:
+    paths:
+      - 'benchmarks/v031_o79_vzip_whole_sha_range_oracle.py'
+      - '.github/workflows/v031-o79-vzip-whole-sha-range.yml'
+      - 'docs/v031-research/2026-10-25-o79-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o79-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  installed-whole-recipe-sha:
+    name: O79 installed r24 authenticated VZIP selective-range oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify actual parent source and installed CMPCT
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          python -m pip install .
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.builder as builder, cmpct.reader as reader, cmpct.codec as codec
+          import subprocess
+          repo=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip())
+          for mod in (builder,reader,codec):
+              where=Path(mod.__file__).resolve()
+              assert not where.is_relative_to(repo), f"not an installed product: {where}"
+              print("O79_INSTALLED_MODULE="+str(where))
+          PY
+      - name: Real retained/regenerated whole-recipe proof, hostile and economic court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_o79_vzip_whole_sha_range_oracle.py 2>&1 | tee o79-run.log
+      - name: Preserve actual raw measurements and failures
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o79-vzip-sha-${{ env.EVIDENCE_HEAD }}
+          path: |
+            o79-run.log
+            o79-evidence.json
+          retention-days: 30
+          if-no-files-found: warn
