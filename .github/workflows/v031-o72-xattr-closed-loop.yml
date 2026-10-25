@@ -1,0 +1,122 @@
+# ci-lane: fast
+name: CMPCT O72 installed cross-owner xattr closed-loop court
+
+on:
+  pull_request:
+    paths:
+      - "src/cmpct/builder.py"
+      - "src/cmpct/reader.py"
+      - "tests/test_v031_o65_xattr_capture.py"
+      - "tests/test_v031_o69_strict_xattr_restore.py"
+      - "tests/test_v031_o72_xattr_closed_loop.py"
+      - ".github/workflows/v031-o72-xattr-closed-loop.yml"
+      - "docs/v031-research/2026-10-25-o72-xattr-capture-restore-composition-prereg.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o72-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-cross-owner:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind SHA, source and release scope
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = "7f222458adc1c4aae65fa24650a8fc0c7b0c1b18"
+          test "$(git hash-object tests/test_v031_o65_xattr_capture.py)" = "a1fea48b62b53f417afa19fbbba805fee090736e"
+          test "$(grep -c 'require_xattrs' src/cmpct/reader.py)" -gt 1
+          test "$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')" = "0.30.0"
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install real CMPCT package and test dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install . pytest
+      - name: Confirm package imports from site-packages
+        shell: bash
+        run: |
+          python - <<'PY'
+          import cmpct, pathlib
+          p = pathlib.Path(cmpct.__file__).resolve()
+          assert "site-packages" in str(p).lower(), p
+          print("installed_package", p)
+          PY
+      - name: Run three source-exact historical and interaction suites
+        shell: bash
+        run: |
+          mkdir -p o72-evidence
+          cp tests/test_v031_o65_xattr_capture.py o72-evidence/
+          cp tests/test_v031_o69_strict_xattr_restore.py o72-evidence/
+          cp tests/test_v031_o72_xattr_closed_loop.py o72-evidence/
+          python - <<'PY'
+          import hashlib, pathlib
+          for p in sorted(pathlib.Path("o72-evidence").glob("test_*.py")):
+              a = pathlib.Path("tests") / p.name
+              assert hashlib.sha256(a.read_bytes()).digest() == hashlib.sha256(p.read_bytes()).digest()
+              print("casefile", p.name, hashlib.sha256(p.read_bytes()).hexdigest())
+          PY
+          # Running from a standalone directory avoids the unrelated broad
+          # research conftest and preserves exact bytes of all three suites.
+          python -m pytest -q o72-evidence/test_v031_o65_xattr_capture.py o72-evidence/test_v031_o69_strict_xattr_restore.py o72-evidence/test_v031_o72_xattr_closed_loop.py --junitxml=o72-evidence/junit.xml
+      - name: Audit actual tests and platform-specific skips, fail-closed
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys, xml.etree.ElementTree as ET
+          root = ET.parse("o72-evidence/junit.xml").getroot()
+          suite = root if root.tag == "testsuite" else root.find("testsuite")
+          assert suite is not None
+          count = int(suite.get("tests", -1))
+          failures = int(suite.get("failures", -1))
+          errors = int(suite.get("errors", -1))
+          skipped = int(suite.get("skipped", -1))
+          assert count == 23, f"lost expected test collection: {count}"
+          assert failures == errors == 0, (failures, errors)
+          expected_skips = 0 if sys.platform.startswith("linux") else 3
+          assert skipped == expected_skips, (skipped, expected_skips)
+          skipped_cases = []
+          for case in suite.iter("testcase"):
+              if case.find("skipped") is not None:
+                  skipped_cases.append(case.get("name"))
+          if sys.platform.startswith("linux"):
+              assert not skipped_cases, skipped_cases
+          else:
+              assert all("real" in name or "linux_kernel" in name for name in skipped_cases), skipped_cases
+          receipt = dict(host=sys.platform, head=pathlib.Path(".git/HEAD").read_text().strip(),
+                         tests=count, failures=failures, errors=errors, skipped=skipped,
+                         skip_names=skipped_cases, archive_format="r24",
+                         scope="installed-package capture/restore, not release performance")
+          pathlib.Path("o72-evidence/receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+      - name: Preserve evidence even when failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o72-xattr-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o72-evidence/
+          if-no-files-found: warn
+
+# This composed branch creates no version/format milestone or benchmark credit.
+# No xattr-only mock result substitutes for the Linux native-kernel control.
