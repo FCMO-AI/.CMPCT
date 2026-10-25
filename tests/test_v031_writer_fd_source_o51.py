@@ -84,15 +84,20 @@ def test_symlink_to_regular_preserves_original_source_semantics(tmp_path):
 def test_socket_source_refused_without_archive_mutation(tmp_path):
     archive = _archive(tmp_path)
     before = hashlib.sha256(archive.read_bytes()).hexdigest()
-    source = tmp_path / "listening.sock"
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    try:
-        server.bind(str(source))
-        cp = _cli(archive, source, timeout=3)
-        assert cp.returncode != 0
-        _assert_unchanged(archive, before)
-    finally:
-        server.close()
+    # Darwin limits AF_UNIX sun_path to roughly 104 bytes. pytest's generated temp
+    # path can exceed it before the product even opens the socket; use a short private
+    # socket directory without relaxing the actual bound-socket source adversary.
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="o51-", dir="/tmp") as sd:
+        source = Path(sd) / "sock"
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            server.bind(str(source))
+            cp = _cli(archive, source, timeout=3)
+            assert cp.returncode != 0
+            _assert_unchanged(archive, before)
+        finally:
+            server.close()
 
 
 @pytest.mark.skipif(os.name != "posix" or not hasattr(os, "mkfifo"),
