@@ -1,0 +1,142 @@
+# ci-lane: fast
+# O124: source-archive inode guard × POSIX destination leaf/symlink guard.
+# Scientific composition; no release credit from this specialized workflow.
+name: CMPCT v0.31 O124 Reader source destination safety union
+
+on:
+  push:
+    branches: ['agent/phased1-v031-o124-reader-archive-destination-guard-union-20261025']
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tools/research/o124_reader_guard_union_court.py'
+      - 'docs/v031-research/2026-10-25-o124-*'
+      - '.github/workflows/v031-o124-reader-guard-union.yml'
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tools/research/o124_reader_guard_union_court.py'
+      - 'docs/v031-research/2026-10-25-o124-*'
+      - '.github/workflows/v031-o124-reader-guard-union.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o124-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  three-engine-composition-court:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 28
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Freeze three actual Reader source identities and install in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o124-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 700fa74df7d9101b3d00322ab5b3606ee64faf88 HEAD
+          git merge-base --is-ancestor 67a1b5d11182d0351fd6370ebf8ca9ca9f1d080d HEAD
+          test "$(git hash-object src/cmpct/reader.py)" = "80267375507cb4eca2d0a9e3e839fda3ce4249c4"
+          git worktree add --detach "$RUNNER_TEMP/o124-original" 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
+          git worktree add --detach "$RUNNER_TEMP/o124-parent" 700fa74df7d9101b3d00322ab5b3606ee64faf88
+          test "$(git -C "$RUNNER_TEMP/o124-original" hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git -C "$RUNNER_TEMP/o124-parent" hash-object src/cmpct/reader.py)" = "66b1f84d849cc2a8470467e75e478f6dc5927c75"
+          python -m pip install --disable-pip-version-check . pytest
+          python -m pip install --disable-pip-version-check --no-deps --target "$RUNNER_TEMP/o124-original-installed" "$RUNNER_TEMP/o124-original"
+          python -m pip install --disable-pip-version-check --no-deps --target "$RUNNER_TEMP/o124-parent-installed" "$RUNNER_TEMP/o124-parent"
+          echo "$EVIDENCE_HEAD" > o124-evidence/head.sha
+          git hash-object src/cmpct/reader.py > o124-evidence/candidate-reader.blob
+          git hash-object tools/research/o124_reader_guard_union_court.py > o124-evidence/instrument.blob
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader,cmpct.builder
+          root=Path.cwd().resolve()
+          for module in (cmpct.reader,cmpct.builder):
+              path=Path(module.__file__).resolve()
+              assert not path.is_relative_to(root),(module,path)
+              print("O124_INSTALLED_MODULE="+str(path),flush=True)
+          Path("o124-evidence/candidate-install-root.txt").write_text(
+              str(Path(cmpct.reader.__file__).resolve().parent.parent)+"\n"
+          )
+          PY
+      - name: Unmodified inherited PR 294 physical alias and storage-mode regression court
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Exact unchanged test, outside tests/ to avoid unrelated R25 conftest imports.
+          cp tests/test_v031_destination_hardlink_leaf_alias.py o124-evidence/test_v031_destination_hardlink_leaf_alias.py
+          cmp -s tests/test_v031_destination_hardlink_leaf_alias.py o124-evidence/test_v031_destination_hardlink_leaf_alias.py
+          python -m pytest -q o124-evidence/test_v031_destination_hardlink_leaf_alias.py --junitxml=o124-evidence/parent-inherited-junit.xml 2>&1 | tee o124-evidence/parent-court.log
+      - name: Three-engine authentic source-alias court
+        # Preserve original inherited macOS failure, but independently run the
+        # second scientific question instead of stopping before observing it.
+        if: success() || failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/research/o124_reader_guard_union_court.py \
+            --base-src "$RUNNER_TEMP/o124-original-installed" \
+            --parent-src "$RUNNER_TEMP/o124-parent-installed" \
+            --candidate-src "$(cat o124-evidence/candidate-install-root.txt)" \
+            --out o124-evidence/result.json 2>&1 | tee o124-evidence/court.log
+          grep -qx 'O124_STATIC_ALIAS_GUARD_PASS' <(tail -1 o124-evidence/court.log)
+      - name: Independent structural audit of every scientific cell and nine inherited tests
+        if: success() || failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,xml.etree.ElementTree as ET
+          from pathlib import Path
+          r=json.loads(Path('o124-evidence/result.json').read_text())
+          rows=r['observations']
+          expected={(engine,case) for engine in ('baseline','parent','candidate')
+                    for case in ('clean','same-path','hardlink','symlink')}
+          assert len(rows)==12 and {(x['engine'],x['case']) for x in rows}==expected,rows
+          assert all(x['child_opened'] for x in rows),rows
+          assert all(x['returncode']==0 and x['source_unchanged'] and x['exact_member_output']
+                     for x in rows if x['case']=='clean'),rows
+          assert all(not x['source_unchanged']
+                     for x in rows if x['engine']=='baseline' and x['case']!='clean'),rows
+          assert all(not x['source_unchanged'] for x in rows
+                     if x['engine']=='parent' and x['case']=='same-path'),rows
+          assert all(x['returncode']==48 and x['source_unchanged'] for x in rows
+                     if x['engine']=='parent' and x['case'] in ('hardlink','symlink')),rows
+          assert all(x['returncode']==47 and x['source_unchanged']
+                     for x in rows if x['engine']=='candidate' and x['case']!='clean'),rows
+          assert all(x['source_before_sha256']==r['source_sha256'] for x in rows),rows
+          assert all(x['source_after_sha256']==r['source_sha256']
+                     for x in rows if x['source_unchanged']),rows
+          print('O124_TWELVE_CELL_INDEPENDENT_AUDIT_PASS',flush=True)
+          cases=list(ET.parse('o124-evidence/parent-inherited-junit.xml').getroot().iter('testcase'))
+          assert len(cases)==9,('parent expected 9',len(cases))
+          assert all(all(t.find(k) is None for k in ('error','failure','skipped')) for t in cases)
+          print('O124_INDEPENDENT_AUDIT_PASS twelve three-engine cells plus nine unchanged inherited tests',flush=True)
+          PY
+      - name: Preserve raw scientific receipts even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o124-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o124-evidence/
+          if-no-files-found: warn
+          retention-days: 90
