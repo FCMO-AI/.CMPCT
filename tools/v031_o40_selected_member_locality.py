@@ -92,7 +92,12 @@ def observe(path: Path, expected: dict, require_shared: bool) -> dict:
         cached = reader.cache.get(owner_idx)
         if cached is None or len(cached) != owner_usize:
             raise AssertionError("measured S_PACK physical owner was not fully materialized")
-        # Independently reauthenticate the physical owner; current Reader.verify()\n        # may not compare S_PACK physical SHA in this development lineage.\n        header = BHDR.unpack_from(reader.mm, reader.record_base + reader.blobs[owner_idx][0])\n        if digest(bytes(cached)) != bytes(header[-1]).hex():\n            raise AssertionError("physical S_PACK SHA-256 mismatch")\n        # Codec 1 is Zstd; for RAW the whole owner is materialized but not decompressed.
+        # Independently reauthenticate the physical owner; current Reader.verify()
+        # may not compare S_PACK physical SHA in this development lineage.
+        header = BHDR.unpack_from(reader.mm, reader.record_base + reader.blobs[owner_idx][0])
+        if digest(bytes(cached)) != bytes(header[-1]).hex():
+            raise AssertionError("physical S_PACK SHA-256 mismatch")
+        # Codec 1 is Zstd; for RAW the whole owner is materialized but not decompressed.
         small_bytes = int(expected["small.txt"]["bytes"])
         large_bytes = int(expected["large.txt"]["bytes"])
         row = {
@@ -103,7 +108,8 @@ def observe(path: Path, expected: dict, require_shared: bool) -> dict:
             "owner_uncompressed_bytes": owner_usize,
             "owner_compressed_bytes": owner_csize,
             "owner_codec": owner_codec,
-            "owner_codec_is_zstd": owner_codec == CODEC_ZSTD,\n            "physical_sha256_verified_independently": True,
+            "owner_codec_is_zstd": owner_codec == CODEC_ZSTD,
+            "physical_sha256_verified_independently": True,
             "small_full_member_bytes": small_bytes,
             "largest_member_bytes": large_bytes,
             "release_pack_target_bytes": min(2 * 1024 * 1024, 8 * large_bytes),
