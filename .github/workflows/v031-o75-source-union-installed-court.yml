@@ -47,6 +47,34 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           # Source identity is read before package installation, so generated native build outputs cannot masquerade as tracked source.
           python tools/check_v031_candidate_fingerprint.py --output o75-candidate-identity.json
+          # Independently distinguish Git source-object bytes from platform checkout worktree bytes.
+          # A cross-host fingerprint mismatch is a RED, not an excuse to rewrite owner O266.
+          python - <<'PY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          names = [
+              ".github/workflows/tests.yml",
+              "src/cmpct/builder.py",
+              "src/cmpct/codec.py",
+              "README.md",
+              "docs/V030_RELEASE_LOCK.json",
+              "docs/V031_CANDIDATE_FINGERPRINT.json",
+              "tests/test_public_attribution.py",
+          ]
+          witness = []
+          for p in names:
+              physical = Path(p).read_bytes()
+              canonical = subprocess.check_output(["git","show",f"HEAD:{p}"])
+              witness.append({
+                  "path":p,"same_git_and_worktree_bytes":physical==canonical,
+                  "worktree_sha256":hashlib.sha256(physical).hexdigest(),
+                  "git_blob_content_sha256":hashlib.sha256(canonical).hexdigest(),
+                  "worktree_crlf":physical.count(b"\\r\\n"),
+                  "git_crlf":canonical.count(b"\\r\\n"),
+              })
+          Path("o75-source-byte-diagnostics.json").write_text(json.dumps(witness,indent=2)+"\\n")
+          print("O75_SOURCE_BYTE_DIAGNOSTIC",json.dumps(witness))
+          PY
           test "$(git hash-object src/cmpct/builder.py)" = "382e60983bf1e8e7595ea7112f3a5553dc33dcc0"
           test "$(git hash-object src/cmpct/codec.py)" = "dc3446b0eed82edfba9380e3885a20aa45577899"
           test "$(git hash-object tests/fixtures/o50_o47_parent_builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
@@ -100,6 +128,7 @@ jobs:
           name: o75-${{ matrix.os }}-depth-${{ matrix.depth }}
           path: |
             o75-candidate-identity.json
+            o75-source-byte-diagnostics.json
             o75-identity.log
             o75-identity.xml
             o66-parent.log
