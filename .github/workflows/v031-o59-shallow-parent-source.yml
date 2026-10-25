@@ -54,7 +54,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           test "$(git hash-object src/cmpct/builder.py)" = "21a9ec696df13961c25301654feb607a7e161a4c"
           test "$(git hash-object tests/fixtures/o50_o47_parent_builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
-          test "$(git hash-object tests/test_v031_builder_parent_parity_o50.py)" = "14f8353c7a76bdf770b38c46ef16d45bd6497a3d"
+          test "$(git hash-object tests/test_v031_builder_parent_parity_o50.py)" = "20faf26980693342439c7730f62bd0bab8daca0f"
           # The full clone must be able to retrieve the historical source;
           # depth=1 must not. Report a custody mismatch as a test failure.
           if [ "${{ matrix.depth }}" = "0" ]; then
