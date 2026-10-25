@@ -213,12 +213,48 @@ class CMPCT:
             raw=self.vcache.get(rid)
             if raw is None:
                 raw=rebuild_vzip(self.recipes[rid],self._blob,self._stream);self.vcache[rid]=raw
-            # rebuild_vzip has already verified the virtual file's exact SHA-256.
+            # rebuild_vzip checks length and CRC32, not the recipe SHA-256. The optional\n            # read_vzip_verified() below binds returned bytes to that indexed digest.
             if len(raw)!=size:raise IOError(f'file size failure: {name}')
             return raw
         else:raise IOError('unknown storage kind')
         if len(raw)!=size or sha(raw)!=bytes(h):raise IOError(f'file integrity failure: {name}')
         return raw
+    def read_vzip_verified(self,name,*,max_scan_bytes=64*1024*1024):
+        """Read one VZIP member with an indexed full SHA-256 integrity check.
+
+        This opt-in call hashes the same immutable bytes it returns; default read/range
+        remain the faster CRC-tier operations. It avoids verify()'s unrelated members
+        but necessarily does O(logical ZIP size) hashing, bounded by max_scan_bytes.
+        The SHA is an integrity check, not a signature or origin authentication.
+        """
+        if isinstance(max_scan_bytes,bool) or not isinstance(max_scan_bytes,int) or max_scan_bytes<0:
+            raise ValueError('max_scan_bytes must be a nonnegative integer')
+        row=self.by[name]
+        seen=set()
+        while row[1]==K_HARDLINK:
+            # Hostile authenticated graphs must not turn optional strong reads into
+            # an unbounded recursive hardlink chase.
+            if row[0] in seen or len(seen)>=len(self.files):
+                raise IOError('hardlink cycle while resolving verified VZIP source')
+            seen.add(row[0])
+            target=row[6][0]
+            if target not in self.by:raise IOError('missing hardlink owner for verified VZIP')
+            row=self.by[target]
+        storage=row[6]
+        if row[1]!=K_FILE or not storage or storage[0]!=S_VZIP:
+            raise ValueError('read_vzip_verified requires a VZIP regular file')
+        size=row[4]
+        if not isinstance(size,int) or size<0:raise IOError('invalid VZIP logical size')
+        if size>max_scan_bytes:raise IOError('VZIP verified-read scan budget exceeded')
+        recipe=self.recipes[storage[1]]
+        if recipe[4]!=size:raise IOError('VZIP recipe size mismatch')
+        expected=bytes(recipe[3])
+        if len(expected)!=32:raise IOError('invalid VZIP indexed SHA-256')
+        raw=self.read(row[0])
+        if len(raw)!=size or sha(raw)!=expected:
+            raise IOError('VZIP SHA-256 verification failure')
+        return raw
+
     def read_range(self,name,start,length):
         row=self.by[name];size=row[4];storage=row[6];end=start+length
         if row[1]==K_HARDLINK:return self.read_range(storage[0],start,length)
