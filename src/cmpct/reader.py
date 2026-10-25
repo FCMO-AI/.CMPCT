@@ -454,7 +454,7 @@ class CMPCT:
                 os.symlink(target,full)
                 if metadata:
                     try:os.utime(full,ns=(mt,mt),follow_symlinks=False)
-                    except OSError:pass
+                    except (OSError, NotImplementedError):pass
                 continue
             if storage and storage[0] in (S_CHUNKS,S_CDC):
                 self._extract_chunked_verified(row,full)
@@ -489,14 +489,14 @@ class CMPCT:
                     # existing destination had a different mode (or umask masked creation bits).
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
-                except OSError:pass
+                except (OSError, NotImplementedError):pass
         if metadata:
             self._restore_extra_metadata(clean,require_xattrs=require_xattrs)
             for full,mode,mt in sorted(dirs,key=lambda x:x[0].count(os.sep),reverse=True):
                 try:
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
-                except OSError:pass
+                except (OSError, NotImplementedError):pass
     def verify(self):
         n=0
         for row in self.files:
