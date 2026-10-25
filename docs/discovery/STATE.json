@@ -38,7 +38,7 @@
       "id": "builder-filesystem-custody-composition",
       "family": "filesystem-source-destination-safety",
       "question": "Can O84's now-proven O80×O81 fail-closed Builder union coexist with O75 atomic output #432, O78 behavior #435, O52 source-root custody #407/#434, and separately proven O63 VZIP buffer ownership, while keeping the original filesystem adversaries and same-source release-economics floor?",
-      "status": "EVIDENCE-ADVANCED",
+      "status": "READY",
       "evidence": "#442 O84 exact-head 7efcc51154b64fd6394ddffaab599760659f6c91 installed run 40198804050 SUCCESS on Ubuntu 39 PASS/7 skip, macOS 39/8, Windows 36/11; original failed Windows test identified Reader utime(follow_symlinks=False) and focused court preserves Windows byte/hardlink restoration with metadata=False, not metadata parity. O83 #441 final-head 34c379a5745a5f8ff297d3ba92581457b8c9f291 economic A/B: six hosted successful courts, 180 child observations, three same-tree cases identical archive bytes; observed small wall differences no speedup claim. O84 General Tests and effective official performance at 13:43 UTC still pending; inherited O47/O50/O57/O80 workflows fail source-blob pins on this composed Builder and do not prove their real tests regress."
     },
     {
