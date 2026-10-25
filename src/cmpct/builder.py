@@ -89,6 +89,9 @@ class Builder:
                     b=os.readlink(e.path).encode();ref=self.add_content(b,'.symlink')
                     self.files.append([rel,K_SYMLINK,mode,st.st_mtime_ns,len(b),sha(b),[S_BLOB,ref]]);continue
                 if stat.S_ISDIR(st.st_mode):
+                    # Directory ADS is invisible to scandir() and r24 has no slot
+                    # for its bytes. Admit empty enumeration, refuse named $DATA.
+                    if os.name == "nt":refuse_unsupported_named_streams(e.path,directory=True)
                     self.files.append([rel,K_DIR,mode,st.st_mtime_ns,0,b'',None]);walk(e.path,rel);continue
                 if not stat.S_ISREG(st.st_mode):
                     # r24 cannot encode FIFO, socket, or device entries. Skipping them
@@ -129,6 +132,9 @@ class Builder:
                 else:
                     ref=self.add_content(raw,ext);self.files.append([rel,K_FILE,mode,st.st_mtime_ns,len(raw),sha(raw),[S_BLOB,ref]])
 
+        # The selected root has no explicit K_DIR index row, but its NTFS
+        # named streams must not silently disappear from a successful archive.
+        if os.name == "nt":refuse_unsupported_named_streams(self.root,directory=True)
         walk(os.fspath(self.root))
 
         # Many nested archives are a special case where *not* parsing them can be superior. Their
