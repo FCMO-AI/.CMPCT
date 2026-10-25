@@ -318,5 +318,41 @@ class Builder:
         ib=msgpack.packb(index,use_bin_type=True);ic=zc(ib,12);ih=sha(ib);data=b''.join(records)
         header=HDR.pack(MAGIC,VERSION,0,len(ic),len(ib),len(data),ih)
         footer=FTR.pack(FMAGIC,0,1,0,0,len(ic),len(ib),0,ih)
-        out=Path(out);out.write_bytes(header+ic+data+ic+footer)
+        out=Path(out)
+        # Build the replacement beside its destination and publish it in one namespace operation.
+        # A failed/short write must not truncate a previously valid archive. This guarantees
+        # process-level failure atomicity, NOT power-loss durability (no fsync/dir-sync here).
+        payload=header+ic+data+ic+footer
+        stage=None
+        try:
+            for _ in range(3):
+                stage=out.parent/('.'+out.name+'.cmpct-stage-'+os.urandom(16).hex())
+                try:
+                    fd=os.open(stage,os.O_WRONLY|os.O_CREAT|os.O_EXCL|getattr(os,'O_BINARY',0),0o666)
+                    break
+                except FileExistsError:
+                    stage=None
+            else:
+                raise FileExistsError('cannot allocate unique CMPCT staging path')
+            try:
+                # Replacing an ordinary existing output must not silently widen/restrict its
+                # POSIX file mode; for a new output O_CREAT already honors the process umask.
+                try:
+                    previous=os.stat(out,follow_symlinks=False)
+                except FileNotFoundError:
+                    previous=None
+                if previous is not None and stat.S_ISREG(previous.st_mode) and hasattr(os,'fchmod'):
+                    os.fchmod(fd,stat.S_IMODE(previous.st_mode))
+                view=memoryview(payload)
+                while view:
+                    count=os.write(fd,view)
+                    if count<=0:raise IOError('short CMPCT archive staging write')
+                    view=view[count:]
+            finally:
+                os.close(fd)
+            os.replace(stage,out)
+        finally:
+            if stage is not None:
+                try:os.unlink(stage)
+                except FileNotFoundError:pass
         return {'bytes':out.stat().st_size,'logical_bytes':sum(x[4] for x in files if x[1]!=K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':len(data),'encode_workers':self.encode_workers,'reproducible':self.reproducible}
