@@ -1,4 +1,4 @@
-# ci-lane: deep
+# ci-lane: fast
 name: O126 A08 Temporal Window Scientific Court
 
 on:
@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: o126-a08-source-court
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   source-exact-oracle:
