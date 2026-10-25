@@ -108,3 +108,39 @@ jobs:
             o66-rollback.xml
           if-no-files-found: warn
           retention-days: 30
+
+  cross-host-source-identity:
+    name: O75 five-host prospective source fingerprint equality
+    needs: exact-installed-o63-historical-custody
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download each independently created exact-head receipt
+        uses: actions/download-artifact@v4
+        with:
+          pattern: o75-*
+          path: receipts
+      - name: Reject absent, unequal or incorrectly bound source identities
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          receipts = sorted(Path("receipts").glob("*/o75-candidate-identity.json"))
+          assert len(receipts) == 5, f"five platform/depth receipts required, got {receipts}"
+          fingerprints, counts = set(), set()
+          for path in receipts:
+              receipt = json.loads(path.read_text(encoding="utf-8"))
+              assert receipt["schema"] == "cmpct-v031-candidate-source-receipt-v1", path
+              assert receipt["source_sha"] == __import__("os").environ["EVIDENCE_HEAD"], path
+              assert receipt["proof_scope"] == "source-identity-only; no product/release/performance credit", path
+              assert len(receipt["fingerprint"]) == 64, path
+              assert receipt["files"] == len(receipt["paths"]) and receipt["files"] > 0, path
+              fingerprints.add(receipt["fingerprint"])
+              counts.add(receipt["files"])
+          assert len(fingerprints) == len(counts) == 1, (
+              f"cross-platform source fingerprint mismatch: {fingerprints}, counts={counts}"
+          )
+          print("O75_CROSS_HOST_SOURCE_IDENTITY_PASS", next(iter(fingerprints)), next(iter(counts)))
+          PY
