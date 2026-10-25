@@ -55,11 +55,28 @@ def v(number):
     result.append(number)
     return bytes(result)
 
+def parse_varints(raw):
+    result=[]; i=0
+    while i<len(raw):
+        value=0; shift=0
+        while True:
+            if i>=len(raw) or shift>=42: raise ValueError('malformed varint')
+            b=raw[i]; i+=1
+            value|=(b&127)<<shift
+            if not b&128: break
+            shift+=7
+        assert v(value)==raw[sum(len(v(x)) for x in result):i], 'noncanonical varint'
+        result.append(value)
+    return result
+
 def encoded(seq):
     raw=b''.join(v(i) for i in seq)
     packed=z19(raw)
     assert zd(packed,len(raw))==raw
-    return raw if len(raw)<=len(packed) else packed
+    chosen=raw if len(raw)<=len(packed) else packed
+    restored=chosen if chosen==raw else zd(chosen,len(raw))
+    assert parse_varints(restored)==list(seq)
+    return chosen
 
 def data(seed,family):
     r=random.Random(seed*773+sum(map(ord,family)))
@@ -128,6 +145,8 @@ def grammar_cost(roots,rules,nterms):
     table=b''.join(v(a)+v(b)+v(spans[nterms+j]) for j,(a,b) in enumerate(rules))
     packed=z19(table)
     assert zd(packed,len(table))==table
+    expected=[number for j,(a,b) in enumerate(rules) for number in (a,b,spans[nterms+j])]
+    assert parse_varints(table)==expected
     # Shared directory + codec + rule count + raw-or-zstd table; no free length.
     table_bytes=8+1+len(v(len(rules)))+min(len(table),len(packed))
     controls=sum(8+1+len(v(len(row)))+len(encoded(row)) for row in roots)
@@ -143,6 +162,12 @@ def grouped(chains,group_size):
         raw=b''.join(v(len(row))+b''.join(v(k) for k in row) for row in rows)
         compressed=z19(raw)
         assert zd(compressed,len(raw))==raw
+        actual=parse_varints(raw); cursor=0
+        for row in rows:
+            length=actual[cursor]; cursor+=1
+            assert length==len(row) and actual[cursor:cursor+length]==list(row)
+            cursor+=length
+        assert cursor==len(actual)
         # Frame locator, encoded+decoded lengths, codec, group count, bytes.
         total+=8+4+4+1+len(v(len(rows)))+min(len(raw),len(compressed))
         worst_uncompressed=max(worst_uncompressed,len(raw))
