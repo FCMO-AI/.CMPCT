@@ -1,0 +1,102 @@
+# ci-lane: fast
+# O57 candidate: narrow Win32 named-stream refusal, based on unchanged O50 floor.
+name: CMPCT v0.31 O57 Win32 ADS fail-closed product court
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o57-win32-named-stream-admission-20261025'
+  pull_request:
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/ntfs_streams.py'
+      - 'tests/test_v031_win32_ads_refusal_o57.py'
+      - '.github/workflows/v031-win32-ads-refusal-o57.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o57-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-admission:
+    name: O57 exact installed Builder + inherited O50 ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact O57 candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install CPython
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Prove product source and execute actual installed admission controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 17c96603e33b02b3f2f9e0079eec2b128f293be8 HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "7a13545c7dc22ea973f90930fae6cf053f13f1f2"
+          test "$(git hash-object src/cmpct/ntfs_streams.py)" = "23207ac06797fb21322cf327e97928fdbb5241c2"
+          test "$(git hash-object tests/test_v031_win32_ads_refusal_o57.py)" = "abd88c8c7394fac15d4d98a5f3cca0844bd8dff6"
+          test "$(git hash-object tests/test_v031_win32_builder_hardlink_o47.py)" = "6c00ae49eea075957453d6d7238d988add6eedee"
+          test "$(git hash-object tests/test_v031_special_entries_o48.py)" = "d4a22da7d634a5dd6a1e1fb132ed1ceae2249ab6"
+          test "$(git hash-object tests/test_v031_builder_composition_o50.py)" = "44f66dcf220231c1271d56bbff26da290d32d20c"
+          test "$(git hash-object tests/test_v031_builder_parent_parity_o50.py)" = "5b7e2bc50971ca5801038b3598d2e2af36235074"
+          git diff --exit-code 17c96603e33b02b3f2f9e0079eec2b128f293be8 HEAD -- src/cmpct/reader.py src/cmpct/transactions.py native benchmarks tools/check_performance_regression.py
+          echo "O57_HEAD=$(git rev-parse HEAD)"
+          echo "O57_BUILDER_BLOB=$(git hash-object src/cmpct/builder.py)"
+          echo "O57_NTFS_GUARD_BLOB=$(git hash-object src/cmpct/ntfs_streams.py)"
+          python -m pip install . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import cmpct.builder, cmpct.reader, cmpct.ntfs_streams
+          root=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip())
+          for module in (cmpct.builder,cmpct.reader,cmpct.ntfs_streams):
+              p=Path(module.__file__).resolve()
+              assert not p.is_relative_to(root), f"not truly installed: {p}"
+              print("O57_INSTALLED="+str(p))
+          PY
+          mkdir -p o57-isolated
+          cp tests/test_v031_win32_builder_hardlink_o47.py o57-isolated/
+          cp tests/test_v031_special_entries_o48.py o57-isolated/
+          cp tests/test_v031_builder_composition_o50.py o57-isolated/
+          cp tests/test_v031_builder_parent_parity_o50.py o57-isolated/
+          cp tests/test_v031_win32_ads_refusal_o57.py o57-isolated/
+          python -m pytest -vv o57-isolated/ --junitxml=o57-results.xml 2>&1 | tee o57-results.log
+          python - <<'PY'
+          import os, json
+          import xml.etree.ElementTree as ET
+          root=ET.parse('o57-results.xml').getroot()
+          suites=[root] if root.tag=='testsuite' else root.findall('./testsuite')
+          assert suites, root.tag
+          counts={k:sum(int(s.attrib.get(k,0)) for s in suites) for k in ('tests','failures','errors','skipped')}
+          print('O57_JUNIT='+json.dumps(counts,sort_keys=True))
+          assert counts['tests']==14, counts
+          assert counts['skipped']==(5 if os.name=='nt' else 2), counts
+          assert counts['errors']==counts['failures']==0, counts
+          print('O57_SUBSTANTIVE_PASS='+str(counts['tests']-counts['skipped']))
+          PY
+      - name: Preserve original exact-source JUnit/log evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o57-installed-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            o57-results.xml
+            o57-results.log
+          if-no-files-found: warn
+          retention-days: 30
