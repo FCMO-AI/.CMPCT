@@ -147,3 +147,43 @@ def test_source_admission_survives_delete_update_rename_and_physical_salvage(tmp
     }
     assert all(r["verification"] == "unverified"
                and r["generation_membership"] == "unknown" for r in later)
+
+
+def test_exact_immutable_parent_and_combined_writer_emit_identical_supported_archive_bytes(tmp_path):
+    """A/B executes #311's exact parent code, not a same-function monkeypatch."""
+    import subprocess
+    import types
+    import sys
+    from cmpct import transactions
+
+    archive = _archive(tmp_path)
+    frozen_base = "c1e75370281ca6b721ef10edf1ed15e6c5ef48f7"
+    historical_src = subprocess.check_output(
+        ["git", "show", frozen_base + ":src/cmpct/transactions.py"], text=True
+    )
+    # Compile the frozen historical Writer with real installed cmpct dependencies.
+    # Keep every #311 lock/salvage/Reader behavior, replacing only admission in O53.
+    module = types.ModuleType("cmpct._o53_exact_parent")
+    module.__file__ = "<git:" + frozen_base + ":src/cmpct/transactions.py>"
+    module.__package__ = "cmpct"
+    sys.modules[module.__name__] = module
+    try:
+        exec(compile(historical_src, module.__file__, "exec"), module.__dict__)
+        baseline = tmp_path / "original-writer.cmpct"
+        candidate = tmp_path / "descriptor-writer.cmpct"
+        original = archive.read_bytes()
+        baseline.write_bytes(original)
+        candidate.write_bytes(original)
+        source = tmp_path / "stable-update.bin"
+        content = bytes((i * 41 + 13) & 255 for i in range(21_073))
+        source.write_bytes(content)
+        module.append_update(baseline, "current.bin", source)
+        transactions.append_update(candidate, "current.bin", source)
+        assert baseline.read_bytes() == candidate.read_bytes(), (
+            "exact historical #311 vs O53 emitted different complete r24 bytes"
+        )
+        with CMPCT(candidate) as reader:
+            assert reader.read("current.bin") == content
+            reader.verify()
+    finally:
+        sys.modules.pop(module.__name__, None)
