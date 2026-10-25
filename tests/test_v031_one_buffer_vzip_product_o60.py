@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import struct
+import zlib
 from pathlib import Path
 import sys
 import zipfile
@@ -80,7 +82,34 @@ def test_stable_virtual_source_captured_once(tmp_path, monkeypatch, kind, extens
 def test_same_inode_after_capture_mutation_preserves_original_archive(tmp_path, monkeypatch, kind):
     original = zip_bytes(kind, b"A")
     substitute = zip_bytes(kind, b"B")
-    assert original != substitute and len(original) == len(substitute)
+    if kind == "mixed":
+        # DEFLATE stream length can legitimately differ for equally long A/B
+        # input, so fabricate a *valid same-length ZIP B* by mutating exactly
+        # one STORED byte and replacing its CRC in both directory and local
+        # records. Preserve all original other compressed streams unchanged.
+        modified = bytearray(original)
+        with zipfile.ZipFile(io.BytesIO(original)) as reference:
+            stored = next(i for i in reference.infolist()
+                          if i.compress_type == zipfile.ZIP_STORED)
+            assert reference.infolist()[0] is stored
+            assert not (stored.flag_bits & 0x08), "unexpected data descriptor"
+            directory = reference.start_dir
+            header = stored.header_offset
+            assert original[header:header + 4] == b"PK\\x03\\x04"
+            assert original[directory:directory + 4] == b"PK\\x01\\x02"
+            name_len, extra_len = struct.unpack_from("<HH", original, header + 26)
+            payload_offset = header + 30 + name_len + extra_len
+            assert modified[payload_offset] == ord("A")
+            modified[payload_offset] = ord("B")
+            new_crc = zlib.crc32(
+                modified[payload_offset:payload_offset + stored.file_size])
+            struct.pack_into("<I", modified, header + 14, new_crc)
+            struct.pack_into("<I", modified, directory + 16, new_crc)
+        substitute = bytes(modified)
+    assert original != substitute and len(original) == len(substitute), (
+        kind, len(original), len(substitute))
+    with zipfile.ZipFile(io.BytesIO(substitute)) as valid_changed_zip:
+        assert valid_changed_zip.testzip() is None
     tree = tmp_path / "stable"
     tree.mkdir()
     (tree / "nested.zip").write_bytes(original)
