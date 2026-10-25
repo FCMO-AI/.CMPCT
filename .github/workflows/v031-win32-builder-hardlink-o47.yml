@@ -36,6 +36,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -44,7 +45,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          test "$(git hash-object src/cmpct/builder.py)" = "21a9ec696df13961c25301654feb607a7e161a4c"
+          # Prove historical O50 ownership on the actual parent as well as
+          # this source-changing O60 descendant. The original tests remain intact.
+          test "$(git show 17c96603e33b02b3f2f9e0079eec2b128f293be8:src/cmpct/builder.py | git hash-object --stdin)" = "21a9ec696df13961c25301654feb607a7e161a4c"
+          test "$(git hash-object src/cmpct/builder.py)" = "bda9d7f8005e276ba891aac75ae50eabe67bd431"
           python -m pip install . pytest
           python - <<'PY'
           from pathlib import Path
