@@ -175,7 +175,11 @@ def one(seed,family):
     blocks,chains=dedup(members); nterms=len(blocks)
     # Same actual Zstd-19 physical blocks for all three navigation layouts.
     # Charge every terminal frame, SHA256 identity, extent and locator.
-    common=64+sum(4+32+4+len(z19(b)) for b in blocks)
+    common=64
+    for b in blocks:
+        packed=z19(b)
+        assert zd(packed,len(b))==b, 'terminal must round-trip through stored Zstd frame'
+        common+=4+32+4+len(packed)
     common+=sum(8+len(f'member{i:03d}'.encode())+32 for i in range(N_FILES))
     flat_total=common+flat_cost(chains)+1
     best=None
