@@ -1,0 +1,91 @@
+# ci-lane: fast
+# O68: only bounded, source-exact VZIP inflation economics; never a release gate.
+name: CMPCT v0.31 O68 VZIP Inflation Economics
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o68-vzip-inflation-economics-20261025'
+  pull_request:
+    paths:
+      - 'benchmarks/v031_o68_vzip_inflation_economics.py'
+      - '.github/workflows/v031-o68-vzip-inflation-economics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o68-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-economic-oracle:
+    name: O68 installed, bounded same-source A/B Ubuntu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O63_PARENT: 18e32cae012f5dca9fc47f10d194f8b81005c85c
+      CMPCT_O68_REPORT: o68-evidence/o68-raw.json
+    steps:
+      - name: Source-exact checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Preregistration and product-source custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O63_PARENT" HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = 382e60983bf1e8e7595ea7112f3a5553dc33dcc0
+          test "$(git hash-object src/cmpct/codec.py)" = dc3446b0eed82edfba9380e3885a20aa45577899
+          git diff --exit-code "$O63_PARENT" HEAD -- src native tests benchmarks/history
+          test -f docs/v031-research/2026-10-25-o68-vzip-inflation-economics-prereg.md
+          python -m py_compile benchmarks/v031_o68_vzip_inflation_economics.py
+      - name: Install the actual archived product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Execute bounded real-source virtual vs opaque oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o68-evidence
+          python benchmarks/v031_o68_vzip_inflation_economics.py 2>&1 | tee o68-evidence/experiment.log
+          python - <<'PY'
+          import json
+          p='o68-evidence/o68-raw.json'
+          z=json.load(open(p))
+          assert len(z['cases'])==3
+          assert [len(s['observations']) for s in z['cases']]==[6,6,6]
+          assert all(x['summary']['inflation_ratio']>50 for x in z['cases'])
+          for s in z['cases']:
+              assert all(x['source_sha256']==s['source_sha256'] for x in s['observations'])
+          print('O68_REAL_PRODUCT_OBSERVATIONS=18; no release credit')
+          PY
+      - name: Preserve exact result-bearing source identity
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o68-evidence
+          git rev-parse HEAD > o68-evidence/source.sha
+          git hash-object src/cmpct/builder.py > o68-evidence/builder.blob
+          git hash-object src/cmpct/codec.py > o68-evidence/codec.blob
+          git hash-object benchmarks/v031_o68_vzip_inflation_economics.py > o68-evidence/instrument.blob
+          git diff --stat "$O63_PARENT" HEAD > o68-evidence/diff-stat.txt
+      - name: Preserve positive, negative and incomplete evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o68-raw-${{ github.sha }}
+          path: o68-evidence/
+          if-no-files-found: error
