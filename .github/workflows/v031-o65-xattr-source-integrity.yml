@@ -28,7 +28,7 @@ jobs:
       EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       O65_PARENT: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
       O65_BUILDER_BLOB: 7f222458adc1c4aae65fa24650a8fc0c7b0c1b18
-      O65_TEST_BLOB: f29b6490fd526642f47906010c6d930c691407a6
+      O65_TEST_BLOB: a1fea48b62b53f417afa19fbbba805fee090736e
       O65_REFEREE_BLOB: e3437a1c1510721bb3e6d31b58117361a5d2b560
     steps:
       - name: Checkout exact candidate with original source
