@@ -59,7 +59,18 @@ jobs:
         shell: bash
         run: |
           mkdir -p o69-artifacts
-          python -m pytest -q tests/test_v031_o69_strict_xattr_restore.py --junitxml=o69-artifacts/junit.xml
+          # The broad tests/conftest.py imports historical experimental codecs and host libzstd.
+          # This installed-product court does not exercise those experiments: copy the exact
+          # testcase bytes into an isolated directory, preserving the original SHA-256.
+          cp tests/test_v031_o69_strict_xattr_restore.py o69-artifacts/test_v031_o69_strict_xattr_restore.py
+          python - <<'PY'
+          import hashlib, pathlib
+          a = pathlib.Path("tests/test_v031_o69_strict_xattr_restore.py").read_bytes()
+          b = pathlib.Path("o69-artifacts/test_v031_o69_strict_xattr_restore.py").read_bytes()
+          assert hashlib.sha256(a).digest() == hashlib.sha256(b).digest()
+          print("exact test SHA-256:", hashlib.sha256(a).hexdigest())
+          PY
+          python -m pytest -q o69-artifacts/test_v031_o69_strict_xattr_restore.py --junitxml=o69-artifacts/junit.xml
       - name: Independently audit executed JUnit counts
         shell: bash
         run: |
