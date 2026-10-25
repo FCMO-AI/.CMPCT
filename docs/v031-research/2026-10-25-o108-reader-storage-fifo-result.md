@@ -55,3 +55,20 @@ A single 3×4 instrument executing Builder-authentic representations on the same
 **Owner action** (PR #269, Issue #462): define and implement a storage-class-neutral fail-closed type policy for existing destination leaves, covering both direct `S_BLOB` and `S_SPARSE`, preserving normal files and intentional staged cases. Evaluate descriptor-bound and no-follow alternatives against TOCTOU, symlink, inode, hardlink, xattr, permission and parent-root constraints. The cheapest next decisive product court is original 12 O108 cases reused *unchanged* against the proposed Reader safety composition, with expected safe immediate refusal for nonregular leaves when stipulated by the new contract, rather than replacing a failing observation with a green timeout test. Match release-law full CI and official same-semantics ABBA before any promotion.
 
 **Disposition:** O108 scientific question decision-complete on Linux; distinct macOS/Windows platform verification remains unmeasured. No product credit, no merge, no release.
+
+## Independent cheap repair feasibility oracle — local Linux POSIX primitives, NOT Reader product evidence
+
+A separate **post-decision exploratory local microcontrol** exercised `os.open(O_WRONLY|O_NONBLOCK|O_NOFOLLOW|O_CLOEXEC)`, immediately `os.fstat` without truncation, on a disposable temporary directory on Linux. This is **not part of the preregistered O108 product court**, receives no positive product credit, and must not be passed off as a source-exact Builder/Reader repair.
+
+Observed exact results (the kernel errno is an observation, not a portable contractual guarantee):
+
+| Existing leaf | Open outcome |
+|---|---|
+| Regular | descriptor of regular inode, 0.013 ms |
+| FIFO without reader | `ENXIO`, 0.014 ms; **no blocking** |
+| Symlink to FIFO | `ELOOP`, 0.027 ms |
+| Symlink to regular | `ELOOP`, 0.003 ms |
+| Directory | `EISDIR`, 0.005 ms |
+| Absent leaf | `ENOENT`, 0.094 ms |
+
+On the same disposable regular inode, **after** `fstat` confirmed `S_ISREG`, the microcontrol `ftruncate(0)` followed by a write preserved (1) exact inode identity, (2) a hardlink alias that read the newly written bytes, and (3) an existing Linux `user.cmpct_o108_oracle=keep` extended attribute. These primitive observations suggest a potentially stronger bounded POSIX direct-output design than static `lstat` alone: nonblocking, no-follow `open` without truncate → `fstat` accepted regular descriptor → only then truncate/write through that descriptor. The absent-leaf case requires a separately designed `O_CREAT|O_EXCL` admission contract. This does **not** prove safe directory ancestry, descriptor stability against content mutation, permission consistency, crash atomicity, portable Windows behavior or fully inherited Reader semantics. In particular `O_NOFOLLOW` deliberately refuses a symlink-to-regular file, which could change the behavior of the unmodified Reader but is consistent with a strict destination-safety policy. Owner #269 must choose semantics and run a genuine source-bound product court before accepting any approach.
