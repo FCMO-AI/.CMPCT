@@ -10,6 +10,7 @@ import hashlib
 import os
 from pathlib import Path
 import subprocess
+import sys
 import types
 import zipfile
 
@@ -36,6 +37,9 @@ def _exact_parent_builder():
     mod = types.ModuleType("cmpct._o50_parent_builder")
     mod.__package__ = "cmpct"
     mod.__file__ = str(root / "src/cmpct/builder.py")
+    # CPython's dataclass resolution of postponed annotations consults
+    # sys.modules[cls.__module__]; an unregistered isolated namespace is invalid.
+    sys.modules[mod.__name__] = mod
     exec(compile(src, f"git:{_PARENT_SHA}:src/cmpct/builder.py", "exec"), mod.__dict__)
     return mod.Builder
 
