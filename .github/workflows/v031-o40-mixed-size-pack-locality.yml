@@ -64,7 +64,7 @@ jobs:
       - name: Install genuine public CMPCT package
         run: |
           set -euo pipefail
-          python -m pip install -e .
+          python -m pip install -e '.[test]'
           python -m py_compile tools/v031_o40_selected_member_locality.py
       - name: Four authentic r24 shipping/locality controls
         shell: bash
