@@ -1,0 +1,78 @@
+# O73: fully charged scientific oracle only. Never a release/product gate.
+name: CMPCT v0.31 O73 gap-separated ZIP physical owners
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-o70-split-owner-oracle-o73-20261025'
+  pull_request:
+    paths:
+      - 'tests/test_v031_zip_gap_owners_o73.py'
+      - '.github/workflows/v031-zip-gap-owners-o73.yml'
+      - 'docs/v031-research/2026-10-25-o73-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o73-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  charged-split-owner-oracle:
+    name: O73 real installed CMPCT / shipping vs noncohort vs split owner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify real source, installed product, and evaluate structural hold-outs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          python -m py_compile tests/test_v031_zip_gap_owners_o73.py
+          python -m pip install . pytest
+          python - <<'PY'
+          import cmpct.builder as b
+          from pathlib import Path
+          import subprocess
+          repo=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip())
+          source=Path(b.__file__).resolve()
+          assert not source.is_relative_to(repo), "editable product is not installed scientific evidence"
+          print("O73_INSTALLED_BUILDER="+str(source))
+          PY
+          mkdir -p o73-isolated
+          cp tests/test_v031_zip_gap_owners_o73.py o73-isolated/test_v031_zip_gap_owners_o73.py
+          python -m pytest -s -v o73-isolated/test_v031_zip_gap_owners_o73.py --junitxml=o73-junit.xml 2>&1 | tee o73-log.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("o73-evidence.json")
+          data=json.loads(p.read_text())
+          assert set(data["cases"])=={"six_large_two_small","five_large_three_small","seven_large_one_small","homogeneous_eight_large"}
+          assert all(len(c["raw"])==6 for c in data["cases"].values())
+          assert set(data["source_shas"])=={"shipping_source_sha256","individual_source_sha256","split_source_sha256"}
+          assert data["status"]=="ORACLE_ONLY_NO_PRODUCT_CREDIT"
+          print("O73_AUDIT_CARDINALITY_PASS")
+          print("O73_FINAL_RESULT="+data["primary_decision"])
+          PY
+      - name: Preserve original raw and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o73-source-bound-${{ env.EVIDENCE_HEAD }}
+          path: |
+            o73-log.txt
+            o73-junit.xml
+            o73-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
