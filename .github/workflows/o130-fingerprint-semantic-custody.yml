@@ -1,3 +1,4 @@
+# ci-lane: fast
 # Scientific/custody lane only; pass means reproducing a scoped negative.
 name: O130 prospective fingerprint semantic custody
 
@@ -7,6 +8,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-o130-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   exact-git-custody:
