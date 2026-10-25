@@ -48,11 +48,12 @@ jobs:
           git merge-base --is-ancestor 00c7367b5d90e1349e31098a9262ebadd059b2a8 HEAD
           test "$(git rev-parse HEAD:src/cmpct/path_policy.py)" = 91fc335eea8fb18c3899511f416c8abe96c48f80
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e6ac7fb8e677d5a1bdac4bab9663921f3e20df5c
-          python -m py_compile src/cmpct/reader.py src/cmpct/path_policy.py
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Check Python syntax after setup
+        run: python -m py_compile src/cmpct/reader.py src/cmpct/path_policy.py
       - name: Install real CMPCT and pytest
         run: python -m pip install . pytest
       - name: Prove imported original test Git identities
