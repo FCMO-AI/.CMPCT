@@ -1,0 +1,119 @@
+# ci-lane: fast
+# O101: independent adverse *same-inode* parent reparent scientific court on authentic O99 Builder.
+name: CMPCT v0.31 O101 Same-inode parent location court
+on:
+  pull_request:
+    paths:
+      - 'tests/test_v031_o101_same_inode_parent_reparent.py'
+      - 'docs/v031-research/2026-10-25-o101-same-inode-parent-reparent-prereg.md'
+      - '.github/workflows/v031-o101-same-inode-parent-reparent.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o101-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-source-exact-ancestor-court:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O101_RESULTS_DIR: o101-evidence
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Exact-head provenance and independent installed CMPCT
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 2fbdba24d0dfb29231c3710eb9b272a2aea89b9b HEAD
+          git merge-base --is-ancestor 81373baf91702fef111ecbfbc522cde470f18c3a HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "7400d0b0c2f8bf664e7022ae499cd0ab07b18968"
+          git diff --exit-code 2fbdba24d0dfb29231c3710eb9b272a2aea89b9b HEAD -- src/cmpct/ src/native/ native/ docs/FORMAT.md tests/test_v031_o99_builder_output_parent_bound.py
+          mkdir -p o101-isolated o101-evidence
+          git rev-parse HEAD > o101-evidence/head.sha
+          git hash-object src/cmpct/builder.py > o101-evidence/builder.blob
+          git hash-object tests/test_v031_o101_same_inode_parent_reparent.py > o101-evidence/instrument.blob
+          python -m pip install --disable-pip-version-check . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.builder,cmpct.reader
+          import subprocess,hashlib
+          root=Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip()).resolve()
+          for mod in (cmpct.builder,cmpct.reader):
+              p=Path(mod.__file__).resolve()
+              assert not p.is_relative_to(root),("not truly installed",p)
+          raw=Path(cmpct.builder.__file__).read_bytes()
+          canonical=raw.replace(b"\r\n",b"\n")
+          blob=hashlib.sha1(b"blob "+str(len(canonical)).encode()+b"\0"+canonical).hexdigest()
+          assert blob=="7400d0b0c2f8bf664e7022ae499cd0ab07b18968",("wrong installed Builder",blob)
+          print("O101_INSTALLED_ORIGINAL_O99="+blob,flush=True)
+          PY
+      - name: Execute inherited O99 plus independently preregistered O101 court
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_v031_o99_builder_output_parent_bound.py o101-isolated/
+          cp tests/test_v031_o101_same_inode_parent_reparent.py o101-isolated/
+          python -m pytest -vv -s o101-isolated/ --junitxml=o101-evidence/junit.xml 2>&1 | tee o101-evidence/court.log
+      - name: Fail closed on missing observations, skips and source provenance
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET,json,sys
+          cases=list(ET.parse("o101-evidence/junit.xml").getroot().iter("testcase"))
+          result={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
+          result["total"]=len(cases)
+          result["passed"]=result["total"]-sum(result[k] for k in ("failure","error","skipped"))
+          assert result["total"]==8,result
+          assert result["skipped"]==(0 if sys.platform.startswith("linux") else 1),result
+          assert result["error"]==result["failure"]==0,result
+          log=Path("o101-evidence/court.log").read_text()
+          for marker in ("O101_STABLE_EXTERNAL=PASS",
+                         "O101_DIFFERENT_INODE_REFUSED=PASS",
+                         "O101_SAME_INODE_REPARENT_INTO_SOURCE=PASS",
+                         "O99_STABLE_REGULAR=PASS",
+                         "O99_POSTSCAN_PARENT_SOURCE_REFUSED=PASS",
+                         "O99_POSTSCAN_PARENT_OTHER_EXTERNAL_REFUSED=PASS"):
+              assert marker in log,("missing genuine observed marker",marker)
+          hostile=json.loads(Path("o101-evidence/same_inode_reparent_into_source.json").read_text())
+          assert hostile["same_parent_inode"] is True
+          assert hostile["postscan_parent_inside_source"] is True
+          assert hostile["source_original_sha256"]==hostile["source_after_sha256"]
+          assert hostile["logical_files_in_archive"]==1
+          assert hostile["reader_verify"]=="PASS"
+          assert hostile["verdict"]=="ACCEPTED_IN_SOURCE_DESPITE_ORIGINAL_EXTERNAL_ADMISSION"
+          Path("o101-evidence/audit.json").write_text(json.dumps({
+              "head":Path("o101-evidence/head.sha").read_text().strip(),
+              "builder_git_blob":Path("o101-evidence/builder.blob").read_text().strip(),
+              "instrument_git_blob":Path("o101-evidence/instrument.blob").read_text().strip(),
+              "junit":result,
+              "scientific_scope":"PASS means SAME-INODE SOURCE-TREE PUBLICATION DEFECT reproduced, not secure product",
+              "release": "NO PRODUCT OR RELEASE CREDIT"
+          },sort_keys=True,indent=2)+"\n")
+          print("O101_SOURCE_BOUND_SCIENTIFIC_AUDIT=PASS",flush=True)
+          PY
+      - name: Preserve raw results, including errors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o101-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o101-evidence/
+          if-no-files-found: warn
+          retention-days: 30
