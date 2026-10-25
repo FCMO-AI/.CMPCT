@@ -43,6 +43,18 @@ I independent: respectively 266,112 / 266,112 / 792,352 / 266,112 B. All four fa
 
 **Secondary H2 locality: CONDITIONAL / UNPROMOTED.** In crossed-choice F occupies 10,626 B versus G 10,848 B and R 58,912 B, with modeled single-member decode of 7,208 logical bytes versus G 266,240 and R 8,192; S remains smaller at 9,998 B but needs a 262,144-byte solid logical decode. Held-out likewise has F 21,070 B below G 21,668, but above S 20,055. This suggests one local size-versus-selected-work Pareto point, **not** a universal compression gain or genuine measured selective latency/I/O advantage. Streaming Zstd decode and actual physical read amplification have not been measured; the model even grants gifted factor discovery.
 
+### Countercheck: nondominated two-axis oracle frontier
+An additional independent enumeration on the **unchanged raw results**, with objectives (fully charged stored bytes, estimated complete logical bytes decoded for one selected member), eliminates dominated variants without re-fitting any experiment:
+
+| Family | Nondominated among the five existing models | Key eliminated controls |
+|---|---|---|
+| Crossed | S, F, I | S and F each dominate grouped XOR G; F dominates individual-root residual R |
+| Correlated | S, F, I | S dominates G; F dominates R |
+| Held-out | S, F, I | S and F dominate G; F dominates R |
+| Hostile noise | S, I | **F is dominated by both I and R**; R is itself dominated by I |
+
+This is a **post-result analytical comparison of frozen observations**, not a new preregistered benchmark and not a physical selective-read measurement. Crucially, it further narrows the locality seed: F survives a two-axis *modeled* Pareto screen on the three structured families but is **strictly dominated in the hostile random family**. Any generic admission would therefore have to reject that family without costly unnecessary factor search; this is not yet demonstrated.
+
 ## Strongest negative, contradictions and validity boundary
 - The supposedly favorable crossed-choice corpus did NOT produce a storage win over S. This is more decision-changing than winning against the weaker independent or grouped-residual controls.
 - The correlated-control F still pays all unused independent factor alternatives; all four case outputs are preserved unchanged.
