@@ -1,0 +1,95 @@
+# ci-lane: fast
+# O63: exact-source one-buffer VZIP × transactional failed-recipe rollback.
+name: CMPCT v0.31 O63 One-Buffer VZIP Rollback Union
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-o60-vzip-fallback-transaction-union-o63-20261025'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o63-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-rollback-and-inherited-o60:
+    name: O63 actual installed ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      EXACT_HEAD: ${{ github.sha }}
+      O60_PARENT: c88a6bc29b9ec8738e23aab788b7c09ab0390e79
+    steps:
+      - name: Exact branch-source checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check source, baseline, immutable scientific controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O60_PARENT" HEAD
+          test "$(git show "$O60_PARENT:src/cmpct/builder.py" | git hash-object --stdin)" = bda9d7f8005e276ba891aac75ae50eabe67bd431
+          test "$(git hash-object src/cmpct/codec.py)" = dc3446b0eed82edfba9380e3885a20aa45577899
+          test "$(git hash-object tests/test_v031_one_buffer_vzip_product_o60.py)" = 95740053ac9a3dd3335c10b63362eb0484722382
+          git diff --exit-code "$O60_PARENT" HEAD -- benchmarks native src/cmpct/codec.py tools/check_performance_regression.py
+          test -f docs/v031-research/2026-10-25-o63-vzip-onebuffer-rollback-prereg.md
+      - name: Install actual CMPCT wheel and focused test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install . pytest
+      - name: Isolate original O60 and O63 tests from inherited experimental conftest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o63-court o63-evidence
+          cp tests/test_v031_one_buffer_vzip_product_o60.py o63-court/test_o60.py
+          cp tests/test_v031_o63_vzip_rollback_union.py o63-court/test_o63.py
+          python - <<'PY'
+          import cmpct.builder, cmpct.codec, cmpct.reader, subprocess
+          from pathlib import Path
+          root=Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip())
+          for mod in (cmpct.builder,cmpct.codec,cmpct.reader):
+              actual=Path(mod.__file__).resolve()
+              assert not actual.is_relative_to(root), ("editable/source import",actual)
+              print("O63_INSTALLED",mod.__name__,actual)
+          PY
+      - name: Run unchanged O60 plus new O63 hostile product court
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -vv -s o63-court/test_o60.py o63-court/test_o63.py --junitxml=o63-evidence/junit.xml 2>&1 | tee o63-evidence/pytest.log
+      - name: Capture exact provenance and failure artifacts
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o63-evidence
+          git rev-parse HEAD > o63-evidence/source.sha
+          git hash-object src/cmpct/builder.py > o63-evidence/builder.blob
+          git hash-object src/cmpct/codec.py > o63-evidence/codec.blob
+          git hash-object tests/test_v031_o63_vzip_rollback_union.py > o63-evidence/o63-test.blob
+          git hash-object tests/test_v031_one_buffer_vzip_product_o60.py > o63-evidence/o60-test.blob
+          git diff "$O60_PARENT" HEAD --stat > o63-evidence/diff-stat.txt
+      - name: Upload result-bearing evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o63-${{ matrix.os }}-${{ github.sha }}
+          path: o63-evidence/
+          if-no-files-found: error
