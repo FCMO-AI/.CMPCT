@@ -71,33 +71,31 @@ def main():
             "passed": True,
         })
 
-        if hasattr(os, "listxattr") and hasattr(os, "getxattr"):
-            def enumerated(_path, *, follow_symlinks=False):
-                return ["user.cmpct_o65"]
+        # Inject the same OS API on every host, even where Python lacks the
+        # native interface (macOS/Windows), to prove the original-source branch.
+        def enumerated(_path, *, follow_symlinks=False):
+            return ["user.cmpct_o65"]
 
-            def cannot_read(*_args, **_kw):
-                raise PermissionError(13, "injected observed xattr denial")
+        def cannot_read(*_args, **_kw):
+            raise PermissionError(13, "injected observed xattr denial")
 
-            with patch.object(os, "listxattr", enumerated), patch.object(os, "getxattr", cannot_read):
-                before = old(root, workers=1)
-                before.scan()
-                assert before.meta_by_rel["member.bin"][2] == {}
-                try:
-                    candidate.Builder(root, workers=1).scan()
-                except OSError as exc:
-                    assert "refusing lossy archive" in str(exc), str(exc)
-                else:
-                    raise AssertionError("candidate silently omitted observed unreadable xattr")
-                report["case_results"].append({
-                    "case": "original_builder_incorrect_success_vs_candidate_refusal",
-                    "passed": True,
-                    "historical_silent_loss": True,
-                    "candidate_failure_closed": True,
-                })
-        else:
+        with patch.object(os, "listxattr", enumerated, create=True), patch.object(
+            os, "getxattr", cannot_read, create=True
+        ):
+            before = old(root, workers=1)
+            before.scan()
+            assert before.meta_by_rel["member.bin"][2] == {}
+            try:
+                candidate.Builder(root, workers=1).scan()
+            except OSError as exc:
+                assert "refusing lossy archive" in str(exc), str(exc)
+            else:
+                raise AssertionError("candidate silently omitted observed unreadable xattr")
             report["case_results"].append({
                 "case": "original_builder_incorrect_success_vs_candidate_refusal",
-                "skipped": True, "reason": "OS has no POSIX xattr APIs",
+                "passed": True,
+                "historical_silent_loss": True,
+                "candidate_failure_closed": True,
             })
     print("O65_ORIGINAL_SOURCE_REFEREE", json.dumps(report, sort_keys=True))
     return 0
