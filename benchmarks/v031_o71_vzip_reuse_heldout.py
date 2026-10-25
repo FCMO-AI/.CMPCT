@@ -56,9 +56,9 @@ def payload(family: str, index: int, ownership: str) -> bytes:
         r = random.Random(7100 + idx)
         # O71b preregistered causal contrast: same entropy class and file sizes,
         # but distinct long-range repeated patterns and distinct small random tails.
-        pattern = (f"tenant=cohort-{idx}; event=complete; status=ok\\n".encode()
+        pattern = (f"tenant=cohort-{idx}; event=complete; status=ok\n".encode()
                    if ownership == "independent" else
-                   b"tenant=neutral; event=complete; status=ok\\n")
+                   b"tenant=neutral; event=complete; status=ok\n")
         prefix = (pattern * 30000)[: MIB - 16384]
         return prefix.ljust(MIB - 16384, b"X") + r.randbytes(16384)
     if family == "random":
