@@ -12,6 +12,7 @@ import msgpack
 from .codec import *
 from .codec import _audio_modules, _compressed_payload, _hash_sparse, _sparse_data_extents, _wav_parts
 from ._ordered_pull import ordered_worker_pull
+from .ntfs_streams import refuse_unsupported_named_streams
 
 @dataclass
 class Candidate:
@@ -102,6 +103,9 @@ class Builder:
                                 if os.name == 'nt' else st)
                 if not stat.S_ISREG(ownership_st.st_mode):
                     raise OSError(f'file type changed during archive scan: {rel}')
+                # NTFS named $DATA streams are not scandir entries. r24 cannot
+                # encode them: refuse a falsely complete archive before reading.
+                if os.name == 'nt':refuse_unsupported_named_streams(e.path)
                 if ownership_st.st_nlink>1:
                     ik=(ownership_st.st_dev,ownership_st.st_ino)
                     if ik in self.inode_first:
