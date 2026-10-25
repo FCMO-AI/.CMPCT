@@ -124,3 +124,19 @@ def test_o90_dangling_symlink_rejected(tmp_path):
     out.symlink_to(target)
     reject(source,out,"archive output must not be a dangling symlink")
     assert out.is_symlink() and not target.exists()
+
+
+@POSIX
+def test_o90_bound_unix_socket_is_rejected_without_block(tmp_path):
+    import socket
+    import tempfile
+    source,data=source_tree(tmp_path)
+    # Darwin AF_UNIX path length is bounded; use a short temporary output path.
+    with tempfile.TemporaryDirectory(prefix="o90-sock-",dir="/tmp") as d:
+        out=Path(d)/"s"
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as sock:
+            sock.bind(str(out))
+            assert stat.S_ISSOCK(os.stat(out).st_mode)
+            reject(source,out,"archive output must be a regular file")
+            assert stat.S_ISSOCK(os.stat(out).st_mode)
+            assert (source/"data.bin").read_bytes()==data
