@@ -53,7 +53,13 @@ def worker(mode: str, path: Path, replacement: Path | None) -> int:
         if mode == "truncate":
             # Mutate the exact mapped inode after index+mapping were opened,
             # not an alternative pathname which might point to another inode.
-            os.ftruncate(reader.f.fileno(), 0)
+            # The Reader deliberately opens its descriptor read-only.  A separate,
+            # independent writable descriptor is the authentic concurrent actor.
+            # Both descriptors must refer to the same physical object before truncation.
+            with open(path, "r+b", buffering=0) as writer:
+                actor = os.fstat(writer.fileno())
+                assert (before.st_dev, before.st_ino) == (actor.st_dev, actor.st_ino)
+                os.ftruncate(writer.fileno(), 0)
             after = os.fstat(reader.f.fileno())
             assert (before.st_dev, before.st_ino) == (after.st_dev, after.st_ino)
             print(json.dumps({"phase": "SAME_INODE_TRUNCATED", "size": after.st_size}),
