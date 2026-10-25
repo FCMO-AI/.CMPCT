@@ -135,3 +135,47 @@ else:
                         check=False, capture_output=True, text=True, timeout=5)
     assert cp.returncode == 0, (cp.stdout, cp.stderr)
     _assert_unchanged(archive, before)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="descriptor/path replacement metadata custody POSIX")
+def test_source_path_switched_after_open_uses_opened_inode_metadata(tmp_path):
+    archive = _archive(tmp_path)
+    source = tmp_path / "replace-me.bin"
+    other = tmp_path / "attacker-new-path.bin"
+    original_bytes = b"fd-original-contents" * 43
+    other_bytes = b"wrong-replacement-contents" * 41
+    source.write_bytes(original_bytes)
+    other.write_bytes(other_bytes)
+    os.chmod(source, 0o640)
+    os.chmod(other, 0o600)
+    before = source.stat()
+    child = r"""
+import os, sys
+from pathlib import Path
+import cmpct.transactions as transactions
+archive=Path(sys.argv[1]); source=Path(sys.argv[2]); other=Path(sys.argv[3])
+moved=source.with_suffix(".original")
+actual_open=transactions.os.open
+switched=[False]
+def after_open(path,flags,*args,**kwargs):
+    fd=actual_open(path,flags,*args,**kwargs)
+    if os.fspath(path)==os.fspath(source) and not switched[0]:
+        switched[0]=True
+        os.replace(source,moved)
+        os.replace(other,source)
+    return fd
+transactions.os.open=after_open
+transactions.append_update(archive,"initial.bin",source)
+assert switched[0], "test did not pivot after descriptor acquisition"
+"""
+    cp = subprocess.run([sys.executable, "-c", child,
+                         str(archive), str(source), str(other)],
+                        check=False, capture_output=True, text=True, timeout=5)
+    assert cp.returncode == 0, (cp.stdout, cp.stderr)
+    assert source.read_bytes() == other_bytes
+    with CMPCT(archive) as reader:
+        assert reader.read("initial.bin") == original_bytes
+        row = reader.by["initial.bin"]
+        assert row[2] == (before.st_mode & 0o7777)
+        assert row[3] == before.st_mtime_ns
+        assert reader.verify() >= 1
