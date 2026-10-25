@@ -358,13 +358,15 @@ class CMPCT:
                 try:os.unlink(tmp)
                 except FileNotFoundError:pass
 
-    def _restore_extra_metadata(self,clean):
+    def _restore_extra_metadata(self,clean, *, require_xattrs=False):
         """Restore sparse ownership overrides and xattrs after file materialization.
 
         Footnote: chown is attempted only when permitted; failing to own a file should not make an
         otherwise valid archive impossible to extract as an unprivileged user. Xattr failures are also
         non-fatal because namespace support differs across filesystems. The metadata remains preserved
-        in the archive even when the destination cannot represent it.
+        in the archive even when the destination cannot represent it. Callers may explicitly request
+        fail-closed xattr restoration; this does not make ownership/timestamp recovery strict or
+        roll back a tree after a late filesystem error.
         """
         common=tuple(self.fsmeta.get('owner',(0,0)));over={i:(u,g) for i,u,g in self.fsmeta.get('owner_overrides',[])}
         xam={i:xs for i,xs in self.fsmeta.get('xattrs',[])}
@@ -373,12 +375,20 @@ class CMPCT:
             if hasattr(os,'chown') and (uid or gid):
                 try:os.chown(full,uid,gid,follow_symlinks=False)
                 except (OSError,PermissionError):pass
-            if i in xam and hasattr(os,'setxattr'):
+            if i in xam:
+                if not hasattr(os,'setxattr'):
+                    if require_xattrs:raise IOError(f'xattr restoration unsupported for {row[0]!r}')
+                    continue
                 for name,value in xam[i]:
                     try:os.setxattr(full,name,value,follow_symlinks=False)
-                    except OSError:pass
+                    except OSError as exc:
+                        if require_xattrs:
+                            raise IOError(f'xattr restoration failed for {row[0]!r}, {name!r}: {exc}') from exc
+                        # Historical portable mode retains metadata in the archive even if the
+                        # extraction target cannot represent it.
+                        pass
 
-    def extractall(self,dest:Path,metadata=True,max_bytes:int|None=None,safe_symlinks=True):
+    def extractall(self,dest:Path,metadata=True,max_bytes:int|None=None,safe_symlinks=True, *, require_xattrs=False):
         """Extract the logical tree with a low-syscall fast path.
 
         Footnote: v0.14 called ``mkdir(..., exist_ok=True)`` for nearly every member and built
@@ -387,6 +397,13 @@ class CMPCT:
         directory tree once, then writes members using plain OS paths. This changes no archive
         semantics; it only removes Python/filesystem bookkeeping from the hot loop.
         """
+        # Explicit metadata fidelity must not silently degrade to the portable default. Check
+        # contradictions and a missing host API before creating the destination; per-path errors
+        # can still occur later and do not imply transactional whole-tree publication.
+        if require_xattrs:
+            if not metadata:raise ValueError('require_xattrs=True requires metadata=True')
+            if self.fsmeta.get('xattrs') and not hasattr(os,'setxattr'):
+                raise IOError('xattr restoration unsupported by destination host')
         dest=Path(dest);dest.mkdir(parents=True,exist_ok=True);dest_s=os.fspath(dest)
         total=sum(x[4] for x in self.files if x[1]!=K_DIR)
         if max_bytes is not None and total>max_bytes:raise IOError(f'archive expands to {total} bytes, above limit {max_bytes}')
@@ -474,7 +491,7 @@ class CMPCT:
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
                 except OSError:pass
         if metadata:
-            self._restore_extra_metadata(clean)
+            self._restore_extra_metadata(clean,require_xattrs=require_xattrs)
             for full,mode,mt in sorted(dirs,key=lambda x:x[0].count(os.sep),reverse=True):
                 try:
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
