@@ -112,6 +112,16 @@ jobs:
             --candidate-source "$GITHUB_WORKSPACE/src" \
             --out "$GITHUB_WORKSPACE/o38-evidence" --reps 8 2>&1 | tee o38-evidence/economics.log
           exit "${PIPESTATUS[0]}"
+      - name: O41 fail-closed actual O31/O38 source, native and corpus identity witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/v031_o41_o38_source_identity_witness.py \
+            --raw o38-evidence/o33-raw.json \
+            --base-source "$RUNNER_TEMP/o38-owner/src" \
+            --candidate-source "$GITHUB_WORKSPACE/src" \
+            --evidence-head "$EVIDENCE_HEAD" \
+            --out o38-evidence/o41-actual-source-witness.json
       - name: Independent prospective product economics decision
         shell: bash
         run: |
