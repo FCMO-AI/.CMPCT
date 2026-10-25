@@ -20,6 +20,7 @@ class Candidate:
 class Builder:
     def __init__(self,root:Path, deflate_reuse_min:int|None=None, *, workers:int|None=None, reproducible:bool=False, reproducible_epoch_ns:int|None=None):
         self.root=Path(root);self.cands:{}={};self.files=[];self.recipes=[];self.dictionary=b'';self.dict_hash=None;self.canonical_deflate={};self.secondary_stream_hashes=set();self.inode_first={};self.meta_by_rel={}
+        self._protected_output_inode=None
         # Exact Deflate streams below this size are regenerated from raw data + a one-byte zlib level.
         # 0 reproduces v0.17's maximum-speed policy; a huge value is the compact policy.
         self.deflate_reuse_min=int(os.environ.get('CMPCT_DEFLATE_REUSE_MIN','65536')) if deflate_reuse_min is None else int(deflate_reuse_min)
@@ -83,7 +84,14 @@ class Builder:
             with os.scandir(absdir) as it: entries=sorted(it,key=lambda e:e.name)
             for e in entries:
                 rel=f'{prefix}/{e.name}' if prefix else e.name
-                st=e.stat(follow_symlinks=False);mode=stat.S_IMODE(st.st_mode);self._capture_fs_meta(e.path,rel,st)
+                st=e.stat(follow_symlinks=False)
+                # An external output can be hardlinked to a source member. Publishing to
+                # that name would overwrite the member's real inode on a successful build.
+                if (self._protected_output_inode is not None and
+                        stat.S_ISREG(st.st_mode) and
+                        (st.st_dev,st.st_ino)==self._protected_output_inode):
+                    raise ValueError(f'archive output is a hardlink to source member: {rel!r}')
+                mode=stat.S_IMODE(st.st_mode);self._capture_fs_meta(e.path,rel,st)
                 if stat.S_ISLNK(st.st_mode):
                     b=os.readlink(e.path).encode();ref=self.add_content(b,'.symlink')
                     self.files.append([rel,K_SYMLINK,mode,st.st_mtime_ns,len(b),sha(b),[S_BLOB,ref]]);continue
@@ -261,6 +269,24 @@ class Builder:
         if best and best[0]+16 < len(raw):return best[1],best[2],best[3]
         return CODEC_RAW,raw,b''
     def build(self,out:Path):
+        # An output inside the walked root is also an input on the next invocation.
+        # Fail closed instead of silently excluding a source file or recursively
+        # archiving a previous output. realpath covers existing symlink parents.
+        root_path=os.path.realpath(os.fspath(self.root))
+        output_path=os.path.realpath(os.fspath(out))
+        try:
+            if os.path.commonpath([root_path,output_path])==root_path:
+                raise ValueError('archive output must be outside the source root')
+        except ValueError as exc:
+            # Windows permits different volumes; commonpath cannot compare those.
+            if 'archive output must be outside' in str(exc):
+                raise
+        try:
+            out_stat=os.stat(out)
+        except FileNotFoundError:
+            self._protected_output_inode=None
+        else:
+            self._protected_output_inode=(out_stat.st_dev,out_stat.st_ino)
         self.scan();self._build_micro_packs();self._prepare_deflate_reuse();self._train_dictionary()
         # Candidate compression is parallel but materialization is not. ``Executor.map`` yields results
         # in the exact sorted-hash input order, so worker scheduling cannot perturb blob ids, offsets or
