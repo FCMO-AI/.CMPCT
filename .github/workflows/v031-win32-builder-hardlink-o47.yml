@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          test "$(git hash-object src/cmpct/builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
+          test "$(git hash-object src/cmpct/builder.py)" = "21a9ec696df13961c25301654feb607a7e161a4c"
           python -m pip install . pytest
           python - <<'PY'
           from pathlib import Path
