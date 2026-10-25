@@ -1,0 +1,112 @@
+# ci-lane: fast
+# O118: product-fix scientific court; two OS, exact inherited source, source-inode custody.
+name: CMPCT v0.31 O118 Reader self-archive alias court
+
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tools/research/o118_reader_source_alias_court.py'
+      - '.github/workflows/v031-o118-reader-self-source.yml'
+      - 'docs/v031-research/2026-10-25-o118-reader-source-alias-prereg.md'
+      - 'docs/v031-research/2026-10-25-o118-reader-source-alias-result.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o118-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-inode-court:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind original/candidate sources and install independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o118-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = "729ddc263f8d2d5ce2bbab7162461d19b0b2768c"
+          git worktree add --detach "$RUNNER_TEMP/o118-base" 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
+          test "$(git -C "$RUNNER_TEMP/o118-base" hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          python -m pip install --disable-pip-version-check .
+          python -m pip install --disable-pip-version-check --no-deps --target "$RUNNER_TEMP/o118-baseline-installed" "$RUNNER_TEMP/o118-base"
+          test -f "$RUNNER_TEMP/o118-baseline-installed/cmpct/reader.py"
+          echo "$EVIDENCE_HEAD" > o118-evidence/head.sha
+          git hash-object src/cmpct/reader.py > o118-evidence/candidate-reader.blob
+          git -C "$RUNNER_TEMP/o118-base" hash-object src/cmpct/reader.py > o118-evidence/baseline-reader.blob
+          git hash-object tools/research/o118_reader_source_alias_court.py > o118-evidence/instrument.blob
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader,cmpct.builder
+          workspace=Path.cwd().resolve()
+          for module in (cmpct.reader, cmpct.builder):
+              path=Path(module.__file__).resolve()
+              assert not path.is_relative_to(workspace),(module,path)
+              print("O118_CANDIDATE_INSTALLED="+str(path))
+          Path("o118-evidence/candidate-install-root.txt").write_text(
+              str(Path(cmpct.reader.__file__).resolve().parent.parent)+"\n"
+          )
+          PY
+      - name: Compare authentic original and fixed Readers with independent subprocesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$RUNNER_TEMP/o118-baseline-installed"
+          candidate="$(cat o118-evidence/candidate-install-root.txt)"
+          python tools/research/o118_reader_source_alias_court.py \
+            --base-src "$base" --candidate-src "$candidate" \
+            --out o118-evidence/result.json 2>&1 | tee o118-evidence/court.log
+          grep -qx 'O118_STATIC_ALIAS_GUARD_PASS' <(tail -1 o118-evidence/court.log)
+      - name: Audit full eight-cell scientific court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("o118-evidence/result.json").read_text())
+          o=r["observations"]
+          assert r["decision"]=="O118_STATIC_ALIAS_GUARD_PASS",r
+          assert len(o)==8,len(o)
+          assert {(x["engine"],x["case"]) for x in o}=={
+              (eng,case) for eng in ("baseline","candidate")
+              for case in ("clean","same-path","hardlink","symlink")
+          }
+          assert all(x["child_opened"] for x in o),o
+          assert all(x["source_unchanged"] and x["exact_member_output"] and x["returncode"]==0
+                     for x in o if x["case"]=="clean"),o
+          assert all(not x["source_unchanged"] for x in o
+                     if x["engine"]=="baseline" and x["case"]!="clean"),o
+          assert all(x["source_unchanged"] and x["returncode"]==47 for x in o
+                     if x["engine"]=="candidate" and x["case"]!="clean"),o
+          print("O118_INDEPENDENT_AUDIT_PASS: eight exact-source cells")
+          PY
+      - name: Preserve raw evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o118-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o118-evidence/
+          if-no-files-found: warn
+          retention-days: 30
