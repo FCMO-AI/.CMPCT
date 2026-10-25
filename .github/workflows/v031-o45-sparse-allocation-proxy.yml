@@ -11,6 +11,7 @@ on:
       - '.github/workflows/v031-o45-sparse-allocation-proxy.yml'
       - 'tools/v031_o45_sparse_allocation_proxy.py'
       - 'docs/v031-research/2026-10-25-o45-sparse-allocation-proxy-prereg.md'
+      - 'docs/v031-research/2026-10-25-o45b-heldout-filesystem-prereg.md'
   workflow_dispatch:
 
 permissions:
@@ -52,6 +53,7 @@ jobs:
               'tools/v031_o45_sparse_allocation_proxy.py',
               '.github/workflows/v031-o45-sparse-allocation-proxy.yml',
               'docs/v031-research/2026-10-25-o45-sparse-allocation-proxy-prereg.md',
+              'docs/v031-research/2026-10-25-o45b-heldout-filesystem-prereg.md',
               'docs/v031-research/2026-10-25-o45-sparse-allocation-proxy-result.md',
           }
           assert changed and changed.issubset(allowed), sorted(changed - allowed)
@@ -129,6 +131,61 @@ jobs:
           )
           assert report['verdict'] == expected, (report['verdict'], expected)
           print('O45_INDEPENDENT_AUDIT=PASS; verdict=' + expected)
+          PY
+      - name: O45b held-out tmpfs original Builder five-arm replication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d /dev/shm
+          df -B1 /dev/shm
+          # Tmpfs needs one 8 MiB corpus plus up to five 8 MiB extracted checks.
+          avail="$(df -B1 --output=avail /dev/shm | tail -1 | tr -d ' ')"
+          test "$avail" -gt 55000000
+          set +e
+          python -u -m tools.v031_o45_sparse_allocation_proxy \
+            --scratch-dir /dev/shm \
+            --output benchmark-artifacts/o45b-tmpfs.json \
+            --expected-head "$EVIDENCE_HEAD" \
+            > benchmark-artifacts/o45b-tmpfs.log 2>&1
+          code=$?
+          set -e
+          cat benchmark-artifacts/o45b-tmpfs.log
+          echo "$code" > benchmark-artifacts/o45b-exit-code.txt
+          exit "$code"
+      - name: Independently classify held-out tmpfs topology without rewriting O45
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          f=Path('benchmark-artifacts/o45b-tmpfs.json')
+          assert f.is_file() and f.stat().st_size>1000, 'O45b did not execute'
+          p=json.loads(f.read_text())
+          assert p['schema']=='cmpct-o45-source-exact-sparse-allocation-proxy-v1'
+          assert p['source_head']==os.environ['EVIDENCE_HEAD']
+          assert p['scratch_parent']=='/dev/shm'
+          a,b,u,w,c=p['cases']
+          assert [x['name'] for x in p['cases']]==[
+              'sparse','sparse_repeat','preallocated','written_dense','sparse_restored']
+          assert all(x['verify']=='PASS' and x['read']=='EXACT' and x['extractall']=='EXACT'
+                     for x in p['cases'])
+          assert len({x['o42_semantic_tree_sha256'] for x in p['cases']})==1
+          assert len({x['logical_sha256'] for x in p['cases']})==1
+          assert len({(x['physical']['inode'],x['physical']['dev'],x['physical']['mode'],
+                       x['physical']['mtime_ns']) for x in p['cases']})==1
+          assert a['storage_kind']=='S_SPARSE'
+          assert u['storage_kind']!='S_SPARSE'
+          assert a['full_archive_sha256']==b['full_archive_sha256']==c['full_archive_sha256']
+          assert p['preallocation_minus_sparse_archive_bytes']==(
+              u['full_archive_bytes']-a['full_archive_bytes'])
+          positive=(a['physical']['seek_data']==u['physical']['seek_data']
+                    and a['physical']['seek_data'] is not None
+                    and a['physical']['seek_data']>0 and w['physical']['seek_data']==0)
+          expected=('SUPPORTED_SAME_HOLE_TOPOLOGY_ALLOCATION_PROXY_FALSE_NEGATIVE'
+                    if positive else 'NOT_SUPPORTED_ON_THIS_HOST')
+          assert p['verdict']==expected
+          print('O45B_TMPFS_HOSTED_CLASSIFICATION='+expected)
           PY
       - name: Preserve original positive, negative and failure receipts
         if: always()
