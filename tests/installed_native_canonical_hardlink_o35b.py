@@ -28,6 +28,71 @@ from cmpct.validation import preflight_archive
 PAYLOAD = b"O35b-authenticated-mixed-owner-\x00\xfe" * 3
 
 
+def win32_volume_filesystem(path: Path) -> str:
+    """Name the filesystem; 64-bit file IDs alone are not unique on ReFS."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    get_volume = kernel.GetVolumeInformationW
+    get_volume.argtypes = [
+        wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD),
+        ctypes.POINTER(wintypes.DWORD), wintypes.LPWSTR, wintypes.DWORD,
+    ]
+    get_volume.restype = wintypes.BOOL
+    name = ctypes.create_unicode_buffer(64)
+    root = str(path.resolve().anchor)
+    if not get_volume(root, None, 0, None, None, None, name, len(name)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return name.value.upper()
+
+
+def win32_physical_id(path: Path) -> tuple[int, int, int]:
+    """Independent native Win32 file identity: volume, file index, hardlink count."""
+    import ctypes
+    from ctypes import wintypes
+
+    class FileTime(ctypes.Structure):
+        _fields_ = [("low", wintypes.DWORD), ("high", wintypes.DWORD)]
+
+    class FileInformation(ctypes.Structure):
+        _fields_ = [
+            ("attributes", wintypes.DWORD),
+            ("created", FileTime), ("accessed", FileTime), ("written", FileTime),
+            ("volume", wintypes.DWORD), ("size_high", wintypes.DWORD),
+            ("size_low", wintypes.DWORD), ("links", wintypes.DWORD),
+            ("index_high", wintypes.DWORD), ("index_low", wintypes.DWORD),
+        ]
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_file = kernel.CreateFileW
+    open_file.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+        wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+    ]
+    open_file.restype = wintypes.HANDLE
+    info_fn = kernel.GetFileInformationByHandle
+    info_fn.argtypes = [wintypes.HANDLE, ctypes.POINTER(FileInformation)]
+    info_fn.restype = wintypes.BOOL
+    close = kernel.CloseHandle
+    close.argtypes = [wintypes.HANDLE]
+    close.restype = wintypes.BOOL
+    # Access=0 requests metadata, not write permissions. Open the existing leaf.
+    handle = open_file(str(path), 0, 7, None, 3, 0x80, None)
+    if handle in (None, ctypes.c_void_p(-1).value):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        info = FileInformation()
+        if not info_fn(handle, ctypes.byref(info)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return (int(info.volume), (int(info.index_high) << 32) | int(info.index_low),
+                int(info.links))
+    finally:
+        if not close(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+
 def signed_archive(path: Path, targets: dict[str, str]) -> None:
     rows = [["sub/owner.bin", K_FILE, 0o644, 0, len(PAYLOAD), sha(PAYLOAD), [S_BLOB, 0]]]
     rows.extend(
@@ -104,6 +169,40 @@ def main() -> None:
         posix_inode_check = os.name == "posix"
         if posix_inode_check:
             assert len({(destination / name).stat().st_ino for name in names}) == 1
+        win32_native_same = win32_negative_distinct = win32_samefile = win32_link_count = False
+        win32_ntfs_volume_confirmed = False
+        if os.name == "nt":
+            # BY_HANDLE_FILE_INFORMATION exposes a 64-bit file index. Microsoft
+            # does not guarantee its uniqueness on ReFS (128-bit FileIdInfo).
+            # Certify this 64-bit witness ONLY on a measured NTFS volume.
+            filesystem = win32_volume_filesystem(destination / names[0])
+            win32_ntfs_volume_confirmed = filesystem == "NTFS"
+            assert win32_ntfs_volume_confirmed, (
+                f"64-bit Win32 file identity proof requires NTFS, found {filesystem!r}"
+            )
+            # O43: stronger than byte equality or os.stat inode alone. All
+            # aliases must share one native file identity; an equal-byte fresh
+            # regular file must not accidentally satisfy the same predicate.
+            assert all(not (destination / name).is_symlink() for name in names), (
+                "a symlink may resolve to the same file ID without being a hardlink"
+            )
+            identities = [win32_physical_id(destination / name) for name in names]
+            win32_native_same = len({pair[:2] for pair in identities}) == 1
+            assert win32_native_same, identities
+            win32_link_count = all(item[2] >= len(names) for item in identities)
+            assert win32_link_count, identities
+            win32_samefile = all(
+                os.path.samefile(destination / names[0], destination / name)
+                for name in names[1:]
+            )
+            assert win32_samefile, identities
+            independent = root / "independent-same-content.bin"
+            independent.write_bytes(PAYLOAD)
+            win32_negative_distinct = (
+                win32_physical_id(independent)[:2] != identities[0][:2]
+                and not os.path.samefile(independent, destination / names[0])
+            )
+            assert win32_negative_distinct, "native file ID falsely equated distinct same-byte file"
         hostile = root / "unsafe-signed-r24.cmpct"
         signed_archive(hostile, {"alias.bin": "../escape.bin"})
         must_reject(hostile, "parent-escape")
@@ -126,6 +225,11 @@ def main() -> None:
         "implicit_hardlink_only_parent_restored": True,
         "all_member_content_and_ranges_verified": True,
         "host_posix_inode_identity_confirmed": posix_inode_check,
+        "win32_ntfs_volume_confirmed": win32_ntfs_volume_confirmed,
+        "win32_native_file_id_equal": win32_native_same,
+        "win32_samefile_crosschecked": win32_samefile,
+        "win32_hardlink_count_at_least_four": win32_link_count,
+        "win32_same_byte_independent_owner_distinct": win32_negative_distinct,
         "unsafe_parent_target_rejected": True,
         "canonical_cycle_rejected": True,
         "scope": "real installed wheel exact r24 hardlink semantic class; not race-free confinement",
