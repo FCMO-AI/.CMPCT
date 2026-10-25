@@ -185,5 +185,31 @@ def test_exact_immutable_parent_and_combined_writer_emit_identical_supported_arc
         with CMPCT(candidate) as reader:
             assert reader.read("current.bin") == content
             reader.verify()
+
+        # Held-out structural transfer: the same real historical-vs-composed
+        # Writer A/B must survive the >4*CHUNK CDC path and a second
+        # mostly-reused CDC generation. Do not infer generality from RAW-only
+        # small-file parity.
+        from cmpct.codec import CHUNK, S_CDC
+        large = bytearray(bytes((i * 37 + 11) & 255 for i in range(256))
+                          * (5 * CHUNK // 256 + 1))
+        large = large[:5 * CHUNK + 173]
+        assert len(large) > 4 * CHUNK
+        for round_id in range(2):
+            if round_id:
+                large[len(large) // 2] ^= 0x7f
+            source.write_bytes(large)
+            module.append_update(baseline, "current.bin", source)
+            transactions.append_update(candidate, "current.bin", source)
+            old_bytes, new_bytes = baseline.read_bytes(), candidate.read_bytes()
+            assert old_bytes == new_bytes, (
+                "CDC/update physical archive bytes differ from actual #311 parent",
+                round_id, len(old_bytes), len(new_bytes)
+            )
+            with CMPCT(candidate) as reader:
+                assert reader.read("current.bin") == large
+                assert reader.by["current.bin"][6][0] == S_CDC
+                reader.verify()
+            print(f"O53_CDC_ROUND_{round_id}_ARCHIVE_BYTES={len(new_bytes)}")
     finally:
         sys.modules.pop(module.__name__, None)
