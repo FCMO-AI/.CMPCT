@@ -67,3 +67,19 @@ Directly measured per arm: full CMPCT stored bytes, logical size/hash, inode, `s
 Primary O45 decision changed once via held-out structural perturbation. No collision detected with #396 (official semantic fingerprint owner), #398 (hardlink-heldout owner), #392 (hardlink product) or #240 (shared discovery state). No Discovery Engine policy lesson earned beyond the prospective ordinary requirement to test material physical-layout assumptions across different supported filesystems. No modification to `docs/discovery/STATE.json` or frozen evaluators. No merge or release authority implied.
 
 **Research evidence:** positive only within tmpfs causal semantics. **Product evidence:** existing Builder/Reader operations exact on the synthetic controls; no shipped change. **Infrastructure:** genuine source-bound hosted workflow, independent audit and immutable artifacts. **Unmeasured:** broader speed, memory, portability, release conditions and generality.
+
+## Exact complete-byte attribution (same held-out hosted receipt)
+
+The original unmodified `Builder.build()` returned these machine-readable per-archive metrics in the hosted O45b log. This comparison is within each single host and source inode, not a cross-host timing benchmark:
+
+| Metric | Sparse `S_SPARSE` | Preallocated `S_CDC` | Difference |
+|---|---:|---:|---:|
+| Complete archive bytes | 5,090 | 5,249 | **+159** |
+| Serialized physical record/data bytes | 4,160 | 4,287 | **+127** |
+| One compressed-index copy | 397 | 413 | **+16** |
+| Raw uncompressed index | 465 | 692 | +227 (not an extra physical byte charge) |
+| Unique physical blob records | 1 | 2 | +1 |
+| Logical source bytes | 8,388,608 | 8,388,608 | 0 |
+| Actual Reader strong verify/read/extract | PASS/EXACT/EXACT | PASS/EXACT/EXACT | No semantic difference observed |
+
+Since canonical Builder serializes the same compressed index **twice** (primary and tail), the complete-byte delta reconciles exactly as **127 additional record bytes + 2 × 16 additional compressed-index bytes = 159 complete bytes**. No missing index/footer cost is hidden in this comparison. The question is the value of changing sparse admission for general filesystems, not a claim that 8 MiB of data were saved on disk.
