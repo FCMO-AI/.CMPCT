@@ -87,6 +87,9 @@ jobs:
           cmp -s tests/test_v031_destination_hardlink_leaf_alias.py o124-evidence/test_v031_destination_hardlink_leaf_alias.py
           python -m pytest -q o124-evidence/test_v031_destination_hardlink_leaf_alias.py --junitxml=o124-evidence/parent-inherited-junit.xml 2>&1 | tee o124-evidence/parent-court.log
       - name: Three-engine authentic source-alias court
+        # Preserve original inherited macOS failure, but independently run the
+        # second scientific question instead of stopping before observing it.
+        if: success() || failure()
         shell: bash
         run: |
           set -euo pipefail
@@ -97,6 +100,7 @@ jobs:
             --out o124-evidence/result.json 2>&1 | tee o124-evidence/court.log
           grep -qx 'O124_STATIC_ALIAS_GUARD_PASS' <(tail -1 o124-evidence/court.log)
       - name: Independent structural audit of every scientific cell and nine inherited tests
+        if: success() || failure()
         shell: bash
         run: |
           set -euo pipefail
@@ -122,6 +126,7 @@ jobs:
           assert all(x['source_before_sha256']==r['source_sha256'] for x in rows),rows
           assert all(x['source_after_sha256']==r['source_sha256']
                      for x in rows if x['source_unchanged']),rows
+          print('O124_TWELVE_CELL_INDEPENDENT_AUDIT_PASS',flush=True)
           cases=list(ET.parse('o124-evidence/parent-inherited-junit.xml').getroot().iter('testcase'))
           assert len(cases)==9,('parent expected 9',len(cases))
           assert all(all(t.find(k) is None for k in ('error','failure','skipped')) for t in cases)
