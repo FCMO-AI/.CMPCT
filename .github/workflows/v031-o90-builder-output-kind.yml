@@ -1,0 +1,116 @@
+# ci-lane: fast
+# O90: prospective installed-package source/output kind guard, not a release.
+name: CMPCT v0.31 O90 Builder nonregular output admission
+on:
+  push:
+    branches:
+      - 'agent/phased2-v031-o90-builder-nonregular-output-failclosed-20261025'
+  pull_request:
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'tests/test_v031_o90_builder_output_kind.py'
+      - 'tests/test_v031_o90_o84_archive_parity.py'
+      - '.github/workflows/v031-o90-builder-output-kind.yml'
+      - 'docs/v031-research/2026-10-25-o90-builder-output-kind-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o90-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-archive-court:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Authenticate source and install
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 7efcc51154b64fd6394ddffaab599760659f6c91 HEAD
+          git merge-base --is-ancestor 53004551dad8838bc9fe1f8a2da6e92dc09e0058 HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "bfb37fcd06e6ff05742606ece365348150f477fc"
+          test "$(git hash-object tests/test_v031_o81_builder_output_source_alias.py)" = "f23cd936ace4019e654f5042f3cb476e3682f2a2"
+          git diff --exit-code 7efcc51154b64fd6394ddffaab599760659f6c91 HEAD -- src/cmpct/reader.py src/cmpct/codec.py src/cmpct/transactions.py src/cmpct/ntfs_streams.py native/ benchmarks/ tools/check_performance_regression.py
+          mkdir -p o90-evidence o90-isolated
+          git rev-parse HEAD > o90-evidence/head.sha
+          git hash-object src/cmpct/builder.py > o90-evidence/product.blob
+          git hash-object tests/test_v031_o90_builder_output_kind.py > o90-evidence/instrument.blob
+          python -m pip install --disable-pip-version-check . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import cmpct.builder,cmpct.reader
+          root=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip()).resolve()
+          for mod in (cmpct.builder,cmpct.reader):
+              path=Path(mod.__file__).resolve()
+              assert not path.is_relative_to(root),("uninstalled-source import",path)
+              print("O90_INSTALLED_MODULE="+str(path),flush=True)
+          PY
+      - name: Run original owner controls and O90 tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in             test_v031_win32_builder_hardlink_o47.py             test_v031_special_entries_o48.py             test_v031_builder_composition_o50.py             test_v031_builder_parent_parity_o50.py             test_v031_win32_ads_refusal_o57.py             test_v031_ntfs_empty_dir_guard_o61d2.py             test_v031_ntfs_directory_admission_o64.py             test_v031_o65_xattr_capture.py             test_v031_hardlinked_symlink_o67.py             test_v031_o80_builder_fidelity_composition.py             test_v031_o81_builder_output_source_alias.py             test_v031_o84_builder_output_fidelity_interaction.py             test_v031_o90_builder_output_kind.py \
+            test_v031_o90_o84_archive_parity.py; do
+              cp "tests/$name" o90-isolated/
+          done
+          python -m pytest -vv -s o90-isolated/ --junitxml=o90-evidence/junit.xml 2>&1 | tee o90-evidence/court.log
+      - name: Independent JUnit and negative-bound audit
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json,sys,xml.etree.ElementTree as ET
+          cases=list(ET.parse("o90-evidence/junit.xml").getroot().iter("testcase"))
+          expected_total=57 if sys.platform.startswith("linux") else 58
+          expected_skips=7 if sys.platform.startswith("linux") else 8 if sys.platform=="darwin" else 16
+          counts={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
+          counts["total"]=len(cases)
+          counts["passed"]=counts["total"]-sum(counts[k] for k in ("failure","error","skipped"))
+          print("O90_JUNIT="+json.dumps(counts,sort_keys=True),flush=True)
+          assert counts["total"]==expected_total,counts
+          assert counts["skipped"]==expected_skips,counts
+          assert counts["failure"]==counts["error"]==0,counts
+          assert counts["passed"]==expected_total-expected_skips,counts
+          names=[(c.get("classname","")+" "+c.get("name","")).lower() for c in cases]
+          for tag in ("o64","o65","o67","o80","o81","o84","o90"):
+              assert any(tag in name for name in names),tag
+          log=Path("o90-evidence/court.log").read_text()
+          if sys.platform != "win32":
+              assert "O90_REAL_PRODUCT_FIFO_REJECTION=PASS" in log
+              assert "O90_REAL_PRODUCT_SYMLINK_FIFO_REJECTION=PASS" in log
+          assert "O90_O84_COMPLETE_ARCHIVE_PARITY=" in log
+          result={"head":Path("o90-evidence/head.sha").read_text().strip(),
+                  "product_blob":Path("o90-evidence/product.blob").read_text().strip(),
+                  "instrument_blob":Path("o90-evidence/instrument.blob").read_text().strip(),
+                  "counts":counts,
+                  "scope":"installed O84+O90 static filesystem output-kind admission, no release credit"}
+          Path("o90-evidence/result.json").write_text(json.dumps(result,sort_keys=True,indent=2)+"\n")
+          PY
+      - name: Preserve raw results, including failure cases
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o90-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o90-evidence/
+          if-no-files-found: warn
+          retention-days: 30

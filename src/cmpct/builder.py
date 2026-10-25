@@ -322,12 +322,21 @@ class Builder:
         try:
             out_stat=os.stat(out)
         except FileNotFoundError:
+            # stat follows links: a dangling output symlink must not silently
+            # create its missing target in an unrelated directory (O90).
+            if os.path.islink(out):
+                raise ValueError('archive output must not be a dangling symlink')
             self._protected_output_inode=None
         else:
+            # Output-kind admission must precede costly source scanning. Opening
+            # an existing FIFO without a reader would otherwise block; other
+            # nonregular targets are not writable archives (O87/O90).
+            if not stat.S_ISREG(out_stat.st_mode):
+                raise ValueError('archive output must be a regular file')
             # A distinct external single-link destination is never a second
             # name of a source inode. Reuse O80's existing per-entry stat.
             self._protected_output_inode=((out_stat.st_dev,out_stat.st_ino)
-                if stat.S_ISREG(out_stat.st_mode) and out_stat.st_nlink>1 else None)
+                if out_stat.st_nlink>1 else None)
         self.scan();self._build_micro_packs();self._prepare_deflate_reuse();self._train_dictionary()
         # Candidate compression is parallel but materialization is not. ``Executor.map`` yields results
         # in the exact sorted-hash input order, so worker scheduling cannot perturb blob ids, offsets or
