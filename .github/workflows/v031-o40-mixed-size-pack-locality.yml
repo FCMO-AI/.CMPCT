@@ -1,0 +1,94 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# O40 read-only scientific court; never a release performance gate.
+name: CMPCT v0.31 O40 mixed-size selected-member PACK locality
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-mixed-size-pack-locality-o40-20261025
+    paths:
+      - '.github/workflows/v031-o40-mixed-size-pack-locality.yml'
+      - 'tools/v031_o40_selected_member_locality.py'
+      - 'docs/v031-research/2026-10-25-o40-mixed-size-pack-locality-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-o40-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  selected-member:
+    name: Original source-bound r24 physical PACK decoded-work falsifier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Bind actual source, prospective freeze, and only new research files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 663ef0922992b1fbb8f19e6eea88d55c10a56044
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          test "$(git rev-parse HEAD:experiments/entropygraph_v030_release_product_base.py)" = b6b87b5c2b2f50fe53114ad3b5d228cd1e887367
+          git merge-base --is-ancestor 695a4951e8fd738a39f1e2b26fec4b06671ceebc HEAD
+          python - <<'PY'
+          import subprocess
+          root = "695a4951e8fd738a39f1e2b26fec4b06671ceebc^"
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", root, "HEAD"], text=True).splitlines())
+          allowed = {
+              "docs/v031-research/2026-10-25-o40-mixed-size-pack-locality-prereg.md",
+              "tools/v031_o40_selected_member_locality.py",
+              ".github/workflows/v031-o40-mixed-size-pack-locality.yml",
+              "docs/v031-research/2026-10-25-o40-mixed-size-pack-locality-result.md",
+          }
+          assert changed.issubset(allowed), sorted(changed - allowed)
+          assert len(changed & allowed) >= 3, changed
+          print("Exact original Builder/Reader/shipping source and append-only research scope: PASS")
+          PY
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install genuine public CMPCT package
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          python -m py_compile tools/v031_o40_selected_member_locality.py
+      - name: Four authentic r24 shipping/locality controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          set +e
+          python -u tools/v031_o40_selected_member_locality.py \
+            --output benchmark-artifacts/o40-cold-pack.json \
+            --expected-head "$EVIDENCE_HEAD" \
+            > benchmark-artifacts/o40-run.log 2>&1
+          code=$?
+          set -e
+          echo "$code" > benchmark-artifacts/o40-exit-code.txt
+          cat benchmark-artifacts/o40-run.log
+          exit "$code"
+      - name: Retain decisive positive, negative or infrastructure failure
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-o40-cold-pack-${{ github.sha }}
+          path: |
+            benchmark-artifacts/o40-cold-pack.json
+            benchmark-artifacts/o40-run.log
+            benchmark-artifacts/o40-exit-code.txt
+          if-no-files-found: warn
+          retention-days: 90
