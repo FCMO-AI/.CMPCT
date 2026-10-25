@@ -1,0 +1,137 @@
+# ci-lane: fast
+# O99: POSIX parent-dirfd namespace custody repair, not failure-atomic publication.
+name: CMPCT v0.31 O99 Builder output parent custody
+on:
+  push:
+    branches:
+      - 'agent/phased2-v031-o99-output-parent-dirfd-custody-20261025'
+  pull_request:
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'tests/test_v031_o99_builder_output_parent_bound.py'
+      - 'docs/v031-research/2026-10-25-o99-output-parent-dirfd-prereg.md'
+      - '.github/workflows/v031-o99-output-parent-custody.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o99-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-crosshost-repair:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind exact candidate, original controls and install outside repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 15aac3f81c23e0a54ae66de3f6b2146642afa350 HEAD
+          git merge-base --is-ancestor 02ff874ff40e065a602679fb6b1449265f237c19 HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "7400d0b0c2f8bf664e7022ae499cd0ab07b18968"
+          test "$(git hash-object tests/test_v031_o81_builder_output_source_alias.py)" = "f23cd936ace4019e654f5042f3cb476e3682f2a2"
+          git diff --exit-code 15aac3f81c23e0a54ae66de3f6b2146642afa350 HEAD -- src/cmpct/reader.py src/cmpct/codec.py src/cmpct/transactions.py native/ benchmarks/
+          mkdir -p o99-evidence o99-isolated
+          git rev-parse HEAD > o99-evidence/head.sha
+          git hash-object src/cmpct/builder.py > o99-evidence/product.blob
+          git hash-object tests/test_v031_o99_builder_output_parent_bound.py > o99-evidence/instrument.blob
+          python -m pip install --disable-pip-version-check . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.builder,cmpct.reader
+          import subprocess,hashlib
+          root=Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip()).resolve()
+          for mod in (cmpct.builder,cmpct.reader):
+              p=Path(mod.__file__).resolve()
+              assert not p.is_relative_to(root),("not installed",p)
+          data=Path(cmpct.builder.__file__).read_bytes()
+          canonical=data.replace(b"\r\n",b"\n")  # Windows installed-wheel text newline normalization.
+          blob=hashlib.sha1(b"blob "+str(len(canonical)).encode()+b"\0"+canonical).hexdigest()
+          assert blob=="7400d0b0c2f8bf664e7022ae499cd0ab07b18968",("canonical source mismatch",blob)
+          print("O99_INSTALLED_BUILDER="+blob,flush=True)
+          PY
+      - name: Execute unchanged O93 inherited correctness court plus O99 parent cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            test_v031_win32_builder_hardlink_o47.py \
+            test_v031_special_entries_o48.py \
+            test_v031_builder_composition_o50.py \
+            test_v031_builder_parent_parity_o50.py \
+            test_v031_win32_ads_refusal_o57.py \
+            test_v031_ntfs_empty_dir_guard_o61d2.py \
+            test_v031_ntfs_directory_admission_o64.py \
+            test_v031_o65_xattr_capture.py \
+            test_v031_hardlinked_symlink_o67.py \
+            test_v031_o80_builder_fidelity_composition.py \
+            test_v031_o81_builder_output_source_alias.py \
+            test_v031_o84_builder_output_fidelity_interaction.py \
+            test_v031_o90_builder_output_kind.py \
+            test_v031_o90_o84_archive_parity.py \
+            test_v031_o93_builder_output_bound.py \
+            test_v031_o99_builder_output_parent_bound.py; do
+              cp "tests/$name" o99-isolated/
+          done
+          python -m pytest -vv -s o99-isolated/ --junitxml=o99-evidence/junit.xml 2>&1 | tee o99-evidence/court.log
+      - name: Audit exact tests and the adversarial *refusal* verdict
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET,json,sys
+          cases=list(ET.parse("o99-evidence/junit.xml").getroot().iter("testcase"))
+          expected_total=70 if sys.platform.startswith("linux") else 71
+          expected_skips=7 if sys.platform.startswith("linux") else 9 if sys.platform=="darwin" else 25
+          result={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
+          result["total"]=len(cases)
+          result["passed"]=result["total"]-sum(result[k] for k in ("failure","error","skipped"))
+          assert result["total"]==expected_total,result
+          assert result["skipped"]==expected_skips,result
+          assert result["failure"]==result["error"]==0,result
+          log=Path("o99-evidence/court.log").read_text()
+          assert "O99_STABLE_REGULAR=PASS" in log
+          if sys.platform!="win32":
+              for marker in ("O99_STABLE_SYMLINK_PARENT_INPLACE=PASS",
+                             "O99_POSTSCAN_PARENT_SOURCE_REFUSED=PASS",
+                             "O99_POSTSCAN_PARENT_OTHER_EXTERNAL_REFUSED=PASS",
+                             "O93_REAL_POSTSCAN_SOURCE_PIVOT_REFUSED=PASS",
+                             "O90_REAL_PRODUCT_FIFO_REJECTION=PASS"):
+                  assert marker in log,marker
+          if sys.platform.startswith("linux"):
+              assert "O99_LINUX_EXECUTE_ONLY_PARENT=PASS" in log
+          Path("o99-evidence/result.json").write_text(json.dumps({
+              "head":Path("o99-evidence/head.sha").read_text().strip(),
+              "product_blob":Path("o99-evidence/product.blob").read_text().strip(),
+              "instrument_blob":Path("o99-evidence/instrument.blob").read_text().strip(),
+              "junit":result,
+              "scope":"O99 POSIX ancestor identity repair; Windows baseline; no atomicity/release claims"
+          },sort_keys=True,indent=2)+"\n")
+          print("O99_PARENT_REFUSAL_AUDIT=PASS",flush=True)
+          PY
+      - name: Preserve original and negative receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o99-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o99-evidence/
+          if-no-files-found: warn
+          retention-days: 30

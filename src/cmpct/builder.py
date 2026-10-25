@@ -308,7 +308,7 @@ class Builder:
         if best and best[0]+16 < len(raw):return best[1],best[2],best[3]
         return CODEC_RAW,raw,b''
     @staticmethod
-    def _publish_bound_output(out:Path, payload:bytes, expected_stat):
+    def _publish_bound_output(out:Path, payload:bytes, expected_stat, expected_parent_stat):
         """Publish through the *verified* output inode, never a second path open.
 
         O91 proved that a post-scan symlink/FIFO pivot can otherwise clobber an
@@ -321,7 +321,26 @@ class Builder:
         if expected_stat is None:
             # A previously absent output must not follow a newly planted alias.
             flags |= os.O_CREAT | os.O_EXCL
-        fd=os.open(out,flags,0o666)
+        # Pin the *parent directory*, not just the leaf inode. O96 proved a
+        # post-scan symlink-ancestor pivot could redirect a newly created output
+        # back into the source root despite O93's exclusive leaf creation.
+        # On POSIX, openat relative to this verified directory handle prevents
+        # a later parent-name rebind from redirecting the destructive open.
+        if os.open in getattr(os, 'supports_dir_fd', ()):
+            parent_flags=(getattr(os,'O_PATH',getattr(os,'O_SEARCH',os.O_RDONLY))
+                          | getattr(os,'O_DIRECTORY',0) | getattr(os,'O_CLOEXEC',0))
+            parent_fd=os.open(out.parent,parent_flags)
+            try:
+                parent=os.fstat(parent_fd)
+                if (parent.st_dev,parent.st_ino)!=(expected_parent_stat.st_dev,expected_parent_stat.st_ino):
+                    raise ValueError('archive output parent identity changed after admission')
+                fd=os.open(out.name,flags,0o666,dir_fd=parent_fd)
+            finally:
+                os.close(parent_fd)
+        else:
+            # Windows has no os.open(dir_fd=...): preserve the inherited O93
+            # behavior, without claiming an unproven ancestor-custody guarantee.
+            fd=os.open(out,flags,0o666)
         try:
             opened=os.fstat(fd)
             if not stat.S_ISREG(opened.st_mode):
@@ -375,6 +394,11 @@ class Builder:
             # name of a source inode. Reuse O80's existing per-entry stat.
             self._protected_output_inode=((out_stat.st_dev,out_stat.st_ino)
                 if out_stat.st_nlink>1 else None)
+        # Capture the directory object before expensive source traversal.
+        # Its physical identity, rather than its mutable pathname, is the
+        # authorization witness checked against the openat parent at publish.
+        out=Path(out)
+        parent_stat=os.stat(out.parent)
         self.scan();self._build_micro_packs();self._prepare_deflate_reuse();self._train_dictionary()
         # Candidate compression is parallel but materialization is not. ``Executor.map`` yields results
         # in the exact sorted-hash input order, so worker scheduling cannot perturb blob ids, offsets or
@@ -433,5 +457,5 @@ class Builder:
         header=HDR.pack(MAGIC,VERSION,0,len(ic),len(ib),len(data),ih)
         footer=FTR.pack(FMAGIC,0,1,0,0,len(ic),len(ib),0,ih)
         out=Path(out)
-        published_size=self._publish_bound_output(out,header+ic+data+ic+footer,out_stat)
+        published_size=self._publish_bound_output(out,header+ic+data+ic+footer,out_stat,parent_stat)
         return {'bytes':published_size,'logical_bytes':sum(x[4] for x in files if x[1]!=K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':len(data),'encode_workers':self.encode_workers,'reproducible':self.reproducible}
