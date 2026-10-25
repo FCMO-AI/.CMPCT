@@ -28,7 +28,7 @@ jobs:
       EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       O65_PARENT: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
       O65_BUILDER_BLOB: 7f222458adc1c4aae65fa24650a8fc0c7b0c1b18
-      O65_TEST_BLOB: f637e81d3dae27cff2053d41af02ceb39e35e49d
+      O65_TEST_BLOB: ed76b9fe8bd68e31c557fe954d32dceabd51192d
     steps:
       - name: Checkout exact candidate with original source
         uses: actions/checkout@v4
@@ -92,11 +92,11 @@ jobs:
           passed=len(cases)-failed-skipped
           posix=sys.platform!='win32'
           print('O65_JUNIT',{'platform':sys.platform,'tests':len(cases),'pass':passed,'skip':skipped,'fail':failed})
-          assert failed==0 and len(cases)>=9
+          assert failed==0 and len(cases)>=10
           if posix:
-              assert passed>=9 and skipped==0
+              assert passed>=10 and skipped==0
           else:
-              assert passed>=1 and skipped>=8
+              assert passed>=1 and skipped>=9
           PY
       - name: Persist exact proof artifacts even on failure
         if: always()
