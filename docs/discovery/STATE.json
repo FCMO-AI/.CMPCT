@@ -5,12 +5,12 @@
     "canonical_release": "v0.30.0 (rolling pre-1.0; revision 24)",
     "main": "main@80c358f8824ec1b20d349c92ed94c898090969b0",
     "v031_development": "agent/v031-development@4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
-    "observed_at_utc": "2026-10-25T12:49:00Z",
+    "observed_at_utc": "2026-10-25T13:43:15Z",
     "note": "This is a staleable frontier pointer, NOT a release gate or independent project database. Canonical Git refs, issue/PR owners, exact source CI artifacts and frozen experiment documents always override this index. Do not interpret isolated draft success as merged v0.31 product. For further details follow cited PRs instead of expanding this cache."
   },
   "active_product_bottleneck": {
     "id": "v031-unmerged-owner-composition-plus-cross-host-source-identity",
-    "observation": "The v0.31 development branch remains at its October 6 head while multiple tested Builder, Reader, Writer and VZIP developments remain separate draft PRs. A key composed Builder evidence route O75 #431 on O66 #422 and O266 #266 now has generic Tests SUCCESS at exact head b7bdf9360b57f018fd2fe9ebf89dbf5ec8074449, but its five-host installed court 40185222752 is RED: Ubuntu 2/2 + macOS 1/1 PASS, Windows 0/2 FAIL on cross-host raw source-byte identity. No new official performance admission may be inferred from administratively green skipped jobs.",
+    "observation": "The v0.31 development branch remains at its October 6 head while multiple tested Builder, Reader, Writer and VZIP developments remain separate draft PRs. A key composed Builder evidence route O75 #431 on O66 #422 and O266 #266 now has generic Tests SUCCESS at exact head b7bdf9360b57f018fd2fe9ebf89dbf5ec8074449, but its five-host installed court 40185222752 is RED: Ubuntu 2/2 + macOS 1/1 PASS, Windows 0/2 FAIL on cross-host raw source-byte identity. No new official performance admission may be inferred from administratively green skipped jobs. Separately O84 #442@7efcc51154b64fd6394ddffaab599760659f6c91 has now executed its composed O80×O81 installed court across all three platforms (run 40198804050: Ubuntu 39 PASS/7 justified skips, macOS 39/8, Windows 36/11, 0 failures). Windows metadata=False avoids an independently owned Reader utime(follow_symlinks=False) portability limitation; this is NOT full Windows metadata restoration.",
     "next_discriminator": "The #431 owner must first distinguish a Git-object/worktree EOL transform from a real source-blob conflict on Windows using corrected actual-CRLF counts plus exact normalized-byte witness (see PR #431 comment 6397825789); then rerun the unchanged five-host controls. Do not weaken source pins or claim cross-host parity on three passing jobs."
   },
   "primary_question": {
@@ -37,9 +37,9 @@
     {
       "id": "builder-filesystem-custody-composition",
       "family": "filesystem-source-destination-safety",
-      "question": "Can the existing distinct O75 output staging #432, O78 inode/xattr behavioral court #435, source-root race #407/#434, source-output alias #439, ADS/xattr #437, and O63 buffer ownership coexist without losing any documented filesystem semantics?",
-      "status": "READY",
-      "evidence": "All are separate unmerged owner drafts; #439 pending three-host evidence as of this reconciliation. Do not cherry-pick safety patches into canonical development until exact composed adverse filesystem and output metadata identity courts run."
+      "question": "Can O84's now-proven O80×O81 fail-closed Builder union coexist with O75 atomic output #432, O78 behavior #435, O52 source-root custody #407/#434, and separately proven O63 VZIP buffer ownership, while keeping the original filesystem adversaries and same-source release-economics floor?",
+      "status": "EVIDENCE-ADVANCED",
+      "evidence": "#442 O84 exact-head 7efcc51154b64fd6394ddffaab599760659f6c91 installed run 40198804050 SUCCESS on Ubuntu 39 PASS/7 skip, macOS 39/8, Windows 36/11; original failed Windows test identified Reader utime(follow_symlinks=False) and focused court preserves Windows byte/hardlink restoration with metadata=False, not metadata parity. O83 #441 final-head 34c379a5745a5f8ff297d3ba92581457b8c9f291 economic A/B: six hosted successful courts, 180 child observations, three same-tree cases identical archive bytes; observed small wall differences no speedup claim. O84 General Tests and effective official performance at 13:43 UTC still pending; inherited O47/O50/O57/O80 workflows fail source-blob pins on this composed Builder and do not prove their real tests regress."
     },
     {
       "id": "s-pack-physical-owner-read-amplification",
@@ -86,7 +86,9 @@
     "current_o75_host": "Actions 40185222752 for #431@b7bdf936: Linux/macos PASS; Windows 2/2 source identity FAIL before O66 test assertions. Git source and worktree hashes differ on Windows for seven sampled tracked files, including immutable release lock; CRLF diagnostic is incorrectly escaped and inconclusive. PR comment #6397825789.",
     "vzip_integrity": "O76 #433 physical mode0 unverified ranges may silently return corrupted bytes; O79 #436 SHA-oracle rejects selected/unselected/skeleton tamper in measured scope; O81 #438 authentic CRC32-preserving physical mutation gave regular full read differing from verify rejection. These are distinct integrity tiers.",
     "writer_unmerged": "#409 O53 combines descriptor-bound POSIX FIFO source admission with Writer lease/salvage in an isolated PR; source exact-host and official promotion parity must be independently recovered before integration.",
-    "v031_primary_historical": "The former BLOCKED bounded-drift, issue194 and issue206 states were recorded October 6; issue206 later received product tests in #418/#422. Their original scientific evidence remains at their owner branches; this cache no longer claims those three cases are universally unexecuted."
+    "v031_primary_historical": "The former BLOCKED bounded-drift, issue194 and issue206 states were recorded October 6; issue206 later received product tests in #418/#422. Their original scientific evidence remains at their owner branches; this cache no longer claims those three cases are universally unexecuted.",
+    "o84_composed_builder": "#442@7efcc51154b64fd6394ddffaab599760659f6c91: installed run 40198804050 3/3 jobs SUCCESS; JUnit Ubuntu 39/46 pass, macOS 39/47 pass, Windows 36/47 pass with 7/8/11 platform skips and zero errors. This is scoped O80×O81 product evidence, not a complete Windows Reader metadata claim nor release promotion. Superseded first-head 40198258303 had genuine Windows symlink-utime test failure; test isolated unrelated Reader O69 portability by using metadata=False only on Windows while retaining physical byte/hardlink checks. Other inherited workflow runs fail hardcoded historical Builder identity before assertions.",
+    "o83_linux_economics": "#441 O83 exact O64→O80 Builder AB/BA on identical real Linux trees: 6 SUCCESS hosted courts through final HEAD 34c379a5745a5f8ff297d3ba92581457b8c9f291, 180 real child process observations across 3 families, 0 archive-byte differences; source-authentic extraction equivalence; small mixed-sign wall deltas not significant. Baseline is O64, NOT released v0.30 nor integrated O84."
   },
   "process_lessons": [
     {
@@ -110,8 +112,33 @@
       "evidence": "Exact-head historical Actions/artifact search recovered C25CC02 run 33296257896 and resolved A07 from UNKNOWN to a replicated negative."
     }
   ],
-  "pending_jobs": [],
-  "next_action": "Primary shared-owner next step: on #431, correct actual CRLF diagnostic and characterize HEAD Git-object versus checkout working-tree bytes, then rerun all five installed jobs without changing any original O66/O266 assertions. This activation owns no competing implementation. While #431 owner resolves it, a different operator should take a dependency-safe frontier (e.g. #436 integrity-matched selective-read product path after its owner review, or a genuinely new physical ownership oracle) rather than duplicate O75. When combined correctness is green, execute the real unchanged official r24/ZIP same-input base/candidate comparison; do not count SKIPPED jobs as green.",
+  "pending_jobs": [
+    {
+      "provider": "GitHub Actions",
+      "repo": "FCMO-AI/.CMPCT",
+      "source_sha": "7efcc51154b64fd6394ddffaab599760659f6c91",
+      "pr": 442,
+      "question": "O84 full original same-runner r24/ZIP performance",
+      "run_id": 40198803932,
+      "job_id": 121185375639,
+      "status_at_observation": "in_progress",
+      "expected_artifact": "raw effective benchmark job conclusion and same-source repeated measures; administrative workflow success or skipped work is insufficient",
+      "decision": "unlocked"
+    },
+    {
+      "provider": "GitHub Actions",
+      "repo": "FCMO-AI/.CMPCT",
+      "source_sha": "7efcc51154b64fd6394ddffaab599760659f6c91",
+      "pr": 442,
+      "question": "O84 generic regression truth and inherited v0.30 historical assertions",
+      "run_id": 40198804084,
+      "job_id": 121185347880,
+      "status_at_observation": "in_progress",
+      "expected_artifact": "actual pytest JUnit and failure classification",
+      "decision": "unlocked"
+    }
+  ],
+  "next_action": "First recover (do not babysit) O84 #442 exact-source general Tests run 40198804084 and effective r24/ZIP performance job in run 40198803932; classify genuine product regressions vs historical source-blob pins, and preserve any performance debt. The O84 3-host scoped source/output ownership result is already green but independent Windows Reader metadata remains unproven. O75 #431 source/worktree identity Windows FAIL remains owner-owned; correct CRLF diagnostic there rather than create a duplicate implementation. Next cross-owner integration must compose O84 with O75 output staging and O63 VZIP without weakening tests or release gates.",
   "release_policy": {
     "effective_date": "2026-10-04",
     "pre1_mode": "rolling material checkpoints",
