@@ -5,7 +5,7 @@
     "canonical_release": "v0.30.0 (rolling pre-1.0; revision 24)",
     "main": "main@80c358f8824ec1b20d349c92ed94c898090969b0",
     "v031_development": "agent/v031-development@4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
-    "observed_at_utc": "2026-10-25T19:53:16.216Z",
+    "observed_at_utc": "2026-10-25T20:03:20.932Z",
     "note": "This is a staleable frontier pointer, NOT a release gate or independent project database. Canonical Git refs, issue/PR owners, exact source CI artifacts and frozen experiment documents always override this index. Do not interpret isolated draft success as merged v0.31 product. For further details follow cited PRs instead of expanding this cache."
   },
   "active_product_bottleneck": {
@@ -23,7 +23,8 @@
       "PR #431 at b7bdf9360b57f018fd2fe9ebf89dbf5ec8074449: generic Tests run 40185222735 SUCCESS; installed run 40185222752: Ubuntu shallow/full and macOS shallow SUCCESS, Windows shallow/full FAIL; aggregation SKIPPED.",
       "PR #431 comment 6397825789: both Windows checkouts show wrong worktree-vs-HEAD source bytes including historical v0.30 lock, while the diagnostic accidentally counts literal backslash-r-backslash-n rather than actual CRLF bytes; cause is not yet established.",
       "Parent #422 O66 actual 5-host clean-installed 108 PASS/2 Windows skips; its generic 812 PASS/4 FAIL is not green. O266 #266 alone fixes the four inherited source epoch assertions, but independent passes are not a combined result.",
-      "Official r24/ZIP effective benchmark repeatedly SKIPPED on documentation/workflow-only PR pushes; no release-performance credit."
+      "Official r24/ZIP effective benchmark repeatedly SKIPPED on documentation/workflow-only PR pushes; no release-performance credit.",
+      "O75 independent 2026-10-25 exact Git-object-byte analysis on two representative immutable/tracked files shows LF→CRLF conversion alone EXACTLY reproduces hosted Windows worktree SHA-256: docs/V030_RELEASE_LOCK.json canonical 73731e... -> CRLF fed9be...; docs/V031_CANDIDATE_FINGERPRINT.json canonical f1df4c... -> CRLF b266f2.... Evidence comment PR #431 #6402497920, Windows original run 40185222752. Cause established ONLY for these two; full 2316-file/installed-wheel/five-host court remains unverified and BLOCKED."
     ]
   },
   "frontier_candidates": [
@@ -83,7 +84,7 @@
     "a15": "NARROWED / DO NOT CHARTER: internal nonserialized projection/helper factoring is the stronger simpler control; serialized IR carrying-cost advantage is not established. Durable coordination: docs/v031-coordination/2026-10-06-foundry-reconciliation-a15-a07.json.",
     "a07": "NARROWED / NOT CHARTERED: exact-head C25CC02 run 33296257896 recovered from Actions artifact 9727565317; projected complete 10,220,043 B versus Zstd-19 10,199,302 B, margin -20,741 B, exact semantics/locality green, promotion_signal=false. Two earlier artifacts reproduce the ~20.7 KiB loss.",
     "v031_composition": "#415 O60 coherent single VZIP source; #418 O63 rollback product; #422 O66 historical parent; #266 prospective fingerprint; #431 O75 composition. No canonical merge, no earned core release.",
-    "current_o75_host": "Actions 40185222752 for #431@b7bdf936: Linux/macos PASS; Windows 2/2 source identity FAIL before O66 test assertions. Git source and worktree hashes differ on Windows for seven sampled tracked files, including immutable release lock; CRLF diagnostic is incorrectly escaped and inconclusive. PR comment #6397825789.",
+    "current_o75_host": "O75 original #431@b7bdf936 Windows hosted run 40185222752 remains two Windows FAIL / three POSIX SUCCESS, 2316 fingerprinted paths. Independent exact canonical bytes on docs/V030_RELEASE_LOCK.json and docs/V031_CANDIDATE_FINGERPRINT.json when LF→CRLF match actual Windows worktree SHA256 exactly, PR #431 comment 6402497920. This PROVES those two sampled divergences are Git checkout EOL, not Git blob mutation; the buggy diagnostic counts literal backslash-r/backslash-n. All-path full normalized identity and installed wheel behavior still UNMEASURED; original strict cross-host raw fingerprint remains red.",
     "vzip_integrity": "O76 #433 physical mode0 unverified ranges may silently return corrupted bytes; O79 #436 SHA-oracle rejects selected/unselected/skeleton tamper in measured scope; O81 #438 authentic CRC32-preserving physical mutation gave regular full read differing from verify rejection. These are distinct integrity tiers.",
     "writer_unmerged": "#409 O53 combines descriptor-bound POSIX FIFO source admission with Writer lease/salvage in an isolated PR; source exact-host and official promotion parity must be independently recovered before integration.",
     "v031_primary_historical": "The former BLOCKED bounded-drift, issue194 and issue206 states were recorded October 6; issue206 later received product tests in #418/#422. Their original scientific evidence remains at their owner branches; this cache no longer claims those three cases are universally unexecuted.",
@@ -122,7 +123,7 @@
     }
   ],
   "pending_jobs": [],
-  "next_action": "Product convergence must be judged on unchanged gates: #431 owner resolve Windows original Git object versus worktree EOL discrepancy; #442/#266/#414/#422 owners reconcile four historical v0.30 assertions plus six shallow history cases and rerun full generic and effective r24/ZIP same-source ABBA. #455/#442 owners define realistic output namespace threat contract in light of O101 installed negative and O110 lower-rung openat2 ancestry bound; retain O91/O96 controls, ordinary regular-output success and exact archive identity. #269 Reader owner triage #460 same-inode mmap SIGBUS and #462 output-FIFO extraction; #463 storage-mode research remains partial on macOS. Other scheduled activations should choose dependency-safe representation/ownership research rather than duplicate these active implementation surfaces. No canonical merge/release.",
+  "next_action": "Product convergence must be judged on unchanged gates: #431 owner verify all 2316 Windows paths and installed wheel: two exact-path SHA witnesses conclusively reproduce Windows release-lock/fingerprint bytes from Git LF→CRLF, but untouched five-host full court remains RED (PR #431 comment 6402497920). Preserve raw negative while separating Git canonical source custody from platform worktree/installed runtime identity;; #442/#266/#414/#422 owners reconcile four historical v0.30 assertions plus six shallow history cases and rerun full generic and effective r24/ZIP same-source ABBA. #455/#442 owners define realistic output namespace threat contract in light of O101 installed negative and O110 lower-rung openat2 ancestry bound; retain O91/O96 controls, ordinary regular-output success and exact archive identity. #269 Reader owner triage #460 same-inode mmap SIGBUS and #462 output-FIFO extraction; #463 storage-mode research remains partial on macOS. Other scheduled activations should choose dependency-safe representation/ownership research rather than duplicate these active implementation surfaces. No canonical merge/release.",
   "release_policy": {
     "effective_date": "2026-10-04",
     "pre1_mode": "rolling material checkpoints",
