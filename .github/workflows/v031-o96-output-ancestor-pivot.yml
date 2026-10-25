@@ -9,6 +9,7 @@ on:
     paths:
       - 'tests/test_v031_o96_builder_output_ancestor_pivot.py'
       - 'docs/v031-research/2026-10-25-o96-output-ancestor-pivot-prereg.md'
+      - 'docs/v031-research/2026-10-25-o96-output-ancestor-pivot-result.md'
       - '.github/workflows/v031-o96-output-ancestor-pivot.yml'
   workflow_dispatch:
 
