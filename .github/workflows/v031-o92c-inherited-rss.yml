@@ -1,0 +1,77 @@
+# ci-lane: fast
+name: CMPCT v0.31 O92c Linux inherited RSS oracle
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o92-vzip-phase-rss-20261025'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o92c-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  inherited-rss-primitive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      EXACT_HEAD: ${{ github.sha }}
+      O92C_PREREG: b0de6e842643782854e6180f8260fc5efc68684c
+      O86_SOURCE: 6225e30f3e21c0783aa56726b52a3a3583540f99
+    steps:
+      - name: Checkout fixed oracle and GitHub source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Assert preregistration and unchanged product/evaluators
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O92C_PREREG" HEAD
+          git merge-base --is-ancestor "$O86_SOURCE" HEAD
+          git diff --exit-code "$O86_SOURCE" HEAD -- src native tests pyproject.toml benchmarks/history docs/discovery/STATE.json
+          python -m py_compile benchmarks/v031_o92c_inherited_rss.py
+      - name: Measure real parent-spawn highwater versus child VmHWM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o92c-evidence
+          O92C_REPORT=o92c-evidence/o92c-raw.json python benchmarks/v031_o92c_inherited_rss.py 2>&1 | tee o92c-evidence/court.log
+          test "${PIPESTATUS[0]}" -eq 0
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('o92c-evidence/o92c-raw.json').read_text())
+          assert len(r['children_after_parent_peak'])==3
+          assert r['experiment']=='O92c'
+          assert r['decision'] in ('CONFIRMED_INHERITED_ACCOUNTING','FALSIFIED_OR_AMBIGUOUS')
+          assert all(x['VmHWM']>0 for x in r['children_after_parent_peak'])
+          print('O92C_GENUINE_PARENT_CHILD_WITNESS=PASS')
+          print('O92C_SCIENTIFIC_DECISION='+r['decision'])
+          PY
+      - name: Preserve original source and partial failure receipts
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o92c-evidence
+          git rev-parse HEAD > o92c-evidence/research-head.sha
+          git hash-object benchmarks/v031_o92c_inherited_rss.py > o92c-evidence/instrument.blob
+          printf '%s\n' "$O92C_PREREG" > o92c-evidence/prereg.sha
+      - name: Upload original scientific receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o92c-inherited-rss-${{ github.sha }}
+          path: o92c-evidence/
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,100 @@
+# ci-lane: fast
+# O92b source-exact clean import attribution; not a release gate.
+name: CMPCT v0.31 O92b Import RSS Oracle
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o92-vzip-phase-rss-20261025'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o92b-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  genuine-import-resource-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EXACT_HEAD: ${{ github.sha }}
+      O63_BASE: 18e32cae012f5dca9fc47f10d194f8b81005c85c
+      O86_CANDIDATE: 6225e30f3e21c0783aa56726b52a3a3583540f99
+      O92B_PREREG: cbb93860f6861f71ae48c1623b525f9405de5559
+    steps:
+      - name: Checkout exact code and historical sources
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prove science-only diff and authentic Git blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O92B_PREREG" HEAD
+          git merge-base --is-ancestor "$O86_CANDIDATE" HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = e46c8670c11c386925f9ae228b25de44c8045f2e
+          test "$(git hash-object src/cmpct/codec.py)" = 7d4c4a5a5f00c42561043611e5d4400dd8af38e6
+          git diff --exit-code "$O86_CANDIDATE" HEAD -- src native tests pyproject.toml benchmarks/history docs/discovery/STATE.json
+          python -m py_compile benchmarks/v031_o92b_import_rss.py
+          git worktree add --detach "$RUNNER_TEMP/o92b-o63-source" "$O63_BASE"
+          test "$(git -C "$RUNNER_TEMP/o92b-o63-source" hash-object src/cmpct/builder.py)" = 382e60983bf1e8e7595ea7112f3a5553dc33dcc0
+          test "$(git -C "$RUNNER_TEMP/o92b-o63-source" hash-object src/cmpct/codec.py)" = dc3446b0eed82edfba9380e3885a20aa45577899
+          echo 'O92B_SOURCE_CUSTODY=PASS'
+      - name: Independently install both actual source snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o92b-o63-install" "$RUNNER_TEMP/o92b-o63-source"
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o92b-o86-install" .
+          test "$(git hash-object "$RUNNER_TEMP/o92b-o63-install/cmpct/builder.py")" = 382e60983bf1e8e7595ea7112f3a5553dc33dcc0
+          test "$(git hash-object "$RUNNER_TEMP/o92b-o63-install/cmpct/codec.py")" = dc3446b0eed82edfba9380e3885a20aa45577899
+          test "$(git hash-object "$RUNNER_TEMP/o92b-o86-install/cmpct/builder.py")" = e46c8670c11c386925f9ae228b25de44c8045f2e
+          test "$(git hash-object "$RUNNER_TEMP/o92b-o86-install/cmpct/codec.py")" = 7d4c4a5a5f00c42561043611e5d4400dd8af38e6
+          echo 'O92B_INSTALLED_SOURCE=PASS'
+      - name: Execute original/candidate fresh import RSS witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o92b-evidence
+          python benchmarks/v031_o92b_import_rss.py \
+            --o63-package "$RUNNER_TEMP/o92b-o63-install" \
+            --o86-package "$RUNNER_TEMP/o92b-o86-install" \
+            --report o92b-evidence/o92b-raw.json 2>&1 | tee o92b-evidence/court.log
+          test "${PIPESTATUS[0]}" -eq 0
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("o92b-evidence/o92b-raw.json").read_text())
+          assert data["experiment"] == "O92b" and not data["failures"]
+          assert len(data["observations"]) == 6 and data["summary"]
+          assert {x["arm"] for x in data["observations"]} == {"o63", "o86"}
+          assert all(len(x["steps"]) == 6 for x in data["observations"])
+          print("O92B_SIX_GENUINE_SOURCE_EXACT_CHILDREN=PASS")
+          PY
+      - name: Persist exact commit/source identity even after a failure
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o92b-evidence
+          git rev-parse HEAD > o92b-evidence/research-head.sha
+          git hash-object benchmarks/v031_o92b_import_rss.py > o92b-evidence/instrument.blob
+          printf '%s\n' "$O63_BASE" > o92b-evidence/o63-head.sha
+          printf '%s\n' "$O86_CANDIDATE" > o92b-evidence/o86-head.sha
+      - name: Upload immutable raw observations and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o92b-import-rss-${{ github.sha }}
+          path: o92b-evidence/
+          if-no-files-found: warn
+          retention-days: 30
