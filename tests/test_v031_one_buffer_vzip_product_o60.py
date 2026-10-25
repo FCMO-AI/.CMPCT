@@ -198,6 +198,39 @@ def test_eight_zip_cohort_remains_exact(tmp_path):
         assert reader.verify() >= 1
 
 
+
+def test_direct_codec_legacy_path_api_reads_one_coherent_buffer(tmp_path, monkeypatch):
+    """The original two-argument codec API must keep working without path reopens."""
+    import cmpct.codec as codec
+
+    payload = zip_bytes("mixed")
+    source = tmp_path / "direct.zip"
+    source.write_bytes(payload)
+    real_read = Path.read_bytes
+    source_reads = []
+    retained = {}
+
+    def read_once(path):
+        if path == source:
+            source_reads.append(path)
+        return real_read(path)
+
+    def retain(raw, hint="", stream=None):
+        digest = codec.sha(raw)
+        retained[digest] = raw
+        return digest
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "read_bytes", read_once)
+        recipe = codec.make_vzip_recipe(source, retain)
+
+    assert source_reads == [source], source_reads
+    assert recipe is not None and len(recipe[2]) == 3
+    assert recipe[3] == codec.sha(payload)
+    assert recipe[4] == len(payload)
+    assert recipe[5] == zlib.crc32(payload)
+    assert retained[recipe[0]]  # Exact skeleton owned by the captured source.
+
 def emit_historical_corpus(location: Path, output: Path):
     """Same physical input tree is shared between historical and candidate builds."""
     location.mkdir(parents=True, exist_ok=True)
