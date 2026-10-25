@@ -50,7 +50,9 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git merge-base --is-ancestor "$O50_PARENT" HEAD
           test "$(git hash-object src/cmpct/codec.py)" = 'dc3446b0eed82edfba9380e3885a20aa45577899'
-          test "$(git hash-object src/cmpct/builder.py)" = 'bda9d7f8005e276ba891aac75ae50eabe67bd431'
+          # O63: retain immutable O60 source custody while pinning candidate separately
+          test "$(git show c88a6bc29b9ec8738e23aab788b7c09ab0390e79:src/cmpct/builder.py | git hash-object --stdin)" = "bda9d7f8005e276ba891aac75ae50eabe67bd431"
+          test "$(git hash-object src/cmpct/builder.py)" = "382e60983bf1e8e7595ea7112f3a5553dc33dcc0"
           git diff --exit-code "$O50_PARENT" HEAD -- benchmarks native tools/check_performance_regression.py
           echo "O60_EXACT_HEAD=$EXPECTED_HEAD"
           echo "O60_HISTORICAL_O50=$O50_PARENT"
