@@ -1,0 +1,69 @@
+# ci-lane: deep
+# O81 evaluates a full-read integrity-semantics discrepancy; not a release gate.
+name: CMPCT v0.31 O81 VZIP CRC collision full read
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-vzip-crc32-full-read-semantic-oracle-o81-20261025'
+  pull_request:
+    paths:
+      - 'benchmarks/v031_o81_vzip_full_read_crc_collision.py'
+      - '.github/workflows/v031-o81-vzip-full-read-crc-collision.yml'
+      - 'docs/v031-research/2026-10-25-o81-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o81-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  source-exact-crc-collision:
+    name: O81 installed r24 VZIP read versus full verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Authenticate the original unchanged Builder/Reader/Codec
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          python -m pip install .
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import cmpct.builder, cmpct.reader, cmpct.codec
+          root=Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip())
+          for mod in (cmpct.builder,cmpct.reader,cmpct.codec):
+              physical=Path(mod.__file__).resolve()
+              assert not physical.is_relative_to(root), f"source import is not installed: {physical}"
+              print("O81_INSTALLED_MODULE="+str(physical))
+          PY
+      - name: Run preregistered authentic VZIP CRC/SHA discriminator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_o81_vzip_full_read_crc_collision.py 2>&1 | tee o81-run.log
+      - name: Preserve exact-head evidence and negatives
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o81-vzip-read-crc-${{ env.EVIDENCE_HEAD }}
+          path: |
+            o81-run.log
+          retention-days: 30
+          if-no-files-found: error
