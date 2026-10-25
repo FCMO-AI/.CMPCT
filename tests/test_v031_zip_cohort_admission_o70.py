@@ -10,6 +10,7 @@ import json
 import os
 import random
 import statistics
+import sys
 import time
 import types
 import zipfile
@@ -48,6 +49,9 @@ def _oracle_class():
     module = types.ModuleType("cmpct._o70_noncohort_oracle")
     module.__package__ = "cmpct"
     module.__file__ = str(source_path)
+    # CPython dataclasses resolves postponed annotations through sys.modules.
+    # Register this ephemeral standalone science module without altering cmpct.builder.
+    sys.modules[module.__name__] = module
     exec(compile(derived, str(source_path) + ":O70-oracle", "exec"), module.__dict__)
     return module.Builder, hashlib.sha256(original.encode()).hexdigest(), hashlib.sha256(derived.encode()).hexdigest()
 
