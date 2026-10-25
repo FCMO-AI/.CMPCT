@@ -105,3 +105,10 @@ This is a representation-specific safety increment, not a replacement for full n
 ## Revision rule
 
 No format revision bump is required for this increment because it writes **no new field, record, codec, transform or storage semantic**. If later hardening requires a reader-visible on-disk rule, that change must follow the repository's normal revision/spec/history/current-state/conformance gate.
+
+
+## Unmerged v0.31 O84 — Python VZIP full-read integrity tier (2026-10-25)
+
+Research/product candidate only: [PR #443](https://github.com/FCMO-AI/.CMPCT/pull/443), independent of the released v0.30.0/revision-24 contract. O81 [PR #438](https://github.com/FCMO-AI/.CMPCT/pull/438) proved that the **Python** `rebuild_vzip` length+CRC32 check, and consequently ordinary Python `CMPCT.read()`, may return a different valid ZIP after a CRC32-preserving **physical** VZIP skeleton mutation. Explicit `verify()` rejects that archive using the indexed recipe SHA. The full native VZIP read's SHA behavior described earlier in this document does **not** imply identical Python ordinary-read guarantees.
+
+The separate proposed `read_vzip_verified(name, max_scan_bytes=...)` checks the recipe SHA-256 over the **same immutable returned bytes**. Its default 64 MiB budget caps claimed logical digest work but is not a complete malformed-recipe memory/work ceiling. It only accepts VZIP regular files (or finite hardlink aliases thereof); ordinary Python `read()`, `read_range()`, and `verify()` remain unmodified. No origin authentication against index rewrites, full snapshot protection under concurrent archive changes, or native ABI parity is claimed. This API requires independent product/portability/release gates before publication. Its SHA cost is real and can dominate a cached full-member fast read; the opt-in boundary prevents silently imposing that cost on all callers.
