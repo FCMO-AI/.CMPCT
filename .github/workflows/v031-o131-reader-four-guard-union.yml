@@ -47,7 +47,7 @@ jobs:
           echo "EXACT_HEAD=$EVIDENCE_HEAD"
           git merge-base --is-ancestor 00c7367b5d90e1349e31098a9262ebadd059b2a8 HEAD
           test "$(git rev-parse HEAD:src/cmpct/path_policy.py)" = 91fc335eea8fb18c3899511f416c8abe96c48f80
-          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e6ac7fb8e677d5a1bdac4bab9663921f3e20df5c
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 5ce013f80c0220c7e7771041c60740a7111fff8a
       - name: Install Python
         uses: actions/setup-python@v5
         with:
