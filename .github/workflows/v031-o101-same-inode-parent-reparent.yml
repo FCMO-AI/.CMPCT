@@ -2,9 +2,11 @@
 # O101: independent adverse *same-inode* parent reparent scientific court on authentic O99 Builder.
 name: CMPCT v0.31 O101 Same-inode parent location court
 on:
-  push:
-    branches:
-      - 'agent/phased3-v031-o101-same-inode-output-parent-reparent-20261025'
+  pull_request:
+    paths:
+      - 'tests/test_v031_o101_same_inode_parent_reparent.py'
+      - 'docs/v031-research/2026-10-25-o101-same-inode-parent-reparent-prereg.md'
+      - '.github/workflows/v031-o101-same-inode-parent-reparent.yml'
   workflow_dispatch:
 
 permissions:
@@ -23,7 +25,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-14]
     env:
-      EVIDENCE_HEAD: ${{ github.sha }}
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       O101_RESULTS_DIR: o101-evidence
     steps:
       - uses: actions/checkout@v6
