@@ -110,3 +110,18 @@ def test_heldout_combined_realistic_synthetic_corpus_without_frozen_changes(tmp_
     assert outcome["typed_member_snapshots_equal"]
     assert outcome["heldout_partition_matches_sources"]
     assert outcome["legacy_unique_inode_charged_bytes"] - outcome["heldout_unique_inode_charged_bytes"] == len(b"proof")
+
+
+def test_hardlink_failure_does_not_silently_make_an_independent_copy(tmp_path, monkeypatch):
+    from benchmarks import heldout_physical_tree as module
+    src = tmp_path / "src"; src.mkdir()
+    (src / "first").write_bytes(b"payload")
+    os.link(src / "first", src / "second")
+    def denied(*_args, **_kwargs):
+        raise OSError("simulated hardlink unavailable")
+    monkeypatch.setattr(module.os, "link", denied)
+    dst = tmp_path / "dst"
+    with pytest.raises((OSError, shutil.Error), match="simulated hardlink unavailable"):
+        module.copytree_with_hardlinks(src, dst)
+    # Partial failure is not a successful corpus; no silent independent copy.
+    assert len(list(dst.glob("*"))) == 1
