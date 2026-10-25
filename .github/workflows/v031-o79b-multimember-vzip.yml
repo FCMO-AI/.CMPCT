@@ -1,0 +1,65 @@
+# ci-lane: deep
+name: CMPCT v0.31 O79b held-out multi-member VZIP SHA
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-o79-vzip-whole-recipe-sha-range-oracle-20261025'
+  pull_request:
+    paths:
+      - 'benchmarks/v031_o79b_multimember_vzip_sha_oracle.py'
+      - '.github/workflows/v031-o79b-multimember-vzip.yml'
+      - 'docs/v031-research/2026-10-25-o79b-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-o79b-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  installed-multimember:
+    name: O79b independent actual-product multi-member proof
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind unchanged code and install non-editable original product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          python -m pip install .
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.builder,cmpct.reader
+          import subprocess
+          root=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip())
+          for m in (cmpct.builder,cmpct.reader):
+              assert not Path(m.__file__).resolve().is_relative_to(root)
+          PY
+      - name: Run genuine three-member VZIP unselected corruption checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_o79b_multimember_vzip_sha_oracle.py 2>&1 | tee o79b-run.log
+      - name: Preserve original observations
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o79b-multi-${{ env.EVIDENCE_HEAD }}
+          path: |
+            o79b-run.log
+            o79b-evidence.json
+          retention-days: 30
+          if-no-files-found: warn
