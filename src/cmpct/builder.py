@@ -19,7 +19,7 @@ class Candidate:
 
 class Builder:
     def __init__(self,root:Path, deflate_reuse_min:int|None=None, *, workers:int|None=None, reproducible:bool=False, reproducible_epoch_ns:int|None=None):
-        self.root=Path(root);self.cands:{}={};self.files=[];self.recipes=[];self.dictionary=b'';self.dict_hash=None;self.canonical_deflate={};self.secondary_stream_hashes=set();self.inode_first={};self.meta_by_rel={}
+        self.root=Path(root);self.cands:{}={};self.files=[];self.recipes=[];self.dictionary=b'';self.dict_hash=None;self.canonical_deflate={};self.secondary_stream_hashes=set();self.inode_first={};self.symlink_inode_first={};self.meta_by_rel={}
         # Exact Deflate streams below this size are regenerated from raw data + a one-byte zlib level.
         # 0 reproduces v0.17's maximum-speed policy; a huge value is the compact policy.
         self.deflate_reuse_min=int(os.environ.get('CMPCT_DEFLATE_REUSE_MIN','65536')) if deflate_reuse_min is None else int(deflate_reuse_min)
@@ -85,6 +85,18 @@ class Builder:
                 rel=f'{prefix}/{e.name}' if prefix else e.name
                 st=e.stat(follow_symlinks=False);mode=stat.S_IMODE(st.st_mode);self._capture_fs_meta(e.path,rel,st)
                 if stat.S_ISLNK(st.st_mode):
+                    # A hardlink to a *symlink inode* is not equivalent to an
+                    # independently created symlink with the same target text.
+                    # r24 cannot reconstruct this physical sharing. Reject only
+                    # if both alias names occur inside the selected source tree:
+                    # one in-tree alias with other links outside is representable.
+                    if st.st_nlink>1:
+                        ik=(st.st_dev,st.st_ino)
+                        previous=self.symlink_inode_first.get(ik)
+                        if previous is not None:
+                            raise OSError(f"unsupported hardlinked symlink {rel!r} "
+                                          f"aliases {previous!r}; refusing lossy archive")
+                        self.symlink_inode_first[ik]=rel
                     b=os.readlink(e.path).encode();ref=self.add_content(b,'.symlink')
                     self.files.append([rel,K_SYMLINK,mode,st.st_mtime_ns,len(b),sha(b),[S_BLOB,ref]]);continue
                 if stat.S_ISDIR(st.st_mode):

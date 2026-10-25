@@ -1,0 +1,98 @@
+name: CMPCT v0.31 O67 symlink-inode source fidelity
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o67-symlink-hardlink-source-fidelity-20261025'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o67-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  installed-symlink-hardlinks:
+    name: O67 installed ${{ matrix.variant }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, candidate]
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      CMPCT_O67_VARIANT: ${{ matrix.variant }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Select exact source with immutable test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_v031_hardlinked_symlink_o67.py "${RUNNER_TEMP}/test_v031_hardlinked_symlink_o67.py"
+          cp tests/test_v031_builder_composition_o50.py "${RUNNER_TEMP}/test_v031_builder_composition_o50.py"
+          cp tests/test_v031_special_entries_o48.py "${RUNNER_TEMP}/test_v031_special_entries_o48.py"
+          if [ "${CMPCT_O67_VARIANT}" = baseline ]; then
+            git checkout --detach 17c96603e33b02b3f2f9e0079eec2b128f293be8
+          fi
+          printf 'O67_VARIANT=%s\n' "${CMPCT_O67_VARIANT}"
+          printf 'O67_SOURCE_HEAD=%s\n' "$(git rev-parse HEAD)"
+          printf 'O67_BUILDER_BLOB=%s\n' "$(git hash-object src/cmpct/builder.py)"
+          test "${CMPCT_O67_VARIANT}" != baseline || test "$(git hash-object src/cmpct/builder.py)" = 21a9ec696df13961c25301654feb607a7e161a4c
+      - name: Install exact product and execute actual fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+          cd "${RUNNER_TEMP}"
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.builder, os
+          source=Path(cmpct.builder.__file__).resolve()
+          checkout=Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          assert not source.is_relative_to(checkout), f"checkout-local import invalidates installed proof: {source}"
+          print("O67_INSTALLED_BUILDER=" + str(source))
+          PY
+          python -m pytest -vv test_v031_hardlinked_symlink_o67.py test_v031_builder_composition_o50.py test_v031_special_entries_o48.py --junitxml=o67-junit.xml 2>&1 | tee o67-pytest.log
+      - name: Verify test execution custody
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}"
+          python - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          root=ET.parse("o67-junit.xml").getroot()
+          suites=[root] if root.tag=="testsuite" else root.findall("testsuite")
+          assert suites, "no actual JUnit suite"
+          tests=sum(int(s.get("tests","0")) for s in suites)
+          fails=sum(int(s.get("failures","0")) for s in suites)
+          errs=sum(int(s.get("errors","0")) for s in suites)
+          skips=sum(int(s.get("skipped","0")) for s in suites)
+          print(f"O67_ACTUAL_TESTS={tests} FAILURES={fails} ERRORS={errs} SKIPS={skips}")
+          assert tests==11, "five O67 + two inherited O50 + four unchanged O48 tests must be collected"
+          assert not fails and not errs, "source-exact semantic court has red assertions"
+          if os.name!="nt":
+              assert skips==0, "POSIX hardlinked-symlink fixture unavailable: no full credit"
+          else:
+              assert skips==7, "Windows skip policy mismatch"
+          assert tests-skips>=4, "fewer than four substantive installed Windows controls executed"
+          PY
+      - name: Preserve raw execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o67-${{ matrix.variant }}-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/o67-junit.xml
+            ${{ runner.temp }}/o67-pytest.log
+          if-no-files-found: warn
+          retention-days: 30
