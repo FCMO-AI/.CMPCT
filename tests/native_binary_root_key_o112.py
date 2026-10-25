@@ -1,8 +1,7 @@
-"""O112: independent non-string binary-key root MessagePack ambiguity court.
+"""Source-exact O112 scientific court: authenticated binary MessagePack root-key aliases.
 
-The unmodified initial research commit f48662e7, run 40052842656, proved 6/6
-authenticated SAME-WIRE Python/Rust semantic divergences. This successor court
-requires both production readers and Python preflight to reject those bytes.
+Falsifies the narrower residual left explicitly untested by PR #316's string-only
+Rust root key uniqueness guard. Green scientific execution can mean a product negative.
 """
 from __future__ import annotations
 
@@ -107,7 +106,7 @@ BIN_KEY = b"O112-opaque-root-field"
 
 def forge_authenticated_binary_key(original: bytes, zstd: Zstd, *, duplicate: bool):
     magic, version, flags, cs, us, data_span, original_index_hash = HDR.unpack_from(original)
-    assert magic == b"CMPCT24\\x00" and version == 24
+    assert magic == b"CMPCT24\x00" and version == 24
     decoded = zstd.decompress(original[HDR.size:HDR.size + cs], us)
     assert sha(decoded) == original_index_hash
     index = msgpack.unpackb(decoded, raw=False)
@@ -131,7 +130,7 @@ def forge_authenticated_binary_key(original: bytes, zstd: Zstd, *, duplicate: bo
     result = (
         HDR.pack(magic, version, flags, len(compressed), len(signed_index), data_span, signed_hash)
         + compressed + physical + compressed
-        + FTR.pack(b"CMPTF24\\x00", 0, 1, 0, 0,
+        + FTR.pack(b"CMPTF24\x00", 0, 1, 0, 0,
                    len(compressed), len(signed_index), 0, signed_hash)
     )
     assert result[HDR.size + len(compressed):HDR.size + len(compressed) + data_span] == physical
@@ -254,7 +253,7 @@ def main():
               "observations": outcomes}
     artifact = Path("o112-evidence")
     artifact.mkdir(exist_ok=True)
-    (artifact / "result.json").write_text(json.dumps(record, sort_keys=True, indent=2) + "\\n")
+    (artifact / "result.json").write_text(json.dumps(record, sort_keys=True, indent=2) + "\n")
     print("O112_VERDICT=" + verdict + " 3 golden/3 unique-bin/3 duplicate-bin")
     print(json.dumps(record, sort_keys=True))
     if verdict not in ("NONSTRING_ROOT_DUPLICATE_GAP_CONFIRMED", "GAP_FALSIFIED_BOTH_REFUSE"):
