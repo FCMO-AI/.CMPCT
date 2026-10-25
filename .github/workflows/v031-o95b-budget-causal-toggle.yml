@@ -1,0 +1,94 @@
+# ci-lane: fast
+# O95b original-O86 same-engine causal oracle; not product/release.
+name: CMPCT v0.31 O95b Same-Engine Budget Causal Court
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o95-child-vmhwm-court-20261025'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o95b-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  genuine-source-budget-toggle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EXACT_HEAD: ${{ github.sha }}
+      O95B_PREREG: 70c5bc83cef11f21974222457873f4534f51caec
+      O95_ROOT: dc9b90d3e654fd56c2a0ed8723506690e78f8275
+    steps:
+      - name: Checkout exact result-bearing source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Lock original O86 source and scientific prereg
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O95_ROOT" HEAD
+          git merge-base --is-ancestor "$O95B_PREREG" HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = e46c8670c11c386925f9ae228b25de44c8045f2e
+          test "$(git hash-object src/cmpct/codec.py)" = 7d4c4a5a5f00c42561043611e5d4400dd8af38e6
+          test "$(git hash-object benchmarks/v031_o88_vzip_budget_positive_economics.py)" = 2acd2d9ea862b9f018bf1838f89dd2efa3807971
+          git diff --exit-code "$O95_ROOT" HEAD -- src native tests pyproject.toml benchmarks/history docs/discovery/STATE.json benchmarks/v031_o88_vzip_budget_positive_economics.py benchmarks/v031_o95_child_vmhwm_attribution.py
+          python -m py_compile benchmarks/v031_o95b_budget_causal_toggle.py
+      - name: Install actual unchanged original O86 engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o95b-o86-install" .
+          test "$(git hash-object "$RUNNER_TEMP/o95b-o86-install/cmpct/builder.py")" = e46c8670c11c386925f9ae228b25de44c8045f2e
+          test "$(git hash-object "$RUNNER_TEMP/o95b-o86-install/cmpct/codec.py")" = 7d4c4a5a5f00c42561043611e5d4400dd8af38e6
+          echo O95B_INSTALLED_O86_IDENTITY=PASS
+      - name: Execute actual matched-input six process original-O86 budget A/B
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o95b-evidence
+          python benchmarks/v031_o95b_budget_causal_toggle.py \
+            --o86-package "$RUNNER_TEMP/o95b-o86-install" \
+            --report o95b-evidence/o95b-raw.json 2>&1 | tee o95b-evidence/court.log
+          test "${PIPESTATUS[0]}" -eq 0
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          j=json.loads(Path('o95b-evidence/o95b-raw.json').read_text())
+          assert j['experiment']=='O95b' and not j['failures']
+          assert len(j['observations'])==6
+          assert {x['arm'] for x in j['observations']}=={'default','allow_vzip'}
+          assert j['summary'] is not None
+          assert j['decision'] in ('BUDGET_IS_CAUSAL_OWNER_ON_TESTED_FAMILY','BUDGET_NOT_SUFFICIENT_TO_EXPLAIN_O95_MEMORY')
+          print('O95B_ACTUAL_SAME_ENGINE_PROCESSES=6')
+          print('O95B_DECISION='+j['decision'])
+          PY
+      - name: Preserve exact identity and partial negatives
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o95b-evidence
+          git rev-parse HEAD > o95b-evidence/source-head.sha
+          git hash-object benchmarks/v031_o95b_budget_causal_toggle.py > o95b-evidence/instrument-blob.sha
+          git hash-object src/cmpct/codec.py > o95b-evidence/codec-blob.sha
+          git hash-object src/cmpct/builder.py > o95b-evidence/builder-blob.sha
+      - name: Upload original research receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o95b-source-exact-budget-control-${{ github.sha }}
+          path: o95b-evidence/
+          if-no-files-found: warn
+          retention-days: 30
