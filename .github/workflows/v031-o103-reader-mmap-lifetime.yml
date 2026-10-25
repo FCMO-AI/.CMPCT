@@ -1,0 +1,67 @@
+# ci-lane: fast
+name: CMPCT v031 O103 Reader mmap mapped-inode truncation science
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o103-mmap-live-truncate-20261025
+    paths:
+      - 'benchmarks/v031_o103_reader_mmap_lifetime_court.py'
+      - '.github/workflows/v031-o103-reader-mmap-lifetime.yml'
+      - 'docs/v031-research/2026-10-25-o103-reader-mmap-truncate-prereg.md'
+      - 'docs/v031-research/2026-10-25-o103-reader-mmap-truncate-result.md'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  installed-reader-negative-court:
+    name: Original installed Reader / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify immutable original Reader and Builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          git rev-parse HEAD
+          git hash-object benchmarks/v031_o103_reader_mmap_lifetime_court.py
+      - name: Install real CMPCT package
+        run: python -m pip install -e .
+      - name: Run disposable-child stable/replace/truncate court
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -c 0 || true
+          python benchmarks/v031_o103_reader_mmap_lifetime_court.py --output "$RUNNER_TEMP/o103-results.json"
+          python - "$RUNNER_TEMP/o103-results.json" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1]))
+          assert x["decision"]=="READER_MMAP_SAME_INODE_SIGBUS_CONFIRMED", x
+          assert [q["decision"] for q in x["observations"]] == [
+              "CONTROL_VALID", "CONTROL_VALID", "SAME_INODE_MMAP_SIGBUS_CONFIRMED"
+          ]
+          assert all(q.get("timeout") is False for q in x["observations"])
+          print("SCIENTIFIC_NEGATIVE_CONFIRMED; NOT A REPAIRED PRODUCT")
+          PY
+      - name: Preserve raw receipts even on negative/unexpected results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o103-original-mmap-negative-${{ matrix.os }}
+          path: ${{ runner.temp }}/o103-results.json
+          if-no-files-found: warn
