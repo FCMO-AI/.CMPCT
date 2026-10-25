@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""O39: source-exact O28 vs O31 fresh-process Reader economics.
+"""O39: source-exact O31 vs committed O38 32k Reader scaling economics.
 
 Derived research-only instrument (O33 fixture framing, O39 distinct question). Predictions frozen in
-docs/v031-research/2026-10-24-o38-heldout-hardlink-scale-o39-prereg.md.
+docs/v031-research/2026-10-25-o38-heldout-hardlink-scale-o39-prereg.md.
 No product code, inherited O33 instrument, release comparator, or gate is modified.
 """
 from __future__ import annotations
@@ -188,6 +188,25 @@ def median(xs: list[float]) -> float:
 def runner(source_base: Path, source_candidate: Path, out: Path, reps: int) -> None:
     if reps < 8 or reps % 2:
         raise ValueError("O39 requires at least eight even-count fresh observations per source")
+    # O33 raw labels were historically source-specific constants. Do not inherit
+    # a false receipt: prove each actually executed Git checkout before any court.
+    for source, head, blob in (
+        (source_base, BASE_SHA, BASE_READER_BLOB),
+        (source_candidate, PRODUCT_SHA, PRODUCT_READER_BLOB),
+    ):
+        repo_root = source.resolve().parent
+        got_head = subprocess.check_output(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"], text=True
+        ).strip()
+        got_blob = subprocess.check_output(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD:src/cmpct/reader.py"],
+            text=True,
+        ).strip()
+        if got_head != head or got_blob != blob:
+            raise RuntimeError(
+                f"source custody mismatch for {repo_root}: "
+                f"got {got_head}/{got_blob}, expected {head}/{blob}"
+            )
     out.mkdir(parents=True, exist_ok=True)
     manifest = generate(out / "archives")
     print("O39 verified authentic six-corpus checkpoint manifest", flush=True)
