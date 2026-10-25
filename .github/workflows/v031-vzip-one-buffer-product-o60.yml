@@ -1,0 +1,114 @@
+# ci-lane: fast
+# O60: product candidate + actual historical parent full-r24-byte control.
+name: CMPCT v0.31 O60 One-Buffer VZIP Product Court
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-vzip-source-coherent-product-o60-20261025'
+  pull_request:
+    paths:
+      - 'src/cmpct/codec.py'
+      - 'src/cmpct/builder.py'
+      - 'tests/test_v031_one_buffer_vzip_product_o60.py'
+      - '.github/workflows/v031-vzip-one-buffer-product-o60.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o60-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-parent-parity-and-mutation:
+    name: O60 installed historical parent x candidate ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O50_PARENT: '17c96603e33b02b3f2f9e0079eec2b128f293be8'
+    steps:
+      - name: Checkout exact product candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Compare real installed historical and product candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor "$O50_PARENT" HEAD
+          test "$(git hash-object src/cmpct/codec.py)" = 'dc3446b0eed82edfba9380e3885a20aa45577899'
+          test "$(git hash-object src/cmpct/builder.py)" = 'bda9d7f8005e276ba891aac75ae50eabe67bd431'
+          git diff --exit-code "$O50_PARENT" HEAD -- benchmarks native tools/check_performance_regression.py
+          echo "O60_EXACT_HEAD=$EXPECTED_HEAD"
+          echo "O60_HISTORICAL_O50=$O50_PARENT"
+          SCRIPT="$GITHUB_WORKSPACE/tests/test_v031_one_buffer_vzip_product_o60.py"
+          WORK="$(mktemp -d)"
+          git worktree add --detach "$WORK/historical-source" "$O50_PARENT"
+          python -m venv "$WORK/historical-venv"
+          python -m venv "$WORK/candidate-venv"
+          BASEPY="$WORK/historical-venv/bin/python"
+          CANDPY="$WORK/candidate-venv/bin/python"
+          if [ -f "$WORK/historical-venv/Scripts/python.exe" ]; then
+            BASEPY="$WORK/historical-venv/Scripts/python.exe"
+            CANDPY="$WORK/candidate-venv/Scripts/python.exe"
+          fi
+          (cd "$WORK/historical-source" && "$BASEPY" -m pip install .)
+          (cd "$GITHUB_WORKSPACE" && "$CANDPY" -m pip install . pytest)
+          mkdir -p "$WORK/input" "$WORK/baseline" "$WORK/candidate" "$WORK/isolated-tests"
+          cd "$WORK"
+          "$BASEPY" "$SCRIPT" --emit "$WORK/input" "$WORK/baseline" | tee "$GITHUB_WORKSPACE/o60-historical-archive.log"
+          "$CANDPY" "$SCRIPT" --emit "$WORK/input" "$WORK/candidate" | tee "$GITHUB_WORKSPACE/o60-candidate-archive.log"
+          "$BASEPY" - <<'PY'
+          from pathlib import Path
+          import cmpct.builder,cmpct.codec
+          p=Path(cmpct.builder.__file__).resolve()
+          print("O60_ACTUAL_HISTORICAL_INSTALLED="+str(p))
+          assert "historical-venv" in str(p),p
+          PY
+          "$CANDPY" - <<'PY'
+          from pathlib import Path
+          import cmpct.builder,cmpct.codec
+          p=Path(cmpct.builder.__file__).resolve()
+          print("O60_ACTUAL_CANDIDATE_INSTALLED="+str(p))
+          assert "candidate-venv" in str(p),p
+          PY
+          for kind in stored deflated mixed wheel cohort; do
+            cmp "$WORK/baseline/$kind.cmpct" "$WORK/candidate/$kind.cmpct"
+            echo "O60_HISTORICAL_WHOLE_R24_IDENTICAL=$kind"
+          done
+          cp "$SCRIPT" "$WORK/isolated-tests/test_o60.py"
+          "$CANDPY" -m pytest -vv -s "$WORK/isolated-tests/test_o60.py" --junitxml="$GITHUB_WORKSPACE/o60-junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/o60-tests.log"
+          "$CANDPY" - <<'PY'
+          import xml.etree.ElementTree as ET
+          root=ET.parse(__import__('os').environ['GITHUB_WORKSPACE']+'/o60-junit.xml').getroot()
+          suites=[root] if root.tag=='testsuite' else root.findall('./testsuite')
+          vals={k:sum(int(x.attrib.get(k,0)) for x in suites) for k in ('tests','failures','errors','skipped')}
+          print("O60_TRUE_JUNIT="+str(vals))
+          assert vals=={'tests':11,'failures':0,'errors':0,'skipped':0}, vals
+          PY
+          echo "O60_PRODUCT_COURT_PASS"
+      - name: Preserve original source-bound logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o60-installed-parent-parity-${{ matrix.os }}
+          path: |
+            o60-historical-archive.log
+            o60-candidate-archive.log
+            o60-tests.log
+            o60-junit.xml
+          if-no-files-found: warn
+          retention-days: 30
