@@ -1,0 +1,128 @@
+# ci-lane: fast
+# O52: independent genuine Builder source-lifetime falsifier, no product patch.
+name: CMPCT v0.31 O52 Builder post-stat source pivot court
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-builder-poststat-pivot-oracle-o52-20261025'
+  pull_request:
+    paths:
+      - 'tests/test_v031_builder_poststat_pivot_o52.py'
+      - '.github/workflows/v031-builder-poststat-pivot-o52.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o52-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  builder-source-lifetime:
+    name: O52 source-bound Builder pivot ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source under examination
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run genuine O50 Builder and independent adversarial tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 17c96603e33b02b3f2f9e0079eec2b128f293be8 HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "21a9ec696df13961c25301654feb607a7e161a4c"
+          test "$(git hash-object tests/test_v031_builder_poststat_pivot_o52.py)" = "c1f63bbc48eeb451d5845db7edcf5c675bc210c6"
+          git diff --exit-code 17c96603e33b02b3f2f9e0079eec2b128f293be8 HEAD -- src/cmpct/builder.py src/cmpct/reader.py src/cmpct/transactions.py native benchmarks
+          python -m pip install . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess, cmpct.builder, cmpct.reader
+          root=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip())
+          for module in (cmpct.builder, cmpct.reader):
+              p=Path(module.__file__).resolve()
+              assert not p.is_relative_to(root), f"source shadowed installation: {p}"
+              actual=subprocess.check_output(["git","hash-object",str(p)],text=True).strip()
+              print("O52_INSTALLED_SOURCE="+str(p)+" blob="+actual)
+              if module is cmpct.builder:
+                  assert actual=="21a9ec696df13961c25301654feb607a7e161a4c"
+          PY
+          echo "O52_HEAD=$(git rev-parse HEAD)"
+          echo "O52_BUILDER_BLOB=$(git hash-object src/cmpct/builder.py)"
+          mkdir -p o52-isolated
+          cp tests/test_v031_builder_poststat_pivot_o52.py o52-isolated/
+          python -m pytest -vv o52-isolated/ --junitxml=o52-results.xml 2>&1 | tee o52-results.log
+          python - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          root=ET.parse('o52-results.xml').getroot()
+          suites=[root] if root.tag=='testsuite' else root.findall('./testsuite')
+          assert suites and sum(int(s.attrib.get('tests',0)) for s in suites)==4
+          totals={key:sum(int(s.attrib.get(key,0)) for s in suites)
+                  for key in ('tests','failures','errors','skipped')}
+          cases=[c for s in suites for c in s.findall('testcase')]
+          names={c.attrib.get('name') for c in cases}
+          expected={
+              'test_stable_control_exact_and_preexisting_symlink_type',
+              'test_static_fifo_is_rejected_before_any_archive_output',
+              'test_poststat_regular_to_external_symlink_captures_outside_bytes',
+              'test_poststat_regular_to_fifo_blocks_until_killed',
+          }
+          assert names==expected, (names,expected)
+          assert totals['tests']==4 and totals['failures']==0 and totals['errors']==0,totals
+          assert totals['skipped']==(3 if os.name=='nt' else 0),totals
+          for key,value in totals.items():print("O52_"+key.upper()+"="+str(value))
+          print("O52_REAL_TEST_EXECUTION=VERIFIED")
+          PY
+      - name: Challenge proposed final-only nofollow with real ancestor substitution
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object tests/test_v031_builder_parent_fd_o52b.py)" = "e069fedd92df2d2ad904bfa85503333009008aaf"
+          mkdir -p o52b-isolated
+          cp tests/test_v031_builder_parent_fd_o52b.py o52b-isolated/
+          python -m pytest -vv -s o52b-isolated/ --junitxml=o52b-results.xml 2>&1 | tee o52b-results.log
+          python - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          root=ET.parse('o52b-results.xml').getroot()
+          suites=[root] if root.tag=='testsuite' else root.findall('./testsuite')
+          assert suites, root.tag
+          counts={k:sum(int(s.attrib.get(k,0)) for s in suites)
+                  for k in ('tests','failures','errors','skipped')}
+          cases=[c for s in suites for c in s.findall('testcase')]
+          assert [c.attrib.get('name') for c in cases] == [
+              'test_final_only_nofollow_leaks_via_switched_parent_but_fd_walk_refuses'
+          ], cases
+          assert counts['tests']==1 and counts['failures']==0 and counts['errors']==0,counts
+          assert counts['skipped']==(0 if os.name=='posix' else 1),counts
+          for k,v in counts.items(): print("O52B_"+k.upper()+"="+str(v))
+          print("O52B_REAL_PRIMITIVE_TEST_EXECUTION=VERIFIED")
+          PY
+      - name: Preserve raw source-bound test receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o52-builder-poststat-${{ matrix.os }}
+          path: |
+            o52-results.log
+            o52-results.xml
+            o52b-results.log
+            o52b-results.xml
+          if-no-files-found: warn
+          retention-days: 30
