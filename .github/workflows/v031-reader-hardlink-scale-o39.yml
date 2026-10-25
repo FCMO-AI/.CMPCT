@@ -1,0 +1,141 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# O39 independent held-out O31 vs O38 scaling, no product mutation.
+name: CMPCT v031 O39 held-out hardlink scaling
+on:
+  pull_request:
+    paths:
+      - 'tools/research_o39_reader_hardlink_scale.py'
+      - 'docs/v031-research/2026-10-25-o38-heldout-hardlink-scale-o39-prereg.md'
+      - '.github/workflows/v031-reader-hardlink-scale-o39.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-o39-heldout-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  O31_HEAD: 0edb7bc6e832deb1b403fea50c36e655da9844fd
+  O38_HEAD: dffc6da03b588e209843f2fc6e219e5bce3a7800
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.classify.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Prospective latest-head classifier
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(tools/research_o39_reader_hardlink_scale[.]py|docs/v031-research/2026-10-25-o38-heldout-hardlink-scale-o39-prereg[.]md|[.]github/workflows/v031-reader-hardlink-scale-o39[.]yml)$'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+  exact-source-scale:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind source, immutable preregistration, correct O31 and O38 slot identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o39-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor baeb17f7881edf6a19ceb4842105d0e99ba2b769 HEAD
+          git merge-base --is-ancestor "$O38_HEAD" HEAD
+          test "$(git rev-parse "$O31_HEAD:src/cmpct/reader.py")" = de9accf6607aca7cf70dfe71d7b299a02e298a2d
+          test "$(git rev-parse "$O38_HEAD:src/cmpct/reader.py")" = 4aee9e8ddf50ff3c3e0db20ebf7671e2ac477867
+          test "$(git hash-object src/cmpct/reader.py)" = 4aee9e8ddf50ff3c3e0db20ebf7671e2ac477867
+          test -z "$(git diff --name-only "$O38_HEAD" HEAD -- src/ native/)"
+          test "$(git hash-object docs/v031-research/2026-10-25-o38-heldout-hardlink-scale-o39-prereg.md)" = "$(git rev-parse baeb17f7881edf6a19ceb4842105d0e99ba2b769:docs/v031-research/2026-10-25-o38-heldout-hardlink-scale-o39-prereg.md)"
+          git diff --check "$O38_HEAD" HEAD
+          git rev-parse HEAD > o39-evidence/source-head.txt
+          git rev-parse "$O31_HEAD" > o39-evidence/baseline-head.txt
+          git rev-parse "$O38_HEAD" > o39-evidence/candidate-head.txt
+          git worktree add --detach --quiet "$RUNNER_TEMP/o39-o31" "$O31_HEAD"
+      - name: Install CMPCT and source-exact native baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[test]'
+          python tools/materialize_performance_base_native.py "$RUNNER_TEMP/o39-o31" --receipt "$GITHUB_WORKSPACE/o39-evidence/base-native.json"
+      - name: Inherited functional and hostile controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest --noconftest -q -rs tests/test_reader_hardlink_graph_o25.py tests/test_v031_hardlink_canonical_owner_o31.py tests/test_v031_static_destination_o10r_union_o27.py tests/test_v031_hardlink_static_destination_union_o28.py tests/test_v031_signed_tree_preflight.py 2>&1 | tee o39-evidence/hostile.log
+          exit "${PIPESTATUS[0]}"
+      - name: Authentic large-corps 128 ABBA independent processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/research_o39_reader_hardlink_scale.py --base-source "$RUNNER_TEMP/o39-o31/src" --candidate-source "$GITHUB_WORKSPACE/src" --out "$GITHUB_WORKSPACE/o39-evidence" --reps 8 2>&1 | tee o39-evidence/economics.log
+          exit "${PIPESTATUS[0]}"
+      - name: Preserve independent prospective decision (fails closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, pathlib, os
+          p=pathlib.Path('o39-evidence/o39-raw.json')
+          r=json.loads(p.read_text())
+          expected={(kind,n) for kind in ('plain','fanout','chain','noncanonical') for n in (8192,32768)}
+          observed={(x['shape'],x['size']) for x in r['results']}
+          assert observed==expected,(observed,expected)
+          assert r['source_baseline_head']==os.environ['O31_HEAD']
+          assert r['source_candidate_head']==os.environ['O38_HEAD']
+          assert r['baseline_reader_blob']=='de9accf6607aca7cf70dfe71d7b299a02e298a2d'
+          assert r['candidate_reader_blob']=='4aee9e8ddf50ff3c3e0db20ebf7671e2ac477867'
+          rows={(x['shape'],x['size']):x for x in r['results']}
+          fan=rows[('fanout',32768)]['construct_ms']
+          gain=fan['base']-fan['candidate']
+          regress=[]
+          for shape in ('plain','noncanonical'):
+              rr=rows[(shape,32768)]['construct_ms']
+              if rr['candidate']-rr['base']>=5.0 and (rr['candidate']-rr['base'])/rr['base']>=0.10:regress.append(shape)
+          mem=[]
+          for key,x in rows.items():
+              a=x['post_rss_kib']
+              if a['candidate']-a['base']>=4096 and (a['candidate']-a['base'])/a['base']>=0.10:mem.append(key)
+          summary={'schema':'cmpct-o39-heldout-v1','source_head':os.environ['EVIDENCE_HEAD'],'baseline_head':os.environ['O31_HEAD'],'candidate_head':os.environ['O38_HEAD'],'raw_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'reps_per_source':r['reps_per_source'],'cases':len(rows),'fanout32768_gain_ms':gain,'control_regressions':regress,'memory_regressions':mem,'research_criteria_pass':gain>=8.0 and not regress and not mem,'release_credit':False}
+          outfile=pathlib.Path('o39-evidence/decision.json')
+          outfile.write_text(json.dumps(summary,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(summary,indent=2,sort_keys=True))
+          if not summary['research_criteria_pass']:raise SystemExit('O39 triage falsified; preserve raw negative evidence')
+          PY
+      - name: Upload both positive and negative O39 receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o39-heldout-source-exact-${{ github.sha }}
+          path: o39-evidence/
+          if-no-files-found: error
