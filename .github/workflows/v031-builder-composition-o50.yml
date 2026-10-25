@@ -8,6 +8,7 @@ on:
     paths:
       - 'src/cmpct/builder.py'
       - 'tests/test_v031_builder_composition_o50.py'
+      - 'tests/test_v031_builder_parent_parity_o50.py'
       - 'tests/test_v031_special_entries_o48.py'
       - 'tests/test_v031_win32_builder_hardlink_o47.py'
       - '.github/workflows/v031-builder-composition-o50.yml'
@@ -52,6 +53,7 @@ jobs:
           test "$(git hash-object tests/test_v031_win32_builder_hardlink_o47.py)" = "6c00ae49eea075957453d6d7238d988add6eedee"
           test "$(git hash-object tests/test_v031_special_entries_o48.py)" = "d4a22da7d634a5dd6a1e1fb132ed1ceae2249ab6"
           test "$(git hash-object tests/test_v031_builder_composition_o50.py)" = "44f66dcf220231c1271d56bbff26da290d32d20c"
+          test "$(git hash-object tests/test_v031_builder_parent_parity_o50.py)" = "2e2982ccb43a87573111456064fb82e4000f2ba2"
           git diff --exit-code 29d9688ae6bff6d1eccc27f019893866abe5b5c3 HEAD -- src/cmpct/reader.py src/cmpct/transactions.py native benchmarks/zip_parity_bench.py tools/check_performance_regression.py
           echo "O50_HEAD=$(git rev-parse HEAD)"
           echo "O50_COMPOSED_BUILDER_BLOB=$(git hash-object src/cmpct/builder.py)"
@@ -70,21 +72,24 @@ jobs:
           cp tests/test_v031_win32_builder_hardlink_o47.py o50-isolated/
           cp tests/test_v031_special_entries_o48.py o50-isolated/
           cp tests/test_v031_builder_composition_o50.py o50-isolated/
+          cp tests/test_v031_builder_parent_parity_o50.py o50-isolated/
           python -m pytest -vv o50-isolated/ --junitxml=o50-results.xml 2>&1 | tee o50-results.log
           python - <<'PY'
           import os
           import xml.etree.ElementTree as ET
-          suite=ET.parse('o50-results.xml').getroot()
-          for key in ('tests','failures','errors','skipped'):
-              print('O50_'+key.upper()+'='+str(suite.attrib.get(key)))
-          if os.name=='nt':
-              assert int(suite.attrib.get('tests',-1))==8
-              assert int(suite.attrib.get('skipped',-1))==4
-          else:
-              assert int(suite.attrib.get('tests',-1))==8
-              assert int(suite.attrib.get('skipped',-1))==0
-          assert int(suite.attrib.get('errors',-1))==0
-          assert int(suite.attrib.get('failures',-1))==0
+          root=ET.parse('o50-results.xml').getroot()
+          suites=[root] if root.tag=='testsuite' else root.findall('./testsuite')
+          assert suites, ('unrecognized-junit-root', root.tag)
+          counts={key:sum(int(x.attrib.get(key,0)) for x in suites)
+                  for key in ('tests','failures','errors','skipped')}
+          for key,value in counts.items():
+              print('O50_'+key.upper()+'='+str(value))
+          # Pytest/JUnit emits a <testsuites> wrapper; never mistake its
+          # absent counters for an actual product assertion failure.
+          assert counts['tests']==10, counts
+          assert counts['skipped']==(4 if os.name=='nt' else 0), counts
+          assert counts['errors']==0, counts
+          assert counts['failures']==0, counts
           PY
       - name: Preserve original result evidence
         if: always()
