@@ -1,0 +1,102 @@
+# ci-lane: fast
+name: CMPCT O102 installed Win32 mtime fidelity falsifier
+
+on:
+  pull_request:
+    paths:
+      - "tests/test_v031_o102_win32_mtime_roundtrip.py"
+      - ".github/workflows/v031-o102-win32-mtime-fidelity.yml"
+      - "docs/v031-research/2026-10-25-o102-win32-extract-mtime-prereg.md"
+      - "docs/v031-research/2026-10-25-o102-win32-extract-mtime-result.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o102-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-physical-mtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O102_RECEIPT_DIR: o102-artifacts
+    steps:
+      - name: Checkout exact test and O69 implementation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind original Reader and immutable preregistered test
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = "1122b1d80f2cf76faab8ed2d4e8cb2e346d85e27"
+          test "$(git hash-object tests/test_v031_o102_win32_mtime_roundtrip.py)" = "237a58ce488ba8d5632e6b78ef3eea3e5f1d61ec"
+          echo "O102_OWNER_READER_BLOB=1122b1d80f2cf76faab8ed2d4e8cb2e346d85e27"
+          echo "O102_TEST_BLOB=237a58ce488ba8d5632e6b78ef3eea3e5f1d61ec"
+      - name: Install Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install actual CMPCT package
+        shell: bash
+        run: python -m pip install . pytest
+      - name: Verify installed source identity
+        shell: bash
+        run: |
+          python - <<'PY'
+          import cmpct, pathlib
+          path=pathlib.Path(cmpct.__file__).resolve()
+          assert "site-packages" in str(path).lower(), path
+          print("O102_INSTALLED_CMPCT:", path)
+          PY
+      - name: Execute genuine r24 negative and positive controls
+        shell: bash
+        run: |
+          mkdir -p o102-artifacts
+          cp tests/test_v031_o102_win32_mtime_roundtrip.py o102-artifacts/test_v031_o102_win32_mtime_roundtrip.py
+          python - <<'PY'
+          import hashlib, pathlib
+          a=pathlib.Path("tests/test_v031_o102_win32_mtime_roundtrip.py").read_bytes()
+          b=pathlib.Path("o102-artifacts/test_v031_o102_win32_mtime_roundtrip.py").read_bytes()
+          assert hashlib.sha256(a).digest()==hashlib.sha256(b).digest()
+          PY
+          python -m pytest -q -s o102-artifacts/test_v031_o102_win32_mtime_roundtrip.py --junitxml=o102-artifacts/junit.xml
+      - name: Independently audit executed test census and raw physical receipts
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys, xml.etree.ElementTree as ET
+          path=pathlib.Path("o102-artifacts/junit.xml")
+          suite=ET.parse(path).getroot()
+          if suite.tag!="testsuite": suite=suite.find("testsuite")
+          assert suite is not None
+          tests=int(suite.attrib["tests"])
+          fails=int(suite.attrib["failures"])+int(suite.attrib["errors"])
+          skips=int(suite.attrib["skipped"])
+          assert (tests,fails,skips)==(2,0,0), (tests,fails,skips)
+          observed=json.loads(pathlib.Path("o102-artifacts/source-physical-mtime.json").read_text())
+          assert observed["platform"]==sys.platform, (observed["platform"],sys.platform)
+          assert observed["reader_verify"]=="pass" and observed["byte_reconstruction"]=="pass"
+          result={"platform":sys.platform,"head":pathlib.Path(".git/HEAD").read_text().strip(),"tests":tests,"failures":fails,"skips":skips,"observed":observed}
+          pathlib.Path("o102-artifacts/ci-receipt.json").write_text(json.dumps(result,indent=2)+"\n")
+          print("O102_VERDICT=",json.dumps(result,sort_keys=True))
+          PY
+      - name: Preserve raw evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o102-mtime-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o102-artifacts/
+          if-no-files-found: warn
+
+# A green Windows research court means an authentic timestamp LOSS was observed.
+# It does not mean the Reader's metadata fidelity is correct or release-ready.
