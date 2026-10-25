@@ -20,7 +20,7 @@ class Candidate:
 
 class Builder:
     def __init__(self,root:Path, deflate_reuse_min:int|None=None, *, workers:int|None=None, reproducible:bool=False, reproducible_epoch_ns:int|None=None):
-        self.root=Path(root);self.cands:{}={};self.files=[];self.recipes=[];self.dictionary=b'';self.dict_hash=None;self.canonical_deflate={};self.secondary_stream_hashes=set();self.inode_first={};self.symlink_inode_first={};self.meta_by_rel={}
+        self.root=Path(root);self.cands:{}={};self.files=[];self.recipes=[];self.dictionary=b'';self.dict_hash=None;self.canonical_deflate={};self.secondary_stream_hashes=set();self.inode_first={};self.symlink_inode_first={};self.meta_by_rel={};self._protected_output_inode=None
         # Exact Deflate streams below this size are regenerated from raw data + a one-byte zlib level.
         # 0 reproduces v0.17's maximum-speed policy; a huge value is the compact policy.
         self.deflate_reuse_min=int(os.environ.get('CMPCT_DEFLATE_REUSE_MIN','65536')) if deflate_reuse_min is None else int(deflate_reuse_min)
@@ -127,6 +127,10 @@ class Builder:
                                 if os.name == 'nt' else st)
                 if not stat.S_ISREG(ownership_st.st_mode):
                     raise OSError(f'file type changed during archive scan: {rel}')
+                # O84 composes O81 output/source identity with O80's existing
+                # Windows os.stat() ownership witness; never overwrite source bytes.
+                if self._protected_output_inode is not None and (ownership_st.st_dev,ownership_st.st_ino)==self._protected_output_inode:
+                    raise ValueError(f'archive output is a hardlink to source member: {rel!r}')
                 # NTFS named $DATA streams are not scandir entries. r24 cannot
                 # encode them: refuse a falsely complete archive before reading.
                 if os.name == 'nt':refuse_unsupported_named_streams(e.path)
@@ -304,6 +308,26 @@ class Builder:
         if best and best[0]+16 < len(raw):return best[1],best[2],best[3]
         return CODEC_RAW,raw,b''
     def build(self,out:Path):
+        # A selected output is not a source member; reject recursive in-tree
+        # builds and pre-existing aliases before any output mutation (O81).
+        root_path=os.path.realpath(os.fspath(self.root))
+        output_path=os.path.realpath(os.fspath(out))
+        try:
+            within_root=os.path.commonpath([root_path,output_path])==root_path
+        except ValueError:
+            # Windows cross-volume paths have no common ancestor.
+            within_root=False
+        if within_root:
+            raise ValueError('archive output must be outside the source root')
+        try:
+            out_stat=os.stat(out)
+        except FileNotFoundError:
+            self._protected_output_inode=None
+        else:
+            # A distinct external single-link destination is never a second
+            # name of a source inode. Reuse O80's existing per-entry stat.
+            self._protected_output_inode=((out_stat.st_dev,out_stat.st_ino)
+                if stat.S_ISREG(out_stat.st_mode) and out_stat.st_nlink>1 else None)
         self.scan();self._build_micro_packs();self._prepare_deflate_reuse();self._train_dictionary()
         # Candidate compression is parallel but materialization is not. ``Executor.map`` yields results
         # in the exact sorted-hash input order, so worker scheduling cannot perturb blob ids, offsets or
