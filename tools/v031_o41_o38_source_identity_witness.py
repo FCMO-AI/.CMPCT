@@ -116,7 +116,9 @@ def validate_rows(
                     Path(row["module"]).resolve(strict=True) == src / "cmpct" / "reader.py",
                     "Reader code module swapped",
                 )
-                assert_contained(row["native_module"], src, "native module")
+                native = assert_contained(row["native_module"], src, "native module")
+                require(native.parent == src / "cmpct", "native library outside package owner")
+                require(native.name.startswith("cmpct_core") and native.suffix == ".so", "native module is not Linux cmpct_core cdylib")
                 require(row["files"] == case["size"], "child Reader file count mismatch")
                 require(
                     Path(row["archive"]).resolve(strict=True) ==
@@ -151,6 +153,7 @@ def negative_controls(raw: dict[str, Any], b: Path, c: Path) -> list[str]:
         "wrong_source": lambda a: a["raw"][0].__setitem__("source", str(c)),
         "wrong_reader": lambda a: a["raw"][0].__setitem__("module", str(c / "cmpct" / "reader.py")),
         "wrong_native": lambda a: a["raw"][0].__setitem__("native_module", str(c / "cmpct" / "reader.py")),
+        "wrong_native_same_source": lambda a: a["raw"][0].__setitem__("native_module", str(b / "cmpct" / "native_codec.py")),
         "wrong_sha": lambda a: a["corpus"][0].__setitem__("sha256", "0" * 64),
         "wrong_group": lambda a: a["raw"][0].__setitem__("pair_group", 99),
     }
@@ -201,6 +204,31 @@ def main() -> None:
     raw = json.loads(payload)
     verified = validate_rows(raw, base, candidate)
     tampered = negative_controls(raw, base, candidate)
+    # Hash native bytes after all timing children, outside measured CPU/wall intervals.
+    native_loaded = {}
+    for label, root in (("base", base), ("candidate", candidate)):
+        paths = {row["native_module"] for row in raw["raw"] if row["source_label"] == label}
+        require(len(paths) == 1, f"{label}: inconsistent loaded native artifact paths")
+        module = assert_contained(next(iter(paths)), root, "loaded native binary")
+        require(module.parent == root / "cmpct", "native binary not in package owner")
+        require(module.name.startswith("cmpct_core") and module.suffix == ".so",
+                "native binary is not Linux cmpct_core")
+        native_data = module.read_bytes()
+        native_loaded[label] = {
+            "module_path": str(module),
+            "sha256": hashlib.sha256(native_data).hexdigest(),
+            "bytes": len(native_data),
+        }
+    # Independent historical native payload materialized from original O31 wheel.
+    base_receipt = json.loads((ns.raw.parent / "base-native.json").read_text())
+    require(base_receipt["source_commit"] == O31_INSTRUMENT_CANDIDATE,
+            "historical native build source SHA mismatch")
+    require(base_receipt["native_path"] == native_loaded["base"]["module_path"],
+            "historical native artifact path mismatch")
+    require(base_receipt["native_sha256"] == native_loaded["base"]["sha256"],
+            "historical native artifact SHA mismatch")
+    require(base_receipt["native_bytes"] == native_loaded["base"]["bytes"],
+            "historical native artifact physical size mismatch")
     witness = {
         "schema": "cmpct-o41-o38-actual-sources-v1",
         "classification": "evidence-source-binding-not-product-benchmark",
@@ -209,7 +237,9 @@ def main() -> None:
         "candidate_product_ancestor": O38_PRODUCT_SHA,
         "historical_reader_blob": O31_READER_BLOB,
         "candidate_reader_blob": O38_READER_BLOB,
-        "native_path_rule": "loaded child native module is inside its checked-out source",
+        "native_path_rule": "same source-owned cmpct_core Linux cdylib physically SHA-256-attested after timing",
+        "native_loaded_artifacts": native_loaded,
+        "historical_native_wheel_receipt_sha256": hashlib.sha256((ns.raw.parent / "base-native.json").read_bytes()).hexdigest(),
         "original_o33_json_sha256": hashlib.sha256(payload).hexdigest(),
         "inherited_o33_source_labels": {
             "source_base": raw["source_base"],
@@ -222,7 +252,7 @@ def main() -> None:
             "Two exact checked-out source trees, not two independently installed wheels.",
             "Linux hosted source-bound fresh processes do not imply cold kernel cache.",
             "This witness does not remeasure timings or authorize promotion/release.",
-            "Only child paths, checked-out source blobs, historical native path containment and physical corpus SHAs are certified.",
+            "Actual source/native library bytes and physical corpus SHA identities are bounded to this hosted evidence, not all platforms or ABI implementations.",
         ],
     }
     ns.out.parent.mkdir(parents=True, exist_ok=True)
