@@ -130,13 +130,14 @@ def evaluate(name: str, root: Path, outroot: Path, expected_head: str) -> dict:
     }
 
 
-def run(output: Path, expected_head: str) -> dict:
+def run(output: Path, expected_head: str, scratch_dir: Path | None = None) -> dict:
     actual_head = git("rev-parse", "HEAD")
     if actual_head != expected_head:
         raise RuntimeError(f"source HEAD mismatch: {actual_head} != {expected_head}")
     if not hasattr(os, "posix_fallocate") or not hasattr(os, "SEEK_DATA"):
         raise RuntimeError("UNSUPPORTED_HOST: no Linux preallocation/SEEK_DATA")
-    with tempfile.TemporaryDirectory(prefix="cmpct-o45-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="cmpct-o45-",
+                                          dir=str(scratch_dir) if scratch_dir else None) as tmp:
         root = Path(tmp) / "source"
         outroot = Path(tmp) / "results"
         root.mkdir()
@@ -191,6 +192,7 @@ def run(output: Path, expected_head: str) -> dict:
     result = {
         "schema": "cmpct-o45-source-exact-sparse-allocation-proxy-v1",
         "source_head": actual_head,
+        "scratch_parent": str(scratch_dir) if scratch_dir else tempfile.gettempdir(),
         "builder_git_blob": git("rev-parse", "HEAD:src/cmpct/builder.py"),
         "codec_git_blob": git("rev-parse", "HEAD:src/cmpct/codec.py"),
         "witness_git_blob": git("rev-parse", "HEAD:tools/v031_release_corpus_semantic_witness.py"),
@@ -221,8 +223,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--expected-head", required=True)
+    parser.add_argument("--scratch-dir", type=Path, default=None)
     args = parser.parse_args()
-    run(args.output, args.expected_head)
+    run(args.output, args.expected_head, args.scratch_dir)
 
 
 if __name__ == "__main__":
