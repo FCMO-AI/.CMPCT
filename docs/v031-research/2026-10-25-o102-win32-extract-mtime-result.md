@@ -54,3 +54,13 @@ The test separates three contracts that a future repair must not conflate:
 
 ## Quality-ratchet and falsification
 The research ratchet is narrower than the product ratchet: original Reader and every semantic/evaluator/benchmark are preserved; O102 adds an independently measured counterexample that prevents future documentation or promotion from equating successful byte extraction with complete Windows filesystem fidelity. A regression-free product change must retain O69's xattr semantics, supported POSIX timestamp restoration, source-byte authentication and destination containment while repairing or transparently declining Windows physical timestamps. **Disproof:** a newer original-O69 source-exact installed Windows court that reports both source and extracted file/directory mtimes equal under the same metadata policy would falsify O102's broadest interpretation; preserve that evidence and narrow accordingly. This result does not authorize changing the frozen experiment, thresholds, format or platform policy.
+
+## External Win32 primary-API boundary (design input, not measured product proof)
+Microsoft's `CreateFileW` documentation defines `FILE_FLAG_OPEN_REPARSE_POINT`: without this flag opening an existing symlink yields a handle to its target; with the flag it yields a handle to the link. `FILE_FLAG_BACKUP_SEMANTICS` is required for opening directory handles. Microsoft's `SetFileTime` operates on an opened file/directory handle with `FILE_WRITE_ATTRIBUTES`. This supplies a **feasibility hypothesis** for a safer Windows metadata-restoration route, not a proven implementation: opening the final path with these flags alone does **not** establish ancestry authorization against a mutable parent path; immutable root/parent custody, destination identity and reparse-point semantics remain separately necessary.
+
+Primary references:
+- [Microsoft CreateFileW flags and symbolic-link behavior](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew).
+- [Microsoft SetFileTime handle-based API](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfiletime).
+- [Microsoft directory handles and SetFileTime support](https://learn.microsoft.com/en-us/windows/win32/fileio/obtaining-a-handle-to-a-directory).
+
+No Native API call was made in O102; these references must receive **zero product evidence credit**. A future product candidate would need exact-object, race, real NTFS/reparse and cross-host courts before any release claim. The no-follow Python failure should not be addressed solely by suppressing errors when the caller needs strict physical fidelity.
