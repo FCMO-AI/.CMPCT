@@ -5,6 +5,11 @@ on:
   push:
     branches:
       - 'agent/phased3-v031-o60-vzip-fallback-transaction-union-o63-20261025'
+  pull_request:
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'tests/test_v031_o63_vzip_rollback_union.py'
+      - '.github/workflows/v031-o63-onebuffer-vzip-rollback.yml'
   workflow_dispatch:
 
 permissions:
@@ -24,7 +29,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-14, windows-2025]
     env:
-      EXACT_HEAD: ${{ github.sha }}
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       O60_PARENT: c88a6bc29b9ec8738e23aab788b7c09ab0390e79
     steps:
       - name: Exact branch-source checkout
