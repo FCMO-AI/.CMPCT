@@ -1,0 +1,82 @@
+# ci-lane: fast
+# Scientific/custody lane only; pass means reproducing a scoped negative.
+name: O130 prospective fingerprint semantic custody
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o130-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-git-custody:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out source exact head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+
+      - name: Verify exact source head
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Preregistered real-Git negative oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-artifacts
+          PYTHONPATH="$PWD" python research/o130_candidate_fingerprint_custody_oracle.py --output test-artifacts/o130-custody.json
+
+      - name: Independent JSON court (different validation code)
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r = json.loads(Path("test-artifacts/o130-custody.json").read_text())
+          rows = r["cases"]
+          assert len(rows) == 4
+          assert [row["case"] for row in rows] == [
+              "baseline", "tracked_yaml_workflow", "tracked_executable_mode",
+              "included_content_mutation"]
+          assert len({row["git_head"] for row in rows}) == 4
+          assert len({row["git_tree"] for row in rows}) == 4
+          assert rows[0]["candidate_fingerprint"] == rows[1]["candidate_fingerprint"]
+          assert rows[1]["candidate_fingerprint"] == rows[2]["candidate_fingerprint"]
+          assert rows[2]["candidate_fingerprint"] != rows[3]["candidate_fingerprint"]
+          assert rows[0]["mode_row"].startswith("100644 ")
+          assert rows[2]["mode_row"].startswith("100755 ")
+          assert all(row["excluded_yaml_example"] for row in rows)
+          assert all(row["included_example"] for row in rows)
+          from tools import check_v031_candidate_fingerprint as C
+          assert r["required_paths_materialized"] == len(C.load_manifest()["required_paths"])
+          assert r["decision"]["product_or_release_credit"] is False
+          print("O130 independent prospective scientific audit: PASS (negative custody reproduced)")
+          PY
+
+      - name: Preserve raw negative and audit outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o130-candidate-semantic-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: test-artifacts/o130-custody.json
+          if-no-files-found: error
