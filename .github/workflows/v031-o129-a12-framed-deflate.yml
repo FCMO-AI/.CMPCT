@@ -1,0 +1,73 @@
+# ci-lane: fast
+name: CMPCT O129 A12 Framed Deflate Headroom Oracle
+on:
+  push:
+    branches:
+      - agent/phased3-v031-a12-framed-deflate-root-oracle-20261025
+    paths:
+      - 'tools/research/o129_framed_deflate_oracle.py'
+      - 'docs/v031-research/2026-10-25-o129-*'
+      - '.github/workflows/v031-o129-a12-framed-deflate.yml'
+  pull_request:
+    paths:
+      - 'tools/research/o129_framed_deflate_oracle.py'
+      - 'docs/v031-research/2026-10-25-o129-*'
+      - '.github/workflows/v031-o129-a12-framed-deflate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-o129-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  charged-a12-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact-head and Zstd-19 prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse HEAD:tools/research/o129_framed_deflate_oracle.py)" = "f43363d8f91110995b4daff009c9344fdbb698ae"
+          if ! command -v zstd; then sudo apt-get update -qq && sudo apt-get install -y -qq zstd; fi
+      - name: Run original source-exact, charged oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o129-evidence
+          python tools/research/o129_framed_deflate_oracle.py > o129-evidence/oracle.json
+          python - <<'PY'
+          from pathlib import Path
+          import json,hashlib
+          p=Path("o129-evidence/oracle.json")
+          x=json.loads(p.read_text())
+          assert x["schema"]=="cmpct-o129-a12-framed-view-oracle-v1"
+          assert len(x["cases"])==96
+          assert x["adversarial_rejections"]==5
+          assert all(r["strongest"]==min(r["solid"],r["independent"]) for r in x["cases"])
+          assert all(r["delta"]==r["proposal"]-r["strongest"] for r in x["cases"])
+          assert all(r["read_amp"]<=8 for r in x["cases"])
+          assert x["product_credit"] is False
+          print("O129_EXACT_CHARGED_CASES=96")
+          print("O129_POSITIVE_WINS="+str(x["positive_wins"]))
+          print("O129_MATERIAL_WINS="+str(x["material_wins"]))
+          print("O129_RAW_SHA256="+hashlib.sha256(p.read_bytes()).hexdigest())
+          PY
+          { git rev-parse HEAD; git rev-parse HEAD:tools/research/o129_framed_deflate_oracle.py; python --version; zstd --version; sha256sum o129-evidence/oracle.json; } > o129-evidence/custody.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o129-exact-head-96-case-oracle
+          path: o129-evidence/
+          if-no-files-found: warn
+          retention-days: 45
