@@ -158,25 +158,35 @@ def deflate_level_for(raw:bytes, target:bytes):
         if got==target:return level
     return None
 
-def make_vzip_recipe(ap:Path, add_content):
-    original=ap.read_bytes(); infos=[]
-    with zipfile.ZipFile(ap) as z:
+def make_vzip_recipe(ap:Path, add_content, *, original:bytes|None=None):
+    """Build a virtual ZIP recipe from one immutable captured byte sequence.
+
+    Footnote: independent path opens were a temporal-coherency defect. A same-inode
+    source overwrite between the original read, ZipFile parse and member stream
+    reads could publish an unreconstructible r24 archive. A caller-supplied buffer
+    owns *every* ZIP fact below; direct callers retain the original path API.
+    This does not claim an atomic snapshot if bytes change *during* capture.
+    """
+    if original is None:original=ap.read_bytes()
+    with zipfile.ZipFile(io.BytesIO(original)) as z:
         infos=sorted([i for i in z.infolist() if not i.is_dir()],key=lambda x:x.header_offset)
-        payloads=[]; spans=[]
-        with open(ap,'rb') as f:
-            for zi in infos:
-                f.seek(zi.header_offset);v=LFH.unpack(f.read(LFH.size));nl,xl=v[-2],v[-1];start=zi.header_offset+LFH.size+nl+xl;end=start+zi.compress_size
-                raw=z.read(zi);stream=original[start:end]
-                if zi.compress_type==zipfile.ZIP_STORED:
-                    cref=add_content(raw,Path(zi.filename).suffix.lower());stream_hash=b'';level=-1
-                elif zi.compress_type==zipfile.ZIP_DEFLATED:
-                    # v0.18 records the deterministic zlib level even when it also retains the exact stream.
-                    # This lets the builder drop cold/small Deflate streams without losing byte-exact ZIP rebuilds.
-                    level=deflate_level_for(raw,stream)
-                    if level is None:return None
-                    cref=add_content(raw,Path(zi.filename).suffix.lower(),stream);stream_hash=sha(stream)
-                else:return None
-                spans.append((start,end));payloads.append([cref,zi.compress_type,stream_hash,len(stream),level])
+        payloads=[];spans=[]
+        for zi in infos:
+            # Use the same bytes for central-directory metadata, local header,
+            # compressed stream and extracted member content.
+            head=original[zi.header_offset:zi.header_offset+LFH.size]
+            v=LFH.unpack(head);nl,xl=v[-2],v[-1]
+            start=zi.header_offset+LFH.size+nl+xl;end=start+zi.compress_size
+            raw=z.read(zi);stream=original[start:end]
+            if zi.compress_type==zipfile.ZIP_STORED:
+                cref=add_content(raw,Path(zi.filename).suffix.lower());stream_hash=b'';level=-1
+            elif zi.compress_type==zipfile.ZIP_DEFLATED:
+                # Preserve the historical exact-stream/regen selection and r24 bytes.
+                level=deflate_level_for(raw,stream)
+                if level is None:return None
+                cref=add_content(raw,Path(zi.filename).suffix.lower(),stream);stream_hash=sha(stream)
+            else:return None
+            spans.append((start,end));payloads.append([cref,zi.compress_type,stream_hash,len(stream),level])
     literals=[];cursor=0
     for start,end in spans:literals.append(original[cursor:start]);cursor=end
     literals.append(original[cursor:])

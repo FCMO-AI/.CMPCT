@@ -141,12 +141,16 @@ class Builder:
                 self.files.append([rel,K_FILE,mode,st.st_mtime_ns,ln,rh,[S_PACK,ph,off,ln]])
         else:
             for p,rel,st,mode in deferred:
-                recipe=make_vzip_recipe(p,self.add_content)
+                # One capture owns parsing, compressed spans, fallback, length and
+                # whole-file identity. Reopening the same path between these steps
+                # admitted impossible hybrid VZIP archives under in-place writes.
+                raw=p.read_bytes()
+                recipe=make_vzip_recipe(p,self.add_content,original=raw)
                 if recipe is None:
-                    raw=p.read_bytes();ref=self.add_content(raw,p.suffix.lower());storage=[S_BLOB,ref]
+                    ref=self.add_content(raw,p.suffix.lower());storage=[S_BLOB,ref]
                 else:
                     rid=len(self.recipes);self.recipes.append(recipe);storage=[S_VZIP,rid]
-                rawsha=sha(p.read_bytes());self.files.append([rel,K_FILE,mode,st.st_mtime_ns,st.st_size,rawsha,storage])
+                self.files.append([rel,K_FILE,mode,st.st_mtime_ns,len(raw),sha(raw),storage])
         if self.reproducible:
             # Footnote: normalize after every storage path has been discovered so directories, links,
             # sparse files and deferred virtual containers all receive exactly the same epoch policy.
