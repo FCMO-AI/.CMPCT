@@ -66,3 +66,14 @@ The exact workflow comment was corrected (without changing the corpus generator,
 **Evidence conclusion:** Scientific corpus-topology claim + six focused adversarial tests now both have genuine hosted execution receipts on the same exact implementation head. The earlier falsely green test steps are retained as a separate *evidence-infrastructure negative* and are not counted. A general lesson is that CI step success does not prove a command actually ran: inspect the job log for meaningful test output/receipts. This is a local verification lesson; it does not justify altering the Discovery Engine or release evaluator.
 
 No true archive creation/extraction/compression speed or physical-storage-block metric is measured. No promotion/merge/release approval is implied.
+
+
+## O44c — permanent anti-false-green evidence receipt
+
+To prevent the earlier commented-out test problem recurring, the dedicated **research** workflow now requires an independently readable JUnit XML receipt from the actual pytest invocation. The step parses it outside pytest and rejects a missing report, fewer than six cases, any failures/errors/skips, or absent individual testcase elements. This protects execution custody without changing any scientific evaluator, threshold, historical suite, production code or release gate.
+
+- **Hosted source/test/workflow HEAD:** `45e0a26f1db9320a4b9a98832f971aae51793500`.
+- [Run 40154191179](https://github.com/FCMO-AI/.CMPCT/actions/runs/40154191179): completed **SUCCESS**, real stdout `6 passed in 0.07s`, independently checked `O44_REAL_TESTS=6 FAILURES=0 ERRORS=0 SKIPS=0`, and actual-generator assessor JSON `verdict: PASS`.
+- [Raw artifact #12583946201](https://github.com/FCMO-AI/.CMPCT/actions/runs/40154191179/artifacts/12583946201), ZIP SHA-256 `d0605694a23ea7c1014f0982218716d03bb3ebc5c3309804257ad7d6445d1c11`. Contains JUnit XML, console log, actual-generator receipt and source HEAD identity.
+
+This is a stronger audit of the **execution of the tests**, not a new product-performance win. The original experimental falsifier and the old failed/false-green observations remain preserved without modification.
