@@ -65,7 +65,7 @@ jobs:
             BASEPY="$WORK/historical-venv/Scripts/python.exe"
             CANDPY="$WORK/candidate-venv/Scripts/python.exe"
           fi
-          (cd "$WORK/historical-source" && "$BASEPY" -m pip install .)
+          (cd "$WORK/historical-source" && "$BASEPY" -m pip install . pytest)
           (cd "$GITHUB_WORKSPACE" && "$CANDPY" -m pip install . pytest)
           mkdir -p "$WORK/input" "$WORK/baseline" "$WORK/candidate" "$WORK/isolated-tests"
           cd "$WORK"
