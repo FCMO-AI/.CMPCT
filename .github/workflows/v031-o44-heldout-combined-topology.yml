@@ -55,8 +55,27 @@ jobs:
           set -euo pipefail
           mkdir -p benchmark-artifacts
           # Research-only tests omit the product conftest, not the product General Tests court.
-          python -m pytest --noconftest -q tests/test_heldout_physical_tree_o44.py \
+          python -m pytest --noconftest -q \
+            --junitxml=benchmark-artifacts/o44-pytest.xml \
+            tests/test_heldout_physical_tree_o44.py \
             2>&1 | tee benchmark-artifacts/o44-focused-tests.log
+          # Fail closed if the test command ever gets commented out again.
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          report = Path("benchmark-artifacts/o44-pytest.xml")
+          assert report.is_file() and report.stat().st_size > 0, "research tests did not execute"
+          root = ET.parse(report).getroot()
+          suites = [root] if root.tag == "testsuite" else root.findall("./testsuite")
+          assert suites, "missing pytest testsuite"
+          tests = sum(int(s.get("tests", 0)) for s in suites)
+          failures = sum(int(s.get("failures", 0)) for s in suites)
+          errors = sum(int(s.get("errors", 0)) for s in suites)
+          skips = sum(int(s.get("skipped", 0)) for s in suites)
+          assert tests >= 6 and failures == errors == skips == 0, (tests, failures, errors, skips)
+          assert len(root.findall(".//testcase")) >= 6, "missing test case receipts"
+          print(f"O44_REAL_TESTS={tests} FAILURES={failures} ERRORS={errors} SKIPS={skips}")
+          PY
       - name: Generate actual universal source and non-frozen held-out combined
         shell: bash
         run: |
