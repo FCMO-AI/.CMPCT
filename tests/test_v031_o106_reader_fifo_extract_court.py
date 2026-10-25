@@ -24,8 +24,11 @@ CHILD_DEADLINE_S = 8
 EXPECTED_READER_GIT_BLOB = "e716233403dabd0966863c45635e18fa5ac6afb8"
 
 
-@pytest.fixture
-def genuine_archive(tmp_path):
+@pytest.fixture(scope="module")
+def genuine_archive(tmp_path_factory):
+    # One physical archive for all three A/B/C cases on the same runner. This
+    # prevents source timestamps/paths from changing archive SHA between arms.
+    tmp_path = tmp_path_factory.mktemp("o106-fixed-archive")
     source = tmp_path / "source"
     source.mkdir()
     payload = hashlib.shake_256(b"O106-existing-extract-output-FIFO").digest(4096)
