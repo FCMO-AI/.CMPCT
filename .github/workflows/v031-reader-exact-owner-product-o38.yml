@@ -11,6 +11,8 @@ on:
       - '.github/workflows/installed-native-package.yml'
       - '.github/workflows/v031-hardlink-static-dest-union-o28.yml'
       - 'docs/v031-research/2026-10-24-o31-exact-hit-productization-o38-prereg.md'
+      - 'tools/v031_o41_o38_source_identity_witness.py'
+      - 'docs/v031-research/2026-10-25-o41-postresult-native-source-control.md'
   workflow_dispatch:
 permissions:
   contents: read
@@ -47,7 +49,7 @@ jobs:
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if echo "$changed" | grep -Eq '^(src/cmpct/reader[.]py|[.]github/workflows/v031-reader-exact-owner-product-o38[.]yml|[.]github/workflows/installed-native-package[.]yml|[.]github/workflows/v031-hardlink-static-dest-union-o28[.]yml|docs/v031-research/2026-10-24-o31-exact-hit-productization-o38-prereg[.]md)$'; then
+          if echo "$changed" | grep -Eq '^(src/cmpct/reader[.]py|[.]github/workflows/v031-reader-exact-owner-product-o38[.]yml|[.]github/workflows/installed-native-package[.]yml|[.]github/workflows/v031-hardlink-static-dest-union-o28[.]yml|docs/v031-research/2026-10-24-o31-exact-hit-productization-o38-prereg[.]md|tools/v031_o41_o38_source_identity_witness[.]py|docs/v031-research/2026-10-25-o41-postresult-native-source-control[.]md)$'; then
             echo "run_deep=true" >> "$GITHUB_OUTPUT"
           else
             echo "run_deep=false" >> "$GITHUB_OUTPUT"
@@ -112,6 +114,16 @@ jobs:
             --candidate-source "$GITHUB_WORKSPACE/src" \
             --out "$GITHUB_WORKSPACE/o38-evidence" --reps 8 2>&1 | tee o38-evidence/economics.log
           exit "${PIPESTATUS[0]}"
+      - name: O41 fail-closed actual O31/O38 source, native and corpus identity witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/v031_o41_o38_source_identity_witness.py \
+            --raw o38-evidence/o33-raw.json \
+            --base-source "$RUNNER_TEMP/o38-owner/src" \
+            --candidate-source "$GITHUB_WORKSPACE/src" \
+            --evidence-head "$EVIDENCE_HEAD" \
+            --out o38-evidence/o41-actual-source-witness.json
       - name: Independent prospective product economics decision
         shell: bash
         run: |
