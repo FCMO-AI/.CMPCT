@@ -78,6 +78,11 @@ class Builder:
         self.deflate_reuse_min=int(os.environ.get('CMPCT_DEFLATE_REUSE_MIN','65536')) if deflate_reuse_min is None else int(deflate_reuse_min)
         self.micro_pack_target=int(os.environ.get('CMPCT_MICRO_PACK_TARGET',str(256*1024)))
         self.micro_pack_max_file=int(os.environ.get('CMPCT_MICRO_PACK_MAX_FILE',str(32*1024)))
+        # Resource admission for speculative ZIP inflation; opaque exact fallback is always available.
+        # This bounds declared member outputs, not physical input capture or whole-process RSS.
+        self.vzip_probe_max_inflated_bytes=int(os.environ.get('CMPCT_VZIP_PROBE_MAX_INFLATED_BYTES',str(64*1024*1024)))
+        if self.vzip_probe_max_inflated_bytes<=0:
+            raise ValueError('CMPCT_VZIP_PROBE_MAX_INFLATED_BYTES must be positive')
         default_workers=max(1,min(8,os.cpu_count() or 1))
         self.encode_workers=max(1,int(os.environ.get('CMPCT_ENCODE_WORKERS',str(default_workers)))) if workers is None else max(1,int(workers))
         self.reproducible=bool(reproducible)
@@ -111,7 +116,10 @@ class Builder:
         self.cands=journal
         committed=False
         try:
-            recipe=make_vzip_recipe(path,self.add_content,original=original)
+            recipe=make_vzip_recipe(
+                path,self.add_content,original=original,
+                max_inflated_bytes=self.vzip_probe_max_inflated_bytes,
+            )
             committed=recipe is not None
             return recipe
         finally:
