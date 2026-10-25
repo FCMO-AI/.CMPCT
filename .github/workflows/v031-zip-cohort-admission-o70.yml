@@ -1,0 +1,65 @@
+# O70 source-bound single-host scientific court; no product/release promotion.
+name: CMPCT v0.31 O70 eight-ZIP cohort admission
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-zip-cohort-admission-o70-20261025'
+  pull_request:
+    paths:
+      - 'tests/test_v031_zip_cohort_admission_o70.py'
+      - '.github/workflows/v031-zip-cohort-admission-o70.yml'
+      - 'docs/v031-research/2026-10-25-o70-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o70-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  cohort-same-input-oracle:
+    name: O70 installed product and non-cohort control
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify exact source and execute independent installed oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          python -m pip install . pytest
+          python - <<'PY'
+          import cmpct.builder as b
+          from pathlib import Path
+          import subprocess
+          repo=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip())
+          source=Path(b.__file__).resolve()
+          assert not source.is_relative_to(repo), f"editable source is not installed evidence: {source}"
+          print("O70_INSTALLED_PRODUCT_BUILDER="+str(source))
+          PY
+          mkdir -p o70-isolated
+          cp tests/test_v031_zip_cohort_admission_o70.py o70-isolated/test_v031_zip_cohort_admission_o70.py
+          python -m pytest -s -v o70-isolated/test_v031_zip_cohort_admission_o70.py --junitxml=o70-junit.xml 2>&1 | tee o70-log.txt
+      - name: Preserve raw positive and negative receipts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o70-source-bound-${{ env.EVIDENCE_HEAD }}
+          path: |
+            o70-log.txt
+            o70-junit.xml
+            o70-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
