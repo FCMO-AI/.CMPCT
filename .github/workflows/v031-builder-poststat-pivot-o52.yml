@@ -89,6 +89,31 @@ jobs:
           for key,value in totals.items():print("O52_"+key.upper()+"="+str(value))
           print("O52_REAL_TEST_EXECUTION=VERIFIED")
           PY
+      - name: Challenge proposed final-only nofollow with real ancestor substitution
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object tests/test_v031_builder_parent_fd_o52b.py)" = "e069fedd92df2d2ad904bfa85503333009008aaf"
+          mkdir -p o52b-isolated
+          cp tests/test_v031_builder_parent_fd_o52b.py o52b-isolated/
+          python -m pytest -vv -s o52b-isolated/ --junitxml=o52b-results.xml 2>&1 | tee o52b-results.log
+          python - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          root=ET.parse('o52b-results.xml').getroot()
+          suites=[root] if root.tag=='testsuite' else root.findall('./testsuite')
+          assert suites, root.tag
+          counts={k:sum(int(s.attrib.get(k,0)) for s in suites)
+                  for k in ('tests','failures','errors','skipped')}
+          cases=[c for s in suites for c in s.findall('testcase')]
+          assert [c.attrib.get('name') for c in cases] == [
+              'test_final_only_nofollow_leaks_via_switched_parent_but_fd_walk_refuses'
+          ], cases
+          assert counts['tests']==1 and counts['failures']==0 and counts['errors']==0,counts
+          assert counts['skipped']==(0 if os.name=='posix' else 1),counts
+          for k,v in counts.items(): print("O52B_"+k.upper()+"="+str(v))
+          print("O52B_REAL_PRIMITIVE_TEST_EXECUTION=VERIFIED")
+          PY
       - name: Preserve raw source-bound test receipts
         if: always()
         uses: actions/upload-artifact@v4
@@ -97,5 +122,7 @@ jobs:
           path: |
             o52-results.log
             o52-results.xml
+            o52b-results.log
+            o52b-results.xml
           if-no-files-found: warn
           retention-days: 30
