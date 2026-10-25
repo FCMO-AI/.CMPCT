@@ -1,0 +1,102 @@
+# ci-lane: fast
+# O91 is a research court for a *negative* product property, not a fix/release.
+name: CMPCT v0.31 O91 post-admission Builder output pivots
+
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-o91-post-admission-output-pivot-20261025'
+  pull_request:
+    paths:
+      - 'tests/test_v031_o91_builder_output_postadmission_pivot.py'
+      - 'docs/v031-research/2026-10-25-o91-builder-post-admission-output-pivot-prereg.md'
+      - '.github/workflows/v031-o91-builder-output-pivot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o91-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-physical-negative:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Exact O90 product and prospective prereg custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 1beb733da61da8e1c562e7c3190b1f18f1cc45d1 HEAD
+          git merge-base --is-ancestor 8f7765b4fee6140659958c47f95db42d33bfe4c5 HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "bfb37fcd06e6ff05742606ece365348150f477fc"
+          test "$(git hash-object docs/v031-research/2026-10-25-o91-builder-post-admission-output-pivot-prereg.md)" = "6fb50e2c0559574ea04399e215724d67185316dd"
+          git diff --exit-code 1beb733da61da8e1c562e7c3190b1f18f1cc45d1 HEAD -- src/cmpct/ native/ docs/FORMAT.md benchmarks/history/
+          mkdir -p o91-evidence o91-isolated
+          git rev-parse HEAD > o91-evidence/source-head.txt
+          git hash-object src/cmpct/builder.py > o91-evidence/builder-git-blob.txt
+          git hash-object tests/test_v031_o91_builder_output_postadmission_pivot.py > o91-evidence/instrument-git-blob.txt
+          python -m pip install --disable-pip-version-check . pytest
+          python - <<'PY'
+          import hashlib, subprocess
+          from pathlib import Path
+          import cmpct.builder
+          root=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip()).resolve()
+          module=Path(cmpct.builder.__file__).resolve()
+          assert not module.is_relative_to(root), ("checkout import instead of installed product",module)
+          raw=module.read_bytes()
+          expected="bfb37fcd06e6ff05742606ece365348150f477fc"
+          actual=hashlib.sha1(f"blob {len(raw)}\0".encode()+raw).hexdigest()
+          assert actual==expected,(actual,expected,module)
+          print("O91_INSTALLED_BUILDER_GIT_BLOB="+actual,flush=True)
+          print("O91_INSTALLED_MODULE="+str(module),flush=True)
+          PY
+      - name: Run matched regular and two hostile installed Builder controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_v031_o91_builder_output_postadmission_pivot.py o91-isolated/
+          python -m pytest -vv -s o91-isolated/ --junitxml=o91-evidence/junit.xml 2>&1 | tee o91-evidence/court.log
+      - name: Audit JUnit independently and preserve negative markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,xml.etree.ElementTree as ET
+          from pathlib import Path
+          cases=list(ET.parse("o91-evidence/junit.xml").getroot().iter("testcase"))
+          counts={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
+          counts["total"]=len(cases)
+          counts["passed"]=len(cases)-sum(counts[k] for k in ("failure","error","skipped"))
+          print("O91_JUNIT="+json.dumps(counts,sort_keys=True),flush=True)
+          assert counts=={"failure":0,"error":0,"skipped":0,"total":3,"passed":3},counts
+          log=Path("o91-evidence/court.log").read_text()
+          for marker in ("O91_REGULAR_OUTPUT_CONTROL=PASS",
+                         "O91_SOURCE_CLOBBER_AFTER_ADMISSION=CONFIRMED",
+                         "O91_POST_ADMISSION_FIFO_TIMEOUT_GT_7S=CONFIRMED"):
+              assert marker in log,marker
+          PY
+      - name: Preserve exact-head evidence, even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o91-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o91-evidence/
+          if-no-files-found: warn
