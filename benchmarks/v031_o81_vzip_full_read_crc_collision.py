@@ -135,7 +135,8 @@ def main():
             assert crc(sk_modified) == crc(skeleton)
             assert sha(sk_modified) != sha(skeleton)
             assert bytes(recipe[3]) == bytes.fromhex(sha(source))
-            assert bytes(row[5]) == bytes.fromhex(sha(source))
+            assert row[5] is None, "VZIP SHA is indexed in the authenticated recipe"
+            assert reader.file_sha256("sample.zip") == bytes.fromhex(sha(source))
             report["skeleton_crc_equal"] = True
             report["archive_bytes"] = archive.stat().st_size
             report["skeleton_storage_codec"] = reader.blobs[skref][3]
