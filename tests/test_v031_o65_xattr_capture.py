@@ -107,3 +107,29 @@ def test_reproducible_mode_explicitly_normalizes_xattrs_without_probing(tmp_path
     builder = Builder(root, workers=1, reproducible=True)
     builder.scan()
     assert builder.meta_by_rel["payload.bin"] == (0, 0, {})
+
+@POSIX_XATTR
+def test_real_filesystem_xattr_roundtrips_through_r24_archive(tmp_path):
+    """An independent OS xattr getter must observe the reconstructed value."""
+    import sys
+    from cmpct.reader import CMPCT
+
+    if not hasattr(os, "setxattr"):
+        pytest.skip("no OS xattr setter API")
+    root, leaf = source(tmp_path)
+    key = "user.cmpct_o65" if sys.platform.startswith("linux") else "com.fcmo.cmpct.o65"
+    value = b"real-kernel-o65\x00\xff"
+    try:
+        os.setxattr(leaf, key, value, follow_symlinks=False)
+        assert os.getxattr(leaf, key, follow_symlinks=False) == value
+    except OSError as error:
+        pytest.skip(f"host filesystem cannot hold the test xattr: {error}")
+    archive = tmp_path / "archive.cmpct"
+    Builder(root, workers=1).build(archive)
+    with CMPCT(archive) as reader:
+        assert reader.verify() >= 1
+        destination = tmp_path / "reconstructed"
+        reader.extractall(destination)
+    assert (destination / "payload.bin").read_bytes() == leaf.read_bytes()
+    assert os.getxattr(destination / "payload.bin", key, follow_symlinks=False) == value
+
