@@ -29,6 +29,7 @@ jobs:
       O65_PARENT: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
       O65_BUILDER_BLOB: 7f222458adc1c4aae65fa24650a8fc0c7b0c1b18
       O65_TEST_BLOB: ed76b9fe8bd68e31c557fe954d32dceabd51192d
+      O65_REFEREE_BLOB: c688e2b80ab285b7cc8f85171f15576d3f9080b6
     steps:
       - name: Checkout exact candidate with original source
         uses: actions/checkout@v4
@@ -48,6 +49,7 @@ jobs:
           git merge-base --is-ancestor "$O65_PARENT" HEAD
           test "$(git hash-object src/cmpct/builder.py)" = "$O65_BUILDER_BLOB"
           test "$(git hash-object tests/test_v031_o65_xattr_capture.py)" = "$O65_TEST_BLOB"
+          test "$(git hash-object tools/o65_original_source_referee.py)" = "$O65_REFEREE_BLOB"
           test "$(git show "$O65_PARENT:src/cmpct/builder.py" | git hash-object --stdin)" = 663ef0922992b1fbb8f19e6eea88d55c10a56044
           git diff --exit-code "$O65_PARENT" HEAD -- src/cmpct/codec.py src/cmpct/reader.py src/cmpct/transactions.py native benchmarks docs/FORMAT.md tools/check_performance_regression.py
           test -f docs/v031-research/2026-10-25-o65-xattr-read-integrity-prereg.md
@@ -77,6 +79,11 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest -vv -s -ra o65-court/test_o65.py --junitxml=o65-evidence/junit.xml 2>&1 | tee o65-evidence/pytest.log
+      - name: Independent actual-parent failure and full-r24 byte-parity referee
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/o65_original_source_referee.py 2>&1 | tee o65-evidence/historical-referee.log
       - name: Fail closed on administrative green with missing tests
         shell: bash
         run: |
@@ -106,6 +113,7 @@ jobs:
           git rev-parse HEAD > o65-evidence/head.sha
           git hash-object src/cmpct/builder.py > o65-evidence/builder.blob
           git hash-object tests/test_v031_o65_xattr_capture.py > o65-evidence/tests.blob
+          git hash-object tools/o65_original_source_referee.py > o65-evidence/referee.blob
           git diff "$O65_PARENT" HEAD --stat > o65-evidence/changed-files.txt
       - name: Upload test and provenance receipts
         if: always()
