@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: v0.31 O120 A05 exact composition oracle
 on:
   push:
@@ -9,6 +10,9 @@ on:
       - "docs/v031-research/2026-10-25-o120-a05-composition-prereg.md"
       - ".github/workflows/v031-o120-a05-composition-oracle.yml"
   workflow_dispatch:
+concurrency:
+  group: v031-o120-a05-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   research:
     name: exact A05 oracle / Ubuntu 24.04
