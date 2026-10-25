@@ -1,0 +1,92 @@
+# ci-lane: fast
+# O75 focused research/product correctness; not a release benchmark or promotion.
+name: CMPCT v0.31 O75 Builder atomic publication
+on:
+  push:
+    branches:
+      - 'agent/phased2-v031-builder-atomic-publication-o75-20261025'
+  pull_request:
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'benchmarks/v031_o75_builder_publication.py'
+      - '.github/workflows/v031-o75-builder-publication.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o75-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  genuine-publisher-court:
+    name: O75 installed Builder on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O75_JSON: o75-evidence/result.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind immutable prereg/source and compile candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o75-evidence
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b HEAD
+          git merge-base --is-ancestor 0e2713874c15c455d30c31c3a6f64a2856360bce HEAD
+          test "$(git rev-parse 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          python -m py_compile src/cmpct/builder.py benchmarks/v031_o75_builder_publication.py
+          git rev-parse HEAD > o75-evidence/exact-head.sha
+          git hash-object src/cmpct/builder.py > o75-evidence/candidate-builder.blob
+          git hash-object benchmarks/v031_o75_builder_publication.py > o75-evidence/instrument.blob
+      - name: Install real CMPCT package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Historical negative and atomic candidate with authentic Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_o75_builder_publication.py 2>&1 | tee o75-evidence/court.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('o75-evidence/result.json').read_text())
+          assert r['original_partial_write']['confirmed_data_loss']
+          assert r['staging_partial_write']['old_archive_preserved']
+          assert r['failed_replace']['old_archive_preserved']
+          assert r['successful_replacement']['identical_complete_r24_archive']
+          assert r['fresh_path']['same_mode']
+          assert r['successful_replacement']['temporary_payload_peak_bytes']==r['successful_replacement']['bytes']
+          print('O75: historical torn overwrite confirmed, candidate process-failure atomic, no r24 wire change.')
+          PY
+      - name: Preserve raw identities and both positive/negative receipts
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o75-evidence
+          git rev-parse HEAD > o75-evidence/exact-head-final.sha
+          python -c "import sys,platform;print(platform.platform());print(sys.version)" > o75-evidence/platform.txt
+      - name: Upload O75 exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o75-${{ matrix.os }}-${{ github.sha }}
+          path: o75-evidence/
+          if-no-files-found: error
