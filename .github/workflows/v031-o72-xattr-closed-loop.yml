@@ -111,6 +111,51 @@ jobs:
           pathlib.Path("o72-evidence/receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
           print(json.dumps(receipt,sort_keys=True))
           PY
+      - name: Compare complete archives against exact historical O69 parent Builder
+        shell: bash
+        run: |
+          # Fetch the actual pre-O65 Builder at the pinned O69 parent, not a
+          # reconstructed/shadow algorithm. A shallow checkout is legitimate.
+          git fetch --no-tags --depth=1 origin agent/phased2-v031-strict-xattr-restoration-o69-20261025
+          test "$(git rev-parse FETCH_HEAD)" = "8fe424ac8575da10bf5ecfdb9660d4b5831f638b"
+          HIST_BLOB="$(git rev-parse FETCH_HEAD:src/cmpct/builder.py)"
+          test "$HIST_BLOB" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          git cat-file blob "$HIST_BLOB" > o72-evidence/legacy_builder.py
+          python - <<'PY'
+          import hashlib, importlib.util, json, pathlib, sys
+          from cmpct.core import Builder, CMPCT
+
+          path = pathlib.Path("o72-evidence/legacy_builder.py").resolve()
+          name = "cmpct._o72_parent_builder"
+          spec = importlib.util.spec_from_file_location(name, path)
+          assert spec and spec.loader
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[name] = module
+          spec.loader.exec_module(module)
+
+          root = pathlib.Path("o72-evidence/ordinary-source")
+          root.mkdir()
+          (root / "data.txt").write_bytes(b"independent ordinary-source archive parity" * 17)
+          (root / "empty.bin").write_bytes(b"")
+          (root / "nested").mkdir()
+          (root / "nested" / "payload.txt").write_bytes(b"nonempty sibling")
+          original = pathlib.Path("o72-evidence/historical.cmpct")
+          candidate = pathlib.Path("o72-evidence/composed.cmpct")
+          module.Builder(root, workers=1).build(original)
+          Builder(root, workers=1).build(candidate)
+          a, b = original.read_bytes(), candidate.read_bytes()
+          assert a == b, "same-input complete r24 archive bytes regressed"
+          with CMPCT(candidate) as reader:
+              assert reader.verify() == 3
+              assert reader.read("nested/payload.txt") == b"nonempty sibling"
+          receipt = dict(historical_parent="8fe424ac8575da10bf5ecfdb9660d4b5831f638b",
+                         historical_builder_blob="663ef0922992b1fbb8f19e6eea88d55c10a56044",
+                         equal=True, stored_bytes=len(b),
+                         sha256=hashlib.sha256(b).hexdigest(),
+                         verification="actual historical Builder with current installed codec on same source")
+          pathlib.Path("o72-evidence/historical-parity.json").write_text(json.dumps(receipt,indent=2)+"\\n")
+          print(json.dumps(receipt,sort_keys=True))
+          PY
       - name: Preserve evidence even when failed
         if: always()
         uses: actions/upload-artifact@v4
