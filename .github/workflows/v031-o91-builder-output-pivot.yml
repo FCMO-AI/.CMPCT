@@ -84,7 +84,7 @@ jobs:
           cases=list(ET.parse("o91-evidence/junit.xml").getroot().iter("testcase"))
           counts={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
           counts["total"]=len(cases)
-          counts["passed"]=len(cases)-sum(counts.values())
+          counts["passed"]=len(cases)-sum(counts[k] for k in ("failure","error","skipped"))
           print("O91_JUNIT="+json.dumps(counts,sort_keys=True),flush=True)
           assert counts=={"failure":0,"error":0,"skipped":0,"total":3,"passed":3},counts
           log=Path("o91-evidence/court.log").read_text()
