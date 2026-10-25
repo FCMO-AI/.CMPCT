@@ -1,0 +1,105 @@
+# ci-lane: fast
+name: CMPCT v0.31 O81 Builder source/output alias court
+
+on:
+  pull_request:
+    paths:
+      - "src/cmpct/builder.py"
+      - "tests/test_v031_o81_builder_output_source_alias.py"
+      - ".github/workflows/v031-o81-builder-output-source-alias.yml"
+      - "docs/v031-research/2026-10-25-o81-builder-output-source-alias-prereg.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o81-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-real-source-court:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Exact-head checkout with genuine historical parent
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind source and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b HEAD
+          git merge-base --is-ancestor 757c47d55331da9e2942b1d6b9f7f17bc2dcabc0 HEAD
+          test "$(git rev-parse 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          mkdir -p o81-evidence
+          git rev-parse HEAD > o81-evidence/head.sha
+          git hash-object src/cmpct/builder.py > o81-evidence/product.blob
+          git hash-object tests/test_v031_o81_builder_output_source_alias.py > o81-evidence/instrument.blob
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install real package and isolated test dependencies
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check . pytest
+      - name: Execute historical negative and candidate positive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_v031_o81_builder_output_source_alias.py o81-evidence/
+          python - <<'PY'
+          import cmpct, pathlib, hashlib
+          p = pathlib.Path(cmpct.__file__).resolve()
+          assert "site-packages" in str(p).lower(), p
+          source = pathlib.Path("tests/test_v031_o81_builder_output_source_alias.py").read_bytes()
+          copied = pathlib.Path("o81-evidence/test_v031_o81_builder_output_source_alias.py").read_bytes()
+          assert hashlib.sha256(source).digest()==hashlib.sha256(copied).digest()
+          print("installed-package:", p)
+          print("instrument-sha256:", hashlib.sha256(copied).hexdigest())
+          PY
+          python -m pytest -q o81-evidence/test_v031_o81_builder_output_source_alias.py --junitxml=o81-evidence/junit.xml 2>&1 | tee o81-evidence/court.log
+      - name: Audit executed cases and justified host capabilities
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys, xml.etree.ElementTree as ET
+          root=ET.parse("o81-evidence/junit.xml").getroot()
+          suite=root if root.tag=="testsuite" else root.find("testsuite")
+          assert suite is not None
+          cases=list(suite.iter("testcase"))
+          assert len(cases)==8, ("missing genuine cases", len(cases))
+          failed=[c.get("name") for c in cases if c.find("failure") is not None or c.find("error") is not None]
+          assert not failed, failed
+          skips=[c.get("name") for c in cases if c.find("skipped") is not None]
+          allowed={"test_historical_successful_build_overwrites_hardlinked_source",
+                   "test_candidate_refuses_external_hardlink_and_preserves_source",
+                   "test_candidate_rejects_output_symlink_into_source",
+                   "test_source_hardlinks_without_output_alias_remain_supported"}
+          assert set(skips)<=allowed, skips
+          assert not skips if sys.platform.startswith("linux") else True
+          assert len(skips)<=3, skips
+          evidence={"head":pathlib.Path("o81-evidence/head.sha").read_text().strip(),
+                   "host":sys.platform,"tests":len(cases),"skipped":skips,
+                   "passing":len(cases)-len(skips),
+                   "scope":"real installed r24 Builder / historical negative; no performance or release credit"}
+          pathlib.Path("o81-evidence/result.json").write_text(json.dumps(evidence,indent=2)+"\n")
+          print(json.dumps(evidence,sort_keys=True))
+          PY
+      - name: Preserve raw positive and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o81-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o81-evidence/
+          if-no-files-found: warn
