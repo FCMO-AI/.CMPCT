@@ -1,0 +1,80 @@
+# ci-lane: fast
+# O64-E: same-corpus real O57-vs-O64 product economy, not release authority.
+name: CMPCT v0.31 O64-E NTFS directory guard economics
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o64-win32-directory-ads-admission-20261025'
+    paths:
+      - 'benchmarks/v031_o64_directory_admission_economics.py'
+      - '.github/workflows/v031-o64e-ntfs-directory-economics.yml'
+      - 'docs/v031-research/2026-10-25-o64e-directory-admission-economics-prereg.md'
+  pull_request:
+    paths:
+      - 'benchmarks/v031_o64_directory_admission_economics.py'
+      - '.github/workflows/v031-o64e-ntfs-directory-economics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o64e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  abba-windows:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact experiment with historical base available
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: CPython 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Exact-source same-host whole-Builder ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor d9f9fa724c139c6281f0e2a92c66601bee912618 HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "b02a30d4ad1b26ea8eea49e11159113caebd6006"
+          test "$(git hash-object src/cmpct/ntfs_streams.py)" = "61d8cab1545c491da76b23ea89d4ca85d3030c5d"
+          git worktree add --detach o64e-baseline d9f9fa724c139c6281f0e2a92c66601bee912618
+          test "$(git hash-object o64e-baseline/src/cmpct/builder.py)" = "7a13545c7dc22ea973f90930fae6cf053f13f1f2"
+          test "$(git hash-object o64e-baseline/src/cmpct/ntfs_streams.py)" = "23207ac06797fb21322cf327e97928fdbb5241c2"
+          python -m pip install . psutil
+          mkdir -p o64e-evidence
+          python benchmarks/v031_o64_directory_admission_economics.py \
+            --baseline o64e-baseline --candidate . \
+            --workspace "$RUNNER_TEMP/o64e-shared-tree" \
+            --report o64e-evidence/results.json \
+            2>&1 | tee o64e-evidence/results.log
+          python - <<'PY'
+          import json
+          p = json.load(open("o64e-evidence/results.json", encoding="utf-8"))
+          assert len(p["raw_samples"]) == 24, len(p["raw_samples"])
+          assert len(p["cases"]) == 3, p["cases"]
+          for name in p["cases"]:
+              rows=[x for x in p["raw_samples"] if x["scenario"]==name]
+              assert len(rows)==8
+              assert {x["source"] for x in rows}=={"base","candidate"}
+              assert len({(x["archive_bytes"],x["archive_sha256"]) for x in rows})==1
+              print("O64E_RESULT_"+name+"="+json.dumps(p["cases"][name],sort_keys=True),flush=True)
+          print("O64E_REAL_SAMPLES=24 ARCHIVE_IDENTITY=EXACT",flush=True)
+          PY
+      - name: Persist both successes and real errors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o64e-windows-raw-${{ github.sha }}
+          path: o64e-evidence/
+          if-no-files-found: warn
+          retention-days: 30
