@@ -1,0 +1,66 @@
+name: v0.31 O120 A05 exact composition oracle
+on:
+  push:
+    branches:
+      - agent/phased2-v031-a05-composition-oracle-o120-20261025
+  pull_request:
+    paths:
+      - "research/o120_a05_composition_oracle.py"
+      - "docs/v031-research/2026-10-25-o120-a05-composition-prereg.md"
+      - ".github/workflows/v031-o120-a05-composition-oracle.yml"
+  workflow_dispatch:
+jobs:
+  research:
+    name: exact A05 oracle / Ubuntu 24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Pin frozen prediction and exact research instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object research/o120_a05_composition_oracle.py)" = "058f14e8b50e6de764b4ecab877abd6e44add6fd"
+          test "$(git hash-object docs/v031-research/2026-10-25-o120-a05-composition-prereg.md)" = "69baaf976c269548050022c48fb75c49763e618f"
+          git rev-parse HEAD
+          python3 --version
+      - name: Ensure real Zstd-19 reference compressor
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v zstd; then sudo apt-get update && sudo apt-get install -y zstd; fi
+          zstd --version
+      - name: Exact invertibility and full prospective court
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o120_results
+          python3 research/o120_a05_composition_oracle.py --selftest
+          python3 research/o120_a05_composition_oracle.py --output o120_results/results.json > o120_results/stdout.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          o=json.loads(Path("o120_results/results.json").read_text())
+          assert o["product_credit"] is False
+          assert len(o["cases"])==5
+          assert o["total_programs"]==sum(c["candidate_count"] for c in o["cases"])
+          for c in o["cases"]:
+              assert c["candidate_count"]>100, c
+              assert len(c["source_sha256"])==64
+              assert c["best_depth_le1_bytes"]==min(c["depth_best"]["0"]["charged_bytes"],c["depth_best"]["1"]["charged_bytes"])
+              assert c["best_depth2_bytes"]==c["depth_best"]["2"]["charged_bytes"]
+              assert c["two_stage_savings_bytes"]==c["best_depth_le1_bytes"]-c["best_depth2_bytes"]
+          print("INDEPENDENT_RESULT_AUDIT PASS",o["decision"],o["total_programs"])
+          PY
+          (git rev-parse HEAD; git hash-object research/o120_a05_composition_oracle.py; sha256sum o120_results/results.json; zstd --version; uname -a) > o120_results/provenance.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o120-a05-exact-results
+          path: |
+            o120_results/
+            research/o120_a05_composition_oracle.py
+            docs/v031-research/2026-10-25-o120-a05-composition-prereg.md
+          retention-days: 90
