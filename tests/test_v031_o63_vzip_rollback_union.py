@@ -126,8 +126,18 @@ def test_successful_virtual_recipe_preserves_existing_o60_archive_bytes(
         assert reader.read(path.name) == raw
         assert reader.verify() >= 1
 
-    # Stable-result byte identity is also exercised by the original O60
-    # full-historical product court, executed unchanged in this workflow.
+    # Stronger than extract equality: execute the *direct original O60*
+    # make_vzip_recipe call on the same captured source with no journal.
+    # Successful transactions must leave the entire physical r24 identical.
+    direct_path = tmp_path / "direct-o60.cmpct"
+    with monkeypatch.context() as mp:
+        mp.setattr(
+            Builder, "_transactional_vzip_recipe",
+            lambda self, path, *, original:
+                builder_module.make_vzip_recipe(path, self.add_content, original=original)
+        )
+        build(root, direct_path)
+    assert candidate_path.read_bytes() == direct_path.read_bytes()
 
 
 def test_late_exception_restores_existing_candidates_in_place(tmp_path, monkeypatch):
