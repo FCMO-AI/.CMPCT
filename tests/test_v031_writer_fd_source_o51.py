@@ -179,3 +179,28 @@ assert switched[0], "test did not pivot after descriptor acquisition"
         assert row[2] == (before.st_mode & 0o7777)
         assert row[3] == before.st_mtime_ns
         assert reader.verify() >= 1
+
+
+def test_directory_source_fails_without_mutating_signed_archive(tmp_path):
+    archive = _archive(tmp_path)
+    original_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+    directory = tmp_path / "input-directory"
+    directory.mkdir()
+    (directory / "payload.bin").write_bytes(b"contents-do-not-turn-directory-into-file")
+    cp = _cli(archive, directory, timeout=5)
+    assert cp.returncode != 0, cp.stdout
+    _assert_unchanged(archive, original_sha)
+
+
+@pytest.mark.skipif(os.name != "posix" or not hasattr(os, "mkfifo"),
+                    reason="POSIX symlink to FIFO admission")
+def test_symlink_target_fifo_cannot_block_open_or_publish(tmp_path):
+    archive = _archive(tmp_path)
+    original_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+    fifo = tmp_path / "symlink-target.fifo"
+    os.mkfifo(fifo, 0o600)
+    link = tmp_path / "source-link.bin"
+    link.symlink_to(fifo)
+    cp = _cli(archive, link, timeout=3)
+    assert cp.returncode != 0
+    _assert_unchanged(archive, original_sha)
