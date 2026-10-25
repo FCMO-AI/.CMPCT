@@ -2,46 +2,52 @@
   "schema": "cmpct-discovery-state-v1",
   "status": "ACTIVE",
   "authority": {
-    "canonical_release": "v0.30.0 rolling pre-1.0 checkpoint",
-    "v031_development": "agent/v031-development (live head; read repository before trusting this staleable cache)",
-    "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
-    "bounded_drift_owner": "agent/v031-bounded-drift-coordered-court@dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf",
-    "issue194_owner": "agent/v031-issue194-source-stat-falsifier@91c35b03cd815b850b078d5083684f3e8587475d",
-    "issue206_owner": "agent/v031-issue206-transactional-vzip@a4e74034b8d6af79877360864f59ef0d2af69575",
-    "note": "Repository heads, frozen preregistrations and exact result-bearing evidence outrank this staleable index. docs/V030_EFFICIENCY_RECOVERY.md is CLOSED as a v0.30 release gate; technical debt carries into v0.31. ACTIVE_RESEARCH_THESIS still contains older allocation prose and must not reopen closed v0.30 release gating."
+    "canonical_release": "v0.30.0 (rolling pre-1.0; revision 24)",
+    "main": "main@80c358f8824ec1b20d349c92ed94c898090969b0",
+    "v031_development": "agent/v031-development@4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "observed_at_utc": "2026-10-25T20:03:20.932Z",
+    "note": "This is a staleable frontier pointer, NOT a release gate or independent project database. Canonical Git refs, issue/PR owners, exact source CI artifacts and frozen experiment documents always override this index. Do not interpret isolated draft success as merged v0.31 product. For further details follow cited PRs instead of expanding this cache."
   },
   "active_product_bottleneck": {
-    "id": "v031-result-custody-and-execution-ownership",
-    "observation": "The highest-value v0.31 mechanisms are decision-complete or product-landed, but their decisive courts are unexecuted: bounded drift lacks an exact-source hosted route; Issue194 has a frozen integrated A/B whose landed v1 evaluator is diagnostic-only; Issue206 has a landed transactional VZIP fix whose exact package/native product court remains unexecuted.",
-    "next_discriminator": "Use the first legitimate exact-source/runtime route to execute one already-frozen court. Do not invent nearby mechanism variants merely because execution custody is blocked."
+    "id": "v031-unmerged-owner-composition-plus-cross-host-source-identity",
+    "observation": "Canonical v0.30.0/r24 is released; v0.31 development remains at 4545d7d5 (Oct 6) with multiple unmerged draft owners. #431@b7bdf936 Windows worktree source identity is red (3/5 hosted jobs passing); #442@7efcc511 composed O80/O81 installed Builder focused tests pass on Ubuntu/macOS/Windows but generic 40198804084 has 10 inherited historical-custody reds and official comparator 40198803932 stops at its correctness gate before measuring. No product benchmark PASS or promotion. Additional source-exact product negatives: #459 O103 Reader same-inode source truncation causes fatal SIGBUS on Ubuntu/macOS (Issue #460); #461 O106 Reader extraction into existing FIFO can exceed 8-second bounded child timeout on Ubuntu/macOS (Issue #462); #455 O99 protects output-parent inode identity but #456 O101 installed Builder can publish inside source after SAME-inode output-parent reparent, Ubuntu/macOS. This release-safety debt must not be obscured by successful scientific test runs. O110 independent lower-rung Linux openat2 oracle limits ancestry claims further, without a product fix.",
+    "next_discriminator": "Keep #431 cross-host source custody with its owner (actual CRLF/normalized-worktree discriminator, no weaker equality). For destination publication, #455/#442 owners must first decide whether CMPCT promises pinned-inode physical publication under stable ancestors or adversarially invariant source-tree exclusion; O101 exact hosted product counterexample and O110 openat2 primitive show the latter needs an enforceable namespace ownership mechanism, not another stat/dirfd check. Keep Reader defects #460/#462 with existing Reader owner #269."
   },
   "primary_question": {
-    "id": "v031-bounded-drift-coordered-court",
-    "family": "representation-execution",
-    "hypothesis": "The frozen coordered bounded-drift court can improve the exact Shifted/Boundary representation frontier under unchanged filesystem, integrity, locality, comparator and release semantics.",
-    "kill": "Any frozen-court byte/locality/equality failure retires or narrows the current bounded-drift promotion claim; do not rescue it by changing thresholds, fixtures, mappings or comparators.",
+    "id": "o75-source-object-versus-platform-worktree-custody",
+    "family": "v031-product-convergence-and-evidence",
+    "hypothesis": "The existing O63 Builder plus O66 historical comparator and O266 prospective candidate fingerprint can become an interpretable five-host candidate if Windows worktree bytes are distinguished correctly from immutable Git source objects, without changing source semantics, historical v0.30 receipts or inherited O66 tests.",
+    "kill": "Any non-EOL source-byte difference, modified canonical Git blob, violated original O66 Builder parity/hostile test, or genuine product regression denies the claimed integrated-green result; all five installed jobs and actual official parity job must run before promotion.",
     "status": "BLOCKED",
     "evidence": [
-      "docs/v031-coordination/2026-10-05-bounded-drift-execution-custody.json@156d2902d01462b17d242a1d0897ea46493ff6ec",
-      "frozen benchmark blob 2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
-      "frozen prereg blob f8e53f058a1c123ea4665b730c45f5619eb93d5f",
-      "owner head dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf has zero exact-head Actions runs/statuses and the dedicated workflow is absent"
+      "PR #431 at b7bdf9360b57f018fd2fe9ebf89dbf5ec8074449: generic Tests run 40185222735 SUCCESS; installed run 40185222752: Ubuntu shallow/full and macOS shallow SUCCESS, Windows shallow/full FAIL; aggregation SKIPPED.",
+      "PR #431 comment 6397825789: both Windows checkouts show wrong worktree-vs-HEAD source bytes including historical v0.30 lock, while the diagnostic accidentally counts literal backslash-r-backslash-n rather than actual CRLF bytes; cause is not yet established.",
+      "Parent #422 O66 actual 5-host clean-installed 108 PASS/2 Windows skips; its generic 812 PASS/4 FAIL is not green. O266 #266 alone fixes the four inherited source epoch assertions, but independent passes are not a combined result.",
+      "Official r24/ZIP effective benchmark repeatedly SKIPPED on documentation/workflow-only PR pushes; no release-performance credit.",
+      "O75 independent 2026-10-25 exact Git-object-byte analysis on two representative immutable/tracked files shows LF→CRLF conversion alone EXACTLY reproduces hosted Windows worktree SHA-256: docs/V030_RELEASE_LOCK.json canonical 73731e... -> CRLF fed9be...; docs/V031_CANDIDATE_FINGERPRINT.json canonical f1df4c... -> CRLF b266f2.... Evidence comment PR #431 #6402497920, Windows original run 40185222752. Cause established ONLY for these two; full 2316-file/installed-wheel/five-host court remains unverified and BLOCKED."
     ]
   },
   "frontier_candidates": [
     {
-      "id": "issue194-grouped-historical-index-ownership",
-      "family": "execution-ownership",
-      "question": "Does reusing the exact historical weak index once per immutable base preserve child/product identity and materially improve the frozen Shifted court without held-out wall/RSS debt?",
-      "status": "BLOCKED",
-      "evidence": "Owner head 91c35b03cd815b850b078d5083684f3e8587475d; landed benchmark blob 38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc; convergence record e43f5dd4ecdba6b4b798970e8c6051f1a29284fe. Lower-rung evidence is strongly positive, but the hardened promotion-quality evaluator remains unlanded/unexecuted."
+      "id": "o79-integrity-matched-vzip-selective-access",
+      "family": "verified-selective-access",
+      "question": "Can the source-exact SHA whole-recipe oracle #436 be integrated as bounded authenticated range access, preserving O76b hostile corruption semantics and O81 #438 full-read/verify distinction without paying unbounded scan/decode or changing r24?",
+      "status": "READY",
+      "evidence": "#436 original hosted run 40190864002 measured 169.687x–706.171x SHA-authenticated speedup on 3 eligible synthetic families; O79b 40191456187 rejected 2/2 unselected physical mutations; random negative 13.6x worse than unchecked range. Research only; #438 CRC32 collision proves regular VZIP full read and verify are different integrity tiers."
     },
     {
-      "id": "issue206-transactional-vzip-evidence",
-      "family": "transactional-state-correctness",
-      "question": "Does the landed transactional VZIP repair preserve complete product bytes/tree while removing speculative state leakage without create/RSS/I-O regression on the exact package/native runtime?",
-      "status": "BLOCKED",
-      "evidence": "Owner head a4e74034b8d6af79877360864f59ef0d2af69575; product landing b00f9a2bc59142dc526a0ee1eba335e1d28d83c4; evaluator-control v8 blob 82eb21628b17b38a4b449e679ee429001454e016. Exact package/native custody, focused tests and six-court product A/B remain unexecuted."
+      "id": "builder-filesystem-custody-composition",
+      "family": "filesystem-source-destination-safety",
+      "question": "Can the independently proven O80/O81 Builder union safely converge with descriptor-bound regular-only publication and an explicit adversarial namespace threat contract, preserving O91/O96/O101 exact-source counterexamples and full r24 physical/recovery/performance parity?",
+      "status": "READY",
+      "evidence": "#442 installed 3-host O84 focused court 40198804050 SUCCESS; generic 40198804084 10 inherited reds and actual official gate 40198803932 blocked before benchmark. #441 O83 180 source-exact independent child observations support 0 complete archive byte change O64→O80 on its tested trees (NOT O84 release parity). #445/#446 O87 FIFO Builder output >8s; #449 O91 source-clobber and late-FIFO; #454 O96 ancestor alias swap; #455 O99 dirfd-bound owner; #456 O101 confirmed same-inode external-output directory relocated into source with Builder success on Linux/macOS. See docs/v031-research/2026-10-25-o110-directory-ancestry-model-bound.md for lower-rung Linux openat2 RESOLVE_BENEATH counterexample; not an installed-product test. Product follow-up belongs to #455/#442 owners; no duplicate patch."
+    },
+    {
+      "id": "s-pack-physical-owner-read-amplification",
+      "family": "physical-layout-and-execution",
+      "question": "Can bounded generic physical ownership avoid mixed eight-ZIP cohort selective-decode amplification without the all-individual create-wall and byte debt measured by O70, using O73 alternative #429 as lower-rung research?",
+      "status": "READY",
+      "evidence": "#426 O70 true-installed same-input court reported 687.911x physical decoded-work amplification; all-individual control cost +2,122 complete bytes and ~3.75x create wall. Research frontiers only; no physical-owner product merge."
     }
   ],
   "saturated_families": [
@@ -76,7 +82,19 @@
     "issue206": "Transactional Builder source is landed; v8 control explicitly binds fresh-child source custody and requires candidate-neutrality before product timing credit.",
     "external_frontier": "Historical external scoreboard remains 15/15 ZIP size wins, 7/15 Zstd-19 size wins, 4/15 ZIP create wins, 5/15 Zstd-19 create wins, 4/15 strict joint wins; historical fingerprint only, not current release credit.",
     "a15": "NARROWED / DO NOT CHARTER: internal nonserialized projection/helper factoring is the stronger simpler control; serialized IR carrying-cost advantage is not established. Durable coordination: docs/v031-coordination/2026-10-06-foundry-reconciliation-a15-a07.json.",
-    "a07": "NARROWED / NOT CHARTERED: exact-head C25CC02 run 33296257896 recovered from Actions artifact 9727565317; projected complete 10,220,043 B versus Zstd-19 10,199,302 B, margin -20,741 B, exact semantics/locality green, promotion_signal=false. Two earlier artifacts reproduce the ~20.7 KiB loss."
+    "a07": "NARROWED / NOT CHARTERED: exact-head C25CC02 run 33296257896 recovered from Actions artifact 9727565317; projected complete 10,220,043 B versus Zstd-19 10,199,302 B, margin -20,741 B, exact semantics/locality green, promotion_signal=false. Two earlier artifacts reproduce the ~20.7 KiB loss.",
+    "v031_composition": "#415 O60 coherent single VZIP source; #418 O63 rollback product; #422 O66 historical parent; #266 prospective fingerprint; #431 O75 composition. No canonical merge, no earned core release.",
+    "current_o75_host": "O75 original #431@b7bdf936 Windows hosted run 40185222752 remains two Windows FAIL / three POSIX SUCCESS, 2316 fingerprinted paths. Independent exact canonical bytes on docs/V030_RELEASE_LOCK.json and docs/V031_CANDIDATE_FINGERPRINT.json when LF→CRLF match actual Windows worktree SHA256 exactly, PR #431 comment 6402497920. This PROVES those two sampled divergences are Git checkout EOL, not Git blob mutation; the buggy diagnostic counts literal backslash-r/backslash-n. All-path full normalized identity and installed wheel behavior still UNMEASURED; original strict cross-host raw fingerprint remains red.",
+    "vzip_integrity": "O76 #433 physical mode0 unverified ranges may silently return corrupted bytes; O79 #436 SHA-oracle rejects selected/unselected/skeleton tamper in measured scope; O81 #438 authentic CRC32-preserving physical mutation gave regular full read differing from verify rejection. These are distinct integrity tiers.",
+    "writer_unmerged": "#409 O53 combines descriptor-bound POSIX FIFO source admission with Writer lease/salvage in an isolated PR; source exact-host and official promotion parity must be independently recovered before integration.",
+    "v031_primary_historical": "The former BLOCKED bounded-drift, issue194 and issue206 states were recorded October 6; issue206 later received product tests in #418/#422. Their original scientific evidence remains at their owner branches; this cache no longer claims those three cases are universally unexecuted.",
+    "o84_composed_builder": "#442@7efcc51154b64fd6394ddffaab599760659f6c91: installed run 40198804050 3/3 jobs SUCCESS; JUnit Ubuntu 39/46 pass, macOS 39/47 pass, Windows 36/47 pass with 7/8/11 platform skips and zero errors. This is scoped O80×O81 product evidence, not a complete Windows Reader metadata claim nor release promotion. Superseded first-head 40198258303 had genuine Windows symlink-utime test failure; test isolated unrelated Reader O69 portability by using metadata=False only on Windows while retaining physical byte/hardlink checks. Other inherited workflow runs fail hardcoded historical Builder identity before assertions.",
+    "o83_linux_economics": "#441 O83 exact O64→O80 Builder AB/BA on identical real Linux trees: 6 SUCCESS hosted courts through final HEAD 34c379a5745a5f8ff297d3ba92581457b8c9f291, 180 real child process observations across 3 families, 0 archive-byte differences; source-authentic extraction equivalence; small mixed-sign wall deltas not significant. Baseline is O64, NOT released v0.30 nor integrated O84.",
+    "o84_exact_head_full_ci": "#442 exact 7efcc51154b64fd6394ddffaab599760659f6c91; generic run 40198804084 FAIL at 10 tests (4 stale v0.30 identity/surface asserts; 3 O50 and 3 O81 source-retrieval errors in shallow checkout). Actual performance job 121185375639 run 40198803932 executed but FAIL at `python -m pytest -q` correctness prerequisite, four v0.30 asserts; the A/B size/create/extract comparator was NEVER RUN. No product timing loss can be inferred from this failure. Prior specialized O84 court 40198804050 three-host PASS remains valid but narrow.",
+    "o87_builder_output_fifo": "O87 #445 (source exact O84 Builder blob 64b0cd21ad54ce7c8e8c6f5847b3c613fff6511c) real installed Ubuntu/macOS run 40202046940: normal external regular output verifies; external FIFO and symlink-to-FIFO each fail to finish within 8-second bounded child deadline (3 tests PASS per host); issue #446. It is a verified Builder *availability* defect, not a Windows/power-loss claim. Owner #439/#442 handles implementation, not this discovery-state branch.",
+    "o103_reader_mmap": "#459@61a5521614995cc386e91b14313687dfc72958a3 genuine installed final-head run 40223070040 Ubuntu/macOS SUCCESS, but same-inode ftruncate causes fatal SIGBUS in worker (Linux -7/macOS -10); different-inode pathname replacement preserves original verified reader. Negative product availability evidence, issue #460; no fix/merge.",
+    "o106_reader_fifo": "#461@56d7302895809e6810f9854f18512498a70bf8bf genuine installed final-head Ubuntu/macOS FIFO extraction 8s bounds reproduced, with matched same physical r24 archive and ordinary controls; issue #462, owner #269. #463 O108 further storage-mode matrix Linux 12 PASS while macOS retained sparse prerequisite errors: do not claim full two-host storage-mode parity. No Reader fix.",
+    "o101_o110_namespace": "#456@15fa20bd14d45f518d38fbb4674206662daf2be9 installed two-host O101 proves output directory SAME dev/inode can be reparented into source and pass O99 after validation; original source preserved but exclusion policy violated. O110 follow-up lower-rung Linux 6.18.55 openat2 RESOLVE_BENEATH|NO_SYMLINKS still admits leaf relative to pinned moved dirfd; ../ escapes correctly refused. Repo note docs/v031-research/2026-10-25-o110-directory-ancestry-model-bound.md, test script tools/research/o110_parent_mobility_oracle.py. This narrows claimed semantics, no product fix or universal impossibility claim."
   },
   "process_lessons": [
     {
@@ -98,10 +116,14 @@
     {
       "lesson": "Absence of a committed result file is not absence of scientific evidence when CI artifacts are an explicit custody surface.",
       "evidence": "Exact-head historical Actions/artifact search recovered C25CC02 run 33296257896 and resolved A07 from UNKNOWN to a replicated negative."
+    },
+    {
+      "lesson": "Before treating a pinned filesystem object as proof of path/ancestry authorization, try moving that exact object (same dev+inode) across the authorization boundary. Object identity, relative openat2 containment and global namespace ancestry are distinct properties.",
+      "evidence": "#454 O96 changed-parent-inode Builder falsifier, #455 O99 anchored-dirfd repair, #456 O101 genuine same-inode counterexample (Ubuntu/macOS), O110 Linux 6.18.55 kernel openat2 primitive and syscall standards; new prospectively reusable discriminator, no Discovery Engine policy change."
     }
   ],
   "pending_jobs": [],
-  "next_action": "Run the frozen bounded-drift court exactly once through the first legitimate exact-source route. If unavailable, execute the converged Issue194 integrated A/B when hardened source/runtime custody becomes available; otherwise execute Issue206 v8 on the exact package/native runtime. Foundry currently has no chartered primary thesis; A15 and A07 are narrowed, so do not reopen them without changed evidence.",
+  "next_action": "Product convergence must be judged on unchanged gates: #431 owner verify all 2316 Windows paths and installed wheel: two exact-path SHA witnesses conclusively reproduce Windows release-lock/fingerprint bytes from Git LF→CRLF, but untouched five-host full court remains RED (PR #431 comment 6402497920). Preserve raw negative while separating Git canonical source custody from platform worktree/installed runtime identity;; #442/#266/#414/#422 owners reconcile four historical v0.30 assertions plus six shallow history cases and rerun full generic and effective r24/ZIP same-source ABBA. #455/#442 owners define realistic output namespace threat contract in light of O101 installed negative and O110 lower-rung openat2 ancestry bound; retain O91/O96 controls, ordinary regular-output success and exact archive identity. #269 Reader owner triage #460 same-inode mmap SIGBUS and #462 output-FIFO extraction; #463 storage-mode research remains partial on macOS. Other scheduled activations should choose dependency-safe representation/ownership research rather than duplicate these active implementation surfaces. No canonical merge/release.",
   "release_policy": {
     "effective_date": "2026-10-04",
     "pre1_mode": "rolling material checkpoints",
