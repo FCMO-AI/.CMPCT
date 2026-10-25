@@ -1,0 +1,54 @@
+name: CMPCT v0.31 O49 real Writer FIFO source falsifier
+on:
+  push:
+    branches: ['agent/phased1-v031-writer-fifo-source-falsifier-o49-20261025']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installed-source-court:
+    name: O49 actual installed Writer ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run original bounded true-product transaction tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "O49_HEAD=$(git rev-parse HEAD)"
+          echo "O49_WRITER_BLOB=$(git hash-object src/cmpct/transactions.py)"
+          python -m pip install . pytest
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+          import cmpct.transactions
+          repo=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip())
+          installed=Path(cmpct.transactions.__file__).resolve()
+          assert not installed.is_relative_to(repo), installed
+          print("O49_INSTALLED_WRITER="+str(installed))
+          PY
+          mkdir -p o49-isolated
+          cp tests/test_v031_writer_fifo_o49.py o49-isolated/test_v031_writer_fifo_o49.py
+          python -m pytest -vv o49-isolated/test_v031_writer_fifo_o49.py --junitxml=o49-results.xml 2>&1 | tee o49-results.log
+      - name: Retain result and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o49-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            o49-results.xml
+            o49-results.log
+          if-no-files-found: warn
+          retention-days: 30
