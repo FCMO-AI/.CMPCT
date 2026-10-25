@@ -219,7 +219,7 @@ def court(a: argparse.Namespace) -> None:
         }
         case["summary"] = summary
         if expanded_len > 64 * MIB:
-            assert all(k == S_BLOB for k in c["kinds"].values()), (
+            assert all(k == 0 for k in c["kinds"].values()), (  # r24 S_BLOB = 0
                 "O86 default budget did not reject all above-budget VZIP members", c)
         if expanded_len <= 64 * MIB:
             assert b["archive_sha256"] == c["archive_sha256"], (
