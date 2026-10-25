@@ -1,0 +1,176 @@
+# ci-lane: fast
+# O121: reuse the exact O117 source corpus and independent PR #336 Reader product candidate.
+name: CMPCT v0.31 O121 O117 Authentic Host-Guard Composition
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o121-authentic-win32-union-extraction-20261025
+    paths:
+      - 'tools/research/o117_casefold_extraction.py'
+      - 'tools/research/o121_authentic_host_union_audit.py'
+      - 'docs/v031-research/2026-10-25-o121-*'
+      - '.github/workflows/v031-o121-authentic-host-guard.yml'
+  pull_request:
+    paths:
+      - 'tools/research/o117_casefold_extraction.py'
+      - 'tools/research/o121_authentic_host_union_audit.py'
+      - 'docs/v031-research/2026-10-25-o121-*'
+      - '.github/workflows/v031-o121-authentic-host-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o121-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  ORIGINAL_SOURCE: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
+  PARENT_UNION: 28d57e13a1b8e89a70f857f180b4403592b96e12
+  O117_INSTRUMENT_BLOB: 47a3caf5676447c3f9dd093ad542a45586a7775d
+
+jobs:
+  authentic-linux-producer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind O117 instrument and candidate Builder to exact sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse HEAD:tools/research/o117_casefold_extraction.py)" = "$O117_INSTRUMENT_BLOB"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "550ddcc84a820fb3d06b7580dd544abb52e93f81"
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = "$(git rev-parse "$ORIGINAL_SOURCE":src/cmpct/builder.py)"
+          mkdir -p o117-artifact o121-evidence
+          python -m pip install --disable-pip-version-check .
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.builder, cmpct.reader
+          root=Path.cwd().resolve()
+          for mod in (cmpct.builder, cmpct.reader):
+              installed=Path(mod.__file__).resolve()
+              assert not installed.is_relative_to(root), installed
+              source=root / 'src' / 'cmpct' / installed.name
+              assert source.read_bytes()==installed.read_bytes(), installed
+              print('O121_INSTALLED_SOURCE='+str(installed))
+          PY
+      - name: Produce authentic unchanged-O117 case-distinct physical archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/research/o117_casefold_extraction.py produce --directory o117-artifact | tee o121-evidence/producer.log
+          test -s o117-artifact/casefold-source.cmpct
+          test -s o117-artifact/manifest.json
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          root=Path('o117-artifact');data=(root/'casefold-source.cmpct').read_bytes()
+          manifest=json.loads((root/'manifest.json').read_text())
+          assert manifest['archive_sha256']==hashlib.sha256(data).hexdigest()
+          assert len(manifest['members'])==3
+          print('O121_AUTHENTIC_ARCHIVE_SHA256='+manifest['archive_sha256'])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o121-authentic-linux-archive
+          path: o117-artifact/
+          if-no-files-found: error
+          retention-days: 45
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cmpct-o121-source-producer
+          path: o121-evidence/
+          if-no-files-found: warn
+          retention-days: 45
+
+  exact-source-installed-consumers:
+    needs: authentic-linux-producer
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: cmpct-o121-authentic-linux-archive
+          path: o117-artifact
+      - name: Install exact candidate and untouched original Reader into separate roots
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse HEAD:tools/research/o117_casefold_extraction.py)" = "$O117_INSTRUMENT_BLOB"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "550ddcc84a820fb3d06b7580dd544abb52e93f81"
+          mkdir -p o121-evidence
+          git worktree add --detach "$RUNNER_TEMP/o121-original" "$ORIGINAL_SOURCE"
+          python -m pip install --disable-pip-version-check .
+          python -m pip install --disable-pip-version-check --no-deps --target "$RUNNER_TEMP/o121-original-installed" "$RUNNER_TEMP/o121-original"
+          test "$(git -C "$RUNNER_TEMP/o121-original" rev-parse HEAD:src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          PYTHONPATH="" python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader
+          root=Path.cwd().resolve()
+          site=Path(cmpct.reader.__file__).resolve()
+          assert not site.is_relative_to(root), site
+          assert site.read_bytes()==(root/'src/cmpct/reader.py').read_bytes()
+          print('O121_UNION_INSTALLED_SOURCE='+str(site))
+          PY
+          PYTHONPATH="$RUNNER_TEMP/o121-original-installed" python - <<'PY'
+          import cmpct.reader,os
+          from pathlib import Path
+          site=Path(cmpct.reader.__file__).resolve()
+          expected=Path(os.environ['RUNNER_TEMP'])/'o121-original-installed'/'cmpct'/'reader.py'
+          assert site==expected.resolve(),(site,expected)
+          source=Path(os.environ['RUNNER_TEMP'])/'o121-original'/'src'/'cmpct'/'reader.py'
+          assert site.read_bytes()==source.read_bytes(),(site,source)
+          print('O121_ORIGINAL_INSTALLED_SOURCE='+str(site))
+          PY
+      - name: Execute untouched original O117 instrument on the same archive for BOTH installed Readers
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$RUNNER_TEMP/o121-original-installed" python tools/research/o117_casefold_extraction.py consume --directory o117-artifact --output o121-evidence/original | tee o121-evidence/original.log
+          PYTHONPATH="" python tools/research/o117_casefold_extraction.py consume --directory o117-artifact --output o121-evidence/union | tee o121-evidence/union.log
+          PYTHONPATH="" python tools/research/o121_authentic_host_union_audit.py \
+            --artifact o117-artifact \
+            --baseline o121-evidence/original/result.json \
+            --candidate o121-evidence/union/result.json \
+            --out o121-evidence/decision.json | tee o121-evidence/audit.log
+      - name: Preserve exact-head and physical-corpus receipts
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o121-evidence
+          git rev-parse HEAD > o121-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o121-evidence/union-reader.blob
+          git rev-parse "$ORIGINAL_SOURCE":src/cmpct/reader.py > o121-evidence/original-reader.blob
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cmpct-o121-${{ matrix.os }}-original-versus-union
+          path: o121-evidence/
+          if-no-files-found: error
+          retention-days: 45
