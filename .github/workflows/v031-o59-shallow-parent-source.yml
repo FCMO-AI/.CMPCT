@@ -1,0 +1,100 @@
+# ci-lane: fast
+# O59 source-custody repair; original O50 workflow remains deliberately source-locked.
+name: CMPCT v0.31 O59 historical O47 parent under shallow and full checkouts
+
+on:
+  push:
+    branches:
+      - 'agent/phased2-v031-o50-shallow-parent-source-o59-20261025'
+  pull_request:
+    paths:
+      - 'tests/test_v031_builder_parent_parity_o50.py'
+      - 'tests/fixtures/o50_o47_parent_builder.py'
+      - '.github/workflows/v031-o59-shallow-parent-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o59-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-parent-two-custody-paths:
+    name: O59 ${{ matrix.os }} checkout-depth=${{ matrix.depth }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, depth: 1, custody: frozen-exact-blob, skips: 0 }
+          - { os: ubuntu-24.04, depth: 0, custody: git-parent, skips: 0 }
+          - { os: macos-14, depth: 1, custody: frozen-exact-blob, skips: 0 }
+          - { os: windows-2025, depth: 1, custody: frozen-exact-blob, skips: 1 }
+          - { os: windows-2025, depth: 0, custody: git-parent, skips: 1 }
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact evaluated source at requested history depth
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: ${{ matrix.depth }}
+          persist-credentials: false
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind historical source and execute real O50 parent-vs-product byte oracles
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = "21a9ec696df13961c25301654feb607a7e161a4c"
+          test "$(git hash-object tests/fixtures/o50_o47_parent_builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
+          test "$(git hash-object tests/test_v031_builder_parent_parity_o50.py)" = "14f8353c7a76bdf770b38c46ef16d45bd6497a3d"
+          # The full clone must be able to retrieve the historical source;
+          # depth=1 must not. Report a custody mismatch as a test failure.
+          if [ "${{ matrix.depth }}" = "0" ]; then
+            git cat-file -e '29d9688ae6bff6d1eccc27f019893866abe5b5c3^{commit}'
+          else
+            if git cat-file -e '29d9688ae6bff6d1eccc27f019893866abe5b5c3^{commit}' 2>/dev/null; then
+              echo "Unexpected historical O47 parent present in depth-1 checkout" >&2
+              exit 1
+            fi
+          fi
+          python -m pip install . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import cmpct.builder, cmpct.reader
+          repo=Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip())
+          for module in (cmpct.builder, cmpct.reader):
+              path=Path(module.__file__).resolve()
+              assert not path.is_relative_to(repo), ('not installed', path)
+              print('O59_INSTALLED', path)
+          PY
+          python -m pytest -vv -s tests/test_v031_builder_parent_parity_o50.py --junitxml=o59-junit.xml 2>&1 | tee o59-test.log
+          grep -q "O50_PARENT_SOURCE_CUSTODY ${{ matrix.custody }} 6f60dfe63742ff4b777f959a15d6fb828ae29610" o59-test.log
+          python - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          root=ET.parse('o59-junit.xml').getroot()
+          suites=[root] if root.tag=='testsuite' else root.findall('./testsuite')
+          counts={key:sum(int(x.attrib.get(key,0)) for x in suites) for key in ('tests','failures','errors','skipped')}
+          print('O59_JUNIT', counts)
+          assert counts['tests']==3,counts
+          assert counts['skipped']==(1 if os.name=='nt' else 0),counts
+          assert counts['failures']==0 and counts['errors']==0,counts
+          PY
+      - name: Preserve source-custody, byte-identity and JUnit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o59-${{ matrix.os }}-depth-${{ matrix.depth }}
+          path: |
+            o59-test.log
+            o59-junit.xml
+          if-no-files-found: warn
+          retention-days: 30
