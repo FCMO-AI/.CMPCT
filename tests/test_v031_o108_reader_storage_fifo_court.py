@@ -67,15 +67,15 @@ def original_archive(request, tmp_path_factory):
 
 def _child(archive, output):
     code = (
-        "from cmpct.core import CMPCT\\n"
-        "from pathlib import Path\\n"
-        "import hashlib,sys\\n"
-        "a=Path(sys.argv[1]);dst=Path(sys.argv[2])\\n"
-        "with CMPCT(a) as r:\\n"
-        "    print('O108_CHILD_INDEX_OPENED',flush=True)\\n"
-        "    r.extractall(dst,metadata=False)\\n"
-        "print('O108_CHILD_RETURNED',flush=True)\\n"
-        "print('O108_CHILD_DIGEST='+hashlib.sha256((dst/'payload.bin').read_bytes()).hexdigest(),flush=True)\\n"
+        "from cmpct.core import CMPCT\n"
+        "from pathlib import Path\n"
+        "import hashlib,sys\n"
+        "a=Path(sys.argv[1]);dst=Path(sys.argv[2])\n"
+        "with CMPCT(a) as r:\n"
+        "    print('O108_CHILD_INDEX_OPENED',flush=True)\n"
+        "    r.extractall(dst,metadata=False)\n"
+        "print('O108_CHILD_RETURNED',flush=True)\n"
+        "print('O108_CHILD_DIGEST='+hashlib.sha256((dst/'payload.bin').read_bytes()).hexdigest(),flush=True)\n"
     )
     start=time.perf_counter()
     try:
