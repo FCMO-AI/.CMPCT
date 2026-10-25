@@ -40,3 +40,17 @@ Most important: the opaque arm is a **test-only selector** (monkeypatched `make_
 **Counterfactual:** One 4 MiB valid high-ratio ZIP, tested with the same-tree opaque control *before building a 15-row matrix*, was enough to reveal the decisive 66x CPU and 375-B complete-archive loss. The prospective observable is member expansion ratio paired with physically measured opaque bytes, not a retrospective hand-tuned threshold. No discovery-policy mutation is earned from one synthetic family.
 
 **Ownership:** Product VZIP/fallback belongs to O63 #418; its O67 #423 economic owner remains independent. This branch modifies no O63/other product code and will pass results to its owners. O68 remains DRAFT and cannot authorize merge or release.
+
+## Independent second actual-hosted replication on the result-bearing documentation HEAD
+
+The documentation-only result HEAD `5595f5e8aef521c2b72685e3d314c871a55ea290` itself triggered an **independent second genuine 18-process full-product O68 execution**, not merely an administrative CI green. [GitHub Actions #40175867463](https://github.com/FCMO-AI/.CMPCT/actions/runs/40175867463) completed SUCCESS, source blobs and provenance unchanged. Its [raw artifact #12591514962](https://github.com/FCMO-AI/.CMPCT/actions/runs/40175867463/artifacts/12591514962) has ZIP `sha256:30c69b9adf4effc5de9d544fc0971abfeb7a68361dc427e9555e21954e2bec8f`. This is **18 more independent processes, for 36 complete O68 measurements across two CI runner activations**. Physical ZIP sizes, virtual and opaque complete archive bytes and strong reconstruction verdicts repeated exactly.
+
+| Inflated logical bytes | Second-run virtual create CPU | Second-run opaque create CPU | Second-run ratio |
+|---:|---:|---:|---:|
+| 65,536 | 1.713134 ms | 0.421879 ms | 4.06x |
+| 4,194,304 | 33.464978 ms | 0.580004 ms | 57.70x |
+| 16,777,216 | 113.075259 ms | 0.816117 ms | 138.55x |
+
+**Negative/noise accounting:** first-run 16 MiB virtual CPU 162.981331 ms versus second 113.075259 ms (separate hosted instances, about 30.6% lower), so no universal 163 ms latency claim or tight confidence interval is earned; the within-run relative CPU multiplier persists at **167.11x and 138.55x** respectively. Complete archive bytes remain identically dominated **+702 B** in both runs. The difference in hosted absolute durations argues for a controlled host when optimizing small timing improvements; the order-of-magnitude source-bound separation here survives it.
+
+The previous result headline table remains the first-run measurement, **not** pooled medians. Both original raw artifacts and each head are named above to prevent scientific source/result confusion. O68 product code remains identical to O63. No release or automatic process-policy change.
