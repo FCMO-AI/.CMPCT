@@ -1,0 +1,70 @@
+# Exact-head product correctness court; no numeric release or format promotion.
+name: CMPCT v0.31 O47 Builder hardlink physical identity
+
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-win32-direntry-hardlink-identity-o47-20261025'
+  pull_request:
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'tests/test_v031_win32_builder_hardlink_o47.py'
+      - '.github/workflows/v031-win32-builder-hardlink-o47.yml'
+      - 'docs/v031-research/2026-10-25-o47-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o47-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  installed-file-identity:
+    name: O47 authentic source-to-archive hardlink ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    timeout-minutes: 26
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify exact Builder and genuinely installed archive path
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
+          python -m pip install . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.builder as builder
+          import subprocess
+          repo=Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
+          imported=Path(builder.__file__).resolve()
+          assert not imported.is_relative_to(repo), f"not clean-installed Builder: {imported}"
+          print("O47_INSTALLED_BUILDER="+str(imported))
+          PY
+          mkdir -p o47-isolated
+          cp tests/test_v031_win32_builder_hardlink_o47.py o47-isolated/test_v031_win32_builder_hardlink_o47.py
+          python -m pytest -v o47-isolated/test_v031_win32_builder_hardlink_o47.py --junitxml=o47-pytest.xml 2>&1 | tee o47-pytest.log
+      - name: Retain original negative or positive exact-head court
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o47-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: |
+            o47-pytest.xml
+            o47-pytest.log
+          if-no-files-found: warn
+          retention-days: 30
