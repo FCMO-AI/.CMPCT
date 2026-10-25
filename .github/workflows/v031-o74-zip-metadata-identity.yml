@@ -1,0 +1,101 @@
+# ci-lane: fast
+# O74 is independent scientific source/metadata-identity evidence, never a release gate.
+name: CMPCT v0.31 O74 ZIP Metadata Identity Falsifier
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o74-zip-metadata-collision-20261025'
+  pull_request:
+    paths:
+      - 'benchmarks/v031_o74_zip_metadata_identity.py'
+      - '.github/workflows/v031-o74-zip-metadata-identity.yml'
+      - 'docs/v031-research/2026-10-25-o74-zip-metadata-identity-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o74-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signed-zip-metadata-identity:
+    name: O74 independent ZIP collision and real installed r24 Reader court
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O71_SCIENCE_PARENT: 330a1fa1c642d4bd4ddf2a1bd6cadd22b94cc19a
+      O74_PREREG: 4c1afe71e1a61979f4e36809443f7ecd269e497d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prove preregistration chronology and exact untouched product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O71_SCIENCE_PARENT" HEAD
+          git merge-base --is-ancestor "$O74_PREREG" HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = 382e60983bf1e8e7595ea7112f3a5553dc33dcc0
+          test "$(git hash-object src/cmpct/codec.py)" = dc3446b0eed82edfba9380e3885a20aa45577899
+          git diff --exit-code "$O71_SCIENCE_PARENT" HEAD -- src native tests benchmarks/history tools
+          python -m py_compile benchmarks/v031_o74_zip_metadata_identity.py
+      - name: Independent standard-library ZIP identity counterexample
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o74-evidence
+          python benchmarks/v031_o74_zip_metadata_identity.py --output o74-evidence/stdlib-result.json | tee o74-evidence/stdlib.log
+      - name: Install authentic O71-parent CMPCT product
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Execute authentic revision-24 Builder/Reader exact reconstruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_o74_zip_metadata_identity.py --require-cmpct --output o74-evidence/product-result.json | tee o74-evidence/product.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('stdlib-result.json','product-result.json'):
+              r=json.loads((Path('o74-evidence')/name).read_text())
+              assert r['disposition']=='FULL_METADATA_COLLISION'
+              assert r['central_directory_metadata_equal']
+              assert r['identical_complete_local_headers']
+              assert r['identical_complete_central_directory_and_eocd_tail']
+              assert r['expanded_sha256'][0]!=r['expanded_sha256'][1]
+              assert r['original_zip_sha256'][0]!=r['original_zip_sha256'][1]
+              assert not r['simulated_crc_only_alias_is_lossless']
+          p=json.loads(Path('o74-evidence/product-result.json').read_text())
+          assert p['product']['status']=='EXACT_SEPARATE_ZIPS'
+          print('O74_CONFIRMED_METADATA_NONIDENTITY_WITH_AUTHENTIC_CMPCT; no product change or release credit')
+          PY
+      - name: Record original exact source and evidence identities
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o74-evidence
+          git rev-parse HEAD > o74-evidence/exact-head.sha
+          git hash-object benchmarks/v031_o74_zip_metadata_identity.py > o74-evidence/instrument.blob
+          git hash-object src/cmpct/builder.py > o74-evidence/builder.blob
+          git hash-object src/cmpct/codec.py > o74-evidence/codec.blob
+          sha256sum o74-evidence/*.json > o74-evidence/results.sha256 2>/dev/null || true
+      - name: Upload original positive and negative scientific receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o74-raw-${{ github.sha }}
+          path: o74-evidence/
+          if-no-files-found: error
