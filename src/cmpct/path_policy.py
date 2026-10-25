@@ -29,3 +29,58 @@ def canonical_logical_path(path: str, *, max_path_bytes: int | None = None) -> t
     if any(part in ('', '.', '..') for part in parts):
         raise ValueError('unsafe logical path component')
     return '/'.join(parts), parts
+
+
+# macOS APFS/HFS+ pathname comparison is normalization-insensitive even though the
+# revision-24 wire format deliberately preserves the original logical UTF-8 spelling.
+# Case-insensitive APFS is common; use a conservative casefold policy also on case-sensitive
+# volumes rather than risk materializing different archive members onto one physical name.
+def macos_comparison_component(part: str) -> str:
+    """A conservative macOS destination alias discriminator, not a wire-name rewrite.
+
+    Footnote: APFS uses its own Unicode-9.0 comparison tables; Python's Unicode tables may
+    differ. This rejects the known NFC/NFD and common case aliases without claiming full
+    equivalence to every native filesystem/version's comparator.
+    """
+    if not isinstance(part, str) or not part or part in (".", ".."):
+        raise ValueError("unsafe macOS path component")
+    try:
+        part.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise ValueError("unsafe macOS non-UTF-8 path component") from exc
+    import unicodedata
+    return unicodedata.normalize("NFD", unicodedata.normalize("NFD", part).casefold())
+
+# Windows destination admission is deliberately separate from the portable r24 logical grammar.
+# POSIX file systems can represent names such as "a:b", while Win32 interprets the colon as a
+# drive/alternate-stream separator. Refusing such names only at Windows materialization keeps
+# the on-disk format and ordinary POSIX readers backward-compatible.
+_WIN32_RESERVED_NAMES = frozenset({
+    "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
+    *(f"COM{i}" for i in "123456789\u00b9\u00b2\u00b3"),
+    *(f"LPT{i}" for i in "123456789\u00b9\u00b2\u00b3"),
+})
+_WIN32_SPECIAL_CHARS = frozenset('<>:"|?*')
+
+
+def canonical_windows_extraction_key(parts: tuple[str, ...]) -> str:
+    """Conservative Win32 name admission and lexical collision key for extraction.
+
+    Windows drive-relative names and alternate streams are not confined by a POSIX-style
+    path-component check. Device aliases, Win32 normalization, and case-insensitive
+    collisions can also change the resulting tree. This key is an admission bound, not a
+    claim to model every possible NTFS Unicode collation or case-sensitive directory.
+    """
+    if not parts:
+        raise ValueError("unsafe Windows empty member path")
+    for part in parts:
+        if not isinstance(part, str) or not part or part in (".", ".."):
+            raise ValueError("unsafe Windows path component")
+        if any(ord(ch) < 32 or ch in _WIN32_SPECIAL_CHARS for ch in part):
+            raise ValueError("unsafe Windows drive, stream, or reserved character")
+        if part.endswith((" ", ".")):
+            raise ValueError("unsafe Windows trailing dot/space alias")
+        stem = part.split(".", 1)[0].rstrip(" ").upper()
+        if stem in _WIN32_RESERVED_NAMES:
+            raise ValueError("unsafe Windows device name")
+    return "/".join(part.casefold() for part in parts)
