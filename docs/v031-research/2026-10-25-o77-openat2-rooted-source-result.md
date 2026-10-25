@@ -32,3 +32,6 @@ The shallow one-component source lookup **favors the simpler per-component `open
 
 ## Handoff
 Notify Builder source custody owner PR #407 and issue #408. Avoid parallel Builder edits. The owner may evaluate Linux descriptor-rooted admission paired with macOS/Windows fallback, preventing TOCTOU at all read sites, snapshot/coherency/metadata policy, actual installed three-host Builder/Reader evidence, CPU/RSS/temp IO, and unchanged revision-24 promotion laws. Do not merge/release on primitive evidence.
+
+## Evidence-gate provenance and final-head revalidation
+The initial engineering-evidence run #40188237996 failed **required PR body headings**, not any O77 syscall experiment. A subsequent exact-head run #40188604757 failed only the required literal `quality-ratchet` falsifiability marker, not substantive science. The PR dossier was corrected to include canonical sections, explicit `disproof` and `quality-ratchet` without weakening the checker. Preserve both negative CI receipts. Original experiment-source CI #40188237953 and document-head #40188542776 are independently green on genuine focused O77 Linux court; generic CI and release-parity status remain separate, with the official performance job skipped. This documentation-only commit requests another normal source-exact CI reconciliation; its eventual status is not presumed.
