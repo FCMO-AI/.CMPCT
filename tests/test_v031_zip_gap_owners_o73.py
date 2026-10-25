@@ -241,3 +241,126 @@ def test_o73_gap_owner_charged_originals_and_structural_holdouts(tmp_path: Path)
                                    else "NOT_CREDIBLE_IN_TESTED_SCOPE")
     preserve()
     print("O73_DECISION=" + results["primary_decision"])
+
+
+# O74 — preregistered simpler two-S_PACK-owner counterfactual. Never shipped.
+def _two_pack_class():
+    source_path = Path(shipping_builder.__file__)
+    original = source_path.read_text(encoding="utf-8")
+    old = (
+        "        if len(deferred)>=8:\n"
+        "            buf=bytearray();packed=[]\n"
+        "            for p,rel,st,mode in deferred:\n"
+        "                raw=p.read_bytes();off=len(buf);buf+=raw;packed.append((rel,st,mode,off,len(raw),sha(raw)))\n"
+        "            ph=self.add_content(bytes(buf),'.cmpct-container-pack')\n"
+        "            for rel,st,mode,off,ln,rh in packed:\n"
+        "                self.files.append([rel,K_FILE,mode,st.st_mtime_ns,ln,rh,[S_PACK,ph,off,ln]])\n"
+        "        else:\n"
+    )
+    assert original.count(old) == 1, "source drift: no exact O74 control available"
+    new = (
+        "        if len(deferred)>=8:\n"
+        "            _sizes=sorted(int(row[2].st_size) for row in deferred)\n"
+        "            _cut=max(range(1,len(_sizes)),key=lambda j:_sizes[j]/max(1,_sizes[j-1]))\n"
+        "            if _sizes[_cut]/max(1,_sizes[_cut-1])>=16:\n"
+        "                _large=[row for row in deferred if row[2].st_size>=_sizes[_cut]]\n"
+        "                _small=[row for row in deferred if row[2].st_size<_sizes[_cut]]\n"
+        "                _cohorts=[_large,_small]\n"
+        "            else:\n"
+        "                _cohorts=[deferred]\n"
+        "            assert sum(len(g) for g in _cohorts)==len(deferred)\n"
+        "            for _group in _cohorts:\n"
+        "                buf=bytearray();packed=[]\n"
+        "                for p,rel,st,mode in _group:\n"
+        "                    raw=p.read_bytes();off=len(buf);buf+=raw;packed.append((rel,st,mode,off,len(raw),sha(raw)))\n"
+        "                ph=self.add_content(bytes(buf),'.cmpct-container-pack')\n"
+        "                for rel,st,mode,off,ln,rh in packed:\n"
+        "                    self.files.append([rel,K_FILE,mode,st.st_mtime_ns,ln,rh,[S_PACK,ph,off,ln]])\n"
+        "        else:\n"
+    )
+    derived=original.replace(old,new)
+    assert derived.replace(new,old)==original
+    module=types.ModuleType("cmpct._o74_two_pack_owner")
+    module.__package__="cmpct"
+    module.__file__=str(source_path)
+    sys.modules[module.__name__]=module
+    exec(compile(derived,str(source_path)+":O74","exec"),module.__dict__)
+    return module.Builder,hashlib.sha256(derived.encode()).hexdigest()
+
+
+def test_o74_two_pack_stronger_control_same_source(tmp_path: Path):
+    versions, source_shas = _oracle_classes()
+    dual_pack, dual_sha = _two_pack_class()
+    variants={"shipping":versions["shipping"],"split_vzip":versions["split"],"two_pack":dual_pack}
+    evidence={
+        "status":"ORACLE_ONLY_NO_PRODUCT_CREDIT",
+        "preregistered_before_code":"7b1c5e93c9aed2c48983e63950c96980a2f91530",
+        "source_git_blob":"663ef0922992b1fbb8f19e6eea88d55c10a56044",
+        "source_shas":{**source_shas,"two_pack_source_sha256":dual_sha},
+        "question":"one original S_PACK vs size-gap large-pack/small-VZIP vs two physical S_PACK owners",
+        "cases":{},
+        "limitations":["one Ubuntu host", "in-memory real Builder versions", "same Python process",
+                       "no OS cold-cache guarantee", "not official competitor or release evidence"]
+    }
+    def persist():
+        Path("o74-evidence.json").write_text(json.dumps(evidence,indent=2,sort_keys=True)+"\n")
+    for case in _CASES:
+        root=tmp_path/(case+"-input")
+        input_shas=_corpus(root,case)
+        selected="m07.zip"
+        selected_bytes=(root/selected).read_bytes()
+        obs=[]
+        # A B C C B A controls long-term process/cache drift.
+        for k,tag in enumerate(["shipping","split_vzip","two_pack","two_pack","split_vzip","shipping"]):
+            out=tmp_path/f"o74-{case}-{tag}-{k}.cmpct"
+            wall0,cpu0=time.perf_counter_ns(),time.process_time_ns()
+            variants[tag](root,workers=1,reproducible=True,reproducible_epoch_ns=0).build(out)
+            create_wall=time.perf_counter_ns()-wall0
+            create_cpu=time.process_time_ns()-cpu0
+            with CMPCT(out) as reader:
+                assert reader.verify()==8
+                rows={row[0]:row for row in reader.index["files"]}
+                kinds={name:row[6][0] for name,row in rows.items()}
+                for name,checksum in input_shas.items():
+                    assert hashlib.sha256(reader.read(name)).hexdigest()==checksum
+                if k<3:
+                    extracted=tmp_path/f"o74-extract-{case}-{tag}"
+                    reader.extractall(extracted,metadata=False)
+                    for name,checksum in input_shas.items():
+                        assert hashlib.sha256((extracted/name).read_bytes()).hexdigest()==checksum
+            samples=[_cold_sample(out,selected,selected_bytes[:64]) for _ in range(4)]
+            obs.append({"arm":tag,"ordinal":k,"size":out.stat().st_size,
+                        "archive_sha256":hashlib.sha256(out.read_bytes()).hexdigest(),
+                        "create_wall_ns":create_wall,"create_cpu_ns":create_cpu,
+                        "selected_kind":kinds[selected],"samples":samples})
+        by={tag:[r for r in obs if r["arm"]==tag] for tag in variants}
+        summary={}
+        for tag,rows in by.items():
+            assert len(rows)==2
+            assert rows[0]["archive_sha256"]==rows[1]["archive_sha256"]
+            summary[tag]={
+                "archive_bytes":statistics.median(r["size"] for r in rows),
+                "create_wall_ns":statistics.median(r["create_wall_ns"] for r in rows),
+                "create_cpu_ns":statistics.median(r["create_cpu_ns"] for r in rows),
+                "read_wall_ns":statistics.median(s["wall_ns"] for r in rows for s in r["samples"]),
+                "read_cpu_ns":statistics.median(s["cpu_ns"] for r in rows for s in r["samples"]),
+                "decoded_blob_bytes":statistics.median(s["decoded_blob_bytes"] for r in rows for s in r["samples"]),
+                "stored_blob_bytes":statistics.median(s["stored_blob_bytes"] for r in rows for s in r["samples"])
+            }
+        a,b=summary["two_pack"],summary["split_vzip"]
+        strong=(a["archive_bytes"]<=b["archive_bytes"] and a["create_wall_ns"]<=b["create_wall_ns"]
+                and a["read_wall_ns"]<=b["read_wall_ns"]
+                and a["decoded_blob_bytes"]<=3*b["decoded_blob_bytes"])
+        if case=="homogeneous_eight_large":
+            assert by["shipping"][0]["archive_sha256"]==by["two_pack"][0]["archive_sha256"], "homogeneous archive mutation"
+        else:
+            assert all(r["selected_kind"]==S_PACK for r in by["two_pack"])
+            assert all(r["selected_kind"]!=S_PACK for r in by["split_vzip"])
+        evidence["cases"][case]={"input_sha256":input_shas,"input_sizes":{n:(root/n).stat().st_size for n in input_shas},
+                                "summary":summary,"two_pack_strong_control":strong,"raw":obs}
+        persist()
+        print("O74_CASE="+json.dumps({"case":case,"strong":strong,"summary":summary},sort_keys=True))
+    evidence["primary_verdict"]=("TWO_PACK_STRONG_CONTROL" if evidence["cases"]["six_large_two_small"]["two_pack_strong_control"]
+                                  else "NOT_STRONG_CONTROL_IN_TESTED_SCOPE")
+    persist()
+    print("O74_DECISION="+evidence["primary_verdict"])
