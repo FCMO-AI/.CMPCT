@@ -158,7 +158,7 @@ def deflate_level_for(raw:bytes, target:bytes):
         if got==target:return level
     return None
 
-def make_vzip_recipe(ap:Path, add_content, *, original:bytes|None=None):
+def make_vzip_recipe(ap:Path, add_content, *, original:bytes|None=None, max_inflated_bytes:int|None=None):
     """Build a virtual ZIP recipe from one immutable captured byte sequence.
 
     Footnote: independent path opens were a temporal-coherency defect. A same-inode
@@ -170,6 +170,18 @@ def make_vzip_recipe(ap:Path, add_content, *, original:bytes|None=None):
     if original is None:original=ap.read_bytes()
     with zipfile.ZipFile(io.BytesIO(original)) as z:
         infos=sorted([i for i in z.infolist() if not i.is_dir()],key=lambda x:x.header_offset)
+        # Speculative ZIP virtualization expands every member before knowing whether its
+        # representation pays for itself. An absolute *declared* output budget is admission
+        # control, not an entropy/ratio heuristic: rejected ZIPs remain exact opaque blobs.
+        # Inspect the whole member roster before the first inflate/add_content mutation.
+        if max_inflated_bytes is not None:
+            if (not isinstance(max_inflated_bytes,int) or isinstance(max_inflated_bytes,bool)
+                    or max_inflated_bytes<=0):
+                raise ValueError('max_inflated_bytes must be a positive integer')
+            remaining=max_inflated_bytes
+            for zi in infos:
+                if zi.file_size>remaining:return None
+                remaining-=zi.file_size
         payloads=[];spans=[]
         for zi in infos:
             # Use the same bytes for central-directory metadata, local header,
