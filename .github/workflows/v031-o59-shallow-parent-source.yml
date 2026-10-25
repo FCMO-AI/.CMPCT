@@ -76,7 +76,12 @@ jobs:
               assert not path.is_relative_to(repo), ('not installed', path)
               print('O59_INSTALLED', path)
           PY
-          python -m pytest -vv -s tests/test_v031_builder_parent_parity_o50.py --junitxml=o59-junit.xml 2>&1 | tee o59-test.log
+          # Mirror original O50 source court: isolate this exact test file from
+          # repository-wide tests/conftest.py (which requires extra dependencies
+          # unrelated to the three historical Builder A/B assertions).
+          mkdir -p o59-isolated
+          cp tests/test_v031_builder_parent_parity_o50.py o59-isolated/
+          python -m pytest -vv -s o59-isolated/test_v031_builder_parent_parity_o50.py --junitxml=o59-junit.xml 2>&1 | tee o59-test.log
           grep -q "O50_PARENT_SOURCE_CUSTODY ${{ matrix.custody }} 6f60dfe63742ff4b777f959a15d6fb828ae29610" o59-test.log
           python - <<'PY'
           import os, xml.etree.ElementTree as ET
