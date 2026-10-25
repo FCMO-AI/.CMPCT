@@ -40,9 +40,10 @@ jobs:
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          test "$(git hash-object src/cmpct/builder.py)" = "7f222458adc1c4aae65fa24650a8fc0c7b0c1b18"
-          test "$(git hash-object tests/test_v031_o65_xattr_capture.py)" = "a1fea48b62b53f417afa19fbbba805fee090736e"
-          test "$(grep -c 'require_xattrs' src/cmpct/reader.py)" -gt 1
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = "7f222458adc1c4aae65fa24650a8fc0c7b0c1b18"
+          test "$(git rev-parse HEAD:tests/test_v031_o65_xattr_capture.py)" = "a1fea48b62b53f417afa19fbbba805fee090736e"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "1122b1d80f2cf76faab8ed2d4e8cb2e346d85e27"
+          test "$(git rev-parse HEAD:tests/test_v031_o69_strict_xattr_restore.py)" = "0350eaedacabfbce2ed4156199d72a48434cdd69"
           test "$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')" = "0.30.0"
       - name: Python 3.11
         uses: actions/setup-python@v5
