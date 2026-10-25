@@ -1,0 +1,177 @@
+# ci-lane: fast
+# O75: independent replay of unmodified O66 installed product court PLUS exact O266/O66 provenance. No source/metric gates relaxed.
+name: CMPCT v0.31 O75 exact candidate custody x O66 installed product
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o75-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-installed-o63-historical-custody:
+    name: O75 installed ${{ matrix.os }} checkout-depth=${{ matrix.depth }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, depth: 1, custody: frozen-exact-blob, skips: 0 }
+          - { os: ubuntu-24.04, depth: 0, custody: git-parent, skips: 0 }
+          - { os: macos-14, depth: 1, custody: frozen-exact-blob, skips: 0 }
+          - { os: windows-2025, depth: 1, custody: frozen-exact-blob, skips: 1 }
+          - { os: windows-2025, depth: 0, custody: git-parent, skips: 1 }
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout actual source at selected depth
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: ${{ matrix.depth }}
+          persist-credentials: false
+      - name: Install Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Execute original O59 parent, O60 mutations, and O63 rollback on the same installed product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          # Source identity is read before package installation, so generated native build outputs cannot masquerade as tracked source.
+          python tools/check_v031_candidate_fingerprint.py --output o75-candidate-identity.json
+          # Independently distinguish Git source-object bytes from platform checkout worktree bytes.
+          # A cross-host fingerprint mismatch is a RED, not an excuse to rewrite owner O266.
+          python - <<'PY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          names = [
+              ".github/workflows/tests.yml",
+              "src/cmpct/builder.py",
+              "src/cmpct/codec.py",
+              "README.md",
+              "docs/V030_RELEASE_LOCK.json",
+              "docs/V031_CANDIDATE_FINGERPRINT.json",
+              "tests/test_public_attribution.py",
+          ]
+          witness = []
+          for p in names:
+              physical = Path(p).read_bytes()
+              canonical = subprocess.check_output(["git","show",f"HEAD:{p}"])
+              witness.append({
+                  "path":p,"same_git_and_worktree_bytes":physical==canonical,
+                  "worktree_sha256":hashlib.sha256(physical).hexdigest(),
+                  "git_blob_content_sha256":hashlib.sha256(canonical).hexdigest(),
+                  "worktree_crlf":physical.count(b"\\r\\n"),
+                  "git_crlf":canonical.count(b"\\r\\n"),
+              })
+          Path("o75-source-byte-diagnostics.json").write_text(json.dumps(witness,indent=2)+"\\n")
+          print("O75_SOURCE_BYTE_DIAGNOSTIC",json.dumps(witness))
+          PY
+          test "$(git hash-object src/cmpct/builder.py)" = "382e60983bf1e8e7595ea7112f3a5553dc33dcc0"
+          test "$(git hash-object src/cmpct/codec.py)" = "dc3446b0eed82edfba9380e3885a20aa45577899"
+          test "$(git hash-object tests/fixtures/o50_o47_parent_builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
+          test "$(git hash-object tests/test_v031_builder_parent_parity_o50.py)" = "20faf26980693342439c7730f62bd0bab8daca0f"
+          test "$(git hash-object tests/test_v031_one_buffer_vzip_product_o60.py)" = "95740053ac9a3dd3335c10b63362eb0484722382"
+          test "$(git hash-object tests/test_v031_o63_vzip_rollback_union.py)" = "519c35ca60f952dea55b5160bba95dcc81f7c660"
+          if [ "${{ matrix.depth }}" = "0" ]; then
+            git cat-file -e '29d9688ae6bff6d1eccc27f019893866abe5b5c3^{commit}'
+          else
+            if git cat-file -e '29d9688ae6bff6d1eccc27f019893866abe5b5c3^{commit}' 2>/dev/null; then
+              echo "Unexpected historical parent in shallow checkout" >&2
+              exit 1
+            fi
+          fi
+          python -m pip install . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.builder,cmpct.codec,cmpct.reader
+          import subprocess
+          root=Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip())
+          for module in (cmpct.builder,cmpct.codec,cmpct.reader):
+              p=Path(module.__file__).resolve()
+              assert not p.is_relative_to(root), ('must be installed package',p)
+              print('O66_INSTALLED',p)
+          PY
+          mkdir -p o66-isolated
+          # Root tests/conftest.py imports historical research codecs; run the unchanged O75 guard in the isolated O66 collection.
+          cp tests/test_v031_o75_source_union_identity.py o66-isolated/test_identity.py
+          python -m pytest -q o66-isolated/test_identity.py --junitxml=o75-identity.xml 2>&1 | tee o75-identity.log
+          cp tests/test_v031_builder_parent_parity_o50.py o66-isolated/test_parent.py
+          cp tests/test_v031_one_buffer_vzip_product_o60.py o66-isolated/test_vzip.py
+          cp tests/test_v031_o63_vzip_rollback_union.py o66-isolated/test_rollback.py
+          python -m pytest -vv -s o66-isolated/test_parent.py --junitxml=o66-parent.xml 2>&1 | tee o66-parent.log
+          grep -q "O50_PARENT_SOURCE_CUSTODY ${{ matrix.custody }} 6f60dfe63742ff4b777f959a15d6fb828ae29610" o66-parent.log
+          python -m pytest -vv -s o66-isolated/test_vzip.py --junitxml=o66-vzip.xml 2>&1 | tee o66-vzip.log
+          python -m pytest -vv -s o66-isolated/test_rollback.py --junitxml=o66-rollback.xml 2>&1 | tee o66-rollback.log
+          python - <<'PY'
+          import os,xml.etree.ElementTree as ET
+          for file,tests,skipped in [('o66-parent.xml',3,1 if os.name=='nt' else 0),('o66-vzip.xml',12,0),('o66-rollback.xml',7,0)]:
+              root=ET.parse(file).getroot()
+              suites=[root] if root.tag=='testsuite' else root.findall('./testsuite')
+              got={k:sum(int(s.attrib.get(k,0)) for s in suites) for k in ('tests','failures','errors','skipped')}
+              print('O66_JUNIT',file,got)
+              assert got=={'tests':tests,'failures':0,'errors':0,'skipped':skipped},got
+          PY
+          echo "O75_O66_THREE_COURT_AND_O266_CUSTODY_PASS"
+      - name: Preserve raw logs and JUnit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o75-${{ matrix.os }}-depth-${{ matrix.depth }}
+          path: |
+            o75-candidate-identity.json
+            o75-source-byte-diagnostics.json
+            o75-identity.log
+            o75-identity.xml
+            o66-parent.log
+            o66-parent.xml
+            o66-vzip.log
+            o66-vzip.xml
+            o66-rollback.log
+            o66-rollback.xml
+          if-no-files-found: warn
+          retention-days: 30
+
+  cross-host-source-identity:
+    name: O75 five-host prospective source fingerprint equality
+    needs: exact-installed-o63-historical-custody
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download each independently created exact-head receipt
+        uses: actions/download-artifact@v4
+        with:
+          pattern: o75-*
+          path: receipts
+      - name: Reject absent, unequal or incorrectly bound source identities
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          receipts = sorted(Path("receipts").glob("*/o75-candidate-identity.json"))
+          assert len(receipts) == 5, f"five platform/depth receipts required, got {receipts}"
+          fingerprints, counts = set(), set()
+          for path in receipts:
+              receipt = json.loads(path.read_text(encoding="utf-8"))
+              assert receipt["schema"] == "cmpct-v031-candidate-source-receipt-v1", path
+              assert receipt["source_sha"] == __import__("os").environ["EVIDENCE_HEAD"], path
+              assert receipt["proof_scope"] == "source-identity-only; no product/release/performance credit", path
+              assert len(receipt["fingerprint"]) == 64, path
+              assert receipt["files"] == len(receipt["paths"]) and receipt["files"] > 0, path
+              fingerprints.add(receipt["fingerprint"])
+              counts.add(receipt["files"])
+          assert len(fingerprints) == len(counts) == 1, (
+              f"cross-platform source fingerprint mismatch: {fingerprints}, counts={counts}"
+          )
+          print("O75_CROSS_HOST_SOURCE_IDENTITY_PASS", next(iter(fingerprints)), next(iter(counts)))
+          PY
