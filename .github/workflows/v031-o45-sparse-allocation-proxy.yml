@@ -137,6 +137,9 @@ jobs:
         run: |
           set -euo pipefail
           test -d /dev/shm
+          fstype="$(stat -f -c %T /dev/shm)"
+          echo "O45B_FILESYSTEM=$fstype"
+          test "$fstype" = tmpfs
           df -B1 /dev/shm
           # Tmpfs needs one 8 MiB corpus plus up to five 8 MiB extracted checks.
           avail="$(df -B1 --output=avail /dev/shm | tail -1 | tr -d ' ')"
