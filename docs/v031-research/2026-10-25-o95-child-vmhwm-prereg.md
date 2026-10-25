@@ -1,0 +1,20 @@
+# O95 — Source-exact child VmHWM court for O63 versus O86 VZIP
+
+Date: 2026-10-25 UTC. **PROSPECTIVE PREDICTION — no O95 outcome observed at this commit.**
+
+## Problem, authority, identity
+The original O88 #447 compared genuine O63 `18e32cae012f5dca9fc47f10d194f8b81005c85c` against genuine O86 `6225e30f3e21c0783aa56726b52a3a3583540f99`, with stable archive bytes, CPU and exact reconstruction. O92c #450 / [run 40211292193](https://github.com/FCMO-AI/.CMPCT/actions/runs/40211292193) **confirmed** Linux `ru_maxrss` inherited from a fixture-building parent, so O88's ~300 MiB memory comparison is not attributable to each independent child. Child-local `VmHWM` and `VmRSS` have not been measured in an authentic O63/O86 build on the same O88 sources. This branch is stacked on exact O92 HEAD `1f1006a8958cd75eed8d1013add6850d8085a4ca`, with no product edit. Existing O94 #452 is a distinct Zstd framed-PACK ownership oracle; Builder output safety is separately owned by O90/O93.
+
+## Falsifiable primary question
+With genuinely independently installed O63/O86, on the *same source ZIP bytes*, does child-local Linux `VmHWM` attribute a material create-phase RSS peak difference hidden by `ru_maxrss`? **Prediction:** on at least one 65 MiB-expanded triple-ZIP family, median O63 peak after Builder exceeds median O86 peak by >=8 MiB despite both apparently reporting a shared inherited `ru_maxrss` floor. This is a testable prediction, not a product claim. **Kill/narrow:** peak difference below 8 MiB in all high-expansion cases, inconsistent source/archives, significant runner overlap/noise or inability to validate origins => no material memory claim. A positive does not establish O86 globally lower-memory or justify a threshold change.
+
+## Strong controls, alternatives, decisions
+- **Simplest control:** child `/proc/self/status` `VmHWM`, `VmRSS`, `RssAnon` sampled before CMPCT import, after import, after Builder, and after Reader verify/read/extract. Keep `ru_maxrss` as an intentionally contaminated comparator, not the source of RSS truth.
+- **Alternative explanation:** O63 may use similar real peak memory because both capture source ZIP bytes and Python process baseline dominates, while `ru_maxrss` merely obscures little genuine delta; a common high water may come from imports/shared allocator unrelated to VZIP; RSS may increase only during Reader.
+- **Positive/negative same-source cases:** O88's `shared_low` 1 MiB, `shared_over` 65 MiB, `independent_over` 65 MiB. Three independent child repetitions per original engine/case (18 authentic product processes), alternating arm order. Source data, r24 archive exact SHA/bytes, VZIP/BLOB selection, read/verify/extract and original installed Builder/codec blobs all checked.
+- **Evidence rung:** repeated same-host authentic-product instrument, not full promotion matrix. No tuning the 64 MiB budget, no benchmark comparator/semantic adjustments, no change to original O88/O92 documents or instruments.
+- **Total-system limits:** collect complete bytes, create wall+CPU, Reader cost, source identities and child VmHWM; no claims about temporary I/O, platform portability outside Linux, all-directory workloads or release readiness.
+- **Counterfactual:** a child `VmHWM` at the start of O88 would have prevented misattributing the high-water. Only a prospective repeat across this materially different source/product measurement may earn a reusable evidence-method lesson.
+
+## Expected decision and concurrency
+If corrected child-local RSS shows a material O63 cost and O86's exact opaque fallback retains the byte/CPU advantage, inform O86 owner #444 and O88/O92 scientific owners; recommend further diverse-family memory measurement in the candidate-product integration lane, not a direct merge. If not, retire the memory-advantage narrative rather than engineering the codec to repair an artifact. No mutation to canonical `docs/discovery/STATE.json`, the current branch, fixed format revision or existing PRs. Require durable GitHub Actions identity+raw receipts before results are accepted.

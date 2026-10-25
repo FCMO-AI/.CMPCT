@@ -1,0 +1,110 @@
+# ci-lane: fast
+# O95: fresh child VmHWM, not inherited ru_maxrss; source-exact research, not release.
+name: CMPCT v0.31 O95 Child VmHWM Court
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o95-child-vmhwm-court-20261025'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o95-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-child-memory-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EXACT_HEAD: ${{ github.sha }}
+      O92_HEAD: 1f1006a8958cd75eed8d1013add6850d8085a4ca
+      O95_PREREG: 3ce0088132bdc001458f6864a64670936c322864
+      O63_HISTORICAL: 18e32cae012f5dca9fc47f10d194f8b81005c85c
+      O86_HISTORICAL: 6225e30f3e21c0783aa56726b52a3a3583540f99
+    steps:
+      - name: Checkout exact research HEAD with original engine ancestry
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify prereg and unchanged historical product/evaluators
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O92_HEAD" HEAD
+          git merge-base --is-ancestor "$O95_PREREG" HEAD
+          git diff --exit-code "$O92_HEAD" HEAD -- src native tests pyproject.toml benchmarks/history docs/discovery/STATE.json benchmarks/v031_o88_vzip_budget_positive_economics.py benchmarks/v031_o92_vzip_phase_rss.py
+          test "$(git hash-object src/cmpct/builder.py)" = e46c8670c11c386925f9ae228b25de44c8045f2e
+          test "$(git hash-object src/cmpct/codec.py)" = 7d4c4a5a5f00c42561043611e5d4400dd8af38e6
+          test "$(git hash-object benchmarks/v031_o88_vzip_budget_positive_economics.py)" = 2acd2d9ea862b9f018bf1838f89dd2efa3807971
+          python -m py_compile benchmarks/v031_o95_child_vmhwm_attribution.py
+          git worktree add --detach "$RUNNER_TEMP/o95-o63-source" "$O63_HISTORICAL"
+          test "$(git -C "$RUNNER_TEMP/o95-o63-source" rev-parse HEAD)" = "$O63_HISTORICAL"
+          test "$(git -C "$RUNNER_TEMP/o95-o63-source" hash-object src/cmpct/builder.py)" = 382e60983bf1e8e7595ea7112f3a5553dc33dcc0
+          test "$(git -C "$RUNNER_TEMP/o95-o63-source" hash-object src/cmpct/codec.py)" = dc3446b0eed82edfba9380e3885a20aa45577899
+          echo 'O95_GENUINE_SOURCE_CUSTODY=PASS'
+      - name: Install two original engines outside research checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o95-o63-install" "$RUNNER_TEMP/o95-o63-source"
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o95-o86-install" .
+          test "$(git hash-object "$RUNNER_TEMP/o95-o63-install/cmpct/builder.py")" = 382e60983bf1e8e7595ea7112f3a5553dc33dcc0
+          test "$(git hash-object "$RUNNER_TEMP/o95-o63-install/cmpct/codec.py")" = dc3446b0eed82edfba9380e3885a20aa45577899
+          test "$(git hash-object "$RUNNER_TEMP/o95-o86-install/cmpct/builder.py")" = e46c8670c11c386925f9ae228b25de44c8045f2e
+          test "$(git hash-object "$RUNNER_TEMP/o95-o86-install/cmpct/codec.py")" = 7d4c4a5a5f00c42561043611e5d4400dd8af38e6
+          echo 'O95_INSTALLED_BLOB_IDENTITIES=PASS'
+      - name: Run actual matched-source child memory measurements
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o95-evidence
+          python benchmarks/v031_o95_child_vmhwm_attribution.py \
+            --o63-package "$RUNNER_TEMP/o95-o63-install" \
+            --o86-package "$RUNNER_TEMP/o95-o86-install" \
+            --report o95-evidence/o95-raw.json 2>&1 | tee o95-evidence/court.log
+          test "${PIPESTATUS[0]}" -eq 0
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('o95-evidence/o95-raw.json').read_text())
+          assert report['experiment'] == 'O95' and not report['failures']
+          assert len(report['cases']) == 3
+          assert sum(len(c['measurements']) for c in report['cases']) == 18
+          for case in report['cases']:
+              assert case['median'] is not None
+              assert {x['arm'] for x in case['measurements']} == {'o63','o86'}
+              for obs in case['measurements']:
+                  assert obs['child_memory_kib_by_stage']['after_builder']['vmhwm_kib'] >= obs['child_memory_kib_by_stage']['after_cmpct_import']['vmhwm_kib']
+          assert report['decision'] in ('MATERIAL_O63_CHILD_VMHWM_DIFFERENCE_ON_TESTED_FAMILY','NO_MATERIAL_CHILD_VMHWM_DIFFERENCE_ON_TESTED_FAMILY')
+          print('O95_ACTUAL_SOURCE_EXACT_PRODUCT_CHILDREN=18')
+          print('O95_SCIENTIFIC_DECISION=' + report['decision'])
+          PY
+      - name: Persist run identity and all partial negatives
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o95-evidence
+          git rev-parse HEAD > o95-evidence/exact-head.sha
+          printf '%s\n' "$O63_HISTORICAL" > o95-evidence/original-o63.sha
+          printf '%s\n' "$O86_HISTORICAL" > o95-evidence/original-o86.sha
+          git hash-object benchmarks/v031_o95_child_vmhwm_attribution.py > o95-evidence/instrument.blob
+          git diff --stat "$O92_HEAD" HEAD > o95-evidence/research-diff.txt
+      - name: Preserve raw source-exact scientific evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o95-genuine-child-vmhwm-${{ github.sha }}
+          path: o95-evidence/
+          if-no-files-found: warn
+          retention-days: 30
