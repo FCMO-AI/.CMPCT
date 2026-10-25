@@ -118,6 +118,12 @@ def test_o106_unconnected_fifo_blocks_reader(genuine_archive):
     try:
         result = _extract_child(archive, dest)
     except subprocess.TimeoutExpired as exc:
+        # A timeout during Python import/index opening would not implicate the
+        # output write. The child must have loaded the real archive first.
+        captured = exc.stdout or b""
+        if isinstance(captured, str):
+            captured = captured.encode()
+        assert b"O106_CHILD_INDEX_OPENED" in captured, captured
         assert stat.S_ISFIFO(os.lstat(leaf).st_mode), "Reader mutated FIFO before timeout"
         assert (root / "source" / "payload.bin").read_bytes() == payload
         print("O106_REAL_READER_FIFO_TIMEOUT=CONFIRMED", flush=True)
