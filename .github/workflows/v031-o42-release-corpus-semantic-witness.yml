@@ -1,0 +1,64 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-stale-fast-courts
+# Dedicated scientific gate; this does not replace the canonical r24/ZIP parity.
+name: CMPCT v0.31 O42 physical release-corpus witness
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-parity-semantic-corpus-witness-o42-20261025
+    paths:
+      - '.github/workflows/v031-o42-release-corpus-semantic-witness.yml'
+      - 'tools/v031_release_corpus_semantic_witness.py'
+      - 'tests/test_v031_release_corpus_semantic_witness.py'
+      - '.github/workflows/zip-parity.yml'
+      - 'docs/v031-research/2026-10-25-o42-release-corpus-semantic-witness-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-o42-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  o42-semantic-corpus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Bind immutable owner base and independent scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor ec8634167e303db050b600fb9d6ea19fad50186c HEAD
+          git diff --exit-code 36c5c737c2896b9ad9ee68c491ff921fbd36aaa4 HEAD -- src native benchmarks tools/check_performance_regression.py
+          git rev-parse HEAD
+          sha256sum tools/v031_release_corpus_semantic_witness.py tests/test_v031_release_corpus_semantic_witness.py
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Source-faithful POSIX hardlink/xattr adverse court
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python -m unittest discover -s tests -p 'test_v031_release_corpus_semantic_witness.py' -v \
+            2>&1 | tee benchmark-artifacts/o42-tests.log
+          python -m py_compile tools/v031_release_corpus_semantic_witness.py
+          printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/o42-head.txt
+      - name: Keep original test evidence, including negatives
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v031-o42-witness-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
+          retention-days: 90
