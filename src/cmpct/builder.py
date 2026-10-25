@@ -4,7 +4,7 @@ from __future__ import annotations
 # evolve aggressively pre-1.0, while a frozen reader must eventually remain compatible with old
 # archives. Keep representation-selection policy here rather than teaching the reader heuristics.
 
-import base64, binascii, ctypes, ctypes.util, hashlib, io, json, os, shutil, stat, struct, subprocess, tempfile, time, zipfile, zlib
+import base64, binascii, ctypes, errno, ctypes.util, hashlib, io, json, os, shutil, stat, struct, subprocess, tempfile, time, zipfile, zlib
 from dataclasses import dataclass
 from pathlib import Path
 import msgpack
@@ -20,7 +20,7 @@ class Candidate:
 
 class Builder:
     def __init__(self,root:Path, deflate_reuse_min:int|None=None, *, workers:int|None=None, reproducible:bool=False, reproducible_epoch_ns:int|None=None):
-        self.root=Path(root);self.cands:{}={};self.files=[];self.recipes=[];self.dictionary=b'';self.dict_hash=None;self.canonical_deflate={};self.secondary_stream_hashes=set();self.inode_first={};self.meta_by_rel={}
+        self.root=Path(root);self.cands:{}={};self.files=[];self.recipes=[];self.dictionary=b'';self.dict_hash=None;self.canonical_deflate={};self.secondary_stream_hashes=set();self.inode_first={};self.symlink_inode_first={};self.meta_by_rel={}
         # Exact Deflate streams below this size are regenerated from raw data + a one-byte zlib level.
         # 0 reproduces v0.17's maximum-speed policy; a huge value is the compact policy.
         self.deflate_reuse_min=int(os.environ.get('CMPCT_DEFLATE_REUSE_MIN','65536')) if deflate_reuse_min is None else int(deflate_reuse_min)
@@ -49,8 +49,9 @@ class Builder:
 
         Footnote: uid/gid are later stored as one common owner plus sparse overrides. Extended
         attributes are only emitted for paths that actually have them. This keeps normal archives tiny
-        while preserving Linux/macOS metadata that ZIP commonly drops. Unsupported filesystems simply
-        produce an empty metadata record; no archive operation depends on xattr availability.
+        while preserving Linux/macOS metadata that ZIP commonly drops. A filesystem with no xattr enumeration support
+        produces an empty record; an observed but unreadable attribute must refuse
+        publication rather than silently discard source information.
 
         Footnote: reproducible mode intentionally normalizes host-owned metadata to a portable zero
         owner/no-xattr profile. That is an explicit build-artifact mode, not the fidelity-preserving
@@ -63,10 +64,18 @@ class Builder:
         xa={}
         if hasattr(os,'listxattr'):
             try:
-                for name in os.listxattr(path,follow_symlinks=False):
-                    try:xa[name]=os.getxattr(path,name,follow_symlinks=False)
-                    except OSError:pass
-            except OSError:pass
+                names=os.listxattr(path,follow_symlinks=False)
+            except OSError as exc:
+                # Only a genuinely unsupported enumerator permits empty-xattr fallback.
+                # Permission/I-O failures cannot certify absence of source metadata.
+                if exc.errno not in (errno.ENOTSUP,errno.EOPNOTSUPP,errno.ENOSYS):
+                    raise OSError(exc.errno,f'cannot enumerate xattrs for {rel!r}; refusing lossy archive') from exc
+                names=()
+            for name in names:
+                try:xa[name]=os.getxattr(path,name,follow_symlinks=False)
+                except OSError as exc:
+                    # Once a key is observed, losing its value is not exact archival.
+                    raise OSError(exc.errno,f'cannot read xattr {name!r} for {rel!r}; refusing lossy archive') from exc
         self.meta_by_rel[rel]=(int(getattr(st,'st_uid',0)),int(getattr(st,'st_gid',0)),xa)
 
     def scan(self):
@@ -86,6 +95,18 @@ class Builder:
                 rel=f'{prefix}/{e.name}' if prefix else e.name
                 st=e.stat(follow_symlinks=False);mode=stat.S_IMODE(st.st_mode);self._capture_fs_meta(e.path,rel,st)
                 if stat.S_ISLNK(st.st_mode):
+                    # A hardlink to a *symlink inode* is not equivalent to an
+                    # independently created symlink with the same target text.
+                    # r24 cannot reconstruct this physical sharing. Reject only
+                    # if both alias names occur inside the selected source tree:
+                    # one in-tree alias with other links outside is representable.
+                    if st.st_nlink>1:
+                        ik=(st.st_dev,st.st_ino)
+                        previous=self.symlink_inode_first.get(ik)
+                        if previous is not None:
+                            raise OSError(f"unsupported hardlinked symlink {rel!r} "
+                                          f"aliases {previous!r}; refusing lossy archive")
+                        self.symlink_inode_first[ik]=rel
                     b=os.readlink(e.path).encode();ref=self.add_content(b,'.symlink')
                     self.files.append([rel,K_SYMLINK,mode,st.st_mtime_ns,len(b),sha(b),[S_BLOB,ref]]);continue
                 if stat.S_ISDIR(st.st_mode):
