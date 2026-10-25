@@ -1,0 +1,104 @@
+# Research-only, no product/format/release authority.
+name: CMPCT v0.31 O46 held-out cross-host multitype mode court
+
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-crosshost-heldout-multitype-o46-20261025'
+  pull_request:
+    paths:
+      - 'benchmarks/v031_crosshost_heldout_multitype_o46.py'
+      - 'tools/research_v031_crosshost_heldout_multitype_o46_referee.py'
+      - 'docs/v031-research/2026-10-25-o46-*'
+      - '.github/workflows/v031-crosshost-heldout-o46.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o46-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  cross-host:
+    name: O46 authentic Builder/Reader ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Assert exact source and run 3-arm product-mounted proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object benchmarks/v031_crosshost_repro_modes_o14.py)" = "c439829f358ef92a4ae71a7aaa4d9bbe8d83718a"
+          python -m py_compile benchmarks/v031_crosshost_heldout_multitype_o46.py tools/research_v031_crosshost_heldout_multitype_o46_referee.py
+          python -m pip install .
+          python benchmarks/v031_crosshost_heldout_multitype_o46.py --out o46-host.json
+          python - <<'PY'
+          import json, os
+          d=json.load(open("o46-host.json"))
+          assert d["source_sha"] == os.environ["EVIDENCE_HEAD"]
+          assert d["builds_per_arm"] == 2
+          assert len(d["outcomes"]) == 3
+          print("O46_REAL_AUTHENTIC_ARMS=3 REPEATED_BUILDS_PER_ARM=2")
+          PY
+      # A host product-fidelity red is decision-changing evidence: retain the
+      # written original receipt even though the job correctly exits nonzero.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o46-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o46-host.json
+          if-no-files-found: error
+          retention-days: 30
+
+  referee:
+    needs: cross-host
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: o46-*-${{ env.EVIDENCE_HEAD }}
+          path: o46-observations
+      - name: Independently classify cross-host physical/nonmode/mode frontiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python tools/research_v031_crosshost_heldout_multitype_o46_referee.py --root o46-observations --sha "$EVIDENCE_HEAD" --out o46-referee.json
+          python - <<'PY'
+          import json
+          d=json.load(open("o46-referee.json"))
+          assert d["logical_input_equal"] and d["hardlink_equivalence_equal"]
+          assert len(d["complete_archive_sha256"]["baseline"]) == 3
+          assert d["research_only"] and not d["product_code_modified"]
+          print("O46_SCIENTIFIC_DECISION="+d["decision"])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: o46-referee-${{ env.EVIDENCE_HEAD }}
+          path: o46-referee.json
+          if-no-files-found: error
+          retention-days: 30
