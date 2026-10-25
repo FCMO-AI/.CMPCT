@@ -11,6 +11,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: cmpct-vzip-budget-o86-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
