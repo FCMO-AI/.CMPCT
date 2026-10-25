@@ -1,0 +1,136 @@
+# ci-lane: fast
+# O117: separate producer/consumer to keep authentic Linux case-distinct archive source
+# invariant while evaluating filesystem extraction behavior on both Linux and Windows.
+name: CMPCT v0.31 O117 Host-Case Filename Fidelity Court
+on:
+  pull_request:
+    paths:
+      - 'tools/research/o117_casefold_extraction.py'
+      - 'docs/v031-research/2026-10-25-o117-win32-casefold-extract-*.md'
+      - '.github/workflows/v031-o117-host-case-extraction.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o117-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authentic-linux-producer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Exact-head identity and independently installed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b)" = "4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b"
+          test -z "$(git diff --name-only 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b HEAD -- src/cmpct native docs/FORMAT.md)"
+          python -m pip install --disable-pip-version-check .
+          mkdir -p o117-artifact o117-evidence
+          git rev-parse HEAD > o117-evidence/head.sha
+          git hash-object src/cmpct/builder.py > o117-evidence/builder.blob
+          git hash-object src/cmpct/reader.py > o117-evidence/reader.blob
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.builder,cmpct.reader
+          root=Path.cwd().resolve()
+          for module in (cmpct.builder,cmpct.reader):
+              p=Path(module.__file__).resolve()
+              assert not p.is_relative_to(root),(module.__name__,p)
+          print("O117_REAL_INSTALLED_SOURCE=PASS",flush=True)
+          PY
+      - name: Create and prove authentic case-distinct source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/research/o117_casefold_extraction.py produce --directory o117-artifact | tee o117-evidence/producer.log
+          test -s o117-artifact/casefold-source.cmpct
+          test -s o117-artifact/manifest.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cmpct-o117-frozen-linux-archive
+          path: o117-artifact/
+          if-no-files-found: warn
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cmpct-o117-producer-receipt
+          path: o117-evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+  same-archive-installed-consumers:
+    needs: authentic-linux-producer
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: cmpct-o117-frozen-linux-archive
+          path: o117-artifact
+      - name: Install independent reader and prove archive evidence identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pip install --disable-pip-version-check .
+          mkdir -p o117-evidence
+          git rev-parse HEAD > o117-evidence/head.sha
+          git hash-object src/cmpct/reader.py > o117-evidence/reader.blob
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader
+          assert not Path(cmpct.reader.__file__).resolve().is_relative_to(Path.cwd().resolve())
+          print("O117_REAL_INSTALLED_READER=PASS",flush=True)
+          PY
+      - name: Execute same-input authentic cross-host archive court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/research/o117_casefold_extraction.py consume --directory o117-artifact --output o117-evidence | tee o117-evidence/court.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('o117-evidence/result.json').read_text())
+          assert d['archive_sha256']==json.loads(Path('o117-artifact/manifest.json').read_text())['archive_sha256']
+          assert d['reader_exact_all_members'] is True
+          assert d['verdict'] in ('CONFIRMED_SILENT_HOST_CASE_ALIAS_LOSS','COMPLETE_SOURCE_TREE_FIDELITY','EXTRACTION_REJECTED_ARCHIVE'),d
+          print('O117_RESULT_CUSTODY_AUDIT=PASS',flush=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cmpct-o117-${{ matrix.os }}-source-bound
+          path: o117-evidence/
+          if-no-files-found: warn
+          retention-days: 30
