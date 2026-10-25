@@ -82,7 +82,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pytest -q tests/test_v031_destination_hardlink_leaf_alias.py --junitxml=o124-evidence/parent-inherited-junit.xml 2>&1 | tee o124-evidence/parent-court.log
+          # Exact unchanged test, outside tests/ to avoid unrelated R25 conftest imports.
+          cp tests/test_v031_destination_hardlink_leaf_alias.py o124-evidence/test_v031_destination_hardlink_leaf_alias.py
+          cmp -s tests/test_v031_destination_hardlink_leaf_alias.py o124-evidence/test_v031_destination_hardlink_leaf_alias.py
+          python -m pytest -q o124-evidence/test_v031_destination_hardlink_leaf_alias.py --junitxml=o124-evidence/parent-inherited-junit.xml 2>&1 | tee o124-evidence/parent-court.log
       - name: Three-engine authentic source-alias court
         shell: bash
         run: |
