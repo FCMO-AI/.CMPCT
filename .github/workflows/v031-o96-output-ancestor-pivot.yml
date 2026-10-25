@@ -1,0 +1,106 @@
+# ci-lane: fast
+# O96: science-only negative of O93 mutable output-ancestor namespace.
+name: CMPCT v0.31 O96 Builder output ancestor-pivot science
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-o96-output-ancestor-pivot-falsifier-20261025'
+  pull_request:
+    paths:
+      - 'tests/test_v031_o96_builder_output_ancestor_pivot.py'
+      - 'docs/v031-research/2026-10-25-o96-output-ancestor-pivot-prereg.md'
+      - '.github/workflows/v031-o96-output-ancestor-pivot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o96-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-actual-product-negative:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind original product and prospective preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 15aac3f81c23e0a54ae66de3f6b2146642afa350 HEAD
+          git merge-base --is-ancestor cf94adc0760df6af52aab2b22ea0ad4ec0c004b0 HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "7214a46b781bb10051e6782ba7731989ebf05edb"
+          git diff --exit-code 15aac3f81c23e0a54ae66de3f6b2146642afa350 HEAD -- src/ native/ benchmarks/ tools/ tests/test_v031_o93_builder_output_bound.py
+          mkdir -p o96-evidence o96-isolated
+          git rev-parse HEAD > o96-evidence/head.sha
+          git hash-object src/cmpct/builder.py > o96-evidence/builder-source.blob
+          git hash-object tests/test_v031_o96_builder_output_ancestor_pivot.py > o96-evidence/instrument.blob
+          python -m pip install --disable-pip-version-check . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, subprocess
+          import cmpct.builder, cmpct.reader
+          root=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip()).resolve()
+          p=Path(cmpct.builder.__file__).resolve()
+          for mod in (cmpct.builder,cmpct.reader):
+              assert not Path(mod.__file__).resolve().is_relative_to(root),mod.__file__
+          data=p.read_bytes()
+          blob=hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest()
+          assert blob=="7214a46b781bb10051e6782ba7731989ebf05edb",("wrong installed Builder",blob)
+          print("O96_REAL_INSTALLED_BUILDER_BLOB="+blob,flush=True)
+          PY
+      - name: Actual unchanged Builder static, stable and hostile parent controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_v031_o96_builder_output_ancestor_pivot.py o96-isolated/
+          python -m pytest -vv -s o96-isolated/ --junitxml=o96-evidence/junit.xml 2>&1 | tee o96-evidence/court.log
+      - name: Independent negative-reproduction audit
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json,xml.etree.ElementTree as ET
+          cases=list(ET.parse("o96-evidence/junit.xml").getroot().iter("testcase"))
+          summary={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
+          summary["total"]=len(cases)
+          summary["passed"]=summary["total"]-sum(summary[k] for k in ("failure","error","skipped"))
+          assert summary=={"failure":0,"error":0,"skipped":0,"total":3,"passed":3},summary
+          log=Path("o96-evidence/court.log").read_text()
+          for marker in ("O96_STATIC_INROOT_REFUSAL=PASS",
+                         "O96_STABLE_EXTERNAL_ANCESTOR=PASS",
+                         "O96_POSTSCAN_ANCESTOR_PIVOT_SOURCE_MUTATION=CONFIRMED",
+                         "O96_DESCRIPTOR_LEAF_IDENTITY_DOES_NOT_BIND_PARENT_NAMESPACE=CONFIRMED"):
+              assert marker in log,marker
+          receipt={"head":Path("o96-evidence/head.sha").read_text().strip(),
+                   "builder_blob":Path("o96-evidence/builder-source.blob").read_text().strip(),
+                   "instrument_blob":Path("o96-evidence/instrument.blob").read_text().strip(),
+                   "junit":summary,
+                   "decision":"O96 ancestor-path-pivot SOURCE-EXACT NEGATIVE; not safe-product PASS"}
+          Path("o96-evidence/result.json").write_text(json.dumps(receipt,indent=2,sort_keys=True)+"\n")
+          print("O96_REAL_PRODUCT_ANCESTOR_NEGATIVE_AUDITED=CONFIRMED",flush=True)
+          PY
+      - name: Preserve raw receipts including failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o96-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o96-evidence/
+          if-no-files-found: warn
+          retention-days: 30
