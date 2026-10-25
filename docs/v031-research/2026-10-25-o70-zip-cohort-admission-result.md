@@ -37,3 +37,22 @@ The cheapest next *structurally different* discriminator is a **charged split-ow
 ## Authority and release boundary
 
 Research only. Released CMPCT v0.30.0/r24 unchanged. No product source, format, frozen evaluator, benchmark, comparator, threshold, CI safety check, discovery state, version, merge, or release was changed. Full promotion gates are unmeasured.
+
+
+## Reproduction on the first result-document HEAD
+
+Independent GitHub-hosted run [40178208888](https://github.com/FCMO-AI/.CMPCT/actions/runs/40178208888), exact HEAD `6b3fac994bcb4af4be4085e9d9adce0b4d334dbf`, **SUCCESS (1/1)**, with its own raw [artifact 12592769212](https://github.com/FCMO-AI/.CMPCT/actions/runs/40178208888/artifacts/12592769212), artifact SHA-256 `bcdff0fc306e7c1e6452829bc9bc23e3cf3e1cfbb6ced2b1118c39bd787bac68`.
+
+The original input hashes, installed Builder blob and isolated one-expression oracle source SHA are identical to the original hosted run. Result:
+
+| Metric | S_PACK shipping | Noncohort oracle | Claim |
+|---|---:|---:|---|
+| Full archive bytes | 790,524 | 792,646 | **Exactly reproduced** |
+| Full create median wall | 9.747 ms | 53.087 ms | Creator benefit replicated; absolute times vary |
+| 64-B selected read median wall | 404.632 µs | 44.539 µs | ~9.09× faster on oracle in this run |
+| Selected-read decoded bytes | 687.911× oracle | baseline | **Exactly reproduced** |
+| Full integrity and reconstruction | PASS | PASS | Exactly reconstructed |
+
+**Joint interpretation:** the fixed output-byte delta and fixed decoded-work ratio are robust in two actual same-input source-bound hosted invocations, while clock timings vary. The creator-vs-reader tension is real for this one synthetic tree. Any estimate of how many lifetime reads could repay the oracle's one-time slower creation must be scoped to workload access frequency, caching, and the measured process boundary; no single universal break-even is claimed.
+
+The original first-science-run setup FAIL remains available. Subsequent generic CI and official performance checks are separate workflows and must never be inferred from the focused result.
