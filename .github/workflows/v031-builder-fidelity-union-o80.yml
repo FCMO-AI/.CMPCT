@@ -92,7 +92,7 @@ jobs:
           count={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
           count["tests"]=len(cases);count["passed"]=len(cases)-sum(count[k] for k in ("failure","error","skipped"))
           print("O80_JUNIT="+json.dumps(count,sort_keys=True),flush=True)
-          assert count["tests"] == 36, ("20 O64 + 10 O65 + 5 O67 + 1 O80",count)
+          assert count["tests"] == 37, ("20 O64 + 11 O65 + 5 O67 + 1 O80",count)
           assert count["passed"] >= 24, count
           assert count["failure"] == count["error"] == 0, count
           for tag in ("o64","o65","o67","o80"):
