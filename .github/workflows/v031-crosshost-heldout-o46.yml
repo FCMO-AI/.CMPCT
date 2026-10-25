@@ -57,7 +57,10 @@ jobs:
           assert len(d["outcomes"]) == 3
           print("O46_REAL_AUTHENTIC_ARMS=3 REPEATED_BUILDS_PER_ARM=2")
           PY
+      # A host product-fidelity red is decision-changing evidence: retain the
+      # written original receipt even though the job correctly exits nonzero.
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: o46-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
           path: o46-host.json
