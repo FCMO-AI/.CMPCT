@@ -97,7 +97,7 @@ jobs:
           suites=[root] if root.tag=='testsuite' else root.findall('./testsuite')
           vals={k:sum(int(x.attrib.get(k,0)) for x in suites) for k in ('tests','failures','errors','skipped')}
           print("O60_TRUE_JUNIT="+str(vals))
-          assert vals=={'tests':11,'failures':0,'errors':0,'skipped':0}, vals
+          assert vals=={'tests':12,'failures':0,'errors':0,'skipped':0}, vals
           PY
           echo "O60_PRODUCT_COURT_PASS"
       - name: Preserve original source-bound logs even on failure
