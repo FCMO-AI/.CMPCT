@@ -62,7 +62,8 @@ jobs:
           assert rows[2]["mode_row"].startswith("100755 ")
           assert all(row["excluded_yaml_example"] for row in rows)
           assert all(row["included_example"] for row in rows)
-          assert r["required_paths_materialized"] >= 40
+          from tools import check_v031_candidate_fingerprint as C
+          assert r["required_paths_materialized"] == len(C.load_manifest()["required_paths"])
           assert r["decision"]["product_or_release_credit"] is False
           print("O130 independent prospective scientific audit: PASS (negative custody reproduced)")
           PY
