@@ -32,7 +32,7 @@ def sha(data: bytes) -> str:
 
 
 def git_blob(data: bytes) -> str:
-    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\\0" + data).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
 
 
 def fixed_zip(path: Path, *, kind: str) -> None:
@@ -49,7 +49,7 @@ def fixed_zip(path: Path, *, kind: str) -> None:
         old = zipfile._get_compressor
         try:
             zipfile._get_compressor = fixed_compressor
-            z.writestr("fixed-last.bin", b"late fixed Huffman is different\\n" * 1100,
+            z.writestr("fixed-last.bin", b"late fixed Huffman is different\n" * 1100,
                        compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
         finally:
             zipfile._get_compressor = old
@@ -59,7 +59,7 @@ def fixed_zip(path: Path, *, kind: str) -> None:
             write_fixed(z)
         for i in range(14):
             body = (
-                f"member={i} exact physical bytes not an oracle\\n".encode() * (45 + i * 3)
+                f"member={i} exact physical bytes not an oracle\n".encode() * (45 + i * 3)
                 + hashlib.sha256(str(i).encode()).digest() * (10 + i)
             )
             z.writestr(f"members/{i:03d}.dat", body,
@@ -220,7 +220,7 @@ def report(directory: Path, destination: Path) -> None:
         "method": "fresh-process ABBA, same physical source, one Linux runner",
         "raw": rows, "summary": summaries,
     }
-    destination.write_text(json.dumps(obj, indent=2, sort_keys=True) + "\\n")
+    destination.write_text(json.dumps(obj, indent=2, sort_keys=True) + "\n")
     print("O67_SOURCE_BOUND_COMPLETE_BUILDER_ECONOMICS",json.dumps(summaries, sort_keys=True))
 
 
@@ -239,11 +239,11 @@ if __name__ == "__main__":
     ns = ap.parse_args()
     if ns.create:
         result = make_corpora(ns.root)
-        ns.out.write_text(json.dumps(result, sort_keys=True, indent=2) + "\\n")
+        ns.out.write_text(json.dumps(result, sort_keys=True, indent=2) + "\n")
     elif ns.sample:
         result = sample(ns.root, ns.out.with_suffix(".cmpct"), case=ns.case,
                         role=ns.role, repetition=ns.repetition, slot=ns.slot)
-        ns.out.write_text(json.dumps(result, sort_keys=True) + "\\n")
+        ns.out.write_text(json.dumps(result, sort_keys=True) + "\n")
         print("O67_SAMPLE",json.dumps(result, sort_keys=True))
     else:
         report(ns.root, ns.out)
