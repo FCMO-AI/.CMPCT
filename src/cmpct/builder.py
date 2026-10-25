@@ -89,7 +89,11 @@ class Builder:
                     self.files.append([rel,K_SYMLINK,mode,st.st_mtime_ns,len(b),sha(b),[S_BLOB,ref]]);continue
                 if stat.S_ISDIR(st.st_mode):
                     self.files.append([rel,K_DIR,mode,st.st_mtime_ns,0,b'',None]);walk(e.path,rel);continue
-                if not stat.S_ISREG(st.st_mode):continue
+                if not stat.S_ISREG(st.st_mode):
+                    # r24 cannot encode FIFO, socket, or device entries. Skipping them
+                    # would publish a falsely complete (but valid-looking) archive.
+                    raise OSError(f"unsupported filesystem entry {rel!r}: "
+                                  f"kind=0o{stat.S_IFMT(st.st_mode):o}; refusing lossy archive")
                 if st.st_nlink>1:
                     ik=(st.st_dev,st.st_ino)
                     if ik in self.inode_first:
