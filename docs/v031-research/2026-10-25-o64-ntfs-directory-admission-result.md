@@ -46,3 +46,29 @@ Prospective [O64-E preregistration](2026-10-25-o64e-directory-admission-economic
 The original independent source stream inventory would have caught O57's unreported directory ADS loss before archive hashing; the cheap O61-D2 valid empty-dir test would have prevented the naive guard regression. The successful candidate shows the smallest acceptable distinction: **file has a default stream; directory may have none**. No repeated systemic-process failure justifies editing the Discovery Engine law or STATE.json.
 
 **Next executable:** finish/reconcile separately installed O57/O64 Windows ABBA economics at actual HEAD, then correlate with full inherited and official release gates. Promote only after source-ownership and performance obligations are met, respecting all preserved negatives.
+
+## Decision-changing O64-E negative — completed source-exact Windows A/B
+
+**NEW SCIENTIFIC RESULT, 2026-10-25 UTC:** [actual hosted Windows O64-E #40172460548](https://github.com/FCMO-AI/.CMPCT/actions/runs/40172460548) **SUCCESS as measurement, FAIL as product economy** on exact executable source HEAD `6a69b3a7b4f5f12c13faca40eb8d3dc33747279f`, with product Builder/NTFS blobs unchanged and historical O57 exact SHA `d9f9fa724c139c6281f0e2a92c66601bee912618`. Raw records: [artifact #12590821716](https://github.com/FCMO-AI/.CMPCT/actions/runs/40172460548/artifacts/12590821716). Corrected harness builds **two independent source-exact native-bearing installed wheels**; fresh Python process each sample; exactly **24 actual observations (4 historical and 4 O64 per fixed corpus, ABBA ordering)**, with no dropped samples, archive semantic fallback or work reduction.
+
+**All 24 historical/candidate output artifacts match in complete SHA-256 and bytes for each same physical corpus.** Whole-Builder measured median wall, milliseconds (Windows 2025):
+
+| Deterministic source tree | O57 original | O64 candidate | Candidate minus O57 | Release slowdown signal |
+| --- | ---: | ---: | ---: | --- |
+| 256 empty directories | 10.14345 | 43.36125 | **+33.21780 ms (+327.5%)** | **YES** |
+| 2,048 empty directories | 72.85710 | 332.11745 | **+259.26035 ms (+355.8%)** | **YES** |
+| 512 directories + one tiny file each | 197.48055 | 264.46000 | **+66.97945 ms (+33.9%)** | **YES** |
+
+Absolute and relative slowdowns each exceed the unchanged current >3ms AND >5% promotion-confidence criteria, with especially strong causal fit to a Windows per-directory native API enumeration path. **No official release gate itself was run for O64**, and this cannot be promoted as a no-regression fix without changing execution architecture or material evidence. Complete output bytes remained **1362 / 2996 / 73560 B** by scenario, and every source tree fingerprint remained fixed.
+
+Raw median wall for whole subprocess and post-builder RSS further revealed real exported costs:
+
+| Source tree | Full subprocess O57 → O64 | Post-builder RSS O57 → O64 |
+| --- | --- | --- |
+| 256 empty dirs | 155.6772 → 195.96915 ms | 26,542 → 28,174 KiB |
+| 2,048 empty dirs | 222.1103 → 496.52485 ms | **28,852 → 40,986 KiB** |
+| 512 directory+file | 348.74455 → 424.60295 ms | 31,312 → 34,264 KiB |
+
+CPU medians moved in the same direction (+39.0625 / +265.625 / +70.3125 ms), but Windows `time.process_time_ns` showed ~15.625ms quantization and is not independently precise enough to attribute the exact function cost. Source review suggests repeated WinDLL/API binding or resource lifetime may dominate, rather than unavoidable NTFS stream enumeration itself. That explanation is **hypothesis only, not proven attribution**. The RSS difference remains an independently measured concern.
+
+**Science decision: SAFE CORRECTNESS SEED PRESERVED — PERFORMANCE/RSS REGRESSION DEBT MATERIAL — NO MERGE, NO RELEASE.** This changes priority from basic directory-ADS correctness to bounded rehabilitation of its cost. Cheapest next different-mechanism A/B: reuse configured Win32 kernel32 native API signatures/handles at module lifetime (rather than rebuilding ctypes function wrappers on every directory), or enumerate at a lower-overhead descriptor-bound boundary, with identical full-archive and original native-loss/valid-dir adversarial controls. The directory scan must never silently revert to losing data, nor may the relative/absolute timing gates be loosened. Windows platform coverage plus complete output equality and measurements prove the *signal*, not a universally applicable economic bound or full native causality.
