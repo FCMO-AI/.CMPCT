@@ -16,7 +16,9 @@ from cmpct.builder import Builder
 from cmpct.reader import CMPCT
 
 
-VARIANT = os.environ.get("CMPCT_O67_VARIANT", "")
+# Generic repository-wide pytest exercises this branch's candidate; the A/B
+# workflow sets baseline or candidate explicitly for exact source custody.
+VARIANT = os.environ.get("CMPCT_O67_VARIANT", "candidate")
 assert VARIANT in {"baseline", "candidate"}, (
     "O67 requires an explicit baseline/candidate binding; no silent defaults"
 )
