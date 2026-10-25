@@ -25,7 +25,7 @@ def test_fifo_is_not_silently_omitted_from_successful_archive():
         root = Path(td) / "tree"
         root.mkdir()
         (root / "present.txt").write_bytes(b"must-not-produce-partial-archive")
-        os.mkfifo(root / "named-pipe", mode=0o600)
+        os.mkfifo(root / "zz-named-pipe", mode=0o600)
         output = Path(td) / "incomplete.cmpct"
         with pytest.raises(OSError, match="unsupported filesystem entry"):
             Builder(root, workers=1, reproducible=True).build(output)
@@ -39,7 +39,7 @@ def test_bound_unix_socket_is_not_silently_omitted():
         root = Path(td) / "tree"
         root.mkdir()
         (root / "present.txt").write_bytes(b"normal-file")
-        sock_path = root / "endpoint.sock"
+        sock_path = root / "zz-endpoint.sock"
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.bind(os.fspath(sock_path))
             output = Path(td) / "incomplete.cmpct"
@@ -84,7 +84,7 @@ def test_cli_rejects_fifo_without_overwriting_existing_output(tmp_path):
     root = tmp_path / "source"
     root.mkdir()
     (root / "ordinary.dat").write_bytes(b"this-file-exists")
-    os.mkfifo(root / "another-pipe")
+    os.mkfifo(root / "zz-another-pipe")
     archive = tmp_path / "previous.cmpct"
     archive.write_bytes(b"KEEP-PREVIOUS-ARCHIVE-EXACT")
     completed = subprocess.run(
