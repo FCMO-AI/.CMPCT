@@ -1,3 +1,4 @@
+# ci-lane: deep
 # O73: fully charged scientific oracle only. Never a release/product gate.
 name: CMPCT v0.31 O73 gap-separated ZIP physical owners
 on:
