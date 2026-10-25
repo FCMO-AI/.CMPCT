@@ -1,0 +1,87 @@
+# ci-lane: fast
+# O54: source-exact independent research falsifier. Not a release/performance gate.
+name: CMPCT v0.31 O54 Deferred VZIP Split-Read Scientific Court
+on:
+  push:
+    branches:
+      - 'agent/phased3-v031-vzip-source-split-o54-20261025'
+  pull_request:
+    paths:
+      - 'tests/test_v031_deferred_vzip_source_split_o54.py'
+      - '.github/workflows/v031-deferred-vzip-source-split-o54.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o54-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-source-falsifier:
+    name: O54 actual installed Builder ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact research source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Source-bound true installed scientific test
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 17c96603e33b02b3f2f9e0079eec2b128f293be8 HEAD
+          git merge-base --is-ancestor be7d2c42a5c7a6d1d603555224f1b8d7f8e516c2 HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = "21a9ec696df13961c25301654feb607a7e161a4c"
+          git diff --exit-code 17c96603e33b02b3f2f9e0079eec2b128f293be8 HEAD -- src/cmpct native benchmarks tools/check_performance_regression.py
+          echo "O54_SOURCE_HEAD=$(git rev-parse HEAD)"
+          echo "O54_BUILDER_GIT_BLOB=$(git hash-object src/cmpct/builder.py)"
+          python -m pip install . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import cmpct.builder, cmpct.codec, cmpct.reader
+          repo = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
+          for mod in (cmpct.builder,cmpct.codec,cmpct.reader):
+              actual = Path(mod.__file__).resolve()
+              assert not actual.is_relative_to(repo), ("NOT_CLEAN_INSTALLED",actual)
+              print("O54_ACTUAL_INSTALLED="+str(actual))
+          PY
+          mkdir -p o54-isolated
+          cp tests/test_v031_deferred_vzip_source_split_o54.py o54-isolated/
+          python -m pytest -vv -s o54-isolated/test_v031_deferred_vzip_source_split_o54.py --junitxml=o54-results.xml 2>&1 | tee o54-results.log
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root=ET.parse("o54-results.xml").getroot()
+          suites=[root] if root.tag=="testsuite" else root.findall("./testsuite")
+          assert suites, root.tag
+          vals={k:sum(int(x.attrib.get(k,0)) for x in suites) for k in ("tests","failures","errors","skipped")}
+          print("O54_JUNIT_COUNTS="+str(vals))
+          assert vals=={"tests":3,"failures":0,"errors":0,"skipped":0}, vals
+          PY
+      - name: Preserve original outputs regardless of result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o54-source-split-${{ matrix.os }}
+          path: |
+            o54-results.log
+            o54-results.xml
+            o54-result.json
+          if-no-files-found: warn
+          retention-days: 30
