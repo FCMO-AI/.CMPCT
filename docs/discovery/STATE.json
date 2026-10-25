@@ -2,46 +2,51 @@
   "schema": "cmpct-discovery-state-v1",
   "status": "ACTIVE",
   "authority": {
-    "canonical_release": "v0.30.0 rolling pre-1.0 checkpoint",
-    "v031_development": "agent/v031-development (live head; read repository before trusting this staleable cache)",
-    "main": "80c358f8824ec1b20d349c92ed94c898090969b0",
-    "bounded_drift_owner": "agent/v031-bounded-drift-coordered-court@dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf",
-    "issue194_owner": "agent/v031-issue194-source-stat-falsifier@91c35b03cd815b850b078d5083684f3e8587475d",
-    "issue206_owner": "agent/v031-issue206-transactional-vzip@a4e74034b8d6af79877360864f59ef0d2af69575",
-    "note": "Repository heads, frozen preregistrations and exact result-bearing evidence outrank this staleable index. docs/V030_EFFICIENCY_RECOVERY.md is CLOSED as a v0.30 release gate; technical debt carries into v0.31. ACTIVE_RESEARCH_THESIS still contains older allocation prose and must not reopen closed v0.30 release gating."
+    "canonical_release": "v0.30.0 (rolling pre-1.0; revision 24)",
+    "main": "main@80c358f8824ec1b20d349c92ed94c898090969b0",
+    "v031_development": "agent/v031-development@4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b",
+    "observed_at_utc": "2026-10-25T12:49:00Z",
+    "note": "This is a staleable frontier pointer, NOT a release gate or independent project database. Canonical Git refs, issue/PR owners, exact source CI artifacts and frozen experiment documents always override this index. Do not interpret isolated draft success as merged v0.31 product. For further details follow cited PRs instead of expanding this cache."
   },
   "active_product_bottleneck": {
-    "id": "v031-result-custody-and-execution-ownership",
-    "observation": "The highest-value v0.31 mechanisms are decision-complete or product-landed, but their decisive courts are unexecuted: bounded drift lacks an exact-source hosted route; Issue194 has a frozen integrated A/B whose landed v1 evaluator is diagnostic-only; Issue206 has a landed transactional VZIP fix whose exact package/native product court remains unexecuted.",
-    "next_discriminator": "Use the first legitimate exact-source/runtime route to execute one already-frozen court. Do not invent nearby mechanism variants merely because execution custody is blocked."
+    "id": "v031-unmerged-owner-composition-plus-cross-host-source-identity",
+    "observation": "The v0.31 development branch remains at its October 6 head while multiple tested Builder, Reader, Writer and VZIP developments remain separate draft PRs. A key composed Builder evidence route O75 #431 on O66 #422 and O266 #266 now has generic Tests SUCCESS at exact head b7bdf9360b57f018fd2fe9ebf89dbf5ec8074449, but its five-host installed court 40185222752 is RED: Ubuntu 2/2 + macOS 1/1 PASS, Windows 0/2 FAIL on cross-host raw source-byte identity. No new official performance admission may be inferred from administratively green skipped jobs.",
+    "next_discriminator": "The #431 owner must first distinguish a Git-object/worktree EOL transform from a real source-blob conflict on Windows using corrected actual-CRLF counts plus exact normalized-byte witness (see PR #431 comment 6397825789); then rerun the unchanged five-host controls. Do not weaken source pins or claim cross-host parity on three passing jobs."
   },
   "primary_question": {
-    "id": "v031-bounded-drift-coordered-court",
-    "family": "representation-execution",
-    "hypothesis": "The frozen coordered bounded-drift court can improve the exact Shifted/Boundary representation frontier under unchanged filesystem, integrity, locality, comparator and release semantics.",
-    "kill": "Any frozen-court byte/locality/equality failure retires or narrows the current bounded-drift promotion claim; do not rescue it by changing thresholds, fixtures, mappings or comparators.",
+    "id": "o75-source-object-versus-platform-worktree-custody",
+    "family": "v031-product-convergence-and-evidence",
+    "hypothesis": "The existing O63 Builder plus O66 historical comparator and O266 prospective candidate fingerprint can become an interpretable five-host candidate if Windows worktree bytes are distinguished correctly from immutable Git source objects, without changing source semantics, historical v0.30 receipts or inherited O66 tests.",
+    "kill": "Any non-EOL source-byte difference, modified canonical Git blob, violated original O66 Builder parity/hostile test, or genuine product regression denies the claimed integrated-green result; all five installed jobs and actual official parity job must run before promotion.",
     "status": "BLOCKED",
     "evidence": [
-      "docs/v031-coordination/2026-10-05-bounded-drift-execution-custody.json@156d2902d01462b17d242a1d0897ea46493ff6ec",
-      "frozen benchmark blob 2fd04bacd64c14b45678b8575ba8ae7c692aa2df",
-      "frozen prereg blob f8e53f058a1c123ea4665b730c45f5619eb93d5f",
-      "owner head dbb9ef2f83a2370e1a947d5e24ee07dc1617bdcf has zero exact-head Actions runs/statuses and the dedicated workflow is absent"
+      "PR #431 at b7bdf9360b57f018fd2fe9ebf89dbf5ec8074449: generic Tests run 40185222735 SUCCESS; installed run 40185222752: Ubuntu shallow/full and macOS shallow SUCCESS, Windows shallow/full FAIL; aggregation SKIPPED.",
+      "PR #431 comment 6397825789: both Windows checkouts show wrong worktree-vs-HEAD source bytes including historical v0.30 lock, while the diagnostic accidentally counts literal backslash-r-backslash-n rather than actual CRLF bytes; cause is not yet established.",
+      "Parent #422 O66 actual 5-host clean-installed 108 PASS/2 Windows skips; its generic 812 PASS/4 FAIL is not green. O266 #266 alone fixes the four inherited source epoch assertions, but independent passes are not a combined result.",
+      "Official r24/ZIP effective benchmark repeatedly SKIPPED on documentation/workflow-only PR pushes; no release-performance credit."
     ]
   },
   "frontier_candidates": [
     {
-      "id": "issue194-grouped-historical-index-ownership",
-      "family": "execution-ownership",
-      "question": "Does reusing the exact historical weak index once per immutable base preserve child/product identity and materially improve the frozen Shifted court without held-out wall/RSS debt?",
-      "status": "BLOCKED",
-      "evidence": "Owner head 91c35b03cd815b850b078d5083684f3e8587475d; landed benchmark blob 38dc11e1b69cf1d2b7d09166db6fc355dd8e4acc; convergence record e43f5dd4ecdba6b4b798970e8c6051f1a29284fe. Lower-rung evidence is strongly positive, but the hardened promotion-quality evaluator remains unlanded/unexecuted."
+      "id": "o79-integrity-matched-vzip-selective-access",
+      "family": "verified-selective-access",
+      "question": "Can the source-exact SHA whole-recipe oracle #436 be integrated as bounded authenticated range access, preserving O76b hostile corruption semantics and O81 #438 full-read/verify distinction without paying unbounded scan/decode or changing r24?",
+      "status": "READY",
+      "evidence": "#436 original hosted run 40190864002 measured 169.687x–706.171x SHA-authenticated speedup on 3 eligible synthetic families; O79b 40191456187 rejected 2/2 unselected physical mutations; random negative 13.6x worse than unchecked range. Research only; #438 CRC32 collision proves regular VZIP full read and verify are different integrity tiers."
     },
     {
-      "id": "issue206-transactional-vzip-evidence",
-      "family": "transactional-state-correctness",
-      "question": "Does the landed transactional VZIP repair preserve complete product bytes/tree while removing speculative state leakage without create/RSS/I-O regression on the exact package/native runtime?",
-      "status": "BLOCKED",
-      "evidence": "Owner head a4e74034b8d6af79877360864f59ef0d2af69575; product landing b00f9a2bc59142dc526a0ee1eba335e1d28d83c4; evaluator-control v8 blob 82eb21628b17b38a4b449e679ee429001454e016. Exact package/native custody, focused tests and six-court product A/B remain unexecuted."
+      "id": "builder-filesystem-custody-composition",
+      "family": "filesystem-source-destination-safety",
+      "question": "Can the existing distinct O75 output staging #432, O78 inode/xattr behavioral court #435, source-root race #407/#434, source-output alias #439, ADS/xattr #437, and O63 buffer ownership coexist without losing any documented filesystem semantics?",
+      "status": "READY",
+      "evidence": "All are separate unmerged owner drafts; #439 pending three-host evidence as of this reconciliation. Do not cherry-pick safety patches into canonical development until exact composed adverse filesystem and output metadata identity courts run."
+    },
+    {
+      "id": "s-pack-physical-owner-read-amplification",
+      "family": "physical-layout-and-execution",
+      "question": "Can bounded generic physical ownership avoid mixed eight-ZIP cohort selective-decode amplification without the all-individual create-wall and byte debt measured by O70, using O73 alternative #429 as lower-rung research?",
+      "status": "READY",
+      "evidence": "#426 O70 true-installed same-input court reported 687.911x physical decoded-work amplification; all-individual control cost +2,122 complete bytes and ~3.75x create wall. Research frontiers only; no physical-owner product merge."
     }
   ],
   "saturated_families": [
@@ -76,7 +81,12 @@
     "issue206": "Transactional Builder source is landed; v8 control explicitly binds fresh-child source custody and requires candidate-neutrality before product timing credit.",
     "external_frontier": "Historical external scoreboard remains 15/15 ZIP size wins, 7/15 Zstd-19 size wins, 4/15 ZIP create wins, 5/15 Zstd-19 create wins, 4/15 strict joint wins; historical fingerprint only, not current release credit.",
     "a15": "NARROWED / DO NOT CHARTER: internal nonserialized projection/helper factoring is the stronger simpler control; serialized IR carrying-cost advantage is not established. Durable coordination: docs/v031-coordination/2026-10-06-foundry-reconciliation-a15-a07.json.",
-    "a07": "NARROWED / NOT CHARTERED: exact-head C25CC02 run 33296257896 recovered from Actions artifact 9727565317; projected complete 10,220,043 B versus Zstd-19 10,199,302 B, margin -20,741 B, exact semantics/locality green, promotion_signal=false. Two earlier artifacts reproduce the ~20.7 KiB loss."
+    "a07": "NARROWED / NOT CHARTERED: exact-head C25CC02 run 33296257896 recovered from Actions artifact 9727565317; projected complete 10,220,043 B versus Zstd-19 10,199,302 B, margin -20,741 B, exact semantics/locality green, promotion_signal=false. Two earlier artifacts reproduce the ~20.7 KiB loss.",
+    "v031_composition": "#415 O60 coherent single VZIP source; #418 O63 rollback product; #422 O66 historical parent; #266 prospective fingerprint; #431 O75 composition. No canonical merge, no earned core release.",
+    "current_o75_host": "Actions 40185222752 for #431@b7bdf936: Linux/macos PASS; Windows 2/2 source identity FAIL before O66 test assertions. Git source and worktree hashes differ on Windows for seven sampled tracked files, including immutable release lock; CRLF diagnostic is incorrectly escaped and inconclusive. PR comment #6397825789.",
+    "vzip_integrity": "O76 #433 physical mode0 unverified ranges may silently return corrupted bytes; O79 #436 SHA-oracle rejects selected/unselected/skeleton tamper in measured scope; O81 #438 authentic CRC32-preserving physical mutation gave regular full read differing from verify rejection. These are distinct integrity tiers.",
+    "writer_unmerged": "#409 O53 combines descriptor-bound POSIX FIFO source admission with Writer lease/salvage in an isolated PR; source exact-host and official promotion parity must be independently recovered before integration.",
+    "v031_primary_historical": "The former BLOCKED bounded-drift, issue194 and issue206 states were recorded October 6; issue206 later received product tests in #418/#422. Their original scientific evidence remains at their owner branches; this cache no longer claims those three cases are universally unexecuted."
   },
   "process_lessons": [
     {
@@ -101,7 +111,7 @@
     }
   ],
   "pending_jobs": [],
-  "next_action": "Run the frozen bounded-drift court exactly once through the first legitimate exact-source route. If unavailable, execute the converged Issue194 integrated A/B when hardened source/runtime custody becomes available; otherwise execute Issue206 v8 on the exact package/native runtime. Foundry currently has no chartered primary thesis; A15 and A07 are narrowed, so do not reopen them without changed evidence.",
+  "next_action": "Primary shared-owner next step: on #431, correct actual CRLF diagnostic and characterize HEAD Git-object versus checkout working-tree bytes, then rerun all five installed jobs without changing any original O66/O266 assertions. This activation owns no competing implementation. While #431 owner resolves it, a different operator should take a dependency-safe frontier (e.g. #436 integrity-matched selective-read product path after its owner review, or a genuinely new physical ownership oracle) rather than duplicate O75. When combined correctness is green, execute the real unchanged official r24/ZIP same-input base/candidate comparison; do not count SKIPPED jobs as green.",
   "release_policy": {
     "effective_date": "2026-10-04",
     "pre1_mode": "rolling material checkpoints",
