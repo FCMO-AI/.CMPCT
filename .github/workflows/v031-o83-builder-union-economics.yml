@@ -1,0 +1,103 @@
+# ci-lane: fast
+# O83 exact-source research economics, not the official r24/ZIP release gate.
+name: CMPCT v0.31 O83 Builder Union Source-Exact Economics
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o83-builder-union-economic-court-20261025'
+  pull_request:
+    paths:
+      - 'benchmarks/v031_o83_builder_union_economics.py'
+      - '.github/workflows/v031-o83-builder-union-economics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o83-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  direct-source-installed-abba:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O83_BASE: 9de342226bfbce3690ef1c8cabb1fdf229dbf003
+      O83_CANDIDATE: 4d65f1bcbc68f1ad770e706197ece8355dd10637
+    steps:
+      - name: Checkout actual research source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Read-only exact source custody and syntax preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor "$O83_CANDIDATE" HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = 37833f09dee4671b8ca6f3f3690a7fdebfbc4c70
+          test "$(git hash-object src/cmpct/ntfs_streams.py)" = 61d8cab1545c491da76b23ea89d4ca85d3030c5d
+          git diff --exit-code "$O83_BASE" HEAD -- src/cmpct/reader.py src/cmpct/codec.py src/cmpct/transactions.py native pyproject.toml benchmarks/history
+          test -f docs/v031-research/2026-10-25-o83-builder-union-economics-prereg.md
+          python -m py_compile benchmarks/v031_o83_builder_union_economics.py
+          git worktree add --detach "$RUNNER_TEMP/o83-original-base" "$O83_BASE"
+          test "$(git -C "$RUNNER_TEMP/o83-original-base" rev-parse HEAD)" = "$O83_BASE"
+          test "$(git -C "$RUNNER_TEMP/o83-original-base" hash-object src/cmpct/builder.py)" = b02a30d4ad1b26ea8eea49e11159113caebd6006
+          echo "O83_BASE_HEAD=$O83_BASE"
+          echo "O83_CANDIDATE_HEAD=$O83_CANDIDATE"
+          echo "O83_RESEARCH_HEAD=$EVIDENCE_HEAD"
+      - name: Install independent original and candidate packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o83-base-install" "$RUNNER_TEMP/o83-original-base"
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o83-candidate-install" .
+          test "$(git hash-object "$RUNNER_TEMP/o83-base-install/cmpct/builder.py")" = b02a30d4ad1b26ea8eea49e11159113caebd6006
+          test "$(git hash-object "$RUNNER_TEMP/o83-candidate-install/cmpct/builder.py")" = 37833f09dee4671b8ca6f3f3690a7fdebfbc4c70
+          echo "O83_INSTALLED_SOURCE_IDENTITY=PASS"
+      - name: Run same actual trees and real installed Builder child-process A/B
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o83-evidence
+          python benchmarks/v031_o83_builder_union_economics.py \
+            --base-package "$RUNNER_TEMP/o83-base-install" \
+            --candidate-package "$RUNNER_TEMP/o83-candidate-install" \
+            --report "o83-evidence/o83-raw.json" 2>&1 | tee o83-evidence/court.log
+          python - <<'PY'
+          import json
+          x = json.load(open("o83-evidence/o83-raw.json"))
+          assert len(x["cases"]) == 3
+          assert all(len(s["observations"]) == 10 for s in x["cases"])
+          assert all(s["size_parity"] for s in x["cases"])
+          assert sum(len(s["observations"]) for s in x["cases"]) == 30
+          assert x["cases"][1]["shape_evidence"]["xattrs"] == 64
+          assert x["cases"][2]["shape_evidence"]["out_of_tree_symlink_inode_aliases"] == 64
+          print("O83_EXACT_INSTALLED_BUILDERS=2; OBSERVATIONS=30; SOURCE_BYTE_PARITY=PASS")
+          PY
+      - name: Preserve material evidence regardless of success or failure
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o83-evidence
+          git rev-parse HEAD > o83-evidence/research-head.sha
+          git hash-object src/cmpct/builder.py > o83-evidence/candidate-builder.blob
+          printf '%s\n' "$O83_BASE" > o83-evidence/base-head.sha
+          git diff --stat "$O83_BASE" "$O83_CANDIDATE" > o83-evidence/candidate-diff-stat.txt
+      - name: Upload raw per-process results and forensic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o83-union-economics-${{ github.sha }}
+          path: o83-evidence/
+          if-no-files-found: warn
+          retention-days: 30
