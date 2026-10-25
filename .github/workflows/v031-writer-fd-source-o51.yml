@@ -56,7 +56,7 @@ jobs:
           assert suite is not None
           count=int(suite.attrib["tests"]); skips=int(suite.attrib.get("skipped",0))
           fails=int(suite.attrib.get("failures",0))+int(suite.attrib.get("errors",0))
-          assert count==8,(count,skips,fails)
+          assert count==9,(count,skips,fails)
           assert fails==0, (count,skips,fails)
           import os
           expected_skips=0 if os.name=="posix" else 6
