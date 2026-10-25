@@ -9,6 +9,12 @@ on:
       - 'research/v031_o105_a03_residual_factor_oracle.py'
       - 'docs/v031-research/2026-10-25-o105-a03-residual-factor-prereg.md'
       - '.github/workflows/v031-o105-a03-residual-factors.yml'
+  pull_request:
+    paths:
+      - 'research/v031_o105_a03_residual_factor_oracle.py'
+      - 'docs/v031-research/2026-10-25-o105-a03-residual-factor-prereg.md'
+      - 'docs/v031-research/2026-10-25-o105-a03-residual-factor-result.md'
+      - '.github/workflows/v031-o105-a03-residual-factors.yml'
   workflow_dispatch:
 
 permissions:
@@ -23,7 +29,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      EVIDENCE_HEAD: ${{ github.sha }}
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout exact research source
         uses: actions/checkout@v6
