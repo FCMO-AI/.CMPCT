@@ -55,7 +55,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git merge-base --is-ancestor 700fa74df7d9101b3d00322ab5b3606ee64faf88 HEAD
           git merge-base --is-ancestor 67a1b5d11182d0351fd6370ebf8ca9ca9f1d080d HEAD
-          test "$(git hash-object src/cmpct/reader.py)" = "80267375507cb4eca2d0a9e3e839fda3ce4249c4"
+          test "$(git hash-object src/cmpct/reader.py)" = "e6ac7fb8e677d5a1bdac4bab9663921f3e20df5c"
           git worktree add --detach "$RUNNER_TEMP/o124-original" 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
           git worktree add --detach "$RUNNER_TEMP/o124-parent" 700fa74df7d9101b3d00322ab5b3606ee64faf88
           test "$(git -C "$RUNNER_TEMP/o124-original" hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
