@@ -1,0 +1,81 @@
+# ci-lane: fast
+# O94 charged libzstd science only, never a CMPCT release/performance verdict.
+name: CMPCT v0.31 O94 dictionary-framed physical-owner oracle
+on:
+  push:
+    branches: ['agent/phased3-v031-dict-framed-pack-oracle-o94-20261025']
+  pull_request:
+    paths:
+      - 'research/v031_o94_dict_frames_oracle.py'
+      - 'docs/v031-research/2026-10-25-o94-*'
+      - '.github/workflows/v031-o94-dict-framed-pack-oracle.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-o94-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  charged-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Exact source, prospective ancestry, libzstd and charged oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor a265272c4ac4d9a9f4dcc1c80607e7dd7f1ac470 HEAD
+          python - <<'PY'
+          import ctypes.util
+          assert ctypes.util.find_library('zstd'), 'libzstd unavailable'
+          PY
+          mkdir -p o94-evidence
+          git rev-parse HEAD > o94-evidence/head.txt
+          git hash-object research/v031_o94_dict_frames_oracle.py > o94-evidence/instrument-blob.txt
+          python research/v031_o94_dict_frames_oracle.py --reps 7 --out o94-evidence/raw.json 2>&1 | tee o94-evidence/run.log
+      - name: Referee—validate raw schema, all regimes and controls, not chosen verdict
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          p=Path('o94-evidence/raw.json')
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-o94-dict-framed-oracle-v1'
+          assert d['repetitions']==7
+          assert {c['regime'] for c in d['corpora']}=={'template','entropy','holdout'}
+          for c in d['corpora']:
+              assert c['logical_files']==256
+              assert len(c['source_sha256'])==64
+              assert c['train_error'] is None
+              assert set(c['summary'])=={'monolithic','individual','dictionary','groups16','groups16_dict'}
+              for key in c['summary']:
+                  rows=c['raw'][key]
+                  assert len(rows)==7
+                  assert all(len(r['reads'])==7 for r in rows)
+                  assert len({r['full_bytes'] for r in rows})==1
+                  assert all(r['selected_member_bytes']>0 for r in rows)
+              print(c['regime'],c['verdict'],json.dumps(c['decision'],sort_keys=True))
+          print('ORACLE_SCOPE=RESEARCH_ONLY;NO_PRODUCT_SEMANTIC_EQUIVALENCE')
+          print('RAW_SHA256='+hashlib.sha256(p.read_bytes()).hexdigest())
+          PY
+      - name: Preserve raw evidence even on negative or infrastructure failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o94-charged-oracle-${{ env.EVIDENCE_HEAD }}
+          path: o94-evidence/
+          if-no-files-found: warn
+          retention-days: 30
