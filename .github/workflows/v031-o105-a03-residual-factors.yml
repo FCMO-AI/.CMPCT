@@ -1,0 +1,112 @@
+# ci-lane: fast
+# O105: source-bound research-only A03 six-arm exact residual factorization oracle.
+name: CMPCT v0.31 O105 Residual-Factor Oracle
+on:
+  push:
+    branches:
+      - 'agent/phased2-v031-a03-residual-factors-o105-20261025'
+    paths:
+      - 'research/v031_o105_a03_residual_factor_oracle.py'
+      - 'docs/v031-research/2026-10-25-o105-a03-residual-factor-prereg.md'
+      - '.github/workflows/v031-o105-a03-residual-factors.yml'
+  pull_request:
+    paths:
+      - 'research/v031_o105_a03_residual_factor_oracle.py'
+      - 'docs/v031-research/2026-10-25-o105-a03-residual-factor-prereg.md'
+      - 'docs/v031-research/2026-10-25-o105-a03-residual-factor-result.md'
+      - '.github/workflows/v031-o105-a03-residual-factors.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o105-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-research-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact research source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify exact source, prereg ancestor and isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 3527d8d0129fa50a4897155e2593413f60454274 HEAD
+          git show 3527d8d0129fa50a4897155e2593413f60454274:docs/v031-research/2026-10-25-o105-a03-residual-factor-prereg.md >/dev/null
+          git diff --name-only 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b HEAD | tee /tmp/o105-files.txt
+          if grep -Ev '^(docs/v031-research/2026-10-25-o105-a03-residual-factor-(prereg|result)\.md|research/v031_o105_a03_residual_factor_oracle\.py|\.github/workflows/v031-o105-a03-residual-factors\.yml)$' /tmp/o105-files.txt; then
+            echo 'Unexpected scope modifications' >&2
+            exit 1
+          fi
+          python tools/check_ci_topology.py .github/workflows/v031-o105-a03-residual-factors.yml
+          mkdir -p o105-evidence
+          git rev-parse HEAD > o105-evidence/HEAD.txt
+          git hash-object research/v031_o105_a03_residual_factor_oracle.py > o105-evidence/source-git-blob.txt
+          python --version | tee o105-evidence/python.txt
+          sha256sum research/v031_o105_a03_residual_factor_oracle.py | tee o105-evidence/source-sha256.txt
+      - name: Execute source-bound five-repeat six-arm scientific court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/v031_o105_a03_residual_factor_oracle.py --repetitions 5 --output o105-evidence/raw.json | tee o105-evidence/oracle.log
+      - name: Independent receipt and accounting audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          doc=json.loads(Path('o105-evidence/raw.json').read_text())
+          assert doc['schema']=='o105-a03-residual-factors-v1'
+          assert doc['settings']['repetitions']==5
+          assert len(doc['raw'])==120, len(doc['raw'])
+          assert set(doc['results'])=={'shared','heldout','hostile','flat'}
+          for case in doc['results']:
+              rows=[r for r in doc['raw'] if r['case']==case]
+              assert set(r['arm'] for r in rows)==set('ABCDEF')
+              assert len(set(r['input_sha256'] for r in rows))==1
+              for arm in 'ABCDEF':
+                  items=[r for r in rows if r['arm']==arm]
+                  assert len(items)==5
+                  assert {r['rep'] for r in items}==set(range(5))
+                  assert len({r['complete_charged_bytes'] for r in items})==1
+                  for r in items:
+                      assert len(r['selected_work'])==4
+                      assert len(r['selected_read_ns'])==4
+                      assert r['complete_charged_bytes']==64+32*24+32*r['owners']+r['encoded_payload_bytes']
+                      assert r['max_selected_decode_bytes']==max(x['decoded_work'] for x in r['selected_work'])
+                      assert all(x['physical_bytes']>0 for x in r['selected_work'])
+              n=4096
+              assert doc['results'][case]['scores']['A']['max_selected_decode_bytes']==n
+              assert doc['results'][case]['scores']['B']['max_selected_decode_bytes']==32*n
+              assert doc['results'][case]['scores']['C']['max_selected_decode_bytes']==2*n
+              assert doc['results'][case]['scores']['D']['max_selected_decode_bytes']==9*n
+              assert doc['results'][case]['scores']['E']['max_selected_decode_bytes']==9*n
+              assert doc['results'][case]['scores']['F']['max_selected_decode_bytes']==3*n
+              assert doc['results'][case]['winner_factor_arm'] in 'EF'
+              print('verified case:',case,'factor_delta:',doc['results'][case]['factor_relative_to_strong_control'])
+          Path('o105-evidence/audit.txt').write_text('120 observations; 4 regimes x 6 arms x 5; exact reconstruction and all scoped accounting checks PASS\n')
+          PY
+      - name: Upload original scientific receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-o105-science-${{ env.EVIDENCE_HEAD }}
+          path: o105-evidence/
+          if-no-files-found: warn
+          retention-days: 90
