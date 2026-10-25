@@ -53,6 +53,7 @@ jobs:
               print("O76_INSTALLED_MODULE="+str(path))
           PY
           python benchmarks/v031_o76_vzip_retention_oracle.py 2>&1 | tee o76-run.log
+          python benchmarks/v031_o76b_range_integrity_falsifier.py 2>&1 | tee o76b-run.log
       - name: Preserve exact observed evidence and failures
         uses: actions/upload-artifact@v4
         if: always()
@@ -61,5 +62,7 @@ jobs:
           path: |
             o76-run.log
             o76-evidence.json
+            o76b-run.log
+            o76b-evidence.json
           retention-days: 30
           if-no-files-found: warn
