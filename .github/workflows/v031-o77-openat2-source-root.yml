@@ -1,0 +1,53 @@
+# ci-lane: research
+# ci-cancel-policy: preserve-running-exact-receipt
+name: O77 Linux source-root syscall court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-o77-linux-openat2-source-boundary-20261025
+  pull_request:
+    paths:
+      - benchmarks/v031_o77_linux_openat2_rooted_source.py
+      - .github/workflows/v031-o77-openat2-source-root.yml
+      - docs/v031-research/2026-10-25-o77-openat2-rooted-source-prereg.md
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  o77-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Run actual Linux syscall oracle and capture raw repetitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o77-evidence
+          python3 --version | tee o77-evidence/python.txt
+          uname -a | tee o77-evidence/uname.txt
+          git rev-parse HEAD | tee o77-evidence/head.txt
+          python3 benchmarks/v031_o77_linux_openat2_rooted_source.py | tee o77-evidence/raw.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("o77-evidence/raw.json").read_text())
+          assert r["status"]=="PASS"
+          assert len(r["tests"])==17, len(r["tests"])
+          assert all(t["PASS"] for t in r["tests"])
+          assert len(r["micro"])==3
+          for d in ("1","4","8"):
+              m=r["micro"][d]
+              assert all(len(m["samples"][x])==7 for x in ("openat2","component"))
+          print("O77_REAL_TESTS=17 DEPTHS=3 SEVEN_REPETITIONS_PER_ARM PASS")
+          PY
+      - name: Keep source and exact raw output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o77-source-exact-linux-evidence
+          path: o77-evidence/
+          retention-days: 30
