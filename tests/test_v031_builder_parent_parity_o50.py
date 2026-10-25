@@ -98,3 +98,30 @@ def test_composed_builder_preserves_exact_parent_bytes_on_supported_sources(tmp_
                 assert sum(row[1] == K_HARDLINK for row in files) == 1, files
     print("O50_PARENT_BYTE_IDENTITY", shape, len(original),
           hashlib.sha256(original).hexdigest())
+
+
+@pytest.mark.skipif(os.name == "nt" or not hasattr(os, "mkfifo"),
+                    reason="original O47 versus O50 FIFO admission is POSIX only")
+def test_exact_parent_silently_omits_fifo_but_composite_refuses(tmp_path: Path):
+    """Same-source A/B: baseline passes with a missing entry, candidate fails closed.
+
+    This negative control deliberately runs the historical source code unchanged,
+    rather than simulating its behavior with a mocked predicate.
+    """
+    source = _make_source(tmp_path, "mixed")
+    fifo = source / "zz-unsupported.fifo"
+    os.mkfifo(fifo, mode=0o600)
+    ParentBuilder = _exact_parent_builder()
+    legacy = tmp_path / "legacy-partial.cmpct"
+    ParentBuilder(source, workers=1, reproducible=True, reproducible_epoch_ns=0).build(legacy)
+    with CMPCT(legacy) as reader:
+        assert reader.verify() >= 1
+        assert all(row[0] != fifo.name for row in reader.index["files"])
+        assert sum(row[1] == K_HARDLINK for row in reader.index["files"]) == 1
+    sentinel = b"PREVIOUS-SIGNED-GENERATION-MUST-NOT-BE-DESTROYED"
+    candidate = tmp_path / "candidate-existing.cmpct"
+    candidate.write_bytes(sentinel)
+    with pytest.raises(OSError, match="unsupported filesystem entry"):
+        ComposedBuilder(source, workers=1, reproducible=True,
+                        reproducible_epoch_ns=0).build(candidate)
+    assert candidate.read_bytes() == sentinel
