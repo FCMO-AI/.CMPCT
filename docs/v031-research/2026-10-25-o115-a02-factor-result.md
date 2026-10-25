@@ -38,6 +38,9 @@ Common metadata **64 + 40 bytes/file** (file logical length and SHA-256). Every 
 
 I independent: respectively 266,112 / 266,112 / 792,352 / 266,112 B. All four families completed `ALL_FIVE_RECONSTRUCT_AND_SHA256_PASS`; a distinct workflow audit checked population, complete model keys, stored bytes = payload + metadata, best-control selection, exact flags and declared win/loss, ending `O115_CHARGED_ORACLE_AUDIT_PASS`.
 
+### Payload-only and equal-directory upper bound on rescuing F
+Even if **all factor-specific additional descriptors and assignment bookkeeping were gifted free** while keeping the common per-file directory charge equal to S, the observed F *compressed payload alone* exceeds S by **372 B crossed**, **617 B correlated**, **567 B held-out** and **8,050 B hostile**. These are direct differences between measured compressed payloads `F(root + full factor dictionary + exceptions)` and `S(solid originals)`, independent of the extra F descriptor costs of 256 / 256 / 448 / 256 B. Therefore **metadata micro-packing alone cannot rescue the frozen factor mechanism against S under equal member-directory semantics**. A real reversal would require a different information model/codebook payload or a different product objective; no local threshold/descriptor tuning is justified.
+
 ### Scientific interpretation
 **Primary H1 storage improvement: FALSIFIED for this aligned fixed-slot dictionary representation.** Fully charged gifted F loses to a simpler **solid-original** Zstd baseline on *every* frozen family including held-out. No reason to tune offsets, token counts or sample seeds on these courts; inference/search overhead could only add cost.
 
