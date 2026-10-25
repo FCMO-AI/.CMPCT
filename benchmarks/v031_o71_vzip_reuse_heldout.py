@@ -250,6 +250,32 @@ def court() -> None:
         "COUNTEREXAMPLE_OBSERVED" if outcome else
         "NO_COUNTEREXAMPLE_IN_TESTED_FAMILIES")
     report["positive_cases"] = outcome
+    # O71b was preregistered *after* the original 42-observation outcome.
+    # Do not rewrite original O71 results: use the separately recorded control.
+    shared = next(c for c in report["cases"] if c["name"] == "shared_mixed_levels")
+    independent = next(c for c in report["cases"]
+                       if c["name"] == "independent_mixed_levels")
+    assert len(shared["members"]) == len(independent["members"]) == 3
+    assert [x["level"] for x in shared["members"]] == [1, 6, 9]
+    assert [x["level"] for x in independent["members"]] == [1, 6, 9]
+    assert len({x["expanded_sha256"] for x in shared["members"]}) == 1
+    assert len({x["expanded_sha256"] for x in independent["members"]}) == 3
+    independent_delta = independent["summary"]["virtual_minus_opaque_bytes"]
+    shared_delta = shared["summary"]["virtual_minus_opaque_bytes"]
+    if shared_delta >= 0:
+        judgement = "ORIGINAL_SHARED_WIN_DID_NOT_REPLICATE"
+    elif independent_delta < -127:
+        judgement = "INDEPENDENT_MIXED_STILL_WINS_CAUSAL_STORY_INSUFFICIENT"
+    else:
+        judgement = "EXACT_CONTENT_IDENTITY_SUPPORTED_WITHIN_MATCHED_ENTROPY_FAMILY"
+    report["o71b"] = {
+        "prereg": "83fc27518f45663c399d1f16809b9601880a9fec",
+        "shared_minus_opaque_bytes": shared_delta,
+        "independent_minus_opaque_bytes": independent_delta,
+        "disposition": judgement,
+        "scope": "within-family genuine complete stored bytes, not cross-input A/B",
+    }
+
     report["scope"] = (
         "Installed source-bound O63 oracle only. No product-policy, release, "
         "externally benchmarked, cross-platform, or generic-heuristic credit.")
