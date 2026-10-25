@@ -16,6 +16,7 @@ import zipfile
 import pytest
 
 from cmpct.builder import Builder as ComposedBuilder
+from cmpct.codec import K_HARDLINK
 from cmpct.reader import CMPCT
 
 _PARENT_SHA = "29d9688ae6bff6d1eccc27f019893866abe5b5c3"
@@ -90,6 +91,6 @@ def test_composed_builder_preserves_exact_parent_bytes_on_supported_sources(tmp_
             assert reader.verify() >= 1
             files = reader.index["files"]
             if shape == "mixed":
-                assert sum(row[1] == 3 for row in files) == 1, files
+                assert sum(row[1] == K_HARDLINK for row in files) == 1, files
     print("O50_PARENT_BYTE_IDENTITY", shape, len(original),
           hashlib.sha256(original).hexdigest())
