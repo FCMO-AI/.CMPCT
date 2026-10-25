@@ -17,7 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from cmpct import Builder, CMPCT
+from cmpct.builder import Builder
+from cmpct.reader import CMPCT
 
 PAYLOADS = {
     "Report.txt": b"UPPER-ASCII-NAME-CASE-COLLISION-ORIGINAL\\n" * 47,
