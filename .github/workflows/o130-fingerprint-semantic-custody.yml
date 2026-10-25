@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p test-artifacts
-          python research/o130_candidate_fingerprint_custody_oracle.py --output test-artifacts/o130-custody.json
+          PYTHONPATH="$PWD" python research/o130_candidate_fingerprint_custody_oracle.py --output test-artifacts/o130-custody.json
 
       - name: Independent JSON court (different validation code)
         shell: bash
