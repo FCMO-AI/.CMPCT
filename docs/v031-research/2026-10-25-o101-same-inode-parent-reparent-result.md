@@ -47,3 +47,23 @@ The experiment measures **correctness**, not compression, create time, RSS, I/O,
 Counterfactual: the cheapest prospective discriminator was to move the *original inode itself* into source after preflight, then verify that `fstat` remained equal. This transfers to all safety policies that use a stable object inode as a proxy for mutable namespace ancestry. It justifies a new **test**, not a rewrite of Discovery Engine normative policy.
 
 **Status:** science decision changed; no codec/format/source implementation, no merge, no release. Current CI for the final documentation HEAD must be checked separately; do not transfer the source-HEAD receipt automatically to new HEAD.
+
+## Independent secondary audit of *raw* GitHub artifacts
+
+After the primary hosted verdict, both original hosted artifact ZIPs were separately downloaded and verified locally by their full archive SHA-256, then opened with Python stdlib `zipfile` and `json`. This secondary inspection did not rely solely on pytest console markers.
+
+| Raw JSON field | Ubuntu 24.04 | macOS 14 |
+|---|---|---|
+| Artifact outer ZIP SHA-256 | `4cbe06eb08c30c8b0c08b07989e8416fcd50abd2538fc9ca0f9a649ebefa6747` | `30e365e553659796082a41b7d4f6e15bec0dc160094d3293de64df1ed76da554` |
+| `audit.head` | `9e93c4a8bd6408f50fe2d955cecac9068d85998d` | same |
+| `audit.builder_git_blob` | `7400d0b0c2f8bf664e7022ae499cd0ab07b18968` | same |
+| Physical parent `(dev,ino)` before/after | `(2049,9180073)` / identical | `(16777232,2889421)` / identical |
+| Original and final leaf SHA-256 | `8ad4a02eaef2403292f1a4c07e2fdf2bb643c6179c9b76521dcb6b832c6a9c60` / identical | identical |
+| Resulting CMPCT size | **4,958 B** | **4,958 B** |
+| Resulting archive SHA-256 | `6de72a5c5dde56105c1f9a3f6faea148cd329600af3a2fd5848f0b89d9bec8b4` | **same** |
+| Reader verify + original read | PASS | PASS |
+| Postscan realpath inside source | TRUE | TRUE |
+| Returned logical archive files | 1 | 1 |
+| JUnit audit | 8 PASS, 0 SKIP/FAIL | 7 PASS, 1 Linux-only SKIP, 0 FAIL |
+
+Independent raw-artifact decision: **PASS**. The archive SHA equality across the two hosts additionally rules out a platform-dependent wire-format difference **for this reproducible single-leaf fixture only**; it is not universal cross-platform byte identity. The matching `dev/ino` comparisons are within each host; cross-host numeric inode/device identifiers do not have shared identity.
