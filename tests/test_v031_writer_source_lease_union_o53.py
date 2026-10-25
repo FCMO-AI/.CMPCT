@@ -158,9 +158,24 @@ def test_exact_immutable_parent_and_combined_writer_emit_identical_supported_arc
 
     archive = _archive(tmp_path)
     frozen_base = "c1e75370281ca6b721ef10edf1ed15e6c5ef48f7"
-    historical_src = subprocess.check_output(
-        ["git", "show", frozen_base + ":src/cmpct/transactions.py"], text=True
-    )
+    # A generic CI checkout can be shallow and omit the exact historical
+    # parent Git object. Preserve the original *entire source* as a fixture,
+    # independently enforcing its Git blob SHA, rather than silently skipping
+    # this strongest A/B comparison or using an invented historical stub.
+    frozen_fixture = Path(__file__).with_name("o53_frozen_311_transactions.py")
+    try:
+        historical_bytes = subprocess.check_output(
+            ["git", "show", frozen_base + ":src/cmpct/transactions.py"],
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError:
+        historical_bytes = frozen_fixture.read_bytes()
+    import hashlib
+    blob_header = b"blob " + str(len(historical_bytes)).encode("ascii") + b"\0"
+    assert hashlib.sha1(blob_header + historical_bytes).hexdigest() == (
+        "a3b9c3375ed19f0b37d40ee47ead7b5d5b8905ee"
+    ), "frozen #311 original Writer blob mismatch"
+    historical_src = historical_bytes.decode("utf-8")
     # Compile the frozen historical Writer with real installed cmpct dependencies.
     # Keep every #311 lock/salvage/Reader behavior, replacing only admission in O53.
     module = types.ModuleType("cmpct._o53_exact_parent")
