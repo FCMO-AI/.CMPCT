@@ -15,7 +15,9 @@ import pytest
 from cmpct.builder import Builder
 
 
-# Only the actual kernel roundtrip requires the host-native xattr API.\n# All other cases inject an API on each platform to test the same failure policy.\nPOSIX_XATTR = pytest.mark.skipif(
+# Only the actual kernel roundtrip requires the host-native xattr API.
+# All other cases inject an API on each platform to test the same failure policy.
+POSIX_XATTR = pytest.mark.skipif(
     not hasattr(os, "listxattr") or not hasattr(os, "getxattr"),
     reason="POSIX extended-attribute enumeration API unavailable",
 )
