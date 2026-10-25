@@ -72,3 +72,24 @@ def test_ordinary_tree_remains_byte_deterministic_and_exactly_reconstructible(tm
         if os.name != "nt":
             assert os.readlink(destination / "safe-link") == "nested/payload.bin"
     assert digests[0] == digests[1]
+
+
+@pytest.mark.skipif(os.name == "nt" or not hasattr(os, "mkfifo"),
+                    reason="CLI FIFO user-surface control requires POSIX")
+def test_cli_rejects_fifo_without_overwriting_existing_output(tmp_path):
+    """The end-user create command must not report success or clobber an older archive."""
+    import subprocess
+    import sys
+
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "ordinary.dat").write_bytes(b"this-file-exists")
+    os.mkfifo(root / "another-pipe")
+    archive = tmp_path / "previous.cmpct"
+    archive.write_bytes(b"KEEP-PREVIOUS-ARCHIVE-EXACT")
+    completed = subprocess.run(
+        [sys.executable, "-m", "cmpct", "create", str(root), str(archive)],
+        capture_output=True, text=True, timeout=90, check=False)
+    assert completed.returncode != 0, completed.stdout
+    assert "unsupported filesystem entry" in completed.stderr, completed.stderr
+    assert archive.read_bytes() == b"KEEP-PREVIOUS-ARCHIVE-EXACT"
