@@ -98,6 +98,33 @@ def test_independent_equal_target_symlinks_must_remain_distinct(tmp_path):
     assert os.lstat(a).st_ino != os.lstat(b).st_ino
 
 
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX symlink-inode external-link control")
+def test_single_selected_symlink_alias_with_external_hardlink_is_valid(tmp_path):
+    """Global nlink>1 is not proof that the selected source contains an alias pair."""
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "payload.bin").write_bytes(b"one-name-in-scope-is-representable")
+    os.symlink("payload.bin", root / "selected")
+    try:
+        os.link(root / "selected", tmp_path / "outside-root-alias", follow_symlinks=False)
+    except (OSError, NotImplementedError, ValueError) as exc:
+        pytest.skip(f"hardlinking a symlink inode is unsupported on host: {exc}")
+    inside, outside = os.lstat(root / "selected"), os.lstat(tmp_path / "outside-root-alias")
+    assert stat.S_ISLNK(inside.st_mode) and stat.S_ISLNK(outside.st_mode)
+    assert (inside.st_dev, inside.st_ino) == (outside.st_dev, outside.st_ino)
+    assert inside.st_nlink >= 2
+    # There is exactly one selected symlink: rejection solely from st_nlink
+    # would be a false-positive loss of valid archive coverage.
+    archive = tmp_path / "single-alias.cmpct"
+    _create(root, archive)
+    with CMPCT(archive) as reader:
+        assert reader.verify() >= 1
+        dest = tmp_path / "restored"
+        reader.extractall(dest, metadata=False)
+    assert os.readlink(dest / "selected") == "payload.bin"
+    assert (dest / "payload.bin").read_bytes() == b"one-name-in-scope-is-representable"
+
 def test_regular_file_hardlinks_remain_one_inode(tmp_path):
     root = tmp_path / "source"
     root.mkdir()
