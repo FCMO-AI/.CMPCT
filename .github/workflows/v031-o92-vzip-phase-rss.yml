@@ -1,0 +1,106 @@
+# ci-lane: fast
+# O92 original-source fresh-process peak-RSS attribution; science, NOT release.
+name: CMPCT v0.31 O92 VZIP Phase RSS Court
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o92-vzip-phase-rss-20261025'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o92-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase-attributed-physical-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EXACT_HEAD: ${{ github.sha }}
+      O63_BASE: 18e32cae012f5dca9fc47f10d194f8b81005c85c
+      O86_CANDIDATE: 6225e30f3e21c0783aa56726b52a3a3583540f99
+      O88_BASE: 7f42c7854a3b06f4d81e168a29b8d9855582c34d
+      O92_PREREG: 43ccdf653140531c694f558925d5d894a20d5e99
+    steps:
+      - name: Checkout actual source and historical evidence
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Assert all authoritative sources remain identical
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor "$O88_BASE" HEAD
+          git merge-base --is-ancestor "$O92_PREREG" HEAD
+          test "$(git hash-object src/cmpct/builder.py)" = e46c8670c11c386925f9ae228b25de44c8045f2e
+          test "$(git hash-object src/cmpct/codec.py)" = 7d4c4a5a5f00c42561043611e5d4400dd8af38e6
+          test "$(git hash-object benchmarks/v031_o88_vzip_budget_positive_economics.py)" = 2acd2d9ea862b9f018bf1838f89dd2efa3807971
+          git diff --exit-code "$O88_BASE" HEAD -- src native tests pyproject.toml benchmarks/history docs/discovery/STATE.json benchmarks/v031_o88_vzip_budget_positive_economics.py
+          python -m py_compile benchmarks/v031_o92_vzip_phase_rss.py
+          git worktree add --detach "$RUNNER_TEMP/o92-o63-source" "$O63_BASE"
+          test "$(git -C "$RUNNER_TEMP/o92-o63-source" rev-parse HEAD)" = "$O63_BASE"
+          test "$(git -C "$RUNNER_TEMP/o92-o63-source" hash-object src/cmpct/builder.py)" = 382e60983bf1e8e7595ea7112f3a5553dc33dcc0
+          test "$(git -C "$RUNNER_TEMP/o92-o63-source" hash-object src/cmpct/codec.py)" = dc3446b0eed82edfba9380e3885a20aa45577899
+          echo 'O92_HISTORICAL_SOURCE_CUSTODY=PASS'
+      - name: Install authentic historical engine and candidate independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o92-o63-install" "$RUNNER_TEMP/o92-o63-source"
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o92-o86-install" .
+          test "$(git hash-object "$RUNNER_TEMP/o92-o63-install/cmpct/builder.py")" = 382e60983bf1e8e7595ea7112f3a5553dc33dcc0
+          test "$(git hash-object "$RUNNER_TEMP/o92-o63-install/cmpct/codec.py")" = dc3446b0eed82edfba9380e3885a20aa45577899
+          test "$(git hash-object "$RUNNER_TEMP/o92-o86-install/cmpct/builder.py")" = e46c8670c11c386925f9ae228b25de44c8045f2e
+          test "$(git hash-object "$RUNNER_TEMP/o92-o86-install/cmpct/codec.py")" = 7d4c4a5a5f00c42561043611e5d4400dd8af38e6
+          echo 'O92_INSTALLED_CUSTODY=PASS'
+      - name: Actually measure fresh child Builder and Reader RSS phases
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o92-evidence
+          python benchmarks/v031_o92_vzip_phase_rss.py \
+            --o63-package "$RUNNER_TEMP/o92-o63-install" \
+            --o86-package "$RUNNER_TEMP/o92-o86-install" \
+            --report o92-evidence/o92-raw.json 2>&1 | tee o92-evidence/court.log
+          test "${PIPESTATUS[0]}" -eq 0
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r = json.loads(Path('o92-evidence/o92-raw.json').read_text())
+          assert r['experiment'] == 'O92' and not r['failures']
+          assert len(r['observations']) == 6 and r['summary'] is not None
+          assert len([x for x in r['observations'] if x['arm']=='o63']) == 3
+          assert len([x for x in r['observations'] if x['arm']=='o86']) == 3
+          assert all(len(x['rss_kib_linux_peak_by_phase']) == 5 for x in r['observations'])
+          print('O92_ACTUAL_EXECUTED_INSTALLED_PROCESSES=6')
+          print('O92_PHASE_ATTRIBUTION=' + json.dumps(r['summary'], sort_keys=True))
+          PY
+      - name: Preserve exact HEAD and all partial negatives
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p o92-evidence
+          git rev-parse HEAD > o92-evidence/research-head.sha
+          printf '%s\n' "$O63_BASE" > o92-evidence/o63-base.sha
+          printf '%s\n' "$O86_CANDIDATE" > o92-evidence/o86-base.sha
+          git hash-object benchmarks/v031_o92_vzip_phase_rss.py > o92-evidence/instrument.blob
+          git diff --stat "$O88_BASE" HEAD > o92-evidence/diff-stat.txt
+      - name: Upload full raw scientific receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o92-source-exact-vzip-phase-rss-${{ github.sha }}
+          path: o92-evidence/
+          if-no-files-found: warn
+          retention-days: 30
