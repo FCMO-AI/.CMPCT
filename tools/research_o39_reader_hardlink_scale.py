@@ -307,9 +307,17 @@ def runner(source_base: Path, source_candidate: Path, out: Path, reps: int) -> N
         }
         summaries.append(summary)
         print("O39_RESULT " + json.dumps(summary, sort_keys=True), flush=True)
+    candidate_checkout_head = subprocess.check_output(
+        ["git", "-C", str(source_candidate.resolve().parent), "rev-parse", "HEAD"],
+        text=True,
+    ).strip()
+    # The product source is the pinned O38 ancestor, while the evidence-only
+    # checkout has its own HEAD. Never mislabel an experiment ref as product SHA.
     result = {
         "experiment": "O39", "status": "RESEARCH_NOT_RELEASE",
         "source_baseline_head": BASE_SHA, "source_candidate_head": PRODUCT_SHA,
+        "source_evidence_checkout_head": candidate_checkout_head,
+        "source_relation": "evidence HEAD descends from O38; identical tracked src/ and native/ trees",
         "baseline_reader_blob": BASE_READER_BLOB,
         "candidate_reader_blob": PRODUCT_READER_BLOB,
         "platform": platform.platform(), "python": sys.version,
