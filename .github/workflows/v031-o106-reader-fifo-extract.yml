@@ -1,0 +1,106 @@
+# ci-lane: fast
+# O106: scientific Reader extraction FIFO availability court, no promoted product credit.
+name: CMPCT v0.31 O106 Reader FIFO extract court
+
+on:
+  push:
+    branches:
+      - 'agent/phased1-v031-o106-reader-fifo-extract-20261025'
+  pull_request:
+    paths:
+      - '.github/workflows/v031-o106-reader-fifo-extract.yml'
+      - 'tests/test_v031_o106_reader_fifo_extract_court.py'
+      - 'docs/v031-research/2026-10-25-o106-reader-fifo-extract-prereg.md'
+      - 'docs/v031-research/2026-10-25-o106-reader-fifo-extract-result.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o106-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-reader-fifo:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out source-exact product and preregistration
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prove exact provenance, install independently and freeze instrument identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b HEAD
+          git merge-base --is-ancestor 5c0a66d22ea3b2fc0ab727749e0c3c9cafcf1cce HEAD
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          mkdir -p o106-evidence
+          git rev-parse HEAD > o106-evidence/head.sha
+          git hash-object src/cmpct/reader.py > o106-evidence/reader.blob
+          git hash-object src/cmpct/builder.py > o106-evidence/builder.blob
+          git hash-object tests/test_v031_o106_reader_fifo_extract_court.py > o106-evidence/instrument.blob
+          python -m pip install --disable-pip-version-check . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess,cmpct.reader,cmpct.builder
+          root=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip()).resolve()
+          for module in (cmpct.reader,cmpct.builder):
+              location=Path(module.__file__).resolve()
+              assert not location.is_relative_to(root),(root,location)
+              print("O106_INSTALLED_PRODUCT="+str(location),flush=True)
+          PY
+      - name: Run real bounded disposable Reader children
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_v031_o106_reader_fifo_extract_court.py o106-evidence/
+          python -m pytest -vv -s o106-evidence/test_v031_o106_reader_fifo_extract_court.py --junitxml=o106-evidence/junit.xml 2>&1 | tee o106-evidence/court.log
+      - name: Independently audit mandatory controls and observed negative
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,xml.etree.ElementTree as ET
+          from pathlib import Path
+          cases=list(ET.parse("o106-evidence/junit.xml").getroot().iter("testcase"))
+          assert len(cases)==3,("mandatory test cases absent",len(cases))
+          counts={key:sum(c.find(key) is not None for c in cases) for key in ("failure","error","skipped")}
+          assert counts=={"failure":0,"error":0,"skipped":0},counts
+          log=Path("o106-evidence/court.log").read_text()
+          assert log.count("O106_CASE=")==3, "missing raw per-case measurement"
+          assert "O106_REAL_READER_FIFO_TIMEOUT=CONFIRMED" in log, "failure not observed; falsify/narrow hypothesis"
+          for case in ("fresh","regular","unconnected_fifo"):
+              assert '"case": "'+case+'"' in log,("missing "+case)
+          summary={"head":Path("o106-evidence/head.sha").read_text().strip(),
+                   "reader_blob":Path("o106-evidence/reader.blob").read_text().strip(),
+                   "builder_blob":Path("o106-evidence/builder.blob").read_text().strip(),
+                   "instrument_blob":Path("o106-evidence/instrument.blob").read_text().strip(),
+                   "cases":3,"passed":3,"failed":0,"skipped":0,
+                   "scope":"two-host scientific negative; no Reader fix, full CI, or release credit"}
+          Path("o106-evidence/result.json").write_text(json.dumps(summary,sort_keys=True,indent=2)+"\n")
+          print("O106_AUDIT="+json.dumps(summary,sort_keys=True))
+          PY
+      - name: Preserve all raw evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o106-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o106-evidence/
+          if-no-files-found: warn
+          retention-days: 30
