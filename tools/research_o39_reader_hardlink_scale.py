@@ -202,11 +202,32 @@ def runner(source_base: Path, source_candidate: Path, out: Path, reps: int) -> N
             ["git", "-C", str(repo_root), "rev-parse", "HEAD:src/cmpct/reader.py"],
             text=True,
         ).strip()
-        if got_head != head or got_blob != blob:
+        if got_blob != blob:
             raise RuntimeError(
-                f"source custody mismatch for {repo_root}: "
-                f"got {got_head}/{got_blob}, expected {head}/{blob}"
+                f"source Reader blob mismatch for {repo_root}: "
+                f"got {got_blob}, expected {blob}"
             )
+        if head == BASE_SHA:
+            # Baseline must be the exact historical commit.
+            if got_head != head:
+                raise RuntimeError(f"historical O31 HEAD mismatch: {got_head} != {head}")
+        else:
+            # Research branch is a child of product SHA. Requiring HEAD equality
+            # incorrectly rejects legitimate evidence-only child commits.
+            # Admit only ancestry plus full product-source/native tree identity.
+            ancestor = subprocess.run(
+                ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", head, "HEAD"],
+                check=False,
+            )
+            changed_product = subprocess.run(
+                ["git", "-C", str(repo_root), "diff", "--quiet", head, "HEAD", "--", "src/", "native/"],
+                check=False,
+            )
+            if ancestor.returncode != 0 or changed_product.returncode != 0:
+                raise RuntimeError(
+                    f"candidate source closure mismatch: checkout {got_head} must descend "
+                    f"from immutable product {head} with identical src/ and native/"
+                )
     out.mkdir(parents=True, exist_ok=True)
     manifest = generate(out / "archives")
     print("O39 verified authentic six-corpus checkpoint manifest", flush=True)
