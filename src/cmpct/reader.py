@@ -540,19 +540,22 @@ class CMPCT:
         # Refuse static aliases before *any* destination mutation, across storage types.
         # This is not a concurrent rename/symlink race barrier; descriptor-bound publication
         # remains separate work. Never use a pathname string equality as an inode proof.
-        source_stat = os.fstat(self.f.fileno())
-        source_inode = (source_stat.st_dev, source_stat.st_ino)
-        for _row, _parts, _full in clean:
-            if _row[1] == K_DIR:
-                continue
-            try:
-                # Following existing leaf symlinks is essential: O_TRUNC follows them too.
-                destination_stat = os.stat(_full)
-            except FileNotFoundError:
-                continue
-            if (destination_stat.st_dev, destination_stat.st_ino) == source_inode:
-                raise IOError(f'extraction destination aliases open source archive: {_row[0]!r}')
-
+        # Synthetic path-namespace tests construct a CMPCT shell with no opened archive.
+        # A genuine Reader always owns self.f; never allow a real open archive alias to
+        # bypass the physical inode check. The no-source shell has no inode to guard.
+        if getattr(self, 'f', None) is not None:
+            source_stat = os.fstat(self.f.fileno())
+            source_inode = (source_stat.st_dev, source_stat.st_ino)
+            for _row, _parts, _full in clean:
+                if _row[1] == K_DIR:
+                    continue
+                try:
+                    # Following existing leaf symlinks is essential: O_TRUNC follows them too.
+                    destination_stat = os.stat(_full)
+                except FileNotFoundError:
+                    continue
+                if (destination_stat.st_dev, destination_stat.st_ino) == source_inode:
+                    raise IOError(f'extraction destination aliases open source archive: {_row[0]!r}')
         if safe_symlinks:
             # Preflight the selected destination namespace *before* any archive
             # materialization. This is static defense, not a TOCTOU guarantee.
