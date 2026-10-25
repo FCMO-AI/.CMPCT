@@ -11,6 +11,7 @@ on:
       - 'tests/test_v031_o90_builder_output_kind.py'
       - 'tests/test_v031_o90_o84_archive_parity.py'
       - 'tests/test_v031_o93_builder_output_bound.py'
+      - 'tests/v031_o93_output_bound_economics.py'
       - '.github/workflows/v031-o93-builder-output-bound.yml'
       - 'docs/v031-research/2026-10-25-o93-descriptor-output-prereg.md'
   workflow_dispatch:
@@ -112,6 +113,27 @@ jobs:
                   "counts":counts,
                   "scope":"installed O84+O90+O93 publication-fd custody, no release credit"}
           Path("o93-evidence/result.json").write_text(json.dumps(result,sort_keys=True,indent=2)+"\n")
+          PY
+      - name: Measure paired original O90 versus O93 Builder on same installed host
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/v031_o93_output_bound_economics.py 2>&1 | tee o93-evidence/economics.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          log=Path("o93-evidence/economics.log").read_text()
+          text=[s for s in log.splitlines() if s.startswith("O93_ACTUAL_BUILDER_ECONOMICS=")]
+          assert len(text)==1,text
+          x=json.loads(text[0].split("=",1)[1])
+          assert len(x["cases"])==2
+          for row in x["cases"]:
+              assert row["repetitions"]==5
+              assert row["identical_archive_bytes"]
+              assert len(row["observations"]["o90"])==len(row["observations"]["o93"])==5
+              assert row["bytes"]>0 and len(row["sha256"])==64
+          Path("o93-evidence/economics.json").write_text(json.dumps(x,sort_keys=True,indent=2)+"\\n")
+          print("O93_HOSTED_ECONOMICS_RECEIPT=PASS",flush=True)
           PY
       - name: Preserve raw results, including failure cases
         if: always()
