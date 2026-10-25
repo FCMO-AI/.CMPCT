@@ -307,6 +307,7 @@ jobs:
               for field in ('canonical_signed_mixed_chain_positive','implicit_hardlink_only_parent_restored','all_member_content_and_ranges_verified','unsafe_parent_target_rejected','canonical_cycle_rejected'):
                   assert canonical.get(field) is True,(os_name,field,canonical)
               assert canonical.get('host_posix_inode_identity_confirmed') is (os_name!='windows-2025'),canonical
+              assert canonical.get('win32_ntfs_volume_confirmed') is (os_name=='windows-2025'),(os_name,canonical)
               for field in ('win32_native_file_id_equal','win32_samefile_crosschecked',
                             'win32_hardlink_count_at_least_four',
                             'win32_same_byte_independent_owner_distinct'):
@@ -355,6 +356,7 @@ jobs:
                   'installed_canonical_hardlink_archive_sha256':canonical['signed_archive_sha256'],
                   'installed_canonical_hardlink_strict_negative_controls':2,
                   'installed_canonical_hardlink_implicit_parent':canonical['implicit_hardlink_only_parent_restored'],
+                  'installed_win32_ntfs_volume_confirmed':canonical['win32_ntfs_volume_confirmed'],
                   'installed_win32_native_file_identity':canonical['win32_native_file_id_equal'],
                   'installed_win32_same_byte_distinct_control':canonical['win32_same_byte_independent_owner_distinct'],
                   'installed_static_destination_result':static['negative_result'] if static else 'not_executed_win32',
@@ -373,7 +375,7 @@ jobs:
                   'installed_signed_symlink_prewrite_three_host_green':True,
                   'installed_static_destination_prewrite_posix_two_host_green':True,
                   'installed_canonical_signed_hardlink_three_host_green':True,
-                  'installed_win32_physical_hardlink_file_identity_green':platform['windows-2025']['installed_win32_native_file_identity'] and platform['windows-2025']['installed_win32_same_byte_distinct_control'],
+                  'installed_win32_physical_hardlink_file_identity_green':platform['windows-2025']['installed_win32_ntfs_volume_confirmed'] and platform['windows-2025']['installed_win32_native_file_identity'] and platform['windows-2025']['installed_win32_same_byte_distinct_control'],
                   'sdist_first_wheel_build':True,
                   'linux_clean_install_green':True,
                   'macos_clean_install_green':True,
