@@ -95,8 +95,8 @@ def test_same_inode_after_capture_mutation_preserves_original_archive(tmp_path, 
             assert not (stored.flag_bits & 0x08), "unexpected data descriptor"
             directory = reference.start_dir
             header = stored.header_offset
-            assert original[header:header + 4] == b"PK\\x03\\x04"
-            assert original[directory:directory + 4] == b"PK\\x01\\x02"
+            assert original[header:header + 4] == b"PK\x03\x04"
+            assert original[directory:directory + 4] == b"PK\x01\x02"
             name_len, extra_len = struct.unpack_from("<HH", original, header + 26)
             payload_offset = header + 30 + name_len + extra_len
             assert modified[payload_offset] == ord("A")
