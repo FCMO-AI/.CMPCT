@@ -1,0 +1,348 @@
+from __future__ import annotations
+
+# Footnote: mutations are isolated from the read path so transactional evolution cannot accidentally
+# complicate basic archive parsing. The footer remains the atomic commit marker; incomplete tails must
+# always leave the last committed generation readable.
+
+import binascii, hashlib, os, stat, struct, tempfile, zipfile, zlib
+from contextlib import contextmanager
+from functools import wraps
+from contextvars import ContextVar
+from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+try:
+    import msvcrt  # Native Windows CRT byte-range locks; no external runtime dependency.
+except ImportError:
+    msvcrt = None
+import msgpack
+
+from .codec import *
+from .builder import Builder
+from .reader import CMPCT
+
+# A Windows byte-range sentinel must stay beyond archive data, or ordinary
+# Reader header reads could be blocked. Windows O0/O1 hosted courts measured
+# this boundary and the initial O_APPEND file-offset side effect explicitly.
+_WINDOWS_LEASE_OFFSET = 1 << 60
+
+# Scoped transaction identity. No active expectation outside a cooperating Writer.
+_CURRENT_TRANSACTION_OWNER = ContextVar('cmpct_transaction_owner', default=None)
+
+@contextmanager
+def _cooperative_writer_lease(archive: Path):
+    """Serialize cooperative POSIX/Windows writers from snapshot to footer fsync.
+
+    POSIX uses an inode-wide advisory flock. Windows uses a CRT byte-range
+    lock at a sentinel offset outside archive content, permitting unrelated
+    Reader header access. The held physical descriptor owns both the lock and
+    dup-based appends, not a pathname-keyed sidecar. Neither platform is safe
+    against non-cooperating writers or adversarial namespace races.
+    """
+    # Keep POSIX's inherited fail-closed error contract on POSIX hosts.
+    if os.name == "nt":
+        if msvcrt is None:
+            raise NotImplementedError("transactional writes require a Windows byte-range lock on this candidate")
+    elif fcntl is None:
+        raise NotImplementedError("transactional writes require a POSIX inode lock on this candidate")
+    # Read and append permissions are both required by the public Writer.
+    # O_APPEND is carried by every dup of this open-file-description.
+    fd = os.open(archive, os.O_RDWR | os.O_APPEND | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0))
+    locked = False
+    try:
+        if os.name == "nt":
+            # CRT locks cover bytes at the CURRENT descriptor offset. Locking
+            # byte zero blocks ordinary CMPCT Readers; the high sentinel does
+            # not. lseek changes tell(), so physical offsets always use fstat.
+            if os.fstat(fd).st_size >= _WINDOWS_LEASE_OFFSET:
+                raise OSError("CMPCT archive exceeds reserved Windows lease offset")
+            os.lseek(fd, _WINDOWS_LEASE_OFFSET, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        locked = True
+        original = os.fstat(fd)
+        if not stat.S_ISREG(original.st_mode):
+            raise OSError("CMPCT transactional archive must be a regular file")
+
+        def check_identity():
+            current = os.stat(archive)
+            if (current.st_dev, current.st_ino) != (original.st_dev, original.st_ino):
+                raise RuntimeError("CMPCT transactional archive pathname changed during writer lease")
+
+        check_identity()
+        # Bind the owned inode to this execution context. A second opened
+        # pathname may point at a different inode after a concurrent replace.
+        token = _CURRENT_TRANSACTION_OWNER.set((original.st_dev, original.st_ino, fd))
+        try:
+            yield
+            check_identity()
+        finally:
+            _CURRENT_TRANSACTION_OWNER.reset(token)
+    finally:
+        try:
+            # A denied LOCK_EX may be followed by an equally failing LOCK_UN.
+            # Never overwrite the actionable acquisition error with a spurious
+            # unlock exception when no lease was ever acquired.
+            if locked:
+                if os.name == "nt":
+                    # dup-based writes may have changed the shared seek offset;
+                    # unlock EXACTLY the byte range acquired, never EOF.
+                    os.lseek(fd, _WINDOWS_LEASE_OFFSET, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+
+def _serialized_writer(func):
+    @wraps(func)
+    def locked(archive, *args, **kwargs):
+        with _cooperative_writer_lease(Path(archive)):
+            return func(archive, *args, **kwargs)
+    return locked
+
+
+
+def _checked_writer_reader(archive: Path):
+    # A successful path-level check at lock entry does not prove that a
+    # subsequently opened Reader references the same inode. Check its open
+    # descriptor before any snapshot may influence the committed generation.
+    reader = CMPCT(archive)
+    expected = _CURRENT_TRANSACTION_OWNER.get()
+    if expected is not None:
+        actual = os.fstat(reader.f.fileno())
+        if (actual.st_dev, actual.st_ino) != expected[:2]:
+            reader.close()
+            raise RuntimeError("CMPCT transactional archive Reader descriptor changed during writer lease")
+    return reader
+
+
+def _checked_append(archive: Path):
+    # Public transactional writers reuse the SAME locked open-file-description.
+    # A fresh pathname open creates a race window between a successful inode
+    # check and the kernel's actual write. dup() retains O_APPEND, the open-file
+    # description, and its inode independently of pathname replacement.
+    expected = _CURRENT_TRANSACTION_OWNER.get()
+    if expected is not None:
+        fd = os.dup(expected[2])
+    else:
+        # Internal non-public callers do not inherit a lease by accident.
+        fd = os.open(archive, os.O_WRONLY | os.O_APPEND | getattr(os, "O_CLOEXEC", 0))
+    try:
+        if expected is not None:
+            actual = os.fstat(fd)
+            if (actual.st_dev, actual.st_ino) != expected[:2]:
+                raise RuntimeError("CMPCT transactional append descriptor diverged from writer lease")
+        return os.fdopen(fd, "wb", buffering=0)
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _locked_archive_size(archive: Path) -> int:
+    # New blob offsets must describe the very inode that was locked and
+    # verified. A path stat here could capture a foreign inode temporarily
+    # substituted after the Reader snapshot (even if later restored).
+    owner = _CURRENT_TRANSACTION_OWNER.get()
+    if owner is not None:
+        return os.fstat(owner[2]).st_size
+    return Path(archive).stat().st_size
+
+
+def _encode_update_blob(raw:bytes,hint:str,dictionary:bytes|None):
+    wf=wavflac_compress(raw) if hint=='.wav' else None
+    if wf:
+        comp,meta=wf
+        if len(comp)+len(meta)+32 < len(raw)*0.92:return CODEC_WAVFLAC,comp,meta
+    if dictionary and hint in TEXT_EXT:
+        dc=zcd(raw,dictionary,9)
+        if len(dc)+16<len(raw):return CODEC_ZSTDDICT,dc,msgpack.packb([9],use_bin_type=True)
+    comp=zc(raw,3)
+    if len(comp)+16<len(raw):return CODEC_ZSTD,comp,msgpack.packb([3],use_bin_type=True)
+    return CODEC_RAW,raw,b''
+
+def _append_generation(archive:Path,delta:dict,prev_footer:int,checkpoint_index:dict|None=None):
+    if checkpoint_index is not None:
+        payload=msgpack.packb(checkpoint_index,use_bin_type=True);kind=0
+    else:
+        payload=msgpack.packb(delta,use_bin_type=True);kind=1
+    comp=zc(payload,3)
+    if len(comp)<len(payload):enc=comp;codec=1
+    else:enc=payload;codec=0
+    footer=FTR.pack(FMAGIC,kind,codec,0,0,len(enc),len(payload),prev_footer,sha(payload))
+    with _checked_append(archive) as f:
+        f.write(enc);os.fsync(f.fileno());footer_pos=f.tell();f.write(footer);os.fsync(f.fileno())
+    return footer_pos,len(enc)+FTR.size
+
+@_serialized_writer
+def append_update(archive:Path,member:str,source:Path):
+    """Crash-safely append/replace one logical member, reusing CDC chunks when possible.
+
+    Footnote: a traditional append-only ZIP update writes the entire replacement member again. Large
+    CMPCT files are content-defined-chunked, so a local edit can append only the chunks whose contents
+    actually changed. Existing chunk hashes are resolved against the archive's content-addressed blob
+    table; the new generation's file row merely points at the reused + newly appended chunks.
+    """
+    archive=Path(archive);source=Path(source);raw=source.read_bytes();rh=sha(raw);st=source.stat();hint=source.suffix.lower()
+    with _checked_writer_reader(archive) as ar:
+        index=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False);record_base=ar.record_base;prev=ar.latest_footer_pos;depth=ar.delta_depth
+        blob_by_hash={}
+        for i,b in enumerate(ar.blobs):
+            off=b[0];rrh=bytes(BHDR.unpack_from(ar.mm,record_base+off)[-1]);blob_by_hash.setdefault(rrh,i)
+        dictionary=ar._blob(ar.dict_idx) if ar.dict_idx is not None else None
+
+    records=[];newblobs=[];archive_end=_locked_archive_size(archive);next_off=archive_end-record_base
+    def ensure_blob(part:bytes):
+        nonlocal next_off
+        h=sha(part);existing=blob_by_hash.get(h)
+        if existing is not None:return existing,True
+        codec,comp,meta=_encode_update_blob(part,hint,dictionary)
+        rec=BHDR.pack(BMAGIC,codec,0,0,len(part),len(comp),len(meta),binascii.crc32(part)&0xffffffff,h)+meta+comp
+        idx=len(index['blobs'])+len(newblobs);newblobs.append([next_off,len(part),len(comp),codec,len(meta)]);records.append(rec)
+        next_off+=len(rec);blob_by_hash[h]=idx
+        return idx,False
+
+    reused=0
+    if len(raw)>4*CHUNK and hint!='.wav':
+        entries=[]
+        for part in cdc_chunks(raw):
+            idx,was_reused=ensure_blob(part);reused+=int(was_reused);entries.append([len(part),idx])
+        storage=[S_CDC,entries];logical_hash=rh
+    else:
+        idx,was_reused=ensure_blob(raw);reused+=int(was_reused);storage=[S_BLOB,idx];logical_hash=None
+
+    row=[member,K_FILE,stat.S_IMODE(st.st_mode),st.st_mtime_ns,len(raw),logical_hash,storage]
+    delta={'blobs':newblobs,'ops':[['put',row]]}
+    # Every 64 deltas write a compact full checkpoint. This bounds open-time chain traversal while
+    # amortizing checkpoint bytes to only a few hundred bytes per update.
+    checkpoint=None
+    if depth>=63:
+        index['blobs'].extend(newblobs)
+        done=False
+        for i,x in enumerate(index['files']):
+            if x[0]==member:index['files'][i]=row;done=True;break
+        if not done:index['files'].append(row)
+        index['files'].sort(key=lambda x:x[0]);checkpoint=index
+    if checkpoint is not None:
+        payload=msgpack.packb(checkpoint,use_bin_type=True);kind=0
+    else:
+        payload=msgpack.packb(delta,use_bin_type=True);kind=1
+    comp2=zc(payload,3);enc=comp2 if len(comp2)<len(payload) else payload;codec2=1 if len(comp2)<len(payload) else 0
+    footer=FTR.pack(FMAGIC,kind,codec2,0,0,len(enc),len(payload),prev,sha(payload))
+    record=b''.join(records)
+    # Two-phase durable commit: all uncommitted bytes are flushed together, then the tiny footer
+    # commit marker is flushed separately. A crash before phase 2 leaves the previous footer valid.
+    with _checked_append(archive) as f:
+        if record:f.write(record)
+        f.write(enc);os.fsync(f.fileno());f.write(footer);os.fsync(f.fileno())
+    return {'reused_chunks':reused,'new_chunks':len(newblobs),'new_size':archive.stat().st_size,
+            'generation_bytes':len(record)+len(enc)+FTR.size,'member':member,'checkpoint':checkpoint is not None}
+
+def _index_after_op(index:dict,op:list):
+    if op[0]=='del':index['files']=[x for x in index['files'] if x[0]!=op[1]]
+    elif op[0]=='ren':
+        for x in index['files']:
+            if x[0]==op[1]:x[0]=op[2];break
+    index['files'].sort(key=lambda x:x[0]);return index
+
+@_serialized_writer
+def append_delete(archive:Path,member:str):
+    archive=Path(archive)
+    with _checked_writer_reader(archive) as ar:
+        if member not in ar.by:raise KeyError(member)
+        prev=ar.latest_footer_pos;depth=ar.delta_depth;idx=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False)
+    op=['del',member];checkpoint=_index_after_op(idx,op) if depth>=63 else None
+    _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
+
+@_serialized_writer
+def append_rename(archive:Path,old:str,new:str):
+    archive=Path(archive)
+    with _checked_writer_reader(archive) as ar:
+        if old not in ar.by:raise KeyError(old)
+        if new in ar.by:raise FileExistsError(new)
+        # Footnote: rename follows real filesystem semantics. A destination parent must already
+        # exist as a logical directory; otherwise compaction/extraction could silently invent a
+        # directory entry and its metadata. Root-level destinations remain valid.
+        parent=Path(new).parent.as_posix()
+        if parent not in ('','.','/'):
+            prow=ar.by.get(parent)
+            if prow is None or prow[1]!=K_DIR:raise FileNotFoundError(f'destination parent directory does not exist: {parent}')
+        prev=ar.latest_footer_pos;depth=ar.delta_depth;idx=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False)
+    op=['ren',old,new];checkpoint=_index_after_op(idx,op) if depth>=63 else None
+    _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
+
+def _iter_blob_header_candidates(archive:Path):
+    """Enumerate *unverified* framed blob-header candidates, even if indexes are damaged.
+
+    This is forensic discovery, not content recovery or authentication. Header CRC/SHA fields are
+    *claims*, not checks; candidates need not belong to any committed generation. Full Reader
+    verification and any future authenticated salvage remain separate operations.
+    """
+    # Footnote: read_bytes() allocated the entire archive, including sparse holes. A single
+    # reusable readinto buffer of 1 MiB + BHDR.size-1 keeps scan memory bounded without
+    # redundant block copies; the overlap preserves full headers across window boundaries.
+    # Framing/offset behavior stays equivalent to the permissive historical candidate scan.
+    window=1024*1024;overlap=BHDR.size-1
+    carry_len=0;position=0
+    with open(archive,'rb') as f:
+        source_size=os.fstat(f.fileno()).st_size
+        # Avoid charging a 1 MiB buffer to tiny forensic inputs. The initial file
+        # extent is the I/O budget; neither buffer capacity nor bytes read can grow
+        # with concurrent append operations.
+        buf=bytearray(min(window,source_size)+overlap)
+        # A concurrently growing source must not turn a forensic scan into an unbounded
+        # tail follower. The open inode is fixed; the initial size limits I/O, not content
+        # identity. This still makes no immutable-snapshot or authentication claim.
+        while position<source_size:
+            n=min(window,source_size-position)
+            got=f.readinto(memoryview(buf)[carry_len:carry_len+n])
+            if not got:break
+            active=carry_len+got;origin=position-carry_len;p=0
+            while True:
+                i=buf.find(BMAGIC,p,active)
+                if i<0 or i+BHDR.size>active:break
+                try:
+                    m,c,fl,res,us,cs,ml,rcrc,rh=BHDR.unpack_from(buf,i)
+                    offset=origin+i;end=offset+BHDR.size+ml+cs
+                    if end<=source_size:
+                        yield {'offset':offset,'codec':c,'usize':us,'csize':cs,
+                                    'crc32':rcrc,'sha256':bytes(rh).hex(),
+                                    'verification':'unverified',
+                                    'generation_membership':'unknown'}
+                except (struct.error,ValueError,OverflowError):
+                    pass
+                p=i+1
+            carry_len=min(overlap,active)
+            buf[:carry_len]=buf[active-carry_len:active]
+            position+=got
+
+
+def recover_blob_records(archive:Path):
+    """Return legacy list-shaped forensic header candidates (never authenticated content).
+
+    For arbitrarily many framed candidates, consume _iter_blob_header_candidates instead;
+    materializing a Python list necessarily uses memory proportional to result count.
+    """
+    return list(_iter_blob_header_candidates(archive))
+
+def compact_archive(src:Path,dst:Path):
+    # Compaction is deliberately simple and conservative in the prototype: reconstruct the exact
+    # live filesystem view into a temporary tree, then rebuild. Dead generations/blobs disappear.
+    with tempfile.TemporaryDirectory(prefix='cmpct-compact-') as td:
+        root=Path(td)/'tree'
+        with CMPCT(src) as ar:ar.extractall(root,metadata=True)
+        return Builder(root).build(dst)
+
+def tree_digest(root:Path):
+    h=hashlib.sha256();root=Path(root)
+    for p in sorted(root.rglob('*')):
+        rel=p.relative_to(root).as_posix().encode();h.update(struct.pack('<I',len(rel)));h.update(rel)
+        if p.is_file():b=p.read_bytes();h.update(b'F');h.update(struct.pack('<Q',len(b)));h.update(hashlib.sha256(b).digest())
+        elif p.is_dir():h.update(b'D')
+        elif p.is_symlink():h.update(b'L');h.update(os.readlink(p).encode())
+    return h.hexdigest()

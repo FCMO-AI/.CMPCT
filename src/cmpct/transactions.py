@@ -179,6 +179,33 @@ def _append_generation(archive:Path,delta:dict,prev_footer:int,checkpoint_index:
         f.write(enc);os.fsync(f.fileno());footer_pos=f.tell();f.write(footer);os.fsync(f.fileno())
     return footer_pos,len(enc)+FTR.size
 
+def _read_regular_update_source(source:Path):
+    """Read one regular source through its opened inode, never through a blocking FIFO path."""
+    # Footnote: Path.read_bytes() opens FIFOs in blocking mode. A pre-open lstat() alone has a
+    # pathname-replacement race. O_NONBLOCK makes the actual POSIX open safe against a FIFO switch,
+    # and fstat() binds type, data and row metadata to that very same opened descriptor.
+    flags=os.O_RDONLY|getattr(os,'O_BINARY',0)
+    if os.name=='posix':
+        flags|=os.O_NONBLOCK|getattr(os,'O_NOCTTY',0)
+    fd=os.open(source,flags)
+    try:
+        with os.fdopen(fd,'rb') as stream:
+            fd=-1
+            before=os.fstat(stream.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise OSError(f'update source is not a regular file: {source}')
+            raw=stream.read()
+            after=os.fstat(stream.fileno())
+            # Detect ordinary in-place growth/rewrite during the read. This is not a full
+            # immutable-source snapshot, but prevents publishing obviously mixed metadata/data.
+            identity=lambda st:(st.st_dev,st.st_ino,st.st_size,st.st_mtime_ns,st.st_ctime_ns)
+            if len(raw)!=before.st_size or identity(before)!=identity(after):
+                raise OSError(f'update source changed during read: {source}')
+            return raw,after
+    finally:
+        if fd>=0:
+            os.close(fd)
+
 @_serialized_writer
 def append_update(archive:Path,member:str,source:Path):
     """Crash-safely append/replace one logical member, reusing CDC chunks when possible.
@@ -188,7 +215,7 @@ def append_update(archive:Path,member:str,source:Path):
     actually changed. Existing chunk hashes are resolved against the archive's content-addressed blob
     table; the new generation's file row merely points at the reused + newly appended chunks.
     """
-    archive=Path(archive);source=Path(source);raw=source.read_bytes();rh=sha(raw);st=source.stat();hint=source.suffix.lower()
+    archive=Path(archive);source=Path(source);raw,st=_read_regular_update_source(source);rh=sha(raw);hint=source.suffix.lower()
     with _checked_writer_reader(archive) as ar:
         index=msgpack.unpackb(msgpack.packb(ar.index,use_bin_type=True),raw=False);record_base=ar.record_base;prev=ar.latest_footer_pos;depth=ar.delta_depth
         blob_by_hash={}
