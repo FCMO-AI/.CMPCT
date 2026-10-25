@@ -49,3 +49,20 @@ No change to discovery policy, frozen release thresholds, format revision, core 
 ## Next highest-leverage decision
 
 Treat this as a **candidate independent mixed-structure held-out test**, not another core feature or official gate. Compare its incremental adversarial coverage against existing separate `dedup_links` and official release corpus evidence. Only if it exposes a meaningful *unmeasured* capability gap, run a separate source-bound real archive/extract differential. If it does not, preserve the negative marginal-value finding and retire this fixture family rather than adding permanent CI cost.
+
+
+## O44b execution-custody correction — 2026-10-25 UTC (append-only)
+
+Post-run log inspection of hosted [40153644282](https://github.com/FCMO-AI/.CMPCT/actions/runs/40153644282) and [40153914192](https://github.com/FCMO-AI/.CMPCT/actions/runs/40153914192) found that an infrastructure edit accidentally inserted *literal* `\\n` characters inside a Bash comment in the research-test step. Thus those runs **did execute the actual full generator and independent typed physical-partition assessor**, but **did not execute pytest** despite the green job statuses. Their earlier documentation's claim that 5/5 hosted tests passed is **incorrect and withdrawn**, without rewriting the earlier artifact. The substantive actual-generator physical-partition PASS from those jobs remains valid.
+
+The exact workflow comment was corrected (without changing the corpus generator, tests, copier or assessor), then a dedicated hosted source-exact proof genuinely executed:
+
+- **Result-bearing exact HEAD:** `30090b9960677c2921e8276c08b2be825adfdd38`.
+- [O44 real six-test court, run 40154041500](https://github.com/FCMO-AI/.CMPCT/actions/runs/40154041500), job `121051439835`: **SUCCESS**, with explicit stdout `...... [100%]` and `6 passed in 0.07s`.
+- The sixth test deliberately injects `os.link` failure and demonstrates the helper rejects it rather than silently copying bytes and losing topology.
+- The **unchanged original full generator** was re-executed on that same exact head and produced **PASS** for the original-to-heldout semantic comparison and expected category-source hardlink partition.
+- [Raw same-run evidence #12583926086](https://github.com/FCMO-AI/.CMPCT/actions/runs/40154041500/artifacts/12583926086), artifact ZIP SHA-256 `023bbc7418ffedc227f0f41c973217173b3a59d7c407fd79cc3749d12972b644`.
+
+**Evidence conclusion:** Scientific corpus-topology claim + six focused adversarial tests now both have genuine hosted execution receipts on the same exact implementation head. The earlier falsely green test steps are retained as a separate *evidence-infrastructure negative* and are not counted. A general lesson is that CI step success does not prove a command actually ran: inspect the job log for meaningful test output/receipts. This is a local verification lesson; it does not justify altering the Discovery Engine or release evaluator.
+
+No true archive creation/extraction/compression speed or physical-storage-block metric is measured. No promotion/merge/release approval is implied.
