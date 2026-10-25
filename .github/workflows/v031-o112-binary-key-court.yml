@@ -1,0 +1,80 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: CMPCT O112 authenticated bin-key Python Rust court
+
+on:
+  pull_request:
+    paths:
+      - "tests/native_binary_root_key_o112.py"
+      - "docs/v031-research/2026-10-25-o112-binary-map-key-prereg.md"
+      - ".github/workflows/v031-o112-binary-key-court.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o112-bin-map-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  genuine-python-rust-o112:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - name: Check out exact candidate HEAD
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind source, immutable comparator and preregistration
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          mkdir -p o112-evidence
+          {
+            echo "source_sha=$EVIDENCE_HEAD"
+            git rev-parse HEAD:src/cmpct/reader.py
+            git rev-parse HEAD:src/cmpct/msgpack_policy.py
+            git rev-parse HEAD:native/cmpct-core/src/lib.rs
+            sha256sum tests/conformance/v24-direct-codecs.json
+            sha256sum tests/native_binary_root_key_o112.py
+            sha256sum docs/v031-research/2026-10-25-o112-binary-map-key-prereg.md
+          } | tee o112-evidence/source.txt
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install Python and native library prerequisites
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd libzstd1
+          python -m pip install -e '.[test]'
+      - name: Build authentic source Rust native core
+        working-directory: native/cmpct-core
+        run: cargo build --release --locked
+      - name: Run exact same-wire positive and hostile cases
+        run: |
+          set -euo pipefail
+          python tests/native_binary_root_key_o112.py 2>&1 | tee o112-evidence/court.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("o112-evidence/result.json").read_text())
+          assert r["schema"]=="cmpct-o112-same-wire-bin-map-duplicate-v1"
+          assert r["golden_count"]==3 and r["unique_bin_control_count"]==3
+          assert r["duplicate_bin_count"]==3
+          assert r["verdict"] in ("NONSTRING_ROOT_DUPLICATE_GAP_CONFIRMED", "GAP_FALSIFIED_BOTH_REFUSE"),r
+          print("O112_AUDITED_VERDICT="+r["verdict"])
+          PY
+      - name: Persist actual result and failures
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-o112-${{ env.EVIDENCE_HEAD }}
+          path: o112-evidence/
+          retention-days: 90
+          if-no-files-found: error
