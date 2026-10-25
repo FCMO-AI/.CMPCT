@@ -116,7 +116,9 @@ jobs:
                      if x['engine']=='parent' and x['case'] in ('hardlink','symlink')),rows
           assert all(x['returncode']==47 and x['source_unchanged']
                      for x in rows if x['engine']=='candidate' and x['case']!='clean'),rows
-          assert len({x['source_sha256'] for x in [r]})==1
+          assert all(x['source_before_sha256']==r['source_sha256'] for x in rows),rows
+          assert all(x['source_after_sha256']==r['source_sha256']
+                     for x in rows if x['source_unchanged']),rows
           cases=list(ET.parse('o124-evidence/parent-inherited-junit.xml').getroot().iter('testcase'))
           assert len(cases)==9,('parent expected 9',len(cases))
           assert all(all(t.find(k) is None for k in ('error','failure','skipped')) for t in cases)
