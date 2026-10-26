@@ -125,7 +125,7 @@ def produce(o162, oracle, args: argparse.Namespace, provenance: dict) -> dict:
         finally:
             os.umask(old_umask)
     archive_sha = sha256(args.archive)
-    if args.archive.read_bytes()[:8] != b"CMPCT24\\0":
+    if args.archive.read_bytes()[:8] != b"CMPCT24\0":
         raise AssertionError("producer did not make a revision-24 archive")
     portable = portable_manifest(source_manifest)
     receipt = {
@@ -174,7 +174,7 @@ def receive(o162, oracle, args: argparse.Namespace, provenance: dict) -> dict:
         raise AssertionError("transferred archive bytes differ from Linux producer")
     if args.archive.stat().st_size != receipt["archive_bytes"]:
         raise AssertionError("transferred archive byte count differs")
-    if args.archive.read_bytes()[:8] != b"CMPCT24\\0":
+    if args.archive.read_bytes()[:8] != b"CMPCT24\0":
         raise AssertionError("transferred bytes are not revision-24 CMPCT")
     source = receipt["source_strict_manifest"]
     expected_portable = portable_manifest(source)
