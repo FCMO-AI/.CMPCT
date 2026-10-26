@@ -1,0 +1,83 @@
+# ci-lane: fast
+name: CMPCT O200 held-out CDC sampling blind-spot replication
+
+on:
+  pull_request:
+    paths:
+      - "research/o200_cdc_sample_blindspot_court.py"
+      - "research/o199_cdc_pair_admission_court.py"
+      - "research/o198_cdc_codec_aware_oracle.py"
+      - "research/o197_native_cdc_mutation_court.py"
+      - "native/cmpct_cdc.c"
+      - "docs/v031-research/2026-10-26-o200-adversarial-sample-blindspot-replication-prereg.md"
+      - ".github/workflows/v031-o200-cdc-blindspot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o200-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sample-blindspot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact evidence
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Authenticate source and prospectively frozen held-out seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o200-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object native/cmpct_cdc.c)" = "a6253beece20ce8aad3cdb605a6d9fcaa50d9364"
+          test "$(git hash-object research/o197_native_cdc_mutation_court.py)" = "9bd08886560e0845d73cf7d0882d9b12b49d7962"
+          test "$(git hash-object research/o198_cdc_codec_aware_oracle.py)" = "bf2329647e31987e2a21314de65555c9d648310a"
+          test -s docs/v031-research/2026-10-26-o200-adversarial-sample-blindspot-replication-prereg.md
+          {
+            echo "source_head=$EVIDENCE_HEAD"
+            echo "prereg_commit=24a1b76fa3b7bbefac9e36025434824faf001105"
+            echo "native_blob=$(git hash-object native/cmpct_cdc.c)"
+            echo "o200_blob=$(git hash-object research/o200_cdc_sample_blindspot_court.py)"
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            uname -a
+            cc --version | head -n 1
+          } > o200-evidence/source.txt
+      - name: Use Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run held-out structural adversary and exact-reassembly controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o200_cdc_sample_blindspot_court.py 2>&1 | tee o200-evidence/output.txt
+          grep -q 'O200_EXACT_REASSEMBLY_AND_IDENTICAL_OBSERVABLES=PASS' o200-evidence/output.txt
+          grep -q 'O200_PRODUCT_GATE=UNMEASURED' o200-evidence/output.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('o200-evidence/results.json').read_text())
+          assert x['seeds']==[811,812,813] and len(x['observations'])==12
+          assert x['recap']['identical_detector_output_pairs']==6
+          assert x['source_native_git_blob']=='a6253beece20ce8aad3cdb605a6d9fcaa50d9364'
+          assert all(m['exact_reassembly'] for row in x['observations'] for m in row['modes'].values())
+          print('O200_SCIENTIFIC_EXPERIMENT_EXECUTED=PASS')
+          print('O200_HYPOTHESIS_DISPOSITION=' + x['recap']['decision'])
+          PY
+      - name: Retain complete positive and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o200-heldout-${{ env.EVIDENCE_HEAD }}
+          path: o200-evidence/
+          if-no-files-found: warn
+# Scientific execution success may accompany a falsified hypothesis. No release credit.

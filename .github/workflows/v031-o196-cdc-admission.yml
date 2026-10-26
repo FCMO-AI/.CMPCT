@@ -1,0 +1,130 @@
+# ci-lane: fast
+name: CMPCT O196 clean-wheel CDC helper admission
+on:
+  pull_request:
+    paths:
+      - "research/o196_cdc_admission_probe.py"
+      - "docs/v031-research/2026-10-26-o196-native-cdc-admission-prereg.md"
+      - "native/cmpct_cdc.c"
+      - "src/cmpct/codec.py"
+      - "pyproject.toml"
+      - ".github/workflows/v031-o196-cdc-admission.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o196-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clean-wheel-native-helper:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact source and bind registered hypothesis
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+
+      - name: Authenticate checked-in product and experiment files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object native/cmpct_cdc.c)" = "a6253beece20ce8aad3cdb605a6d9fcaa50d9364"
+          test -s docs/v031-research/2026-10-26-o196-native-cdc-admission-prereg.md
+          test -s research/o196_cdc_admission_probe.py
+          mkdir -p o196-evidence
+          {
+            echo "source_head=$(git rev-parse HEAD)"
+            echo "cdc_blob=$(git hash-object native/cmpct_cdc.c)"
+            echo "codec_blob=$(git hash-object src/cmpct/codec.py)"
+            echo "pyproject_blob=$(git hash-object pyproject.toml)"
+            echo "experiment_blob=$(git hash-object research/o196_cdc_admission_probe.py)"
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            uname -a
+            cc --version | head -1
+          } | tee o196-evidence/source.txt
+
+      - name: Prepare build environment and create ordinary isolated wheel
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build normal wheel without special CDC helper build hooks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          mkdir -p /tmp/o196-wheelhouse
+          python -m pip wheel --no-deps --wheel-dir /tmp/o196-wheelhouse . 2>&1 | tee o196-evidence/wheel-build.log
+          find /tmp/o196-wheelhouse -maxdepth 1 -type f -name 'cmpct-*.whl' -print > o196-evidence/wheel-paths.txt
+          test "$(wc -l < o196-evidence/wheel-paths.txt)" -eq 1
+          sha256sum /tmp/o196-wheelhouse/cmpct-*.whl > o196-evidence/wheel-sha256.txt
+
+      - name: Install wheel into independent virtualenv
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/o196-wheel-venv
+          /tmp/o196-wheel-venv/bin/python -m pip install /tmp/o196-wheelhouse/cmpct-*.whl 2>&1 | tee o196-evidence/wheel-install.log
+          /tmp/o196-wheel-venv/bin/python -m pip freeze > o196-evidence/installed-freeze.txt
+
+      - name: Run default admission and explicit native positive control in separate processes
+        shell: bash
+        env:
+          PROBE_SOURCE: ${{ github.workspace }}/native/cmpct_cdc.c
+          PROBE_SCRIPT: ${{ github.workspace }}/research/o196_cdc_admission_probe.py
+          EVIDENCE_DIR: ${{ github.workspace }}/o196-evidence
+        run: |
+          set -euo pipefail
+          cd /tmp
+          env -u PYTHONPATH /tmp/o196-wheel-venv/bin/python "$PROBE_SCRIPT" \
+            --mode default --source "$PROBE_SOURCE" --out "$EVIDENCE_DIR/default.json" \
+            > "$EVIDENCE_DIR/default.stdout.txt"
+          env -u PYTHONPATH /tmp/o196-wheel-venv/bin/python "$PROBE_SCRIPT" \
+            --mode injected --source "$PROBE_SOURCE" --out "$EVIDENCE_DIR/injected.json" \
+            > "$EVIDENCE_DIR/injected.stdout.txt"
+
+      - name: Differential scientific decision without assuming predicted answer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path('o196-evidence/default.json').read_text())
+          b=json.loads(Path('o196-evidence/injected.json').read_text())
+          assert a['import_file'] == b['import_file']
+          assert a['module_sha256'] == b['module_sha256']
+          assert a['input_sha256'] == b['input_sha256']
+          assert a['native_source_sha256'] == b['native_source_sha256']
+          assert a['originally_loaded'] == b['originally_loaded']
+          assert a['bytes_exact'] and b['bytes_exact']
+          assert b['observed_lengths'] == b['direct_checked_in_c_lengths']
+          assert b['observed_lengths'] != b['fixed_lengths']
+          assert a['fixed_lengths'] == b['fixed_lengths']
+          if not a['originally_loaded']:
+              assert a['observed_lengths'] == a['fixed_lengths']
+              assert a['package_helper_exists'] is False
+              print('O196_DECISION=DEFAULT_WHEEL_CDC_HELPER_ABSENT')
+          else:
+              print('O196_DECISION=DEFAULT_WHEEL_CDC_HELPER_PRESENT; PREREG_PREDICTION_FALSIFIED')
+          print('O196_NATIVE_INJECTION_POSITIVE_CONTROL=PASS')
+          PY
+
+      - name: Retain complete experiment receipts, including negative results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o196-cdc-admission-${{ env.EVIDENCE_HEAD }}
+          path: o196-evidence/
+          if-no-files-found: warn
+
+# No shipping reader/format/encoder changes or benchmark rule changes.
+# The experiment diagnoses whether a measured gate is exposed to the only changed native C source.

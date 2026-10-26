@@ -1,0 +1,165 @@
+# ci-lane: fast
+name: CMPCT O185 native CDC and bounded Reader coexistence
+on:
+  pull_request:
+    paths:
+      - native/cmpct_cdc.c
+      - research/o166_native_cdc_thread_oracle.c
+      - .github/workflows/v031-o185-native-cdc-cache-convergence.yml
+      - docs/v031-research/2026-10-26-o166-native-cdc-differential-tsan-prereg.md
+  workflow_dispatch:
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o185-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      HISTORICAL_BASE: 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
+    steps:
+      - name: Check out exact source with authentic historical objects
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+
+      - name: Bind original and candidate CDC blobs and compiler provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o166-logs
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          test "$(git rev-parse "$HISTORICAL_BASE:native/cmpct_cdc.c")" = "bf51984f6ca7dec5e5041aa9f8dcccbed75221da"
+          test "$(git hash-object native/cmpct_cdc.c)" = "a6253beece20ce8aad3cdb605a6d9fcaa50d9364"
+          git show "$HISTORICAL_BASE:native/cmpct_cdc.c" > o166-logs/base.c
+          cp native/cmpct_cdc.c o166-logs/candidate.c
+          {
+            printf 'source_head=%s\nbase_source_commit=%s\n' "$EVIDENCE_HEAD" "$HISTORICAL_BASE"
+            git hash-object o166-logs/base.c o166-logs/candidate.c
+            cc --version
+            uname -a
+          } > o166-logs/provenance.txt
+
+      - name: Unsanitized independent source-equivalence functional court
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O2 -pthread -Wall -Wextra -Werror             research/o166_native_cdc_thread_oracle.c o166-logs/base.c -o o166-logs/base-plain
+          cc -std=c11 -O2 -pthread -Wall -Wextra -Werror             research/o166_native_cdc_thread_oracle.c o166-logs/candidate.c -o o166-logs/candidate-plain
+          for engine in base candidate; do
+            for run in 1 2 3; do
+              timeout 30s "o166-logs/$engine-plain" > "o166-logs/$engine-plain-$run.txt"
+              grep -Eq '^O166_CDC_EXACT_FOLD=[0-9a-f]{16}$' "o166-logs/$engine-plain-$run.txt"
+            done
+          done
+          for run in 1 2 3; do
+            cmp "o166-logs/base-plain-$run.txt" "o166-logs/candidate-plain-$run.txt"
+          done
+          cmp o166-logs/base-plain-1.txt o166-logs/base-plain-3.txt
+          cmp o166-logs/candidate-plain-1.txt o166-logs/candidate-plain-3.txt
+          echo 'O166_PLAIN_CUT_PARITY=PASS'
+
+      - name: ThreadSanitizer differential cold start
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O1 -g -pthread -fsanitize=thread -fno-omit-frame-pointer -no-pie             research/o166_native_cdc_thread_oracle.c o166-logs/base.c -o o166-logs/base-tsan
+          cc -std=c11 -O1 -g -pthread -fsanitize=thread -fno-omit-frame-pointer -no-pie             research/o166_native_cdc_thread_oracle.c o166-logs/candidate.c -o o166-logs/candidate-tsan
+          set +e
+          TSAN_OPTIONS='halt_on_error=1:exitcode=66' timeout 45s o166-logs/candidate-tsan             > o166-logs/candidate-tsan.stdout 2> o166-logs/candidate-tsan.stderr
+          candidate_rc=$?
+          set -e
+          echo "candidate_tsan_rc=$candidate_rc" | tee -a o166-logs/provenance.txt
+          if [ "$candidate_rc" -ne 0 ] || grep -Eq 'WARNING: ThreadSanitizer|FATAL: ThreadSanitizer' o166-logs/candidate-tsan.stderr; then
+            echo 'O166_CANDIDATE=RED_OR_INFRA_INCONCLUSIVE'; cat o166-logs/candidate-tsan.stderr; exit 1
+          fi
+          grep -Eq '^O166_CDC_EXACT_FOLD=[0-9a-f]{16}$' o166-logs/candidate-tsan.stdout
+          cmp o166-logs/candidate-plain-1.txt o166-logs/candidate-tsan.stdout
+
+          original_race=0
+          for attempt in 1 2 3; do
+            set +e
+            TSAN_OPTIONS='halt_on_error=1:exitcode=66' timeout 45s o166-logs/base-tsan               > "o166-logs/base-tsan-$attempt.stdout" 2> "o166-logs/base-tsan-$attempt.stderr"
+            rc=$?
+            set -e
+            echo "base_tsan_rc_$attempt=$rc" >> o166-logs/provenance.txt
+            if grep -q 'WARNING: ThreadSanitizer: data race' "o166-logs/base-tsan-$attempt.stderr"; then
+              original_race=1
+              break
+            fi
+            if [ "$rc" -ne 0 ]; then
+              echo 'O166_ORIGINAL_SANITIZER=INFRA_OR_UNEXPECTED_FAILURE'
+              cat "o166-logs/base-tsan-$attempt.stderr"
+              exit 1
+            fi
+          done
+          if [ "$original_race" -ne 1 ]; then
+            echo 'O166_ORIGINAL_RACE_NOT_OBSERVED=INCONCLUSIVE'
+            exit 1
+          fi
+          echo 'O166_TSAN_DIFF=PASS BASELINE_RACE_OBSERVED CANDIDATE_CLEAN'
+
+      - name: Retain source-bound scientific raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o185-cdc-cache-${{ env.EVIDENCE_HEAD }}
+          path: |
+            o166-logs/provenance.txt
+            o166-logs/*plain-*.txt
+            o166-logs/*tsan.stderr
+            o166-logs/*tsan.stdout
+            o166-logs/base-tsan-*.stderr
+            o166-logs/base-tsan-*.stdout
+          if-no-files-found: warn
+# Positive court requires BOTH unsanitized functional parity and an actual differential
+# sanitizer observation. A missing baseline race or TSan host failure is INCONCLUSIVE,
+# not permission to weaken the control, suppress warnings or promote the product.
+
+  installed-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact integrated source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Authenticate inherited Reader, cache tests and CDC implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = "1434c0b1485bfa59bd3dfe6f604ab555e35002a8"
+          test "$(git hash-object tests/test_v031_o169_reader_cache_budget.py)" = "4f04e68dc37ca3c13350faf0cdd9c353d24a194b"
+          test "$(git hash-object tests/test_v031_o173_cache_scan_work.py)" = "c01c48aaca5d3b3f7c2b72243da30697a4b2fe49"
+          test "$(git hash-object native/cmpct_cdc.c)" = "a6253beece20ce8aad3cdb605a6d9fcaa50d9364"
+      - name: Install actual integrated Python package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e . pytest
+          python -c 'import cmpct, cmpct.reader; print(cmpct.reader.__file__)'
+      - name: Run original Reader cache correctness and negative-work cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o185-cache-logs
+          python -m pytest -q -v tests/test_v031_o169_reader_cache_budget.py tests/test_v031_o173_cache_scan_work.py --junitxml=o185-cache-logs/cache-junit.xml 2>&1 | tee o185-cache-logs/cache-pytest.log
+          git status --short > o185-cache-logs/git-status.txt
+      - name: Retain exact-head Reader cache evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o185-reader-cache-${{ env.EVIDENCE_HEAD }}
+          path: o185-cache-logs/
+          if-no-files-found: warn

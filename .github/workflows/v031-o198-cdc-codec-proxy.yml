@@ -1,0 +1,82 @@
+# ci-lane: fast
+name: CMPCT O198 source-exact CDC codec-aware held-out oracle
+on:
+  pull_request:
+    paths:
+      - "research/o198_cdc_codec_aware_oracle.py"
+      - "research/o197_native_cdc_mutation_court.py"
+      - "native/cmpct_cdc.c"
+      - ".github/workflows/v031-o198-cdc-codec-proxy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o198-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-zlib6-proxy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source and evidence
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Authenticate source and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o198-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object native/cmpct_cdc.c)" = "a6253beece20ce8aad3cdb605a6d9fcaa50d9364"
+          test "$(git hash-object research/o197_native_cdc_mutation_court.py)" = "9bd08886560e0845d73cf7d0882d9b12b49d7962"
+          test -s research/o198_cdc_codec_aware_oracle.py
+          {
+            echo "source_head=$EVIDENCE_HEAD"
+            echo "native_blob=$(git hash-object native/cmpct_cdc.c)"
+            echo "o197_blob=$(git hash-object research/o197_native_cdc_mutation_court.py)"
+            echo "o198_blob=$(git hash-object research/o198_cdc_codec_aware_oracle.py)"
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            uname -a
+            cc --version | head -n 1
+          } > o198-evidence/source.txt
+      - name: Use Python 3.11 for independent zlib codec oracle
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Execute exact native CDC vs three stronger fixed controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o198_cdc_codec_aware_oracle.py 2>&1 | tee o198-evidence/output.txt
+          grep -q 'O198_EXACT_SOURCE_CODEC_AWARE_RECONSTRUCTION=PASS' o198-evidence/output.txt
+          grep -q 'O198_PRODUCT_GATE=UNMEASURED' o198-evidence/output.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('o198-evidence/results.json').read_text())
+          assert x['native_blob']=='a6253beece20ce8aad3cdb605a6d9fcaa50d9364'
+          assert x['source_head']
+          assert len(x['observations'])==36
+          assert set(x['summary'])=={
+              'entropy/overwrite','entropy/shift',
+              'repeat/overwrite','repeat/shift',
+              'mixed/overwrite','mixed/shift'}
+          assert all(z['modes'][m]['exact_reassembly'] for z in x['observations'] for m in x['policies'])
+          print('O198_EVIDENCE_SCHEMA_AND_RECONSTRUCTION=PASS')
+          PY
+      - name: Retain raw measurement, negative and source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o198-codec-proxy-${{ env.EVIDENCE_HEAD }}
+          path: o198-evidence/
+          if-no-files-found: warn
+# This court proves only an independently compressed chunk-level research proxy.
+# It never licenses archive-size, throughput, Reader, or release promotion claims.

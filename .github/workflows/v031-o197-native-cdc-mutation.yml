@@ -1,0 +1,66 @@
+# ci-lane: fast
+name: CMPCT O197 native CDC charged mutation falsifier
+on:
+  pull_request:
+    paths:
+      - "research/o197_native_cdc_mutation_court.py"
+      - ".github/workflows/v031-o197-native-cdc-mutation.yml"
+      - "native/cmpct_cdc.c"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o197-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-cdc-mutation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact experiment and native source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Authenticate source identity before experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object native/cmpct_cdc.c)" = "a6253beece20ce8aad3cdb605a6d9fcaa50d9364"
+          test -s research/o197_native_cdc_mutation_court.py
+          mkdir -p o197-evidence
+          {
+            echo "source_head=$EVIDENCE_HEAD"
+            echo "native_cdc_blob=$(git hash-object native/cmpct_cdc.c)"
+            echo "court_blob=$(git hash-object research/o197_native_cdc_mutation_court.py)"
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            uname -a
+            cc --version | head -n 1
+          } > o197-evidence/source.txt
+      - name: Python for deterministic corpus generator
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run research-only physical-raw plus record-header oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o197_native_cdc_mutation_court.py 2>&1 | tee o197-evidence/output.txt
+          grep -q 'O197_EXACT_SOURCE_MICRO_COURT=PASS' o197-evidence/output.txt
+          grep -q 'O197_PRODUCT_GATE=UNMEASURED' o197-evidence/output.txt
+          test -s o197-evidence/results.json
+      - name: Preserve raw positive and negative results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o197-native-cdc-mutation-${{ env.EVIDENCE_HEAD }}
+          path: o197-evidence/
+          if-no-files-found: warn
+# Micro evidence constrains native-default-admission only. It is not complete
+# archive, reader, release-parity, runtime or productization evidence.
