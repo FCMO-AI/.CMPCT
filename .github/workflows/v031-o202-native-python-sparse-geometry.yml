@@ -1,0 +1,117 @@
+# ci-lane: fast
+# O202 scientific classifier — workflow SUCCESS is not product safety approval.
+name: CMPCT O202 native-versus-Python sparse geometry admission
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o202-native-sparse-geometry-abi-court-20261026
+  pull_request:
+    branches:
+      - agent/phased3-v031-o198-sparse-extent-range-contract-20261026
+    paths:
+      - 'research/o202_native_sparse_geometry_abi_court.py'
+      - '.github/workflows/v031-o202-native-python-sparse-geometry.yml'
+      - 'docs/v031-research/2026-10-26-o202-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: o202-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-python-real-wire:
+    name: Independent installed native C ABI x O198 real wire
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact owner source, prereg history and frozen wires
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Bind product source and evidence history
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --is-shallow-repository)" = false
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 5a594f4986cad99955deacab6d03fdec1a2186f9 HEAD
+          git merge-base --is-ancestor f59a6ca5d5a777a018db0cc1944fc2f436b5474c HEAD
+          git merge-base --is-ancestor efec0b5a3b6fcb6bf9dd05b24ae493be90484300 HEAD
+          git merge-base --is-ancestor 16bfcf12adcb6cb1025896c4ece0f8aab7c79646 HEAD
+          git diff --exit-code 16bfcf12adcb6cb1025896c4ece0f8aab7c79646 HEAD -- src/ native/ tests/ benchmarks/
+          mkdir -p o202-evidence
+          git rev-parse HEAD > o202-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o202-evidence/reader.blob
+          git rev-parse HEAD:native/cmpct-core/src/lib.rs > o202-evidence/native.blob
+          git rev-parse HEAD:research/o198_sparse_extent_range_court.py > o202-evidence/original-o198-court.blob
+          git rev-parse HEAD:research/o202_native_sparse_geometry_abi_court.py > o202-evidence/o202-court.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o202-native-python-sparse-prereg.md > o202-evidence/prereg.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o202b-root-schema-prereg.md > o202-evidence/superseding-prereg.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o202c-classifier-correction-prereg.md > o202-evidence/classifier-prereg.blob
+          cp native/cmpct-core/Cargo.lock "$RUNNER_TEMP/o202-cargo.lock"
+      - name: Set up exact Python runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install independent Python Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile research/o202_native_sparse_geometry_abi_court.py
+      - name: Build actual unchanged Rust C ABI from locked graph
+        shell: bash
+        working-directory: native/cmpct-core
+        run: |
+          set -euo pipefail
+          cargo build --release --locked
+          cmp Cargo.lock "$RUNNER_TEMP/o202-cargo.lock"
+      - name: Execute original O198 wire against Python and native implementations
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o202_native_sparse_geometry_abi_court.py" \
+            --native-library "$GITHUB_WORKSPACE/native/cmpct-core/target/release/libcmpct_core.so" \
+            --out "$GITHUB_WORKSPACE/o202-evidence/result.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o202-evidence/court.log"
+      - name: Independently classify outcomes, never convert red product to green claim
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('o202-evidence/result.json').read_text())
+          assert r['source']['head']==Path('o202-evidence/head.sha').read_text().strip()
+          assert r['product_changed'] is False
+          assert len(r['original_o198_cases'])==4
+          assert len(r['revision_normalized_cases'])==4
+          assert [c['length'] for c in r['revision_normalized_cases']]==[4,1,2,5]
+          assert r['positive_control_pass'] is True
+          assert r['decision'] in (
+              'EXISTING_STRICT_VALIDATORS_REJECT_GEOMETRY_ORDINARY_READER_GAP',
+              'UNEXPECTED_OR_CONTRADICTORY_DIFFERENTIAL_REQUIRES_REVIEW')
+          for o,c in zip(r['original_o198_cases'],r['revision_normalized_cases']):
+              assert o['original_wire']['archive_bytes'] > 100
+              assert c['normalized_wire']['archive_bytes'] > 100
+              assert o['original_wire']['archive_sha256'] != c['normalized_wire']['archive_sha256']
+              assert c['normalized_wire']['root_revision']==24
+              assert c['original_archive_sha256']==o['original_wire']['archive_sha256']
+          print('O202_SCIENTIFIC_CLASSIFICATION='+r['decision']+' RESEARCH_ONLY')
+          PY
+      - name: Preserve all decision-bearing logs, errors and raw outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o202-native-python-geometry-${{ github.sha }}
+          path: o202-evidence/
+          if-no-files-found: warn
+          retention-days: 14
