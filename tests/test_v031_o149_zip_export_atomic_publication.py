@@ -64,7 +64,7 @@ def report(case: str, **kw) -> None:
 
 
 def test_independent_raw_crc_failure_preserves_prior_zip() -> None:
-    """Builder-independent frozen physical RAW: output is opened before CRC rejection."""
+    """Builder-independent frozen RAW: CRC failure must not change the old ZIP."""
     fixture = json.loads(Path(os.environ["CMPCT_FIXTURE_JSON"]).read_text())
     vec = next(v for v in fixture["vectors"] if v["name"] == "raw.bin")
     frozen = base64.b64decode(vec["archive_base64"])
@@ -114,7 +114,7 @@ def test_independent_raw_crc_failure_preserves_prior_zip() -> None:
 
 
 def test_builder_two_member_late_corruption_preserves_prior_zip() -> None:
-    """Separate genuine Builder-controlled product case: a good member is already emitted."""
+    """Late-member failure after valid member processing must not publish any partial ZIP."""
     with tempfile.TemporaryDirectory(prefix="o143-late-") as root:
         d = Path(root)
         src = d / "src"
@@ -163,8 +163,7 @@ def test_builder_two_member_late_corruption_preserves_prior_zip() -> None:
                target_before_bytes=len(prior), target_after_bytes=len(partial),
                read_error=read_error, export_error=export_error)
 
-@pytest.mark.parametrize("route", ["fast", "stdlib"])
-def test_injected_midwrite_exception_preserves_prior_zip_and_removes_staging(tmp_path, monkeypatch, route):
+def test_injected_midwrite_exception_preserves_prior_zip_and_removes_staging(tmp_path, monkeypatch):
     fixture = json.loads(Path(os.environ["CMPCT_FIXTURE_JSON"]).read_text())
     vec = next(v for v in fixture["vectors"] if v["name"] == "raw.bin")
     frozen = base64.b64decode(vec["archive_base64"])
@@ -178,7 +177,7 @@ def test_injected_midwrite_exception_preserves_prior_zip_and_removes_staging(tmp
         assert ar.read("raw.bin") == bytes(range(64))
         def simulated_fault(stage, level):
             # Producer has *already written* partial ZIP bytes when I/O fails.
-            Path(stage).write_bytes(b"PK\\x03\\x04partial-zip-before-ENOSPC")
+            Path(stage).write_bytes(b"PK\x03\x04partial-zip-before-ENOSPC")
             raise OSError(28, "simulated ENOSPC after partial staged output")
         monkeypatch.setattr(ar, "_export_zip_direct_unpublished", simulated_fault)
         with pytest.raises(OSError, match="simulated ENOSPC"):
@@ -186,7 +185,7 @@ def test_injected_midwrite_exception_preserves_prior_zip_and_removes_staging(tmp
     assert target.read_bytes() == prior
     assert target.stat().st_ino == prior_inode
     assert not list(tmp_path.glob(".previous.zip.cmpct-zip-*.tmp"))
-    report("injected_writer_fault_" + route, result="prior_zip_and_inode_preserved",
+    report("injected_writer_fault", result="prior_zip_and_inode_preserved",
            target_before_sha=digest(prior), target_after_sha=digest(target.read_bytes()))
 
 
