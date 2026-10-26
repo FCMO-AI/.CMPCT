@@ -1,0 +1,80 @@
+# ci-lane: fast
+# Negative scientific court only: a PASS reproduces a same-UID attacker mutation.
+name: CMPCT J24P02b Linux procfd same-UID mutation falsifier
+on:
+  push:
+    branches: [agent/phased2-v031-j24p02-otmpfile-fd-noclobber-20261026]
+  pull_request:
+    branches: [agent/phased2-v031-o181-zip-postcheck-substitution-20261026]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24p02b-procfd
+  cancel-in-progress: true
+
+jobs:
+  unprivileged-mutability-falsifier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify preregistration, exact source and non-root identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 45bf3caf8d6b63984b23c4c464fcaa636e43ae35 HEAD
+          git diff --exit-code 8b0735912eb6c8062b483ac9279c956294fbac3b HEAD -- src/ native/ tests/ benchmarks/
+          test "$(id -u)" != 0
+          test "$(git rev-parse HEAD:research/j24p02b_procfd_mutation.py)" = "$(git hash-object research/j24p02b_procfd_mutation.py)"
+          mkdir -p j24p02b-evidence
+          git rev-parse HEAD > j24p02b-evidence/head.sha
+          git rev-parse HEAD:research/j24p02b_procfd_mutation.py > j24p02b-evidence/oracle.blob
+          git rev-parse HEAD:research/j24p02_fd_noclobber_oracle.py > j24p02b-evidence/original-oracle.blob
+          id > j24p02b-evidence/host.txt
+          uname -a >> j24p02b-evidence/host.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test genuine same-UID independent process mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24p02_fd_noclobber_oracle.py research/j24p02b_procfd_mutation.py
+          python research/j24p02b_procfd_mutation.py 2>&1 | tee j24p02b-evidence/hostile.log
+      - name: Audit exact negative product boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,pathlib
+          root=pathlib.Path("j24p02b-evidence")
+          txt=(root/"hostile.log").read_text()
+          rows=[json.loads(x.split("J24P02B_DECISION=",1)[1]) for x in txt.splitlines()
+                if x.startswith("J24P02B_DECISION=")]
+          assert len(rows)==1,rows
+          x=rows[0]
+          assert x["classification"]=="SAME_UID_PROC_FD_CONTENT_MUTATION_CONFIRMED"
+          assert x["uid"] != 0 and not x["child_inherited_fd"]
+          assert x["original_zip_sha256"] != x["published_zip_sha256"]
+          assert x["inode_identical"] and x["same_member_name"] and x["same_logical_size"]
+          assert x["zip_crc_valid"] and not x["source_content_authentic"]
+          (root/"audited-decision.json").write_text(json.dumps({
+             "classification":"NEGATIVE_SAME_UID_HOSTILE_FD_EVIDENCE_NOT_PRODUCT_CREDIT",
+             "result":x,"head":(root/"head.sha").read_text().strip(),
+             "oracle_blob":(root/"oracle.blob").read_text().strip()},sort_keys=True,indent=2))
+          print("J24P02B_AUDIT=PASS negative source-mutability witness, NOT secure ZIP export")
+          PY
+      - name: Preserve raw outcome including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p02b-linux-procfd-falsifier
+          path: j24p02b-evidence/
+          if-no-files-found: warn
