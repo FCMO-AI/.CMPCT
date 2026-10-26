@@ -1,0 +1,89 @@
+# ci-lane: fast
+name: CMPCT O199 bounded prospective CDC pair-admission falsifier
+
+on:
+  pull_request:
+    paths:
+      - "research/o199_cdc_pair_admission_court.py"
+      - "research/o198_cdc_codec_aware_oracle.py"
+      - "research/o197_native_cdc_mutation_court.py"
+      - "native/cmpct_cdc.c"
+      - "docs/v031-research/2026-10-26-o199-prospective-cdc-pair-admission-prereg.md"
+      - ".github/workflows/v031-o199-cdc-pair-admission.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o199-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prospective-pair-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Establish exact source and preregistration custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o199-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object native/cmpct_cdc.c)" = "a6253beece20ce8aad3cdb605a6d9fcaa50d9364"
+          test "$(git hash-object research/o197_native_cdc_mutation_court.py)" = "9bd08886560e0845d73cf7d0882d9b12b49d7962"
+          test "$(git hash-object research/o198_cdc_codec_aware_oracle.py)" = "bf2329647e31987e2a21314de65555c9d648310a"
+          test -s docs/v031-research/2026-10-26-o199-prospective-cdc-pair-admission-prereg.md
+          {
+            echo "source_head=$EVIDENCE_HEAD"
+            echo "prereg_commit=0fa276bff2d88bdccccdc8f9ee2febd4f3833166"
+            echo "native_blob=$(git hash-object native/cmpct_cdc.c)"
+            echo "o199_blob=$(git hash-object research/o199_cdc_pair_admission_court.py)"
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            cc --version | head -n 1
+            uname -a
+          } > o199-evidence/source.txt
+      - name: Use reproducible Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Execute prospectively frozen pair admission and all controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o199_cdc_pair_admission_court.py 2>&1 | tee o199-evidence/output.txt
+          grep -q 'O199_RECONSTRUCTION_CHECK=PASS' o199-evidence/output.txt
+          grep -q 'O199_PRODUCT_GATE=UNMEASURED' o199-evidence/output.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('o199-evidence/results.json').read_text())
+          assert data['source_native_git_blob'] == 'a6253beece20ce8aad3cdb605a6d9fcaa50d9364'
+          assert len(data['observations']) == 108
+          assert len(data['unrelated']) == 9
+          assert set(data['by_family']) == {
+              f'{fam}/{kind}' for fam in ('entropy','repeat','mixed')
+              for kind in ('overwrite','shift1','shift256')}
+          assert all(row['modes'][name]['exact_reassembly']
+                     for row in data['observations']
+                     for name in ('native','fixed256','fixed512','fixed1024'))
+          print('O199_COMPLETE_SCIENTIFIC_FALSIFIER=PASS')
+          print('O199_HYPOTHESIS_DISPOSITION=' + data['recap']['decision'])
+          PY
+      - name: Retain raw positive, negative and source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o199-prospective-pair-${{ env.EVIDENCE_HEAD }}
+          path: o199-evidence/
+          if-no-files-found: warn
+
+# A green scientific workflow means the negative/positive experiment executed.
+# It never implies the hypothesis passed or that the product earned admission.
