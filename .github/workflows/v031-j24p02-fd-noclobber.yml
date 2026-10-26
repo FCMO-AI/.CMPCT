@@ -1,0 +1,92 @@
+# ci-lane: fast
+# Scientific Linux kernel primitive only, not a CMPCT Reader security approval.
+name: CMPCT J24P02 Linux fd-bound no-clobber publication oracle
+on:
+  push:
+    branches: [agent/phased2-v031-j24p02-otmpfile-fd-noclobber-20261026]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24p02-fd-noclobber
+  cancel-in-progress: true
+
+jobs:
+  unprivileged-unnamed-inode:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Exact history and source scope
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify prospective preregistration and read-only product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor de4b96c218bce63eae338de8b80c165ceba5f46a HEAD
+          git merge-base --is-ancestor 8b0735912eb6c8062b483ac9279c956294fbac3b HEAD
+          git diff --exit-code 8b0735912eb6c8062b483ac9279c956294fbac3b HEAD -- src/ native/ tests/ benchmarks/
+          test "$(git rev-parse HEAD:research/j24p02_fd_noclobber_oracle.py)" = "$(git hash-object research/j24p02_fd_noclobber_oracle.py)"
+          test "$(id -u)" != 0
+          mkdir -p j24p02-evidence
+          git rev-parse HEAD > j24p02-evidence/head.sha
+          git rev-parse HEAD:research/j24p02_fd_noclobber_oracle.py > j24p02-evidence/oracle.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-j24p02-unnamed-inode-prereg.md > j24p02-evidence/prereg.blob
+          uname -a > j24p02-evidence/host.txt
+          id >> j24p02-evidence/host.txt
+          stat -f -c 'filesystem=%T' /tmp >> j24p02-evidence/host.txt
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run prospective six-case unprivileged court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24p02_fd_noclobber_oracle.py
+          python research/j24p02_fd_noclobber_oracle.py 2>&1 | tee j24p02-evidence/oracle.log
+      - name: Independently audit that a green job has a real result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,pathlib
+          root=pathlib.Path("j24p02-evidence")
+          log=(root/"oracle.log").read_text()
+          cases=[json.loads(line.split("J24P02_CASE=",1)[1]) for line in log.splitlines()
+                 if line.startswith("J24P02_CASE=")]
+          expected=["absent","regular_occupied","symlink_occupied",
+                    "hardlink_occupied","late_creation","renamed_parent_boundary"]
+          assert [r["case"] for r in cases]==expected,cases
+          assert cases[0]["result"]=="EXACT_FD_TO_NAME_CREATE"
+          assert cases[0]["source_unlinked_before"]
+          assert cases[0]["raw_zip_sha256"]==cases[0]["published_sha256"]
+          assert all(r["result"]=="ATOMIC_NOCLOBBER_REJECTION" and
+                     r["errno"]=="EEXIST" for r in cases[1:5])
+          assert all(r["source_unlinked_before"] for r in cases[1:5])
+          assert cases[5]["result"]=="DIRFD_INODE_BOUND_PATHNAME_NOT_BOUND"
+          assert cases[5]["original_path_stale"]
+          decisions=[json.loads(x.split("J24P02_DECISION=",1)[1])
+                     for x in log.splitlines() if x.startswith("J24P02_DECISION=")]
+          assert len(decisions)==1,decisions
+          d=decisions[0]
+          assert d["result"]=="LINUX_CREATE_ONLY_DESCRIPTOR_PUBLICATION_SCOPED_PASS"
+          assert d["cases"]==6 and d["uid"]!=0
+          (root/"audited-decision.json").write_text(json.dumps(
+              {"classification":"RESEARCH_KERNEL_SCOPED_ONLY",
+               "result":d,"cases":cases,"exact_head":(root/"head.sha").read_text().strip(),
+               "oracle_blob":(root/"oracle.blob").read_text().strip()},sort_keys=True,indent=2))
+          print("J24P02_AUDIT=PASS scoped no-clobber kernel primitive; NOT release credit")
+          PY
+      - name: Preserve original positive or negative results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p02-linux-fd-noclobber
+          path: j24p02-evidence/
+          if-no-files-found: warn
