@@ -1,0 +1,147 @@
+# ci-lane: fast
+# O146: verify unmodified O131 owners and O137 physical FIFO admission on one installed Reader.
+# Scientific continuity only; original source-exact O131/O124 workflows remain frozen and red on new blob.
+name: CMPCT O146 O137 inherited Reader continuity
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o146-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-installed-three-host-reader-court:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact O137 child head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Bind actual installed-candidate and inherited owner test bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o146-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor b5901b9d6b5a23c98bd6a74939f5df82a7d1bd56 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e5301ccf24a63577cfbfa169be9c1e452a0d14bd
+          test "$(git rev-parse HEAD:src/cmpct/path_policy.py)" = 91fc335eea8fb18c3899511f416c8abe96c48f80
+          test "$(git rev-parse HEAD:tests/test_v031_apfs_namespace.py)" = 171abf2bc46ba1f74286340144e6f38a5cb13296
+          test "$(git rev-parse HEAD:tests/test_v031_win32_apfs_union.py)" = e4a28ab1a3b6d3d282f2a143a7ddec7ab1befefe
+          test "$(git rev-parse HEAD:tests/test_v031_win32_logical_hardlink_o2.py)" = 576a4f309056cf0bc85818c200332d1099daa76f
+          test "$(git rev-parse HEAD:tests/test_v031_windows_member_namespace.py)" = 5c836f98b15348913f73784d300c003f3e63d197
+          test "$(git rev-parse HEAD:tests/test_v031_o131_cross_guard_composition.py)" = 8b9aef4ab95e0eed84d4d8f642148dcf856f0dab
+          test "$(git rev-parse HEAD:tests/test_v031_o137_direct_fifo_leaf_preflight.py)" = a86a9ea6dbbe2faa29915d3e8efaf2baad0b3fbb
+          git rev-parse HEAD > o146-evidence/head.txt
+          git rev-parse HEAD:src/cmpct/reader.py > o146-evidence/reader-blob.txt
+          git rev-parse HEAD:src/cmpct/path_policy.py > o146-evidence/path-policy-blob.txt
+          git show HEAD:tests/test_v031_o137_direct_fifo_leaf_preflight.py | git hash-object --stdin > o146-evidence/fifo-test-blob.txt
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual CMPCT package and host test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            python -m pip install --disable-pip-version-check . pytest
+          else
+            python -m pip install --disable-pip-version-check '.[test,audio]' pytest
+          fi
+          python - <<'PY'
+          import cmpct.reader, cmpct.path_policy, pathlib,platform,sys
+          root=pathlib.Path.cwd().resolve()
+          for m in (cmpct.reader,cmpct.path_policy):
+              p=pathlib.Path(m.__file__).resolve()
+              assert not p.is_relative_to(root),(m,p)
+              print('O146_INSTALLED',m.__name__,str(p),flush=True)
+          print('O146_HOST',platform.platform(),sys.version,flush=True)
+          PY
+      - name: Run original unchanged O131 owner tests under real O137 Reader
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q -rs --noconftest \
+            tests/test_path_policy.py \
+            tests/test_v031_apfs_namespace.py \
+            tests/test_v031_win32_apfs_union.py \
+            tests/test_v031_win32_logical_hardlink_o2.py \
+            tests/test_v031_o131_cross_guard_composition.py \
+            --junitxml=o146-evidence/o131-core.xml 2>&1 | tee o146-evidence/o131-core.log
+      - name: Keep full original Windows owner suite on Linux and Windows
+        if: runner.os != 'macOS'
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q -rs --noconftest tests/test_v031_windows_member_namespace.py \
+            --junitxml=o146-evidence/o131-windows.xml 2>&1 | tee o146-evidence/o131-windows.log
+      - name: Preserve original documented macOS domain exclusion
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -o pipefail
+          echo 'The original Windows-only case-sensitive POSIX positive fixture is incompatible with the tested default APFS; original O131 explicitly excluded it. No new exclusions.' | tee o146-evidence/o131-macos-domain.txt
+          python -m pytest -q -rs --noconftest tests/test_v031_windows_member_namespace.py \
+            -k 'not test_real_posix_extractor_keeps_legal_windows_incompatible_names' \
+            --junitxml=o146-evidence/o131-windows.xml 2>&1 | tee o146-evidence/o131-windows.log
+      - name: Run unchanged O137 physical FIFO court on real POSIX hosts
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_v031_o137_direct_fifo_leaf_preflight.py o146-evidence/test_v031_o137_direct_fifo_leaf_preflight.py
+          cmp tests/test_v031_o137_direct_fifo_leaf_preflight.py o146-evidence/test_v031_o137_direct_fifo_leaf_preflight.py
+          python -m pytest -q -rs --noconftest o146-evidence/test_v031_o137_direct_fifo_leaf_preflight.py \
+            --junitxml=o146-evidence/o137-fifo.xml 2>&1 | tee o146-evidence/o137-fifo.log
+      - name: Independently audit actual JUnit counts and no hidden failures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import os,xml.etree.ElementTree as ET,json
+          files=list(Path('o146-evidence').glob('*.xml'))
+          expected=3 if os.environ['RUNNER_OS']!='Windows' else 2
+          assert len(files)==expected,(files,expected)
+          totals={'tests':0,'pass':0,'skip':0,'fail':0,'errors':0}
+          for p in files:
+              rows=list(ET.parse(p).getroot().iter('testcase'))
+              assert rows,(p,'empty JUnit is not evidence')
+              for r in rows:
+                  totals['tests']+=1
+                  if r.find('failure') is not None:totals['fail']+=1
+                  elif r.find('error') is not None:totals['errors']+=1
+                  elif r.find('skipped') is not None:totals['skip']+=1
+                  else:totals['pass']+=1
+          assert totals['fail']==0 and totals['errors']==0,totals
+          if os.environ['RUNNER_OS']!='Windows':
+              fifo=list(ET.parse('o146-evidence/o137-fifo.xml').getroot().iter('testcase'))
+              assert len(fifo)==11,(len(fifo),'original O137 count must remain 11')
+              assert all(all(x.find(tag) is None for tag in ('failure','error','skipped')) for x in fifo)
+          Path('o146-evidence/audit.json').write_text(json.dumps(totals,indent=2)+'\n')
+          print('O146_INHERITED_COMPOSITION_PASS',totals,flush=True)
+          PY
+      - name: Preserve source-exact receipts on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o146-reader-continuity-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o146-evidence/
+          if-no-files-found: warn
+          retention-days: 90
