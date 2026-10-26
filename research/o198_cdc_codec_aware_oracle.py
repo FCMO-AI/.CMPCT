@@ -95,6 +95,9 @@ def main():
                         other=mutant(base,pos,kind)
                         assert len(other)==SIZE
                         metrics={mode:measure(base,other,mode,lib) for mode in MODES}
+                        solid=zlib.compress(base+other,6)
+                        if zlib.decompress(solid)!=base+other:
+                            raise AssertionError("Non-equivalent solid control mismatch")
                         best=min(MODES[:-1],key=lambda m:metrics[m]["charged_storage_proxy_bytes"])
                         fixed=metrics[best]["charged_storage_proxy_bytes"]
                         native=metrics["native"]["charged_storage_proxy_bytes"]
@@ -103,6 +106,7 @@ def main():
                             "base_sha256":hashlib.sha256(base).hexdigest(),
                             "variant_sha256":hashlib.sha256(other).hexdigest(),
                             "best_fixed_oracle":best,
+                            "non_equivalent_solid_pair_zlib6_bytes":len(solid),
                             "native_saving_vs_best_fixed_bytes":fixed-native,
                             "native_saving_vs_best_fixed_percent":round(100*(fixed-native)/fixed,6),
                             "modes":metrics,
