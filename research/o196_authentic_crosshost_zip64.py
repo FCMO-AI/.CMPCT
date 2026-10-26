@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import platform
+import struct
 import subprocess
 import sys
 import tempfile
@@ -35,6 +36,41 @@ def sha_file(path):
                 break
             h.update(data)
     return h.hexdigest()
+
+
+# A second-root structural witness: parse the physical ZIP64 local header
+# without trusting ZipFile's own index parser to verify its own writer.
+ZIP_LOCAL_HEADER = struct.Struct("<IHHHHHIIIHH")
+
+
+def inspect_zip64_local_header(path, expected_logical, expected_compressed):
+    with Path(path).open("rb") as handle:
+        raw = handle.read(ZIP_LOCAL_HEADER.size)
+        if len(raw) != ZIP_LOCAL_HEADER.size:
+            raise AssertionError("truncated ZIP64 local header")
+        sig, need, flags, method, dos_time, dos_date, crc, c32, u32, name_n, extra_n = ZIP_LOCAL_HEADER.unpack(raw)
+        if sig != 0x04034b50 or need < 45 or method != 8:
+            raise AssertionError(("invalid ZIP64 local header", sig, need, method))
+        name = handle.read(name_n)
+        extra = handle.read(extra_n)
+        if name != b"sparse.bin" or c32 != 0xFFFFFFFF or u32 != 0xFFFFFFFF:
+            raise AssertionError(("bad ZIP64 local member or 32-bit size sentinel", name, c32, u32))
+        pos, zip64 = 0, None
+        while pos + 4 <= len(extra):
+            tag, size = struct.unpack_from("<HH", extra, pos)
+            pos += 4
+            if pos + size > len(extra):
+                raise AssertionError("ZIP extra TLV out of bounds")
+            if tag == 1:
+                if zip64 is not None or size < 16:
+                    raise AssertionError("invalid or repeated ZIP64 extra block")
+                zip64 = struct.unpack_from("<QQ", extra, pos)
+            pos += size
+        if pos != len(extra) or zip64 != (expected_logical, expected_compressed):
+            raise AssertionError(("ZIP64 local true size mismatch", zip64, expected_logical, expected_compressed))
+        return {"local_version_needed": need, "size_sentinels": True,
+                "local_uncompressed_bytes_64bit": zip64[0],
+                "local_compressed_bytes_64bit": zip64[1], "raw_extra_length": len(extra)}
 
 
 def source_head():
@@ -158,8 +194,15 @@ def host_peak_rss():
                         ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
         obj = Pmc()
         obj.cb = ctypes.sizeof(obj)
-        proc = ctypes.windll.kernel32.GetCurrentProcess()
-        if not ctypes.windll.psapi.GetProcessMemoryInfo(proc, ctypes.byref(obj), obj.cb):
+        # ctypes' default c_int return truncates Win64 pseudo HANDLE values.
+        # Bind the actual WinAPI types instead of silently dropping RSS evidence.
+        kernel = ctypes.windll.kernel32
+        psapi = ctypes.windll.psapi
+        kernel.GetCurrentProcess.restype = ctypes.c_void_p
+        psapi.GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.POINTER(Pmc), wintypes.DWORD]
+        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+        proc = kernel.GetCurrentProcess()
+        if not psapi.GetProcessMemoryInfo(proc, ctypes.byref(obj), obj.cb):
             raise OSError("GetProcessMemoryInfo failed")
         return {"peak_rss_observed_bytes": int(obj.PeakWorkingSetSize), "peak_rss_origin": "GetProcessMemoryInfo.PeakWorkingSetSize"}
     except Exception as err:
@@ -215,6 +258,9 @@ def consume(directory, record):
         info = z.getinfo("sparse.bin")
         if info.file_size != TOTAL:
             raise AssertionError(("ZIP64 wrong decoded member length", info.file_size))
+        record["independent_zip64_local_header"] = inspect_zip64_local_header(
+            out, TOTAL, info.compress_size
+        )
         t, h, decoded = time.perf_counter(), hashlib.sha256(), 0
         with z.open(info) as inp:
             while True:
