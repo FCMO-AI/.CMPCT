@@ -522,6 +522,53 @@ class CMPCT:
         p=pos+BHDR.size+rml
         return self.mm[p:p+rcs],rcrc,rus
 
+    def _export_zip_compat_stream(self,out:Path,level=6,*,chunk_bytes=1<<20):
+        """Write fallback ZIP members incrementally, with authenticated logical identity.
+
+        Footnote (O193): ZIP64's inherited writestr(self.read(name)) owned the entire
+        logical member in RAM, including sparse holes. A bounded read_range/write
+        loop can instead feed ZipFile's supported ZIP64 streaming writer. This is
+        a bound on *requested logical chunks*, not on decoding a large physical
+        compressed frame inside read_range; large unsplittable blobs require
+        a separate decode-unit budget before general resource-bound claims.
+        """
+        if not 0<chunk_bytes<=1<<20:
+            raise ValueError('ZIP compatibility stream chunk outside 1MiB budget')
+        out=Path(out)
+        with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,
+                             compresslevel=level,allowZip64=True) as z:
+            for rel,k,mode,mt,size,h,storage in self.files:
+                zi=zipfile.ZipInfo(rel.rstrip('/')+'/' if k==K_DIR else rel)
+                # Reuse O190/O191's one bounded DOS calendar without changing
+                # the ordinary ZIP writer or recording a second date policy.
+                ztime,zdate=self._zip_dos_time(mt)
+                zi.date_time=(1980+(zdate>>9),(zdate>>5)&15,zdate&31,
+                              ztime>>11,(ztime>>5)&63,(ztime&31)*2)
+                zi.create_system=3
+                typ=stat.S_IFDIR if k==K_DIR else (stat.S_IFLNK if k==K_SYMLINK else stat.S_IFREG)
+                zi.external_attr=((typ|mode)&0xffff)<<16
+                if k==K_DIR:
+                    z.writestr(zi,b'',compress_type=zipfile.ZIP_STORED)
+                    continue
+                zi.compress_type=zipfile.ZIP_DEFLATED
+                zi._compresslevel=level  # ZipFile.open consumes per-ZipInfo level.
+                zi.file_size=size
+                expected=self.file_sha256(rel)
+                observed=hashlib.sha256()
+                written=0
+                with z.open(zi,'w',force_zip64=(size>=0xffffffff)) as member:
+                    while written<size:
+                        wanted=min(chunk_bytes,size-written)
+                        data=self.read_range(rel,written,wanted)
+                        if not data or len(data)>wanted:
+                            raise IOError(f'ZIP streaming short/invalid range: {rel}')
+                        observed.update(data)
+                        member.write(data)
+                        written+=len(data)
+                if written!=size or observed.digest()!=expected:
+                    raise IOError(f'ZIP streaming SHA-256 failure: {rel}')
+        return out
+
     def export_zip(self,out:Path,level=6):
         """Export a conventional Deflate ZIP while reusing CMPCT's existing compressed streams.
 
@@ -532,22 +579,10 @@ class CMPCT:
         them, STORE is selected instead. ZIP64-sized members fall back to ZipFile in this prototype.
         """
         out=Path(out);entries=[];offset=0
-        # Keep the compatibility writer intentionally conservative until its ZIP64 branch is native.
+        # O193: use incremental, SHA-authenticated ownership instead of a
+        # whole-member self.read() allocation for ZIP64 compatibility output.
         if any(x[4]>=0xffffffff for x in self.files):
-            with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=level,allowZip64=True) as z:
-                for rel,k,mode,mt,size,h,storage in self.files:
-                    zi=zipfile.ZipInfo(rel.rstrip('/')+'/' if k==K_DIR else rel)
-                    # ZIP64 fallback must use the same authenticated DOS-local calendar
-                    # as the fast writer. ZipInfo's default 1980 date silently discards
-                    # ordinary and signed CMPCT mtimes (O191; O190 bounds the calendar).
-                    ztime,zdate=self._zip_dos_time(mt)
-                    zi.date_time=(1980+(zdate>>9),(zdate>>5)&15,zdate&31,
-                                  ztime>>11,(ztime>>5)&63,(ztime&31)*2)
-                    zi.create_system=3
-                    typ=stat.S_IFDIR if k==K_DIR else (stat.S_IFLNK if k==K_SYMLINK else stat.S_IFREG)
-                    zi.external_attr=((typ|mode)&0xffff)<<16
-                    z.writestr(zi,b'' if k==K_DIR else self.read(rel),compress_type=(zipfile.ZIP_STORED if k==K_DIR else zipfile.ZIP_DEFLATED),compresslevel=level)
-            return out
+            return self._export_zip_compat_stream(out,level)
         with open(out,'wb') as f:
             for row in self.files:
                 rel,k,mode,mt,size,h,storage=row
