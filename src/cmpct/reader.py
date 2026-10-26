@@ -561,6 +561,18 @@ class CMPCT:
                 (checksum & 0xffffffff) != rcrc or strong.digest() != rh):
             raise IOError('retained Deflate physical integrity failure')
 
+    @staticmethod
+    def _zip_member_name(rel: str, kind: int) -> str:
+        """Use the same portable logical namespace as ordinary CMPCT extraction.
+
+        An authenticated r24 index may spell a separator as a backslash; writing that spelling
+        unchanged into ZIP creates a different pathname when extracted by POSIX ZIP tools.
+        Reader-open already fails closed on duplicate canonical keys, so this is a serialization
+        projection, not a mutation of the signed logical index or the storage lookup key.
+        """
+        key, _ = canonical_logical_path(rel)
+        return key + '/' if kind == K_DIR else key
+
     def _zip64_offset_fallback_required(self):
         """Conservatively bound ZIP32 member sizes and cumulative offsets before output.
 
@@ -571,7 +583,7 @@ class CMPCT:
         """
         upper=ZEOCD.size
         for rel,k,mode,mt,size,h,storage in self.files:
-            name=(rel.rstrip('/')+'/' if k==K_DIR else rel).encode('utf-8')
+            name=self._zip_member_name(rel,k).encode('utf-8')
             payload=0 if k==K_DIR else size
             if storage and storage[0]==S_BLOB:
                 ref=storage[1]
@@ -671,7 +683,7 @@ class CMPCT:
         if self._zip64_offset_fallback_required():
             with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=level,allowZip64=True) as z:
                 for rel,k,mode,mt,size,h,storage in self.files:
-                    zi=zipfile.ZipInfo(rel.rstrip('/')+'/' if k==K_DIR else rel)
+                    zi=zipfile.ZipInfo(self._zip_member_name(rel,k))
                     zi.create_system=3
                     typ=stat.S_IFDIR if k==K_DIR else (stat.S_IFLNK if k==K_SYMLINK else stat.S_IFREG)
                     zi.external_attr=((typ|mode)&0xffff)<<16
@@ -680,7 +692,7 @@ class CMPCT:
         with open(out,'wb') as f:
             for row in self.files:
                 rel,k,mode,mt,size,h,storage=row
-                name=(rel.rstrip('/')+'/' if k==K_DIR else rel).encode('utf-8');flags=0x800
+                name=self._zip_member_name(rel,k).encode('utf-8');flags=0x800
                 ztime,zdate=self._zip_dos_time(mt);local_off=offset
                 if k==K_DIR:
                     raw=b'';method=0;comp=b'';crc=0;usize=0
