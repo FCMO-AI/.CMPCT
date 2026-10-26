@@ -63,7 +63,7 @@ def test_chunked_golden_extracts_without_optional_fchmod(
     assert hashlib.sha256(target.read_bytes()).hexdigest() == record["logical_sha256"]
     assert not list(out.glob(".*.cmpct-part-*"))
     if os.name == "posix" and hasattr(os, "fchmod") and not without_fchmod:
-        assert stat.S_IMODE(target.stat().st_mode) == (mode or 0o666)
+        assert stat.S_IMODE(target.stat().st_mode) == stat.S_IMODE(mode or 0o666)
 
 
 @pytest.mark.parametrize("record", _records(), ids=lambda r: r["name"])
