@@ -88,7 +88,7 @@ jobs:
           import json,os,pathlib,xml.etree.ElementTree as ET
           root=pathlib.Path("o181-evidence")
           cases=list(ET.parse(root/"junit.xml").getroot().iter("testcase"))
-          assert len(cases)==6,len(cases)
+          assert len(cases)==8,len(cases)
           assert not [c for c in cases if any(c.find(k) is not None for k in ("failure","error"))]
           skips=[c for c in cases if c.find("skipped") is not None]
           assert len(skips)==(2 if os.name=="nt" else 0),len(skips)
@@ -96,7 +96,8 @@ jobs:
                 (root/"test.log").read_text(errors="replace").splitlines()
                 if "O181_CASE=" in s]
           expected={"clean_fast","clean_stdlib",
-                    "foreign_valid_zip_fast","foreign_valid_zip_stdlib"}
+                    "foreign_valid_zip_fast","foreign_valid_zip_stdlib",
+                    "same_name_forged_zip_fast","same_name_forged_zip_stdlib"}
           if os.name!="nt":
               expected|={"late_symlink","late_hardlink"}
           assert {r["case"] for r in rows}==expected,rows
@@ -104,9 +105,13 @@ jobs:
           assert all(r["source_sha"]==rows[0]["source_sha"] for r in rows)
           assert all(r["prior_zip_sha"]!=r["published_zip_sha"] for r in rows)
           attack=[r for r in rows if r["case"].startswith(("foreign_valid_zip","late_"))]
+          assert all(r["result"]=="AUTHENTIC_CLEAN_CONTROL" for r in rows
+                     if r["case"].startswith("clean_"))
           assert all(r["result"]=="POSTCHECK_NAME_SUBSTITUTION_ACCEPTED" for r in attack)
           assert all(r["expected_member_absent"] for r in attack
                      if r["case"].startswith("foreign_valid_zip"))
+          assert all(r["same_name_wrong_contents"] and r["attacker_zip_crc_valid"]
+                     for r in attack if r["case"].startswith("same_name_forged_zip"))
           result={"classification":"NEGATIVE_PRODUCT_WITNESS_NOT_RELEASE_CREDIT",
                   "head":(root/"head.sha").read_text().strip(),
                   "reader_blob":(root/"reader.blob").read_text().strip(),
