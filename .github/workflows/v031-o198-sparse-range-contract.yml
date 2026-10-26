@@ -1,0 +1,99 @@
+# ci-lane: fast
+# Scientific classifier: workflow success does not imply Reader safety.
+name: CMPCT O198 authentic sparse extent-length range semantic court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o198-sparse-extent-range-contract-20261026
+  pull_request:
+    branches:
+      - agent/phased3-v031-o193-zip64-streamed-fallback-20261026
+    paths:
+      - 'research/o198_sparse_extent_range_court.py'
+      - '.github/workflows/v031-o198-sparse-range-contract.yml'
+      - 'docs/v031-research/2026-10-26-o198-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: o198-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-r24-reader:
+    name: Authenticated real-wire sparse consistency (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - name: Checkout exact source and full prereg history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify exact prospective history and unchanged product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 8338a81b180e30b3e218a4cee0f9fdc172f2aefb HEAD
+          git merge-base --is-ancestor 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD
+          git diff --exit-code 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD -- src/ native/ tests/ benchmarks/
+          mkdir -p o198-evidence
+          git rev-parse HEAD > o198-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o198-evidence/reader.blob
+          git rev-parse HEAD:research/o198_sparse_extent_range_court.py > o198-evidence/court.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o198-sparse-extent-range-prereg.md > o198-evidence/prereg.blob
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Independently install exact CMPCT package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Produce and test four complete self-consistent revision-24 archives
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python -m py_compile research/o198_sparse_extent_range_court.py
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o198_sparse_extent_range_court.py" --out "$GITHUB_WORKSPACE/o198-evidence/decision.json" 2>&1 | tee "$GITHUB_WORKSPACE/o198-evidence/court.log"
+      - name: Independently classify positive controls and genuine hosted result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('o198-evidence/decision.json').read_text())
+          assert r['source']['git_head']==Path('o198-evidence/head.sha').read_text().strip()
+          assert r['product_change'] is False
+          assert len(r['cases'])==4
+          assert [c['declared_extent_length'] for c in r['cases']]==[4,1,2,5]
+          assert r['positive_control_pass'] is True
+          assert r['decision'] in (
+              'REPRODUCED_AUTHENTIC_SPARSE_RANGE_SEMANTIC_GAP',
+              'HOSTILE_EXTENT_REJECTED_OR_NO_MISMATCH')
+          assert bool(r['hostile_mismatch_observed'])==(r['decision']=='REPRODUCED_AUTHENTIC_SPARSE_RANGE_SEMANTIC_GAP')
+          for c in r['cases']:
+              assert c['archive']['archive_bytes']>100
+              assert len(c['archive']['archive_sha256'])==64
+          print('O198_HOSTED_AUDIT=PASS RESULT='+r['decision']+' RESEARCH_ONLY')
+          PY
+      - name: Preserve positive, negative, or infrastructure-failed raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o198-real-wire-${{ matrix.os }}-${{ github.sha }}
+          path: o198-evidence/
+          if-no-files-found: warn
