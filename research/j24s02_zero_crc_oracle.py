@@ -224,7 +224,7 @@ def main():
                       wire_bytes=expected[3],same_sha_crc_deflate=True)
             cases.append(case)
             print("J24S02_CASE",json.dumps(case,sort_keys=True),flush=True)
-    positive=any(x["algebra_speedup"]>=1/0.95 for x in cases if x["family"]!="nonhole")
+    positive=all(any(x["family"]==family and x["algebra_speedup"]>=1/0.95 for x in cases) for family in ("zero","mixed"))
     nohole=all(x["algebra_wall_s"]<=1.02*x["baseline_wall_s"] for x in cases if x["family"]=="nonhole")
     # Promote no result without every required family being covered.
     complete={x["family"] for x in cases}=={"zero","mixed","nonhole"}
