@@ -60,7 +60,8 @@ def record(case: str, *, src: Path, source_bytes: bytes, victim: Path,
     assert not stage_paths(dest.parent)
     data = {
         "case": case,
-        "result": "POSTCHECK_NAME_SUBSTITUTION_ACCEPTED",
+        "result": ("AUTHENTIC_CLEAN_CONTROL" if case.startswith("clean_")
+                   else "POSTCHECK_NAME_SUBSTITUTION_ACCEPTED"),
         "source_sha": sha(source_bytes),
         "victim_before_sha": sha(victim_original),
         "victim_after_sha": sha(victim.read_bytes()),
