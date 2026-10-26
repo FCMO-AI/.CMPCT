@@ -75,15 +75,19 @@ jobs:
           set -euo pipefail
           cd "$RUNNER_TEMP"
           python - <<'PY'
-          import hashlib,os,pathlib
+          import hashlib,os,pathlib,subprocess
           import cmpct.reader
           installed=pathlib.Path(cmpct.reader.__file__).resolve()
           workspace=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
           assert not installed.is_relative_to(workspace),(installed,workspace)
+          source_bytes=subprocess.check_output(["git","show",os.environ["EVIDENCE_HEAD"]+":src/cmpct/reader.py"],cwd=workspace)
           data=installed.read_bytes()
-          git_blob=hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest()
+          normalized=data.replace(b"\r\n",b"\n")
+          assert normalized==source_bytes,(installed,len(normalized),len(source_bytes))
+          git_blob=hashlib.sha1(b"blob "+str(len(source_bytes)).encode()+b"\0"+source_bytes).hexdigest()
           assert git_blob=="f29885574c892a2c2dd819f13b7595d1af59a903",(installed,git_blob)
           print("O160_INSTALLED_READER_GIT_BLOB="+git_blob)
+          print("O160_INSTALLED_READER_CRLF_CONVERTED="+str(data!=source_bytes))
           PY
       - name: Execute independent authenticated golden and ZIP filesystem parity
         shell: bash
