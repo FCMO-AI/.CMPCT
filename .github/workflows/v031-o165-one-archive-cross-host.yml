@@ -1,0 +1,90 @@
+# ci-lane: fast
+name: v031 O165 one Linux archive to macOS topology
+
+on:
+  pull_request:
+    branches:
+      - agent/phased3-v031-o162-authentic-typed-tree-roundtrip-20261026
+    paths:
+      - 'research/o165_one_archive_cross_host_court.py'
+      - 'docs/v031-research/2026-10-26-o165-cross-host-one-archive-*.md'
+      - '.github/workflows/v031-o165-one-archive-cross-host.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-origin:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact CMPCT distribution
+        run: python -m pip install .
+      - name: Build exactly one Linux archive and record physical source
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/o165"
+          python research/o165_one_archive_cross_host_court.py \
+            --role producer \
+            --archive "$RUNNER_TEMP/o165/origin.cmpct" \
+            --receipt "$RUNNER_TEMP/o165/producer.json" \
+            --output "$RUNNER_TEMP/o165/producer-result.json"
+      - name: Upload original binary archive and raw receipts (including failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o165-linux-original-archive
+          path: ${{ runner.temp }}/o165/
+          if-no-files-found: warn
+
+  macos-receiver:
+    needs: linux-origin
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install same exact CMPCT source independently on macOS
+        run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          name: o165-linux-original-archive
+          path: ${{ runner.temp }}/o165
+      - name: Verify SAME archive bytes and measure raw/portable physical tree
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o165_one_archive_cross_host_court.py \
+            --role receiver \
+            --archive "$RUNNER_TEMP/o165/origin.cmpct" \
+            --receipt "$RUNNER_TEMP/o165/producer.json" \
+            --output "$RUNNER_TEMP/o165/receiver-result.json"
+      - name: Preserve macOS raw result even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o165-macos-receiver-result
+          path: ${{ runner.temp }}/o165/receiver-result.json
+          if-no-files-found: warn
