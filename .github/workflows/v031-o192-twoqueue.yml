@@ -1,3 +1,4 @@
+# ci-lane: fast
 name: O192 — bounded reuse-informed cache admission oracle
 on:
   pull_request:
