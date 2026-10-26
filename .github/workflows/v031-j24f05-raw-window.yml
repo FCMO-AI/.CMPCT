@@ -15,7 +15,7 @@ permissions:
   contents: read
 concurrency:
   group: j24f05-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   raw-window-hostile-court:
