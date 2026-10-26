@@ -105,17 +105,23 @@ def actor(path, offset, payload):
                 altered_physical_payload_sha256=sha(observed))
 
 
-def trial(directory, storage_kind):
+def trial(directory, storage_kind, mutate_future=False):
     from cmpct.reader import CMPCT
     chunks = raw_chunks()
     original = b"".join(chunks)
-    foreign0 = bytes(x ^ 0xA5 for x in chunks[0])
-    foreign = foreign0 + b"".join(chunks[1:])
+    selected = 1 if mutate_future else 0
+    foreign_chunk = bytes(x ^ 0xA5 for x in chunks[selected])
+    foreign = b"".join(
+        foreign_chunk if i == selected else chunk
+        for i, chunk in enumerate(chunks))
     name, archive_bytes, payload_offset = independent_revision24(chunks, storage_kind)
     archive = directory / f"source-{name}.cmpct"
     archive.write_bytes(archive_bytes)
     source_start = os.stat(archive)
     source_sha_before = sha(archive.read_bytes())
+    if mutate_future:
+        # The next physical RAW record follows the first payload and second header.
+        payload_offset += len(chunks[0]) + BHDR.size
 
     with CMPCT(archive) as reader:
         row = reader.by[name]
@@ -134,6 +140,9 @@ def trial(directory, storage_kind):
 
         attacked = directory / f"attacked-{name}"
         attacked.mkdir()
+        sentinel = b"existing verified destination, preserve on SHA failure"
+        if mutate_future:
+            (attacked / name).write_bytes(sentinel)
         original_write = os.write
         injected = []
         def interpose_write(fd, content):
@@ -146,14 +155,14 @@ def trial(directory, storage_kind):
                 command = [
                     sys.executable, str(Path(__file__).resolve()), "--actor",
                     str(archive), str(payload_offset),
-                    base64.b64encode(foreign0).decode("ascii"),
+                    base64.b64encode(foreign_chunk).decode("ascii"),
                 ]
                 child_proc = subprocess.run(
                     command, text=True, capture_output=True, timeout=15, check=True)
                 child = json.loads(child_proc.stdout)
                 if child["pid"] == os.getpid():
                     raise AssertionError("actor did not use independent process")
-                if child["altered_physical_payload_sha256"] != sha(foreign0):
+                if child["altered_physical_payload_sha256"] != sha(foreign_chunk):
                     raise AssertionError("actor changed wrong physical bytes")
                 observed = bytes(content)
                 if observed != chunks[0]:
@@ -163,6 +172,8 @@ def trial(directory, storage_kind):
                     trigger="first private stage os.write after logical digest.update",
                     original_stage_fd=fd,
                     child=child, before_sha=sha(chunks[0]), after_view_sha=sha(observed),
+                    mutation_target=("future_RAW_chunk_before_snapshot" if mutate_future
+                                     else "first_RAW_chunk_after_snapshot"),
                 ))
             return original_write(fd, content)
 
@@ -206,13 +217,20 @@ def trial(directory, storage_kind):
     # Two valid outcomes: unchanged indexed-authentic bytes published on success,
     # or integrity error with no foreign output. An ordinary successful extraction
     # containing attacker bytes is NEVER an acceptable candidate outcome.
-    safe = ((failure is None and actual == original) or
-            (failure is not None and actual is None))
+    if mutate_future:
+        # Original destination must survive failed authentication of a not-yet-copied
+        # source chunk; a first-stage snapshot cannot protect later mutable chunks.
+        safe = (failure is not None and actual == sentinel)
+    else:
+        safe = ((failure is None and actual == original) or
+                (failure is not None and actual is None))
+    result["case"] = ("future_mutation_requires_SHA_failure" if mutate_future
+                      else "post_snapshot_mutation_preserves_authenticated_output")
     result["decision"] = ("IMMUTABLE_TRANSFER_PASS" if safe else "UNSAFE_PUBLICATION")
-    if actual is not None and sha(actual) != sha(original):
-        raise AssertionError("J24F04 candidate published bytes not in whole-file indexed SHA")
+    if failure is None and sha(actual or b"") != sha(original):
+        raise AssertionError("J24F04 candidate reported success with foreign output SHA")
     if not safe:
-        raise AssertionError("J24F04 candidate violated immutable chunk transfer invariant")
+        raise AssertionError("J24F04 candidate violated immutable source-transfer or rollback invariant")
     return result
 
 
@@ -234,7 +252,8 @@ def main():
     if actual_blob != READER_BLOB:
         raise AssertionError(("Reader source custody drift", actual_blob))
     with tempfile.TemporaryDirectory(prefix="cmpct-j24f03-") as temp:
-        cases = [trial(Path(temp), mode) for mode in (1, 5)]
+        cases = [trial(Path(temp), mode, later) for mode in (1, 5)
+                 for later in (False, True)]
     result = dict(
         schema="cmpct-j24f04-v1", source_reader_blob=actual_blob,
         reader_path=str(source), platform=sys.platform, pid=os.getpid(),
@@ -249,7 +268,7 @@ def main():
     for case in cases:
         print("J24F04_CASE=" + json.dumps(case, sort_keys=True), flush=True)
     if result["decision"] != "IMMUTABLE_TRANSFER_PASS":
-        raise AssertionError("J24F04 two-vector source-mutation defense did not pass")
+        raise AssertionError("J24F04 four-case source-mutation defense did not pass")
 
 
 if __name__ == "__main__":
