@@ -102,7 +102,7 @@ def frozen_court(root: Path):
 def builder_court(root: Path):
     source=root/"builder-src"
     source.mkdir()
-    block=b"CMPCT real Builder chunked-source parity\n"*8192
+    block=b"CMPCT streaming extraction parity regression\n"*8192
     payload=(block*8)[:3*1024*1024]
     (source/"large.bin").write_bytes(payload)
     archive=root/"builder.cmpct"
