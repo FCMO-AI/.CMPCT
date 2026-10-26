@@ -1,0 +1,81 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24F08 genuine Linux child VmHWM evidence
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24f08-linux-vmhwm-reader-economics-20261026
+  pull_request:
+    paths:
+      - 'research/j24f08_linux_vmhwm_reader_court.py'
+      - '.github/workflows/v031-j24f08-linux-vmhwm.yml'
+      - 'docs/v031-research/2026-10-26-j24f08-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24f08-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-child-kernel-memory:
+    name: Genuine r24 Reader A/B kernel VmHWM (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact source and full Git identity
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate actual original Readers, prereg, and research instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "41efeb9d3301fc06b1df56ab6bd42d9ee91f6d5e"
+          test "$(git rev-parse d5aa5cbc1ef1e00b6e3c8c72cdd1598192d563a3:src/cmpct/reader.py)" = "8b5910725260e7b4db155ee0b393eb48a42f7efa"
+          test "$(git rev-parse HEAD:research/j24f08_linux_vmhwm_reader_court.py)" = "cdbaf9c424d72ebfbaad2b4de7a1978fb4a8dc2e"
+          git merge-base --is-ancestor 202a13484ee567e3cb6cac97d776bbd08e7f3535 HEAD
+          git merge-base --is-ancestor dd01be99ec33e820517f7e54b9beead416b20e19 HEAD
+      - name: Install genuine native CMPCT package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Measure genuine separate-process kernel high-water memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24f08-evidence
+          python research/j24f08_linux_vmhwm_reader_court.py --output j24f08-evidence/result.json 2>&1 | tee j24f08-evidence/stdout.txt
+          python - <<'PY'
+          import json
+          x = json.load(open('j24f08-evidence/result.json'))
+          assert len(x['cases']) == 4
+          assert x['positive_control']['growth_bytes'] >= 16 * 1024 * 1024
+          for c in x['cases']:
+              assert len(c['trials']) == 8
+              assert c['logical_sha256'] == c['trials'][0]['output_sha256']
+              assert len({t['pid'] for t in c['trials']}) == 8
+              for t in c['trials']:
+                  assert t['output_sha256'] == c['logical_sha256']
+                  assert t['archive_sha256'] == c['archive_sha256']
+                  assert t['peak_vmhwm_bytes'] >= t['kernel_before']['VmHWM'] > 0
+          assert x['decision'] in ('VMHWM_MEMORY_WIN_BOTH_R24_MODES',
+                                   'NO_CONFIRMED_BOTH_MODE_MEMORY_WIN')
+          print('J24F08_RESULT_BEARING_KERNEL_COURT=PASS SCIENCE_ONLY', x['decision'])
+          PY
+      - name: Preserve raw success and failure receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24f08-kernel-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24f08-evidence/
+          if-no-files-found: warn
+          retention-days: 30
