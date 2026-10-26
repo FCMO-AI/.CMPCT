@@ -140,3 +140,27 @@ def test_real_r24_builder_reader_roundtrip_preserves_bytes(tmp_path):
         got.extractall(dest)
         for name, raw in expected.items():
             assert (dest / name).read_bytes() == raw
+
+
+def test_historical_constructor_bypass_adopts_preseeded_cache_without_corruption():
+    # Independent compact-control adapters deliberately bypass CMPCT.__init__.
+    # They must not regress when the product adds private cache state.
+    obj = object.__new__(reader.CMPCT)
+    obj.cache = {10: b"legacy"}
+    obj.vcache = {3: b"virtual"}
+    obj._cache_lock = threading.Lock()
+    assert not hasattr(obj, "_cache_order")
+    assert obj._cached_decoded(0, 10) == b"legacy"
+    assert obj._cached_decoded(1, 3) == b"virtual"
+    obj._retain_decoded(0, 11, b"new")
+    _assert_accounting(obj)
+
+
+def test_historical_constructor_bypass_accounts_and_evicts_preseeded_oversize():
+    obj = object.__new__(reader.CMPCT)
+    obj.cache = {1: b"A" * (64 * 1024 * 1024 + 1)}
+    obj.vcache = {}
+    obj._cache_lock = threading.Lock()
+    assert obj._cached_decoded(0, 1) is None
+    obj._retain_decoded(1, 2, b"safe")
+    _assert_accounting(obj)
