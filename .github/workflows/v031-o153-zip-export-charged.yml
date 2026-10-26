@@ -1,0 +1,153 @@
+# ci-lane: fast
+# Research-only exact-source charged ZIP export comparison across original owner and two repairs.
+name: CMPCT O153 ZIP charged publication court
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-o153-zip-export-charged-court-20261026
+  pull_request:
+    paths:
+      - 'research/o153_zip_export_charged.py'
+      - '.github/workflows/v031-o153-zip-export-charged.yml'
+      - 'docs/v031-research/2026-10-26-o153-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o153-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  charged-same-runner:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O140_SHA: d8b69758dbcbb66fe28fa7cf59598916df160d2d
+      O149_SHA: ca01d885fedc8ffc343b9c3c624eddd134158452
+      O150_SHA: 48bbb41661f8b19d369c50b06bec1018cd4400e9
+    steps:
+      - name: Checkout exact O153 instrument and authentic Git history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Establish source and preregistration custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor d4e801accf46a34f79f3b4c348cb48eb0e2f00f3 HEAD
+          git merge-base --is-ancestor "$O140_SHA" HEAD
+          mkdir -p o153-evidence
+          git rev-parse HEAD > o153-evidence/head.sha
+          git rev-parse HEAD:research/o153_zip_export_charged.py > o153-evidence/test.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o153-zip-export-charged-prereg.md > o153-evidence/prereg.blob
+          python -m py_compile research/o153_zip_export_charged.py
+          uname -a > o153-evidence/host.txt
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > o153-evidence/run-start-utc.txt
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Materialize the actual three Readers on the same runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin agent/phased1-v031-o140-zip-export-nonregular-destination-20261026 agent/phased2-v031-o149-zip-staged-publication-20261026 agent/phased1-v031-o150-zip-transactional-publication-20261026
+          for sha in "$O140_SHA" "$O149_SHA" "$O150_SHA"; do git cat-file -e "$sha^{commit}"; done
+          git worktree add --detach "$RUNNER_TEMP/o153-src-o140" "$O140_SHA"
+          git worktree add --detach "$RUNNER_TEMP/o153-src-o149" "$O149_SHA"
+          git worktree add --detach "$RUNNER_TEMP/o153-src-o150" "$O150_SHA"
+          test "$(git -C "$RUNNER_TEMP/o153-src-o140" rev-parse HEAD:src/cmpct/reader.py)" = e46e6121842d485cb209118576ebf3ba3719080d
+          test "$(git -C "$RUNNER_TEMP/o153-src-o149" rev-parse HEAD:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
+          test "$(git -C "$RUNNER_TEMP/o153-src-o150" rev-parse HEAD:src/cmpct/reader.py)" = f38662c8db4132895778951263d83d24022f9296
+          test "$(git -C "$RUNNER_TEMP/o153-src-o140" rev-parse HEAD:src/cmpct/builder.py)" = 663ef0922992b1fbb8f19e6eea88d55c10a56044
+          for variant in o140 o149 o150; do
+            git -C "$RUNNER_TEMP/o153-src-$variant" rev-parse HEAD > "o153-evidence/$variant-head.sha"
+            git -C "$RUNNER_TEMP/o153-src-$variant" rev-parse HEAD:src/cmpct/reader.py > "o153-evidence/$variant-reader.blob"
+            python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/o153-install-$variant" "$RUNNER_TEMP/o153-src-$variant"
+          done
+          python -m pip freeze > o153-evidence/dependencies.txt
+          python - <<'PY'
+          import hashlib,os,pathlib
+          e=pathlib.Path("o153-evidence")
+          for variant in ("o140","o149","o150"):
+              source=pathlib.Path(os.environ["RUNNER_TEMP"])/("o153-src-"+variant)/"src/cmpct/reader.py"
+              installed=pathlib.Path(os.environ["RUNNER_TEMP"])/("o153-install-"+variant)/"cmpct/reader.py"
+              assert installed.is_file()
+              assert hashlib.sha256(source.read_bytes()).digest()==hashlib.sha256(installed.read_bytes()).digest()
+              (e/(variant+"-installed-reader.sha256")).write_text(hashlib.sha256(installed.read_bytes()).hexdigest()+"\n")
+          PY
+
+      - name: Build exactly one authenticated archive for each input family
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$RUNNER_TEMP/o153-install-o140" python research/o153_zip_export_charged.py prepare --output "$RUNNER_TEMP/o153-inputs" 2>&1 | tee o153-evidence/prepare.log
+          cp "$RUNNER_TEMP/o153-inputs/inputs.json" o153-evidence/inputs.json
+          python - <<'PY'
+          import json,pathlib,hashlib
+          d=json.loads(pathlib.Path("o153-evidence/inputs.json").read_text())
+          assert set(d["cases"])=={"tiny-tree","large-mixed"}
+          for name,c in d["cases"].items():
+              p=pathlib.Path(c["archive"])
+              assert hashlib.sha256(p.read_bytes()).hexdigest()==c["archive_sha256"]
+              assert len(c["members"])>0
+          PY
+
+      - name: Compare rotating fresh-process exports with complete raw receipts
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/o153_zip_export_charged.py court --manifest "$RUNNER_TEMP/o153-inputs/inputs.json" --evidence "$GITHUB_WORKSPACE/o153-evidence" --install-o140 "$RUNNER_TEMP/o153-install-o140" --install-o149 "$RUNNER_TEMP/o153-install-o149" --install-o150 "$RUNNER_TEMP/o153-install-o150" 2>&1 | tee o153-evidence/court.log
+
+      - name: Independently audit receipts, source bytes and output identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import collections,json,pathlib
+          p=pathlib.Path("o153-evidence")
+          rows=[json.loads(s) for s in (p/"raw.jsonl").read_text().splitlines()]
+          assert len(rows)==84,len(rows)
+          tally=collections.Counter((r["family"],r["destination"],r["engine"]) for r in rows)
+          assert len(tally)==12 and set(tally.values())=={7},tally
+          for (family,destination) in {(r["family"],r["destination"]) for r in rows}:
+              group=[r for r in rows if r["family"]==family and r["destination"]==destination]
+              assert len({r["zip_sha256"] for r in group})==1
+              assert len({r["zip_bytes"] for r in group})==1
+              assert all(not r["stage_residue"] for r in group)
+              assert all(r["member_count"]>0 for r in group)
+              assert all(r["reader_open_wall_ns"]>0 and r["export_library_wall_ns"]>0 for r in group)
+          originals=json.loads((p/"inputs.json").read_text())
+          for row in rows:
+              assert row["archive_sha256"]==originals["cases"][row["family"]]["archive_sha256"]
+              assert row["reader_sha256"]==(p/(row["engine"]+"-installed-reader.sha256")).read_text().strip()
+          summary=json.loads((p/"summary.json").read_text())
+          assert summary["observations"]==84 and len(summary["groups"])==4
+          print("O153_INDEPENDENT_AUDIT=84 complete raw observations; 12 seven-replicate groups; 4 exact-output courts")
+          PY
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > o153-evidence/run-end-utc.txt
+
+      - name: Preserve raw evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o153-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o153-evidence/
+          retention-days: 30
+          if-no-files-found: warn
