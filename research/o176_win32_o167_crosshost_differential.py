@@ -144,7 +144,7 @@ def execute(a: argparse.Namespace, record: dict) -> None:
         if not original.is_file():
             raise AssertionError("original O171 physical court missing")
         record["unaltered_original_o171_court_blob"] = git(ROOT, "rev-parse", f"HEAD:research/o171_linux_to_windows_same_archive_court.py")
-        if record["unaltered_original_o171_court_blob"] != "":  # tracked identity, never modify or substitute
+        if record["unaltered_original_o171_court_blob"] == "8c943128f135607dd36abd083bf1019bc9e4433a":  # frozen original court
             cmd = [
                 sys.executable, str(original), "--archive", str(a.archive),
                 "--receipt", str(a.receipt), "--output", str(a.o171_result),
@@ -166,6 +166,8 @@ def execute(a: argparse.Namespace, record: dict) -> None:
                 raise AssertionError("installed pinned O167 failed unchanged O171 physical court")
             if record.get("o171_original_result") != "ONE_AUTHENTIC_LINUX_ARCHIVE_WIN32_SCOPED_PHYSICAL_FIDELITY_VERIFIED":
                 raise AssertionError("O171 result JSON did not report complete physical fidelity")
+        else:
+            raise AssertionError("historical O171 physical scientific court has drifted")
         record["result"] = "EXACT_O167_WIN32_CROSSHOST_TOPOLOGY_VERIFIED"
 
     record["archive_unchanged"] = digest(a.archive) == receipt["archive_sha256"]
