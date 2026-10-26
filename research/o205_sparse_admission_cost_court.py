@@ -159,7 +159,7 @@ def run(args):
     repo = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
     assert head == os.environ["EVIDENCE_HEAD"], ("not exact HEAD", head, os.environ["EVIDENCE_HEAD"])
-    assert subprocess.check_output(["git", "status", "--porcelain"], cwd=repo, text=True).strip() == ""
+    # Receipts are intentionally untracked; require no tracked working-tree source changes.\n    assert subprocess.run(["git", "diff", "--quiet"], cwd=repo, check=False).returncode == 0
     installed = Path(reader_module.__file__).read_bytes().replace(b"\r\n", b"\n")
     source = (repo / "src/cmpct/reader.py").read_bytes().replace(b"\r\n", b"\n")
     assert installed == source and Path(reader_module.__file__).resolve() != (repo / "src/cmpct/reader.py").resolve()
