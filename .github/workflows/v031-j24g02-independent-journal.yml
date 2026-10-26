@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'tests/test_v24_committed_journal_golden.py'
+      - 'tests/test_v031_j24g02b_independent_journal_extract.py'
+      - 'docs/v031-research/2026-10-26-j24g02b-independent-journal-extract-prereg.md'
       - 'tests/conformance/v24-committed-journal.json'
       - 'docs/v031-research/2026-10-26-j24g02-journal-indexed-conformance-prereg.md'
       - '.github/workflows/v031-j24g02-independent-journal.yml'
@@ -57,11 +59,11 @@ jobs:
           } | tee j24g02-evidence/source.txt
       - name: Install genuine product and test dependencies
         run: python -m pip install -e ".[test]"
-      - name: Run unchanged independent J24G01 seven-case oracle
+      - name: Run unchanged J24G01 and prospectively preregistered J24G02b extraction
         shell: bash
         run: |
           set -euo pipefail
-          python -m pytest --noconftest -q -rs tests/test_v24_committed_journal_golden.py 2>&1 | tee j24g02-evidence/pytest.txt
+          python -m pytest --noconftest -q -rs tests/test_v24_committed_journal_golden.py tests/test_v031_j24g02b_independent_journal_extract.py 2>&1 | tee j24g02-evidence/pytest.txt
       - name: Preserve result or negative with source custody
         if: always()
         uses: actions/upload-artifact@v4
