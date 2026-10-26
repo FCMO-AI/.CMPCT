@@ -59,7 +59,7 @@ def physical_blob_record(ar: CMPCT, blob_index: int) -> tuple[int, tuple]:
 
 
 def report(case: str, **kw) -> None:
-    print("O143_CASE=" + json.dumps({"case": case, **kw}, sort_keys=True), flush=True)
+    print("O150_CASE=" + json.dumps({"case": case, **kw}, sort_keys=True), flush=True)
 
 
 def test_independent_raw_crc_rejection_preserves_prior_zip() -> None:
