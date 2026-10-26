@@ -165,6 +165,12 @@ def frozen_vector(py: str, candidate: Path, root: Path) -> dict:
     bad.write_bytes(corrupt)
     wrong = command([py, "-m", "cmpct", "verify", str(bad)], source=candidate)
     assert wrong.returncode != 0, "corrupted physical hash silently accepted"
+    # A generic CLI/import/setup failure is not a scientific integrity rejection.
+    # The unchanged authentic Reader must report the specific indexed SHA mismatch.
+    assert "SHA-256 verification failure" in wrong.stderr.decode(errors="replace"), (
+        "corrupt physical SHA rejected for unexpected reason: " +
+        wrong.stderr.decode(errors="replace")[-500:]
+    )
     return {"vector_archive_sha256": sha(raw), "logical_sha256": sha(contents),
             "codec": 2, "corruption_rejected": True, "range_sha256": sha(got)}
 
