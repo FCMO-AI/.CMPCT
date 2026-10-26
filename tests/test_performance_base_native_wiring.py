@@ -23,4 +23,12 @@ def test_helper_changes_are_performance_impacting():
     start = text.index('latest-head-impact:')
     # Slice at the next job header, not the earlier `run_performance:` output key.
     classifier = text[start:text.index('\n  performance:', start)]
-    assert 'materialize_performance_base_native' in classifier
+    # A former inline grep classifier named the helper directly. The full-PR
+    # classifier now lives in a Python module: checking a string in YAML
+    # would falsely fail the stronger source-bound route (#318). Assert
+    # instead that YAML executes the actual module and that the executable
+    # admission policy still treats this *exact* helper as material.
+    assert 'python tools/classify_zip_parity_scope.py' in classifier
+    from tools.classify_zip_parity_scope import is_performance_input
+    assert is_performance_input(HELPER.encode())
+    assert not is_performance_input(b'docs/not-a-release-input.md')
