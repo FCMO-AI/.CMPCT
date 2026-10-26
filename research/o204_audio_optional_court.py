@@ -97,10 +97,14 @@ def assert_archive(py: str, package: Path, source_bytes: dict[str, bytes],
 
 
 def execute(py: str) -> dict:
-    if importlib.util.find_spec("numpy") is not None:
-        raise AssertionError("Not a minimal runtime: numpy is importable")
-    if importlib.util.find_spec("soundfile") is not None:
-        raise AssertionError("Not a minimal runtime: soundfile is importable")
+    mode = os.environ.get("O204_AUDIO_MODE", "none")
+    if mode not in ("none", "numpy-only"):
+        raise AssertionError("Unknown audio-runtime mode: " + mode)
+    np_present = importlib.util.find_spec("numpy") is not None
+    sf_present = importlib.util.find_spec("soundfile") is not None
+    if np_present != (mode == "numpy-only") or sf_present:
+        raise AssertionError(
+            f"Wrong isolated audio runtime: mode={mode} numpy={np_present} soundfile={sf_present}")
     # Always hash repository blob bytes, not checkout bytes (Windows core.autocrlf
     # may convert LF to CRLF without changing the committed source identity).
     candidate_codec = expected_success(
@@ -118,7 +122,8 @@ def execute(py: str) -> dict:
               "candidate_codec_blob": blob_sha(candidate_codec),
               "runtime": sys.version, "platform": platform.platform(),
               "pip_freeze": freeze.splitlines(),
-              "optional_modules_absent": ["numpy", "soundfile"]}
+              "audio_runtime_mode": mode,
+              "optional_modules_absent": ["soundfile"] if np_present else ["numpy", "soundfile"]}
 
     with tempfile.TemporaryDirectory(prefix="cmpct-o204-") as temp:
         t = Path(temp)
@@ -171,11 +176,13 @@ def execute(py: str) -> dict:
         stderr = historical.stderr.decode(errors="replace")
         result["historical_mixed"] = {
             "returncode": historical.returncode, "error_tail": stderr[-1500:]}
+        missing_module = "soundfile" if mode == "numpy-only" else "numpy"
         if historical.returncode == 0 or not (
             "ModuleNotFoundError" in stderr and
-            ("No module named 'numpy'" in stderr or "No module named 'soundfile'" in stderr)
+            ("No module named '" + missing_module + "'") in stderr
         ):
-            raise AssertionError("Historical control did not fail specifically on missing optional audio")
+            raise AssertionError(
+                "Historical control did not fail specifically on missing " + missing_module)
 
         result["candidate_mixed"] = assert_archive(
             py, candidate, expected, corpus, t / "candidate.cmpct")
@@ -186,7 +193,9 @@ def execute(py: str) -> dict:
                 str(corpus / name)], env={**os.environ, "PYTHONPATH": str(candidate)})
             expected_success(probe, "fallback-probe " + name)
         result["direct_fallback_cases"] = ["pcm16.wav", "pcm32.wav", "pcm8.wav"]
-    result["decision"] = "CANDIDATE_PASS_HISTORICAL_MISSING_AUDIO_FAIL"
+    result["decision"] = ("CANDIDATE_PASS_HISTORICAL_MISSING_SOUNDFILE_FAIL"
+                          if mode == "numpy-only" else
+                          "CANDIDATE_PASS_HISTORICAL_MISSING_AUDIO_FAIL")
     return result
 
 
