@@ -1,0 +1,84 @@
+# ci-lane: fast
+# O188 deterministic lower-rung policy oracle; zero product/release credit.
+name: CMPCT O188 scan-resistant cache admission oracle
+on:
+  push:
+    branches: [agent/phased2-v031-o188-cache-scan-admission-oracle-20261026]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o188-cache-admission
+  cancel-in-progress: true
+
+jobs:
+  deterministic-policy-falsifier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout source and frozen preregistration
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Authenticate ownership and target cache baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor dbdc627b42267f42ae9e564dae564f5853588103 HEAD
+          git merge-base --is-ancestor eb4b2b249e50a2bf9995c760e3763a8f7fcc74fc HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 1434c0b1485bfa59bd3dfe6f604ab555e35002a8
+          mkdir -p o188-evidence
+          git rev-parse HEAD > o188-evidence/head.sha
+          git rev-parse HEAD:research/o188_cache_admission_oracle.py > o188-evidence/oracle.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o188-scan-admission-prereg.md > o188-evidence/prereg.blob
+      - name: Run deterministic offline falsifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile research/o188_cache_admission_oracle.py
+          python3 research/o188_cache_admission_oracle.py > o188-evidence/raw.json
+      - name: Independently audit numerical witnesses and negative boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib,hashlib
+          root=pathlib.Path("o188-evidence")
+          data=(root/"raw.json").read_bytes()
+          r=json.loads(data)
+          assert r["schema"]=="cmpct-o188-policy-oracle-v1"
+          assert r["capacity_bytes"]==67108864 and r["max_entries"]==32768
+          f=r["families"]
+          assert set(f)=={"scan96","fit48","hot16_scan96","phase_shift96","streaming_unique","mixed_weighted","tiny_items"}
+          for fam,policies in f.items():
+              assert set(policies)=={"lru","fixed_pin","guard_48_16","no_cache"}
+              for name,v in policies.items():
+                  assert v["peak_retained_bytes"]<=67108864
+                  assert v["peak_entries"]<=32768
+                  assert v["hits"]+v["misses"]==sum(p["hits"]+p["misses"] for p in v["phases"].values())
+                  assert v["refetch_work_units"]==sum(p["refetch_work_units"] for p in v["phases"].values())
+          assert f["scan96"]["lru"]["phases"]["pass2"]["hits"]==0
+          assert f["scan96"]["guard_48_16"]["phases"]["pass2"]["hits"]>=48
+          assert f["scan96"]["fixed_pin"]["phases"]["pass2"]["hits"]==64
+          assert f["phase_shift96"]["fixed_pin"]["phases"]["B4"]["hits"]==0
+          assert f["phase_shift96"]["guard_48_16"]["phases"]["B4"]["hits"]>=48
+          assert all(v["hits"]==0 for v in f["streaming_unique"].values())
+          audit={"head":(root/"head.sha").read_text().strip(),
+                 "oracle_blob":(root/"oracle.blob").read_text().strip(),
+                 "raw_sha256":hashlib.sha256(data).hexdigest(),
+                 "decision":"SCOPED_ONLINE_HEADROOM_POSSIBLE_NO_PRODUCT_CREDIT",
+                 "scope":"offline policy simulator; NOT Reader RSS/CPU/wall evidence"}
+          (root/"audit.json").write_text(json.dumps(audit,indent=2,sort_keys=True)+"\n")
+          print("O188_AUDIT="+json.dumps(audit,sort_keys=True))
+          PY
+      - name: Preserve independent input/output receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o188-admission-oracle-${{ github.sha }}
+          path: o188-evidence/
+          retention-days: 30
+          if-no-files-found: warn
