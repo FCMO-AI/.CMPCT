@@ -404,12 +404,16 @@ class CMPCT:
                 if stat.S_ISLNK(mode):
                     if leaf and allow_leaf_link:continue
                     raise IOError(f'pre-existing destination symlink: {path!r}')
-                # A regular leaf with multiple hardlink names can share an inode with a
-                # file *outside* this destination. The direct O_TRUNC writer mutates that
-                # outside inode even with O_NOFOLLOW. Fail closed before any archive
-                # member is written; atomic chunked publication is exempt.
-                if leaf and reject_hardlink_leaf and stat.S_ISREG(mode) and existing.st_nlink>1:
-                    raise IOError(f'pre-existing destination hardlink alias: {path!r}')
+                # Direct O_TRUNC writers cannot safely publish to a FIFO/device/socket:
+                # even opening a FIFO for writing can block indefinitely before decoding.
+                # A regular file with external hardlinks can also mutate an outside inode.
+                # Both checks use this existing lstat BEFORE any member is published;
+                # atomic chunked/symlink/hardlink replacement remains exempt.
+                if leaf and reject_hardlink_leaf:
+                    if not stat.S_ISREG(mode):
+                        raise IOError(f'nonregular direct-output destination leaf: {path!r}')
+                    if existing.st_nlink>1:
+                        raise IOError(f'pre-existing destination hardlink alias: {path!r}')
                 if not leaf:
                     if not stat.S_ISDIR(mode):
                         raise IOError(f'non-directory destination parent: {path!r}')

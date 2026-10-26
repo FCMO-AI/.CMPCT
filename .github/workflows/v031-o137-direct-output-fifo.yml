@@ -1,0 +1,79 @@
+# ci-lane: fast
+# Exact-head installed product safety acceptance: static direct FIFO refusal.
+name: CMPCT O137 direct output FIFO admission
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o137-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-source-installed-safety:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 17
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out source exact head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify exact source and invariant fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o137-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = e5301ccf24a63577cfbfa169be9c1e452a0d14bd
+          test "$(git hash-object tests/test_v031_o137_direct_fifo_leaf_preflight.py)" = a86a9ea6dbbe2faa29915d3e8efaf2baad0b3fbb
+          test "$(git hash-object tests/conformance/v24-chunk-maps.json)" = 91141405bb10b2e1226b0652e3aa0a13ba41846c
+          git rev-parse HEAD > o137-evidence/source-head.txt
+          git hash-object src/cmpct/reader.py > o137-evidence/reader-blob.txt
+          git hash-object tests/test_v031_o137_direct_fifo_leaf_preflight.py > o137-evidence/instrument-blob.txt
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install exact CMPCT product and test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -e '.[test,audio]'
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader
+          print("O137_INSTALLED_READER", cmpct.reader.__file__)
+          assert Path(cmpct.reader.__file__).resolve().is_relative_to(Path.cwd().resolve())
+          PY
+      - name: Bound authentic product acceptance court
+        shell: bash
+        run: |
+          set -o pipefail
+          # Historical tests/conftest.py imports unrelated experiment runtimes and
+          # a Linux-named libzstd.so on macOS; that collection failure predates
+          # O137. Run a byte-identical copy of this focused instrument outside
+          # the inherited directory-wide conftest without changing any test.
+          cp tests/test_v031_o137_direct_fifo_leaf_preflight.py o137-evidence/test_v031_o137_direct_fifo_leaf_preflight.py
+          cmp tests/test_v031_o137_direct_fifo_leaf_preflight.py o137-evidence/test_v031_o137_direct_fifo_leaf_preflight.py
+          python -m pytest -q -s o137-evidence/test_v031_o137_direct_fifo_leaf_preflight.py --junitxml=o137-evidence/junit.xml 2>&1 | tee o137-evidence/pytest.txt
+      - name: Preserve original evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o137-direct-fifo-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o137-evidence/
+          if-no-files-found: warn
+          retention-days: 90
