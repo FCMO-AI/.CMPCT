@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import errno
 import hashlib
 import importlib.util
 import json
@@ -110,14 +111,25 @@ def run() -> dict:
         base = Path(td)
         a, b = base / "alpha", base / "beta"
         a.mkdir(); b.mkdir()
+        raw_name_results = []
         for root in (a,b):
             (root / "sub").mkdir()
-            write(root / "sub" / "original", b"\x00\xff\x7f" * 2048)
+            write(root / "sub" / "original", b"\\x00\\xff\\x7f" * 2048)
             os.link(root / "sub" / "original", root / "link")
             (root / "dangling").symlink_to("../outside-no-such-file")
-            raw = os.fsencode(root) + b"/file-\xff"
-            with open(raw, "wb") as f:
-                f.write(b"raw-posix-name")
+            raw = os.fsencode(root) + b"/file-\\xff"
+            try:
+                with open(raw, "wb") as f:
+                    f.write(b"raw-posix-name")
+                raw_name_results.append("SUPPORTED")
+            except OSError as exc:
+                # APFS on GitHub macOS rejects non-UTF8 filename bytes (EILSEQ).
+                # A host inability is explicit UNSUPPORTED, not a fidelity PASS.
+                if exc.errno != errno.EILSEQ:
+                    raise
+                raw_name_results.append("HOST_REFUSED_EILSEQ")
+        assert len(set(raw_name_results)) == 1, raw_name_results
+        raw_name_supported = raw_name_results[0] == "SUPPORTED"
         expected, manifest_a = oracle.strict_digest(a)
         identical, manifest_b = oracle.strict_digest(b)
         assert expected == identical and manifest_a == manifest_b
@@ -155,7 +167,7 @@ def run() -> dict:
 
         observations["controls"] = {
             "same_tree_recreated_inode_independence": expected == identical,
-            "raw_surrogateescaped_filename": True,
+            "raw_surrogateescaped_filename": "SUPPORTED_PASS" if raw_name_supported else "HOST_REFUSED_EILSEQ",
             "dangling_symlink_no_follow": link_target_created == expected,
             "mutation_detection": mutated != expected,
             "permission_mode_detection": mode_mutated != expected,
