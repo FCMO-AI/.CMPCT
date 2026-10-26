@@ -553,7 +553,9 @@ class CMPCT:
                 zi.compress_type=zipfile.ZIP_DEFLATED
                 zi._compresslevel=level  # ZipFile.open consumes per-ZipInfo level.
                 zi.file_size=size
-                expected=self.file_sha256(rel)
+                # Prefer the authenticated per-entry SHA; consulting file_sha256 on
+                # a packed member would needlessly materialize it via read().
+                expected=bytes(h) if h is not None else self.file_sha256(rel)
                 observed=hashlib.sha256()
                 written=0
                 with z.open(zi,'w',force_zip64=(size>=0xffffffff)) as member:
