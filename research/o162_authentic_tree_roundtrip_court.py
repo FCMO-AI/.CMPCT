@@ -120,6 +120,8 @@ def run() -> dict:
             fixture["source_entries"] = len(source_manifest["entries"])
             fixture["source_hardlink_classes"] = source_manifest["hardlink_classes"]
             fixture["source_digest"] = source_digest
+            # Post-first-result observability: portable comparisons require raw mode/name receipts.
+            fixture["source_manifest"] = source_manifest
             create = call_cli(["create", str(source), str(archive), "--workers", "1"], base)
             verify = call_cli(["verify", str(archive)], base)
             extract = call_cli(["extract", str(archive), str(output)], base)
@@ -130,6 +132,7 @@ def run() -> dict:
             fixture["verify"] = verify
             fixture["extract"] = extract
             fixture["output_digest"] = output_digest
+            fixture["output_manifest"] = output_manifest
             fixture["output_entries"] = len(output_manifest["entries"])
             fixture["output_hardlink_classes"] = output_manifest["hardlink_classes"]
             fixture["strict_manifest_equal"] = source_manifest == output_manifest
