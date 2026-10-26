@@ -177,7 +177,12 @@ def test_injected_midwrite_exception_preserves_prior_zip_and_removes_staging(tmp
         assert ar.read("raw.bin") == bytes(range(64))
         def simulated_fault(stage, level):
             # Producer has *already written* partial ZIP bytes when I/O fails.
-            Path(stage).write_bytes(b"PK\x03\x04partial-zip-before-ENOSPC")
+            # O179 private writer now receives the original O_EXCL descriptor stream.
+            # Keep the original post-partial-write ENOSPC fault and all assertions;
+            # do not reopen a stage pathname, the security bug under test.
+            assert hasattr(stage, "write") and hasattr(stage, "fileno")
+            stage.write(b"PK\x03\x04partial-zip-before-ENOSPC")
+            stage.flush()
             raise OSError(28, "simulated ENOSPC after partial staged output")
         monkeypatch.setattr(ar, "_export_zip_direct_unpublished", simulated_fault)
         with pytest.raises(OSError, match="simulated ENOSPC"):
