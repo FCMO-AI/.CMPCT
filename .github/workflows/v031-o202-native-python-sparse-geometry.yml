@@ -42,6 +42,7 @@ jobs:
           test "$(git rev-parse --is-shallow-repository)" = false
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git merge-base --is-ancestor 5a594f4986cad99955deacab6d03fdec1a2186f9 HEAD
+          git merge-base --is-ancestor f59a6ca5d5a777a018db0cc1944fc2f436b5474c HEAD
           git merge-base --is-ancestor 16bfcf12adcb6cb1025896c4ece0f8aab7c79646 HEAD
           git diff --exit-code 16bfcf12adcb6cb1025896c4ece0f8aab7c79646 HEAD -- src/ native/ tests/ benchmarks/
           mkdir -p o202-evidence
@@ -51,6 +52,7 @@ jobs:
           git rev-parse HEAD:research/o198_sparse_extent_range_court.py > o202-evidence/original-o198-court.blob
           git rev-parse HEAD:research/o202_native_sparse_geometry_abi_court.py > o202-evidence/o202-court.blob
           git rev-parse HEAD:docs/v031-research/2026-10-26-o202-native-python-sparse-prereg.md > o202-evidence/prereg.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o202b-root-schema-prereg.md > o202-evidence/superseding-prereg.blob
           cp native/cmpct-core/Cargo.lock "$RUNNER_TEMP/o202-cargo.lock"
       - name: Set up exact Python runtime
         uses: actions/setup-python@v5
@@ -88,15 +90,19 @@ jobs:
           r=json.loads(Path('o202-evidence/result.json').read_text())
           assert r['source']['head']==Path('o202-evidence/head.sha').read_text().strip()
           assert r['product_changed'] is False
-          assert len(r['cases'])==4
-          assert [c['declared_extent_length'] for c in r['cases']]==[4,1,2,5]
+          assert len(r['original_o198_cases'])==4
+          assert len(r['revision_normalized_cases'])==4
+          assert [c['length'] for c in r['revision_normalized_cases']]==[4,1,2,5]
           assert r['positive_control_pass'] is True
           assert r['decision'] in (
-              'NATIVE_PYTHON_SPARSE_GEOMETRY_ADMISSION_SPLIT_CONFIRMED',
+              'EXISTING_STRICT_VALIDATORS_REJECT_GEOMETRY_ORDINARY_READER_GAP',
               'UNEXPECTED_OR_CONTRADICTORY_DIFFERENTIAL_REQUIRES_REVIEW')
-          for c in r['cases']:
-              assert c['wire']['archive_bytes'] > 100
-              assert len(c['wire']['archive_sha256'])==64
+          for o,c in zip(r['original_o198_cases'],r['revision_normalized_cases']):
+              assert o['original_wire']['archive_bytes'] > 100
+              assert c['normalized_wire']['archive_bytes'] > 100
+              assert o['original_wire']['archive_sha256'] != c['normalized_wire']['archive_sha256']
+              assert c['normalized_wire']['root_revision']==24
+              assert c['original_archive_sha256']==o['original_wire']['archive_sha256']
           print('O202_SCIENTIFIC_CLASSIFICATION='+r['decision']+' RESEARCH_ONLY')
           PY
       - name: Preserve all decision-bearing logs, errors and raw outcomes
