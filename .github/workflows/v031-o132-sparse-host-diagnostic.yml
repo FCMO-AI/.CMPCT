@@ -1,0 +1,163 @@
+# ci-lane: fast
+# O132 independent host sparse admission/root-cause science. Product code/tests unchanged.
+name: CMPCT v0.31 O132 macOS sparse admission root cause
+
+on:
+  push:
+    branches: ['agent/phased1-v031-o132-sparse-host-fixture-root-cause-20261025']
+    paths:
+      - 'tools/research/o132_sparse_host_mode_diagnostic.py'
+      - 'docs/v031-research/2026-10-25-o132-*'
+      - '.github/workflows/v031-o132-sparse-host-diagnostic.yml'
+  pull_request:
+    paths:
+      - 'tools/research/o132_sparse_host_mode_diagnostic.py'
+      - 'docs/v031-research/2026-10-25-o132-*'
+      - '.github/workflows/v031-o132-sparse-host-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o132-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scientific-host-physical-mode:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - name: Checkout exact scientific source with authentic history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify unchanged source and installed CMPCT
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o132-evidence
+          echo "$(git rev-parse HEAD)" > o132-evidence/head.sha
+          git merge-base --is-ancestor 700fa74df7d9101b3d00322ab5b3606ee64faf88 HEAD
+          test "$(git hash-object src/cmpct/codec.py)" = 29526db4203723d83523fc95d074c346b63d7587
+          test "$(git hash-object src/cmpct/builder.py)" = 663ef0922992b1fbb8f19e6eea88d55c10a56044
+          test "$(git hash-object tests/test_v031_destination_hardlink_leaf_alias.py)" = ce3da2e0f6611ac624b75ab17d760173a8f03392
+          git hash-object tools/research/o132_sparse_host_mode_diagnostic.py > o132-evidence/instrument.blob
+          python -m pip install --disable-pip-version-check . pytest
+          python - <<'PY'
+          import cmpct.builder,cmpct.codec,cmpct.reader
+          from pathlib import Path
+          cwd=Path.cwd().resolve()
+          for mod in (cmpct.builder,cmpct.codec,cmpct.reader):
+              path=Path(mod.__file__).resolve()
+              print("O132_INSTALLED_SOURCE",path)
+              assert not path.is_relative_to(cwd),(path,cwd)
+          PY
+      - name: Measure host storage admission with exact Builder and Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/research/o132_sparse_host_mode_diagnostic.py o132-evidence/observations.json | tee o132-evidence/science.log
+          grep -q '^O132_EXACT_RECONSTRUCTION_AND_CUSTODY_PASS$' o132-evidence/science.log
+      - name: Independent receipt completeness and logical exactness audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          obj=json.loads(Path("o132-evidence/observations.json").read_text())
+          rows=obj["observations"]
+          assert len(rows)==3 and {r["method"] for r in rows}=={"seek","truncate","dense"},rows
+          assert obj["all_same_logical_bytes"] and obj["exact_reconstruction"]
+          assert len({r["source_sha256"] for r in rows})==1,rows
+          assert all(r["extract_exact"] and r["verified_members"]==1 and r["extracted_sha256"]==r["source_sha256"] for r in rows)
+          assert all(r["archive_size"]==r["builder_report_bytes"] for r in rows)
+          for r in rows:
+              phys=r["physical"]
+              assert phys["size"]==16*1024*1024
+              assert "SEEK_DATA" in phys and "SEEK_HOLE" in phys
+              print("O132_EVIDENCE",r["method"],r["scan_storage"],r["final_storage"],phys["st_blocks"],phys["sparse_returned_none"])
+          print("O132_INDEPENDENT_AUDIT_PASS")
+          PY
+      - name: Independent fixed-byte v24 S_SPARSE destination safety control
+        shell: bash
+        run: |
+          set -euo pipefail
+          git hash-object tests/conformance/v24-sparse.json | tee o132-evidence/golden-sparse.blob
+          test "$(cat o132-evidence/golden-sparse.blob)" = 002d29f71384bfe0213605eccc952f5ebc20df0b
+          cp tests/test_v031_o132_golden_sparse_leaf.py o132-evidence/test_v031_o132_golden_sparse_leaf.py
+          cmp -s tests/test_v031_o132_golden_sparse_leaf.py o132-evidence/test_v031_o132_golden_sparse_leaf.py
+          python -m pytest -q o132-evidence/test_v031_o132_golden_sparse_leaf.py --junitxml=o132-evidence/golden-junit.xml 2>&1 | tee o132-evidence/golden.log
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          cases=list(ET.parse('o132-evidence/golden-junit.xml').getroot().iter('testcase'))
+          assert len(cases)==2,cases
+          assert all(c.find(k) is None for c in cases for k in ('failure','error','skipped')),cases
+          print('O132_INDEPENDENT_GOLDEN_SPARSE_TWO_TEST_AUDIT_PASS')
+          PY
+      - name: Preserve original negative/positive scientific measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o132-physical-${{ matrix.os }}-${{ github.sha }}
+          path: o132-evidence/
+          if-no-files-found: warn
+          retention-days: 90
+
+  inherited-unaltered-parent-court:
+    # This is intentionally separate: macOS original 8/9 red remains a RED check.
+    # We do NOT silently downgrade its assertions or its job failure.
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - name: Checkout exact scientific branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic parent code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o132-inherited
+          git hash-object tests/test_v031_destination_hardlink_leaf_alias.py | tee o132-inherited/parent-test.blob
+          test "$(cat o132-inherited/parent-test.blob)" = ce3da2e0f6611ac624b75ab17d760173a8f03392
+          git rev-parse HEAD > o132-inherited/head.sha
+          python -m pip install --disable-pip-version-check . pytest
+      - name: Execute nine original unchanged parent tests (real regression gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Preserve exact source/test SHA, but isolate from unrelated tests/conftest.py,
+          # matching the original #472/#479 inherited-court execution environment.
+          cp tests/test_v031_destination_hardlink_leaf_alias.py o132-inherited/test_v031_destination_hardlink_leaf_alias.py
+          cmp -s tests/test_v031_destination_hardlink_leaf_alias.py o132-inherited/test_v031_destination_hardlink_leaf_alias.py
+          python -m pytest -q o132-inherited/test_v031_destination_hardlink_leaf_alias.py --junitxml=o132-inherited/parent-junit.xml 2>&1 | tee o132-inherited/parent.log
+      - name: Preserve original parent evidence even if red
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o132-inherited-${{ matrix.os }}-${{ github.sha }}
+          path: o132-inherited/
+          if-no-files-found: warn
+          retention-days: 90
