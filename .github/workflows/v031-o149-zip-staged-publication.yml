@@ -87,12 +87,12 @@ jobs:
           print("O149_INSTALLED_READER="+str(actual),flush=True)
           PY
 
-      - name: Run genuine positive repaired export court
+      - name: Run isolated installed positive repair court (no unrelated conftest)
         shell: bash
         run: |
           set -o pipefail
           cd "$RUNNER_TEMP"
-          python -m pytest -vv -s "$GITHUB_WORKSPACE/tests/test_v031_o149_zip_export_atomic_publication.py" --junitxml="$GITHUB_WORKSPACE/o149-evidence/junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/o149-evidence/pytest.log"
+          python -m pytest --noconftest -c /dev/null -vv -s "$GITHUB_WORKSPACE/tests/test_v031_o149_zip_export_atomic_publication.py" --junitxml="$GITHUB_WORKSPACE/o149-evidence/junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/o149-evidence/pytest.log"
 
       - name: Independently audit five distinct acceptance outcomes
         shell: bash
