@@ -109,3 +109,34 @@ def test_actual_vzip_read_path_returns_exact_values_and_reuses_small_entries(mon
     assert obj.read("b.zip") == b"DATAZIP"
     assert calls == [b"ZIPDATA", b"DATAZIP"]
     _assert_accounting(obj)
+
+
+def test_real_r24_builder_reader_roundtrip_preserves_bytes(tmp_path):
+    # Unlike method-only accounting cases, this exercises genuine on-disk r24 records.
+    import hashlib
+    from cmpct.builder import Builder
+
+    root = tmp_path / "source"
+    root.mkdir()
+    expected = {
+        "alpha.txt": (b"alpha,beta,gamma\\n" * 4096),
+        "bravo.bin": bytes(range(256)) * 224,
+        "charlie.txt": (b"1234567890" * 6144),
+    }
+    for name, data in expected.items():
+        (root / name).write_bytes(data)
+    archive = tmp_path / "real.cmpct"
+    Builder(root, workers=1).build(archive)
+    with reader.CMPCT(archive) as got:
+        assert got.verify() == len(expected)
+        for _ in range(2):
+            for name, raw in expected.items():
+                recovered = got.read(name)
+                assert recovered == raw
+                assert hashlib.sha256(recovered).digest() == hashlib.sha256(raw).digest()
+                assert got.read_range(name, 100, 513) == raw[100:613]
+        _assert_accounting(got)
+        dest = tmp_path / "extracted"
+        got.extractall(dest)
+        for name, raw in expected.items():
+            assert (dest / name).read_bytes() == raw
