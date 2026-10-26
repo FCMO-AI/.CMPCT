@@ -123,6 +123,7 @@ def main() -> int:
     record['product_change']=False
     args.out.parent.mkdir(parents=True,exist_ok=True)
     args.out.write_text(json.dumps(record,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+    print('O201_CASES='+json.dumps([{'declared_chunk_length':c['declared_chunk_length'], 'reader':c['reader']} for c in record['cases']], sort_keys=True))
     print('O201_DECISION='+record['decision'])
     print('O201_RESULT='+json.dumps({k:record[k] for k in
                                     ('decision','positive_control_pass','hostile_mismatch_observed')},
