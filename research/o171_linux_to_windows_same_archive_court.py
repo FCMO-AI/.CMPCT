@@ -71,6 +71,23 @@ def host_capability_probe(workspace: Path) -> dict:
     except OSError as error:
         result["symlink_created"] = False
         result["symlink_error"] = f"{type(error).__name__}: winerror={getattr(error, 'winerror', None)} errno={error.errno}"
+    # Win32 differentiates symbolic links to files and directories at creation.
+    # A file-link positive does not imply the Reader's directory-link call
+    # (which omits target_is_directory) will reconstruct the O162 ln-dir entry.
+    directory = workspace / "probe-directory"
+    directory.mkdir()
+    directory_link = workspace / "probe-dir-sym"
+    try:
+        os.symlink("probe-directory", directory_link, target_is_directory=True)
+        result["directory_symlink_created"] = (
+            directory_link.is_symlink() and directory_link.is_dir()
+        )
+        result["directory_symlink_target"] = os.readlink(directory_link)
+    except OSError as error:
+        result["directory_symlink_created"] = False
+        result["directory_symlink_error"] = (
+            f"{type(error).__name__}: winerror={getattr(error, 'winerror', None)} errno={error.errno}"
+        )
     return result
 
 
