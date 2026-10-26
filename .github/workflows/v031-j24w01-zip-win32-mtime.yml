@@ -69,6 +69,8 @@ jobs:
           python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j24w01-installed" "$GITHUB_WORKSPACE" "zstandard>=0.22"
           python -m pip install --disable-pip-version-check pytest
           echo "PYTHONPATH=$RUNNER_TEMP/j24w01-installed" >> "$GITHUB_ENV"
+          # The original O149 tests consume the independent frozen v24 codec fixture by this named contract.
+          echo "CMPCT_FIXTURE_JSON=$GITHUB_WORKSPACE/tests/conformance/v24-direct-codecs.json" >> "$GITHUB_ENV"
           echo "O140_PRODUCT_SRC=$RUNNER_TEMP/j24w01-installed" >> "$GITHUB_ENV"
           echo "O140_ENGINE=candidate" >> "$GITHUB_ENV"
       - name: Attest independently installed Python source, including Win32 source normalization
