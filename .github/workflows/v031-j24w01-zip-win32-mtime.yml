@@ -1,5 +1,5 @@
 # ci-lane: fast
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: cancel-stale-head
 # J24W01 crosses two independently owned changes without editing their tests.
 name: CMPCT J24W01 O160 ZIP x O167 Win32 mtime composition
 on:
@@ -19,7 +19,7 @@ permissions:
   contents: read
 concurrency:
   group: cmpct-j24w01-${{ github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   three-host-independent-acceptance:
