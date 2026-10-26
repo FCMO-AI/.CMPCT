@@ -1,0 +1,96 @@
+# ci-lane: fast
+# Isolated prospective research; not a release or product-parity gate.
+name: CMPCT O156 ZIP logical separator court
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-o156-zip-logical-separator-conformance-20261026
+  pull_request:
+    paths:
+      - 'research/o156_zip_logical_separator_court.py'
+      - '.github/workflows/v031-o156-zip-logical-separator.yml'
+      - 'docs/v031-research/2026-10-26-o156-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o156-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-reader-posix:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout source and complete authentic history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify source, goldens and prospectively frozen prediction
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor cb7c4d81f92dda2e3b35dcb3a5e5af85bedb0a55 HEAD
+          git rev-parse HEAD:src/cmpct/reader.py
+          git rev-parse HEAD:src/cmpct/path_policy.py
+          git rev-parse HEAD:tests/conformance/v24-direct-codecs.json
+          git rev-parse HEAD:research/o156_zip_logical_separator_court.py
+          python -m py_compile research/o156_zip_logical_separator_court.py
+          mkdir -p o156-evidence
+          git rev-parse HEAD > o156-evidence/commit.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o156-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/path_policy.py > o156-evidence/path-policy.blob
+          git rev-parse HEAD:tests/conformance/v24-direct-codecs.json > o156-evidence/golden.blob
+          git rev-parse HEAD:research/o156_zip_logical_separator_court.py > o156-evidence/instrument.blob
+      - name: Configure Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact branch CMPCT and independent ZIP/vector codec
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check -e . 'zstandard>=0.22'
+          python -m pip freeze > o156-evidence/python-dependencies.txt
+          python - <<'PY'
+          import cmpct.reader, pathlib
+          assert pathlib.Path(cmpct.reader.__file__).resolve().is_relative_to(pathlib.Path.cwd().resolve())
+          print('Installed genuine branch Reader:', cmpct.reader.__file__)
+          PY
+      - name: Execute authenticated same-input namespace court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o156_zip_logical_separator_court.py | tee o156-evidence/court.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          o=json.loads(Path("o156-evidence/result.json").read_text())
+          assert o["status"]=="POSIX_ZIP_LOGICAL_NAMESPACE_DISCREPANCY_CONFIRMED"
+          assert o["cases_count"]==9
+          assert o["backslash_disagreement_count"]==3
+          assert all(x["content_exact"] for x in o["cases"])
+          assert all(x["namespace_agreement"] for x in o["cases"] if x["case"]!="backslash")
+          print("O156 independent receipt validation PASSED")
+          PY
+      - name: Preserve scientific records even after failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o156-${{ matrix.os }}-${{ github.sha }}
+          path: o156-evidence/
+          retention-days: 90
+          if-no-files-found: error
