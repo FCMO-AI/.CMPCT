@@ -97,21 +97,13 @@ The Discovery Engine cannot alter frozen benchmarks, thresholds, comparators, pr
 
 Success is a changed map of what is possible: product improvement, decisive falsification, newly measured bound, preserved breakthrough with reduced debt, or an evidence-backed search-method lesson that makes future decisions cheaper/better.
 
-## Current bootstrap target — temporal, not permanent doctrine
+## Recover the current bootstrap from repository truth
 
-At this reconciliation point, v0.30 runtime rehabilitation remains release-critical, but the create-side search question has changed decisively. PR #139 / fresh-process run `35415287116` demonstrates that G04 can reuse the exact attempt-5 candidate already paid for by the accepted v0.29 portfolio: exact final archive/tree identity, one graph build, 0 B retained payload rewrite, median wall saving 23.359 s / 34.665%, and median CPU saving 26.355%. This exceeds the numerical `shared-build-rehab` research hurdle but is not release credit because the proof still lives in an experimental ownership seam rather than the authoritative candidate fingerprint.
+This research-method document must not repeat a time-sensitive project priority, PR owner, experimental result or benchmark outcome as if it were permanent direction. On each activation, first recover current repository entrypoints and law, then read `docs/discovery/STATE.json` only as a **staleable index** to relevant evidence. Reconcile the index against actual branches, claims, open PRs, frozen preregistrations, completed exact-source CI/artefacts and release authority before choosing a question. A newer authenticated result outranks a cached `BLOCKED` or `UNEXECUTED` label; the index never serves as a lock or scientific authority.
 
-The next cycle should therefore productize before reopening nearby create variants:
+The bootstrap target is a decision from current evidence, not a paragraph to refresh here. When a discrepancy materially changes the frontier, hand the exact receipts to the owner of the shared state rather than overwriting concurrently maintained `STATE.json`; continue with a dependency-safe action. Removing a stale bootstrap does not retire any historical result, alter any research question's frozen evaluator or authorize product/release claims.
 
-1. fold attempt-5 lifetime/output into the authoritative scheduler/G04 ownership boundary, preferably through caller-owned same-filesystem workspace semantics rather than duplicate scheduler code, hardlink-specific product semantics, or global interception;
-2. require exact archive/tree identity, `attempt5_graph_build_count == 1`, zero archive-sized retention copy, and fresh-process wall/CPU/RSS/temp-I/O accounting on the authoritative path;
-3. rebuild fingerprint-bound `shared-build-rehab` and full runtime evidence without weakening its thresholds;
-4. then return to extraction as a separate causal owner: wrapper/session fusion measured only ~2.09%, so do not repeat that family without new evidence—localize reconstruction/verification/data-movement cost instead;
-5. keep one cheap worldview-distance representation/proof hypothesis queued so Forge rehabilitation does not become a permanent local optimum.
-
-An isolated r24 binary/CLI timing failure on the experimental PR is evidence debt to replicate, not a reason to erase the ownership result or waive the gate. If a candidate branch changes no canonical CLI code, use replication and causal comparison to classify such a result; scientific evidence wins over convenience either way.
-
-Update/remove this bootstrap section whenever repository truth changes again.
+**Falsifier for this simplification:** a zero-history activation demonstrably cannot identify a legitimate next action from current repository entrypoints, the discovery index and reachable result receipts. If that occurs, add a small explicitly evidence-linked, freshness-checked orientation pointer instead of reintroducing unverified project-state prose.
 
 ## Completion criterion
 
