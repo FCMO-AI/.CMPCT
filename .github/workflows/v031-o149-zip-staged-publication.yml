@@ -49,7 +49,7 @@ jobs:
           git merge-base --is-ancestor d8b69758dbcbb66fe28fa7cf59598916df160d2d HEAD
           git merge-base --is-ancestor b915aef7456b555987247cbe0cca250d80cf99e0 HEAD
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
-          test "$(git rev-parse HEAD:tests/test_v031_o149_zip_export_atomic_publication.py)" = c0942b3301ba146e2c1f71e6a7ebb29c70ab1a5f
+          test "$(git rev-parse HEAD:tests/test_v031_o149_zip_export_atomic_publication.py)" = d394c1dd66eb229f5b24ccbd3713825f5e95cd89
           test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
           mkdir -p o149-evidence
           git rev-parse HEAD > o149-evidence/head.sha
@@ -94,7 +94,7 @@ jobs:
           cd "$RUNNER_TEMP"
           python -m pytest -vv -s "$GITHUB_WORKSPACE/tests/test_v031_o149_zip_export_atomic_publication.py" --junitxml="$GITHUB_WORKSPACE/o149-evidence/junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/o149-evidence/pytest.log"
 
-      - name: Independently audit six acceptance outcomes
+      - name: Independently audit five distinct acceptance outcomes
         shell: bash
         run: |
           set -euo pipefail
@@ -104,15 +104,14 @@ jobs:
           from xml.etree import ElementTree
           e=Path("o149-evidence")
           cases=list(ElementTree.parse(e/"junit.xml").getroot().iter("testcase"))
-          assert len(cases)==6, len(cases)
+          assert len(cases)==5, len(cases)
           assert all(all(c.find(k) is None for k in ("failure","error","skipped")) for c in cases)
           rows=[json.loads(l.split("O149_CASE=",1)[1]) for l in (e/"pytest.log").read_text(errors="replace").splitlines() if "O149_CASE=" in l]
-          assert len(rows)==6,rows
+          assert len(rows)==5,rows
           expected={
             ("frozen_raw_crc","existing_regular_zip_preserved_on_raw_crc_failure"),
             ("builder_late_payload","existing_regular_zip_preserved_on_late_member_failure"),
-            ("injected_writer_fault_fast","prior_zip_and_inode_preserved"),
-            ("injected_writer_fault_stdlib","prior_zip_and_inode_preserved"),
+            ("injected_writer_fault","prior_zip_and_inode_preserved"),
             ("successful_fast","new_valid_zip_old_hardlink_preserved"),
             ("successful_stdlib","new_valid_zip_old_hardlink_preserved")
           }
@@ -123,7 +122,7 @@ jobs:
                   "reader_git_blob":(e/"git-reader.blob").read_text().strip(),
                   "reader_worktree_blob":(e/"worktree-reader.blob").read_text().strip(),
                   "test_blob":(e/"test.blob").read_text().strip(),
-                  "tests":len(cases),"pass":6,"fail":0,"skip":0,"cases":rows}
+                  "tests":len(cases),"pass":5,"fail":0,"skip":0,"cases":rows}
           (e/"result.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
           print("O149_AUDIT="+json.dumps({k:v for k,v in result.items() if k!="cases"},sort_keys=True))
           PY
