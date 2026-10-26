@@ -312,12 +312,20 @@ class CMPCT:
             lengths=[int(x[0]) for x in storage[1]];ids=[x[1] for x in storage[1]]
         else:raise ValueError('chunked extraction requires fixed or CDC storage')
 
-        # Fully incompressible chunked files are common in disk images, encrypted data and media. Keep
-        # those bytes mmap-backed all the way into SHA-256 + write(2); compressed/mixed files retain the
-        # parallel decoder because decompression, rather than copying, dominates their hot path.
+        # A borrowed mmap view is not a stable hash/write ownership unit: a concurrent writer
+        # to the archive inode could change its bytes after SHA-256 saw them but before write(2).
+        # Detach ONE RAW chunk at a time so the same immutable bytes are hashed and written. This
+        # spends a bounded copy to preserve extraction authenticity under mutable-source races.
+        # Compressed/mixed files retain the ordinary parallel decoder.
         raw_direct=bool(ids) and all(self.blobs[idx][3]==CODEC_RAW for idx in ids)
         if raw_direct:
-            decoded=(self._raw_blob_view_for_extract(idx) for idx in ids)
+            def owned_raw_chunks():
+                for idx in ids:
+                    borrowed=self._raw_blob_view_for_extract(idx)
+                    try:chunk=bytes(borrowed)
+                    finally:borrowed.release()
+                    yield chunk
+            decoded=owned_raw_chunks()
         elif len(ids)>=4:
             if self._executor is None:self._executor=concurrent.futures.ThreadPoolExecutor(max_workers=min(8,os.cpu_count() or 4))
             decoded=self._executor.map(self._blob,ids)
@@ -345,7 +353,9 @@ class CMPCT:
                         try:view.release()
                         except ValueError:pass
                 finally:
-                    if raw_direct and isinstance(b,memoryview):b.release()
+                    # Defensively release a view from any future decoded iterator; RAW snapshots
+                    # are owned bytes and no longer carry borrowed source lifetime past hashing.
+                    if isinstance(b,memoryview):b.release()
             if written!=size or h is None or digest.digest()!=bytes(h):
                 raise IOError(f'file integrity failure: {rel}')
             os.close(fd);fd=-1
