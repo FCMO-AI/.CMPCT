@@ -1,0 +1,147 @@
+# ci-lane: fast
+# O149 positive product repair court; the immutable O143 defect witness stays in PR #489.
+name: CMPCT O149 ZIP failure-atomic publication acceptance
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-o149-zip-staged-publication-20261026
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_v031_o149_zip_export_atomic_publication.py'
+      - '.github/workflows/v031-o149-zip-staged-publication.yml'
+      - 'docs/v031-research/2026-10-26-o149-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o149-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  positive-source-exact:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact tested head, including authentic history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Verify original preregistered parent and exact Git objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor d8b69758dbcbb66fe28fa7cf59598916df160d2d HEAD
+          git merge-base --is-ancestor b915aef7456b555987247cbe0cca250d80cf99e0 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
+          test "$(git rev-parse HEAD:tests/test_v031_o149_zip_export_atomic_publication.py)" = d394c1dd66eb229f5b24ccbd3713825f5e95cd89
+          test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
+          mkdir -p o149-evidence
+          git rev-parse HEAD > o149-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o149-evidence/git-reader.blob
+          git hash-object src/cmpct/reader.py > o149-evidence/worktree-reader.blob
+          git rev-parse HEAD:tests/test_v031_o149_zip_export_atomic_publication.py > o149-evidence/test.blob
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install authentic candidate outside repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/o149-installed" "$GITHUB_WORKSPACE"
+          echo "PYTHONPATH=$RUNNER_TEMP/o149-installed" >> "$GITHUB_ENV"
+          echo "CMPCT_FIXTURE_JSON=$GITHUB_WORKSPACE/tests/conformance/v24-direct-codecs.json" >> "$GITHUB_ENV"
+          echo "O140_PRODUCT_SRC=$RUNNER_TEMP/o149-installed" >> "$GITHUB_ENV"
+          echo "O140_ENGINE=candidate" >> "$GITHUB_ENV"
+
+      - name: Verify installed Reader identity outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import os,pathlib,cmpct.reader
+          actual=pathlib.Path(cmpct.reader.__file__).resolve()
+          workspace=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          assert not actual.is_relative_to(workspace), (actual,workspace)
+          assert actual.read_bytes(), actual
+          print("O149_INSTALLED_READER="+str(actual),flush=True)
+          PY
+
+      - name: Run isolated installed positive repair court (no unrelated conftest)
+        shell: bash
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -c /dev/null -vv -s "$GITHUB_WORKSPACE/tests/test_v031_o149_zip_export_atomic_publication.py" --junitxml="$GITHUB_WORKSPACE/o149-evidence/junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/o149-evidence/pytest.log"
+
+      - name: Independently audit five distinct acceptance outcomes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from xml.etree import ElementTree
+          e=Path("o149-evidence")
+          cases=list(ElementTree.parse(e/"junit.xml").getroot().iter("testcase"))
+          assert len(cases)==5, len(cases)
+          assert all(all(c.find(k) is None for k in ("failure","error","skipped")) for c in cases)
+          rows=[json.loads(l.split("O149_CASE=",1)[1]) for l in (e/"pytest.log").read_text(errors="replace").splitlines() if "O149_CASE=" in l]
+          assert len(rows)==5,rows
+          expected={
+            ("frozen_raw_crc","existing_regular_zip_preserved_on_raw_crc_failure"),
+            ("builder_late_payload","existing_regular_zip_preserved_on_late_member_failure"),
+            ("injected_writer_fault","prior_zip_and_inode_preserved"),
+            ("successful_fast","new_valid_zip_old_hardlink_preserved"),
+            ("successful_stdlib","new_valid_zip_old_hardlink_preserved")
+          }
+          assert {(r["case"],r["result"]) for r in rows}==expected,rows
+          assert all("target_before_sha" in r and "target_after_sha" in r for r in rows)
+          result={"scope":"O149 positive installed-product acceptance; not original O143 negative",
+                  "source_head":(e/"head.sha").read_text().strip(),
+                  "reader_git_blob":(e/"git-reader.blob").read_text().strip(),
+                  "reader_worktree_blob":(e/"worktree-reader.blob").read_text().strip(),
+                  "test_blob":(e/"test.blob").read_text().strip(),
+                  "tests":len(cases),"pass":5,"fail":0,"skip":0,"cases":rows}
+          (e/"result.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
+          print("O149_AUDIT="+json.dumps({k:v for k,v in result.items() if k!="cases"},sort_keys=True))
+          PY
+
+      - name: Preserve inherited static ZIP destination admission on POSIX
+        if: matrix.os != 'windows-2022'
+        shell: bash
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -c /dev/null -vv -s \
+            "$GITHUB_WORKSPACE/tests/test_v031_o140_zip_export_nonregular.py" \
+            --junitxml="$GITHUB_WORKSPACE/o149-evidence/inherited-o140-junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/o149-evidence/inherited-o140.log"
+
+      - name: Preserve raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o149-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o149-evidence/
+          retention-days: 30
+          if-no-files-found: warn

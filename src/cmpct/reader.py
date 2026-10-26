@@ -3,7 +3,7 @@ from __future__ import annotations
 # Footnote: this module contains the compatibility contract that matters most. Refactors must not
 # silently drop recovery, range-read, path-safety, transactional-generation, or metadata semantics.
 
-import base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, mmap, os, shutil, stat, struct, sys, tempfile, threading, time, zipfile, zlib
+import base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, mmap, os, shutil, secrets, stat, struct, sys, tempfile, threading, time, zipfile, zlib
 from pathlib import Path
 import msgpack
 
@@ -582,6 +582,51 @@ class CMPCT:
         return False
 
     def export_zip(self,out:Path,level=6):
+        """Publish a complete ZIP or leave the prior destination untouched on failure.
+
+        The requested output is admitted before staging, so exporting onto the still-open
+        CMPCT source or onto a special destination fails *before* any ZIP is created.
+        A sibling private file receives the existing ZIP writer's exact output; only a
+        successful close permits name replacement. This protects against ordinary
+        decode/write failures, not hostile concurrent pathname swaps or power loss.
+
+        Footnote: successful replacement creates a new inode (and detaches hardlinks);
+        that cost is explicit and cannot be silently treated as in-place preservation.
+        """
+        out=Path(out)
+        source_stat=os.fstat(self.f.fileno())
+        try: target_stat=os.stat(out)
+        except FileNotFoundError: target_stat=None
+        if target_stat is not None and (source_stat.st_dev,source_stat.st_ino)==(target_stat.st_dev,target_stat.st_ino):
+            raise IOError('ZIP export destination aliases its own CMPCT source archive')
+        if target_stat is not None and not stat.S_ISREG(target_stat.st_mode):
+            raise IOError('ZIP export destination is nonregular')
+
+        # O_EXCL prevents following a pre-planted candidate symlink; normal 0666
+        # creation honors the caller's umask, unlike mkstemp's fixed 0600 mode.
+        stage=None
+        for _ in range(8):
+            candidate=out.with_name(f'.{out.name}.cmpct-zip-{secrets.token_hex(16)}.tmp')
+            try:
+                fd=os.open(candidate,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o666)
+            except FileExistsError:
+                continue
+            os.close(fd);stage=candidate;break
+        if stage is None:raise FileExistsError('unable to allocate private ZIP export staging file')
+        try:
+            self._export_zip_direct_unpublished(stage,level)
+            # Keep an existing regular destination's basic permissions where
+            # possible. Owner, xattrs, inode and hardlink identity do not survive
+            # replacement and remain explicit promotion/compatibility debt.
+            if target_stat is not None:
+                os.chmod(stage,stat.S_IMODE(target_stat.st_mode))
+            os.replace(stage,out)
+        finally:
+            try:os.unlink(stage)
+            except FileNotFoundError:pass
+        return out
+
+    def _export_zip_direct_unpublished(self,out:Path,level=6):
         """Export a conventional Deflate ZIP while reusing CMPCT's existing compressed streams.
 
         Footnote: Python's ZipFile API necessarily inflates and re-Deflates every member. CMPCT can
