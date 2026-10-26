@@ -131,7 +131,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pytest -q tests/test_v031_destination_hardlink_leaf_alias.py --junitxml=o132-inherited/parent-junit.xml 2>&1 | tee o132-inherited/parent.log
+          # Preserve exact source/test SHA, but isolate from unrelated tests/conftest.py,
+          # matching the original #472/#479 inherited-court execution environment.
+          cp tests/test_v031_destination_hardlink_leaf_alias.py o132-inherited/test_v031_destination_hardlink_leaf_alias.py
+          cmp -s tests/test_v031_destination_hardlink_leaf_alias.py o132-inherited/test_v031_destination_hardlink_leaf_alias.py
+          python -m pytest -q o132-inherited/test_v031_destination_hardlink_leaf_alias.py --junitxml=o132-inherited/parent-junit.xml 2>&1 | tee o132-inherited/parent.log
       - name: Preserve original parent evidence even if red
         if: always()
         uses: actions/upload-artifact@v4
