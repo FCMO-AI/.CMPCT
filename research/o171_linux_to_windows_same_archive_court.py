@@ -88,6 +88,20 @@ def host_capability_probe(workspace: Path) -> dict:
         result["directory_symlink_error"] = (
             f"{type(error).__name__}: winerror={getattr(error, 'winerror', None)} errno={error.errno}"
         )
+    # A second independent host oracle copies the exact Reader API call:
+    # os.symlink(relative_directory, leaf), omitting target_is_directory.
+    # This distinguishes an OS privilege restriction from a link-kind bug.
+    implicit = workspace / "probe-dir-default-sym"
+    try:
+        os.symlink("probe-directory", implicit)
+        result["default_directory_symlink_is_directory"] = implicit.is_dir()
+        result["default_directory_symlink_raw_target"] = os.readlink(implicit)
+        result["default_directory_symlink_is_link"] = implicit.is_symlink()
+    except OSError as error:
+        result["default_directory_symlink_is_directory"] = False
+        result["default_directory_symlink_error"] = (
+            f"{type(error).__name__}: winerror={getattr(error, 'winerror', None)} errno={error.errno}"
+        )
     return result
 
 
