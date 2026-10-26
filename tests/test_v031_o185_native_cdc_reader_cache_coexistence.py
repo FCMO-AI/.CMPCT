@@ -61,7 +61,7 @@ def test_authentic_cdc_native_cuts_and_bounded_reader_reconstruct_same_r24_tree(
     assert 1 < n <= cap
     cut_ends = [int(ends[i]) for i in range(n)]
     assert cut_ends[-1] == len(data)
-    assert all(0 < prev < end <= len(data)
+    assert all(0 <= prev < end <= len(data)
                for prev, end in zip([0] + cut_ends[:-1], cut_ends))
     native_lengths = tuple(end - prev for prev, end in
                            zip([0] + cut_ends[:-1], cut_ends))
