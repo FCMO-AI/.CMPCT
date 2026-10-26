@@ -13,6 +13,11 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded push/PR runs; result-bearing exact-head artifacts remain preserved.
+concurrency:
+  group: o204-audio-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   minimal-audio:
     name: Declared-runtime WAV fallback (${{ matrix.os }})
