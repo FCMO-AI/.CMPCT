@@ -125,6 +125,9 @@ def run():
     from cmpct.codec import S_SPARSE
     import cmpct.reader as reader_module
 
+    def timed_out(signum, frame):
+        raise TimeoutError("O195 16-minute process budget exceeded")
+    signal.signal(signal.SIGALRM, timed_out)
     signal.alarm(16 * 60)  # Host experiment limit, independent of job timeout.
     # Prevent a future accidental whole-member materialization from OOM-killing
     # the hosted runner. One static process cap is not a measured RSS claim.
@@ -272,6 +275,8 @@ def run():
             def export_arm(kind, ordinal):
                 counter = {"calls":0, "logical_requested_bytes":0,
                            "max_requested":0, "range_wall_ns":0}
+                index_visits_before = index_operations["candidate_extent_visits"]
+                bisects_before = index_operations["bisect_calls"]
                 delegated = original_read_range if kind == "linear" else index_range
                 def tracked(name, offset, length):
                     assert name == "sparse.bin"
@@ -301,7 +306,8 @@ def run():
                     "zip_stored_bytes":dest.stat().st_size,
                     "zip_sha256":sha_file(dest),
                     "model_original_extent_visits":len(extents)*counter["calls"],
-                    "current_index_candidate_visits":index_operations["candidate_extent_visits"],
+                    "indexed_candidate_extent_visits_this_arm":index_operations["candidate_extent_visits"]-index_visits_before,
+                    "indexed_bisect_calls_this_arm":index_operations["bisect_calls"]-bisects_before,
                     "process_peak_rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
                 }
                 assert counter["calls"] == math.ceil(TOTAL/MIB), counter
