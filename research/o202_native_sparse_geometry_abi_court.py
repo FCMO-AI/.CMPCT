@@ -188,10 +188,16 @@ def main() -> int:
     native_rejects=all(
         x["native"]["open_status"]==-3 and not x["native"]["handle_nonnull"]
         for x in bad)
-    strict_rejects=all(
-        not x["preflight"]["ok"]
-        and "length mismatch" in x["preflight"].get("error","")
-        for x in bad)
+    strict_rejects=(
+        all(
+            not x["preflight"]["ok"]
+            and x["preflight"].get("error_type")=="ValidationError"
+            and "length mismatch" in x["preflight"].get("error","")
+            for x in bad[:2])
+        and not bad[2]["preflight"]["ok"]
+        and bad[2]["preflight"].get("error_type")=="ValidationError"
+        and "overlaps or exceeds file" in bad[2]["preflight"].get("error","")
+    )
     orig_missing_version=all(
         not x["preflight"]["ok"]
         and "index revision" in x["preflight"].get("error","")
