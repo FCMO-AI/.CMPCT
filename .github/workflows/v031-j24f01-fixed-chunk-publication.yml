@@ -1,0 +1,121 @@
+# ci-lane: fast
+# J24F01: Builder-independent frozen r24 chunk-map publication / corruption court.
+name: CMPCT v0.31 J24F01 fixed chunk publication court
+
+on:
+  push:
+    branches: ['agent/phased2-v031-j24f01-fixed-chunk-publication-20261026']
+  pull_request:
+    paths:
+      - '.github/workflows/v031-j24f01-fixed-chunk-publication.yml'
+      - 'tests/test_v031_j24f01_fixed_chunk_publication.py'
+      - 'tests/conformance/v24-chunk-maps.json'
+      - 'docs/v031-research/2026-10-26-j24f01-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24f01-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frozen-chunk-publication:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_GOLDEN_PATH: tests/conformance/v24-chunk-maps.json
+    steps:
+      - name: Checkout exact source and independent frozen vector
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify Git identities and install CMPCT independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_HEAD"
+          git merge-base --is-ancestor 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b HEAD
+          git merge-base --is-ancestor ad8b84e8659778e20d500f91b5b825e7e4db051a HEAD
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git hash-object tests/conformance/v24-chunk-maps.json)" = "91141405bb10b2e1226b0652e3aa0a13ba41846c"
+          mkdir -p j24f01-evidence
+          git rev-parse HEAD > j24f01-evidence/head.sha
+          git hash-object src/cmpct/reader.py > j24f01-evidence/reader.blob
+          git hash-object tests/conformance/v24-chunk-maps.json > j24f01-evidence/vector.blob
+          git hash-object tests/test_v031_j24f01_fixed_chunk_publication.py > j24f01-evidence/test.blob
+          python -m pip install --disable-pip-version-check . pytest
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import cmpct.reader
+          root=Path(subprocess.check_output(["git","rev-parse","--show-toplevel"],text=True).strip()).resolve()
+          module=Path(cmpct.reader.__file__).resolve()
+          assert not module.is_relative_to(root),(module,root)
+          print("J24F01_INSTALLED_READER="+str(module),flush=True)
+          PY
+      - name: Run frozen independent archive plus adversarial destination court
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_v031_j24f01_fixed_chunk_publication.py j24f01-evidence/
+          python -m pytest -vv -s j24f01-evidence/test_v031_j24f01_fixed_chunk_publication.py --junitxml=j24f01-evidence/junit.xml 2>&1 | tee j24f01-evidence/court.log
+      - name: Audit original source binding and complete fourteen-case matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from xml.etree import ElementTree
+          cases=list(ElementTree.parse("j24f01-evidence/junit.xml").getroot().iter("testcase"))
+          assert len(cases)==14,("expected fourteen nonoptional tests",len(cases))
+          errors={k:sum(c.find(k) is not None for c in cases) for k in ("failure","error","skipped")}
+          assert errors=={"failure":0,"error":0,"skipped":0},errors
+          log=Path("j24f01-evidence/court.log").read_text()
+          rows=[json.loads(line.split("J24F01_CASE=",1)[1]) for line in log.splitlines() if "J24F01_CASE=" in line]
+          assert len(rows)==14,len(rows)
+          modes=("fixed.bin","cdc.bin")
+          leaves=("fresh","regular","fifo","symlink_fifo","symlink_regular","hardlink_regular","corrupt")
+          assert {(r["mode"],r["leaf"]) for r in rows}=={(m,l) for m in modes for l in leaves}
+          for m in modes:
+              group=[r for r in rows if r["mode"]==m]
+              assert len({r["archive_sha"] for r in group})==1,m
+              assert len({r["logical_sha"] for r in group})==1,m
+              for r in group:
+                  assert r["child"]=="exit" and r["deadline"]==7,r
+                  if r["leaf"]=="corrupt":
+                      assert r["result"]=="corrupt_refused_without_publication" and r["exit_code"]!=0,r
+                  else:
+                      assert r["result"]=="exact_atomic_leaf_replace" and r["exit_code"]==0,r
+          manifest={
+              "source_sha":Path("j24f01-evidence/head.sha").read_text().strip(),
+              "reader_blob":Path("j24f01-evidence/reader.blob").read_text().strip(),
+              "vector_blob":Path("j24f01-evidence/vector.blob").read_text().strip(),
+              "test_blob":Path("j24f01-evidence/test.blob").read_text().strip(),
+              "cases":14,"pass":14,"skip":0,"fail":0,"hosted_scope":"POSIX installed frozen independent vectors",
+              "corrupt_refusals":2,"observations":rows
+          }
+          Path("j24f01-evidence/result.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n")
+          print("J24F01_AUDIT="+json.dumps({k:v for k,v in manifest.items() if k!="observations"},sort_keys=True))
+          PY
+      - name: Retain source-bound raw evidence, including any failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-j24f01-${{ matrix.os }}-${{ env.SOURCE_HEAD }}
+          path: j24f01-evidence/
+          retention-days: 30
+          if-no-files-found: warn
