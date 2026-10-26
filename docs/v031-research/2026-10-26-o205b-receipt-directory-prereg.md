@@ -1,0 +1,9 @@
+# O205b prospective instrument repair — 2026-10-26
+
+**Observed failure before any admission measurement:** GitHub Actions run [40398297741](https://github.com/FCMO-AI/.CMPCT/actions/runs/40398297741) passed exact-HEAD checkout and package installation, but the instrument exited at source-custody assertion `git status --porcelain == ""`. The workflow had intentionally created `o205-evidence/` as an untracked receipt directory before calling the instrument. This was a **scientific harness failure**, not sparse product failure or rejected admission economics. Preserve the raw failed run and its artifact 12688050989.
+
+**Prospective correction:** Retain exact `git rev-parse HEAD == EVIDENCE_HEAD`, installed-reader byte equality, independent installed location, and the workflow's `git diff --exit-code <base> HEAD -- src/ native/ tests/ benchmarks/` assertion. Replace only the irrelevant global *untracked-file cleanliness* condition with an explicit `git diff --quiet` on tracked source, since writing receipts to `o205-evidence/` is intended. Do not modify Builder, Reader, preflight, sparse geometry oracle, benchmark semantics, thresholds or expected decisions.
+
+**Prediction:** After this infrastructure-only correction, the genuine Builder/high-E setup and admission A/B/C/D experiment can actually execute, or expose a distinct source/fixture failure. A second failed run remains a failure; never infer product credit from it.
+
+**Decision boundary:** Admit new scientific cost evidence only from a result containing the entire raw 8×4 process matrix and verified SHA/identities; the first failed run has zero product/science cost-comparison credit.

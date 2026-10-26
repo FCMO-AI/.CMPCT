@@ -1,0 +1,106 @@
+# ci-lane: fast
+# O205 SCIENCE ONLY. SUCCESS classifies *admission costs*, not a product repair.
+name: CMPCT O205 authentic 4GiB sparse admission cost
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o205-sparse-admission-cost-court-20261026
+  pull_request:
+    branches:
+      - agent/phased3-v031-o193-zip64-streamed-fallback-20261026
+    paths:
+      - 'research/o205_sparse_admission_cost_court.py'
+      - '.github/workflows/v031-o205-sparse-admission-cost.yml'
+      - 'docs/v031-research/2026-10-26-o205-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: o205-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sparse-geometry-admission:
+    name: Source-authenticated genuine high-E admission A/B/C/D
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact scientific HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Source and preregistration before research instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor cf00530b763daef9d7ca252177e06d701b31ddfe HEAD
+          git merge-base --is-ancestor d4d3707f4e82a1f336d0e8356c5c4be6b115bd0a HEAD
+          git merge-base --is-ancestor 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD
+          git diff --exit-code 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD -- src/ native/ tests/ benchmarks/
+          mkdir -p o205-evidence
+          git rev-parse HEAD > o205-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o205-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/validation.py > o205-evidence/validation.blob
+          git rev-parse HEAD:research/o205_sparse_admission_cost_court.py > o205-evidence/court.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o205-sparse-admission-cost-prereg.md > o205-evidence/prereg.blob
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install actual source outside checkout, compile experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile research/o205_sparse_admission_cost_court.py
+      - name: Execute four-way fresh-process admissions on one genuine 4GiB sparse source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o205_sparse_admission_cost_court.py" \
+            --out "$GITHUB_WORKSPACE/o205-evidence/result.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o205-evidence/court.log"
+      - name: Independently check scientific receipt completeness
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('o205-evidence/result.json')
+          data=json.loads(p.read_text())
+          assert data['source_head']==Path('o205-evidence/head.sha').read_text().strip()
+          assert data['source_reader_git_blob']==Path('o205-evidence/reader.blob').read_text().strip()
+          assert data['source_validation_git_blob']==Path('o205-evidence/validation.blob').read_text().strip()
+          assert data['court_git_blob']==Path('o205-evidence/court.blob').read_text().strip()
+          assert data['prereg_git_blob']==Path('o205-evidence/prereg.blob').read_text().strip()
+          assert data['product_source_modified'] is False
+          assert data['archive_bytes']>0 and data['requested_logical_bytes']==4294967296
+          assert data['indexed_sparse_extent_count']>=2048
+          assert data['oracle_rejects_unsorted_control'] is True
+          assert data['oracle_rejects_length_mismatch_control'] is True
+          assert len(data['raw_workers'])==64
+          assert sorted((x['mode'],x['trace_memory']) for x in data['raw_workers']) == sorted([(m,t) for m in 'ABCD' for t in (False,True) for _ in range(8)])
+          assert set(data['traced_summaries'])==set('ABCD')
+          assert all(data['summaries'][m]['median_peak_tracemalloc_bytes'] is None for m in 'ABCD')
+          assert all(data['traced_summaries'][m]['median_peak_tracemalloc_bytes'] is not None for m in 'ABCD')
+          assert data['decision'] in (
+              'FULL_STRICT_PREFLIGHT_CHEAP_ENOUGH_FOR_NEXT_OWNER_INTEGRATION_TEST',
+              'PREFER_STUDYING_SHARED_INDEX_TIME_ADMISSION_OVER_DUPLICATE_PREFLIGHT',
+              'ADMISSION_COST_FORK_AMBIGUOUS')
+          print('O205_RESEARCH_DECISION='+data['decision']+' NO_PRODUCT_PROMOTION')
+          PY
+      - name: Upload authentic costs and errors even if court fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o205-high-e-admission-${{ github.sha }}
+          path: o205-evidence/
+          if-no-files-found: warn
+          retention-days: 14

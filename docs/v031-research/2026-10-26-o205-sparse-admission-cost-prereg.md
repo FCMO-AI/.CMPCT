@@ -1,0 +1,23 @@
+# O205 — sparse admission cost: prospective protocol (2026-10-26)
+
+**Status:** preregistered before instrument and hosted measurement. **Source:** O193 Reader #521 at `392112ce859db5a7f85be593c82d1cabc1f5131f`, released base v0.30.0/r24 unchanged. **Lane:** scientific admission economics only; no Reader patch, no mutation of #521 or #533.
+
+## Decisive question
+O198/#532 and O202/#539 show the ordinary Reader's `S_SPARSE` selective read can disagree with successful complete SHA verification on checksum-consistent malformed extent lengths, while existing `cmpct.validation.preflight_archive` and native Rust open already reject them. Is *existing complete Python preflight* cheap enough on an authentic 4 GiB logical / ~4,096-extent CMPCT archive to justify trying it as the Reader admission primitive, or is a smaller one-pass in-memory geometry check the only plausible low-latency route? This experiment measures **cost**, not a new correctness proof, and does not grant release approval.
+
+## Three contrasted routes (same actual archive; different cost/semantic scope)
+A. Shipping `CMPCT(path)` open+close, no extra preflight (weak unsafe negative baseline on adversarial inputs).
+B. `preflight_archive(path, verify_blob_headers=False)` then shipping open+close (complete logical structure, not physical blob-header cross-check).
+C. `preflight_archive(path, verify_blob_headers=True)` then shipping open+close (existing full strict validation).
+D. Shipping open plus a detached bounded pass over the already-authenticated `S_SPARSE` in-memory metadata validating ordering/non-overlap, logical EOF and sum of referenced uncompressed blob lengths (lower-cost **incomplete oracle** only; not a product-level safety policy). Baseline controls include path/reader identity and exact archive SHA. The D pass cannot claim the same resource/path/framing protection as B/C.
+
+## Prediction / test / disproof
+On Ubuntu 24.04, produce the authentic Builder-selected `S_SPARSE` profile used by O195: 4,294,967,296 logical bytes, 4,096 independent 4 KiB writes at 1 MiB offsets, actual SEEK_DATA/SEEK_HOLE extents and a compressed CMPCT file. Reject test if the Builder does not select `S_SPARSE` or retains <2,048 physical extents. On *one immutable archive*, run at least 6 independent fresh Python worker processes per arm in interleaved A/B/C/D rounds, separately record wall ns, CPU ns, peak process RSS and tracemalloc; do not attribute interpreter startup to library open. Independently ensure all arms saw identical file SHA and original indexed extent count; C/B must pass real `preflight_archive`, D must reject at least one unsorted/inconsistent synthetic metadata control without changing the true archive, and direct Reader range probes must match known sparse markers and holes. Preserve all raw measurements and exact source SHA.
+
+**Decision rule:** If C's incremental median in-process admission wall cost is <=30 ms over A and its fresh-worker RSS overhead is <=16 MiB for this profile, full preflight remains a plausible simplest strong owner to evaluate next; if C is materially costlier while D is <=5 ms, route attention to a shared *index-time* validation invariant rather than duplicating expensive whole-archive parsing. Any contradiction, OS resource discrepancy, damaged archive or unstable timing => AMBIGUOUS; no promotion. Thresholds here prioritize a next engineering test, **not** release/evaluator gates.
+
+## Controls / alternatives / carrying cost
+Existing O202 native Rust and strict Python rejection is the positive semantic control; do not rerun malformed micro-fixtures to claim another discovery. O195 authentic 4 GiB ZIP64 is the production-scale positive sparse geometry reference. This experiment does not benchmark 4 GiB extraction, recovery scans at large transaction depth, cold disk cache, malicious giant index decompression, concurrent modification, full-product open budgets, or Windows/macOS. D's Python-loop CPU is a mechanism lower bound and cannot substitute for B/C's parser-hardening. If all routes cost little, the strong existing validator wins the simplicity comparison.
+
+## Concurrency, quality and decision
+Read current #521/#533 and discovery law before writes. No product source modifications, no evaluator or benchmark changes, no policy mutations or release. Persist genuine result artifacts in a dedicated workflow, link the actual provider/run/head, notify existing Reader owner on a genuinely decision-changing result. Do not create an independent shipping Reader implementation.
