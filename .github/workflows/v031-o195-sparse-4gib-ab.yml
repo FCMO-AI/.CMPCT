@@ -1,0 +1,49 @@
+# ci-lane: fast
+name: v031 O195 authentic 4GiB sparse CMPCT ZIP64 A-B court
+on:
+  pull_request:
+    branches:
+      - agent/phased3-v031-o193-zip64-streamed-fallback-20261026
+    paths:
+      - 'research/o195_authentic_sparse_zip64_ab.py'
+      - '.github/workflows/v031-o195-sparse-4gib-ab.yml'
+      - 'docs/v031-research/2026-10-26-o195-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o195-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  genuine-sparse-zip64:
+    name: Source-authenticated Ubuntu 4 GiB sparse Reader A-B
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact source outside checkout
+        run: python -m pip install .
+      - name: Genuine 4 GiB sparse Builder + installed Reader ZIP64 A-B
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o195_authentic_sparse_zip64_ab.py" --out "$RUNNER_TEMP/o195-result.json"
+      - name: Retain failure or success receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o195-authentic-sparse-ab-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/o195-result.json
+          if-no-files-found: warn
