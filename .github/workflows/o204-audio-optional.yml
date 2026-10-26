@@ -1,0 +1,53 @@
+name: O204 source-exact optional WAV dependencies
+on:
+  push:
+    branches:
+      - agent/phased2-v031-o204-audio-optional-hosted-20261026
+  pull_request:
+    paths:
+      - 'research/o204_audio_optional_court.py'
+      - '.github/workflows/o204-audio-optional.yml'
+      - 'docs/v031-research/2026-10-26-o204-audio-optional-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  minimal-audio:
+    name: Declared-runtime WAV fallback (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - name: Checkout exact PR head, not synthetic merge
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install only the shipping mandatory dependency and execute the genuine CLI
+        shell: bash
+        run: |
+          python -m venv .o204-venv
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            PY=.o204-venv/Scripts/python.exe
+          else
+            PY=.o204-venv/bin/python
+          fi
+          "$PY" -m pip install --disable-pip-version-check --no-input 'msgpack>=1.0'
+          "$PY" research/o204_audio_optional_court.py --result "$RUNNER_TEMP/o204-result.json"
+      - name: Preserve exact source identities and per-case observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o204-minimal-audio-${{ matrix.os }}
+          path: ${{ runner.temp }}/o204-result.json
+          if-no-files-found: warn
+          retention-days: 30
