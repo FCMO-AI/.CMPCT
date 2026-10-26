@@ -47,6 +47,30 @@ def test_authentic_cdc_native_cuts_and_bounded_reader_reconstruct_same_r24_tree(
     data = b"".join(hashlib.sha256(i.to_bytes(4, "little")).digest() for i in range(70000))
     assert len(data) > codec.CDC_MAX
     assert len(data) > 4 * codec.CHUNK
+
+    # Confirm the compiled native routine actually owns these boundaries.
+    # A generic "more than one chunk" assertion would also pass if the
+    # production wrapper silently fell back to fixed-size CHUNK slices.
+    cap = max(4, len(data) // max(1, codec.CDC_MIN) + 4)
+    ends = (ctypes.c_uint64 * cap)()
+    native_buf = ctypes.create_string_buffer(data)
+    n = int(native.cmpct_cdc_cut(
+        native_buf, len(data), codec.CDC_MIN, codec.CDC_AVG, codec.CDC_MAX,
+        ends, cap,
+    ))
+    assert 1 < n <= cap
+    cut_ends = [int(ends[i]) for i in range(n)]
+    assert cut_ends[-1] == len(data)
+    assert all(0 < prev < end <= len(data)
+               for prev, end in zip([0] + cut_ends[:-1], cut_ends))
+    native_lengths = tuple(end - prev for prev, end in
+                           zip([0] + cut_ends[:-1], cut_ends))
+    fixed_lengths = tuple(
+        min(codec.CHUNK, len(data) - start)
+        for start in range(0, len(data), codec.CHUNK)
+    )
+    assert native_lengths != fixed_lengths, "native CDC must differ from fixed fallback"
+
     root = tmp_path / "input"
     root.mkdir()
     (root / "payload.bin").write_bytes(data)
@@ -66,7 +90,10 @@ def test_authentic_cdc_native_cuts_and_bounded_reader_reconstruct_same_r24_tree(
     builder.Builder(root, workers=1).build(archive)
 
     # This assertion prevents a green test bought by silently skipping CDC.
-    assert calls and any(input_size == len(data) and len(parts) > 1 for input_size, parts in calls)
+    assert calls and any(
+        input_size == len(data) and part_lengths == native_lengths
+        for input_size, part_lengths in calls
+    ), "Builder must use the exact cuts from the compiled native function"
     with reader.CMPCT(archive) as got:
         assert got.by["payload.bin"][6][0] == reader.S_CDC
         assert got.verify() == 2
