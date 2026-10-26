@@ -48,6 +48,7 @@ jobs:
           test "$(git rev-parse --is-shallow-repository)" = false
           git merge-base --is-ancestor ca01d885fedc8ffc343b9c3c624eddd134158452 HEAD
           git merge-base --is-ancestor 961741a0f7b253591861d0865f92a74c2be10f97 HEAD
+          git merge-base --is-ancestor b6f6be5df9e344879e6ed6bf7cf83869f0797918 HEAD
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
           test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
           mkdir -p o157-evidence
@@ -120,11 +121,11 @@ jobs:
           import json
           out=Path('o157-evidence')
           tests=list(E.parse(out/'junit.xml').getroot().iter('testcase'))
-          assert len(tests)==2,len(tests)
+          assert len(tests)==3,len(tests)
           assert all(all(t.find(n) is None for n in ('failure','error','skipped')) for t in tests)
           rows=[json.loads(s.split('O157_CASE=',1)[1]) for s in (out/'pytest.log').read_text(errors='replace').splitlines() if 'O157_CASE=' in s]
-          assert len(rows)==2,rows
-          assert {r['case'] for r in rows}=={'unpivoted','post_close_symlink_pivot'},rows
+          assert len(rows)==3,rows
+          assert {r['case'] for r in rows}=={'unpivoted','post_close_symlink_pivot','post_close_hardlink_pivot'},rows
           normal=next(r for r in rows if r['case']=='unpivoted')
           pivot=next(r for r in rows if r['case']=='post_close_symlink_pivot')
           assert normal['result']=='exact_zip_and_victim_preserved'
@@ -133,6 +134,14 @@ jobs:
           assert pivot['victim_before_sha']!=pivot['victim_after_sha']
           assert pivot['target_is_symlink']
           assert pivot['archive_sha']==normal['archive_sha']
+          hardlink=next(r for r in rows if r['case']=='post_close_hardlink_pivot')
+          assert hardlink['result']=='unrelated_regular_hardlink_victim_modified_by_exporter'
+          assert hardlink['victim_before_sha']!=hardlink['victim_after_sha']
+          assert hardlink['victim_after_sha']==pivot['victim_after_sha']
+          assert hardlink['victim_after_bytes']==176
+          assert hardlink['target_is_symlink'] is False
+          assert hardlink['target_aliases_victim'] is True
+          assert hardlink['archive_sha']==normal['archive_sha']
           receipt={'scope':'O157 negative research, not product repair', 'head':(out/'head.sha').read_text().strip(),
                    'product_head':(out/'product-head.sha').read_text().strip(),
                    'reader_blob':(out/'product-reader.blob').read_text().strip(),
