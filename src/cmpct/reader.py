@@ -555,7 +555,21 @@ class CMPCT:
                 zi.file_size=size
                 # Prefer the authenticated per-entry SHA; consulting file_sha256 on
                 # a packed member would needlessly materialize it via read().
-                expected=bytes(h) if h is not None else self.file_sha256(rel)
+                # Source hardlinks do not carry an independent row SHA. Resolve their
+                # canonical content owner without asking file_sha256 to read() a PACK
+                # member in one piece. Physical PACK blobs are independently
+                # authenticated before a bounded slice is returned by read_range.
+                source_row=self.by[rel]
+                while source_row[1]==K_HARDLINK:
+                    source_row=self.by[source_row[6][0]]
+                if source_row[5] is not None:
+                    expected=bytes(source_row[5])
+                elif source_row[6][0]==S_PACK:
+                    if size>1<<20:
+                        raise IOError(f'ZIP packed-member authentication budget: {rel}')
+                    expected=hashlib.sha256(self.read_range(rel,0,size)).digest()
+                else:
+                    expected=self.file_sha256(rel)
                 observed=hashlib.sha256()
                 written=0
                 with z.open(zi,'w',force_zip64=(size>=0xffffffff)) as member:
