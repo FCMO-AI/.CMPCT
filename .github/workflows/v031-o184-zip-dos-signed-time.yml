@@ -1,0 +1,87 @@
+# ci-lane: fast
+name: v031 O184 signed mtime ZIP export same archive
+on:
+  pull_request:
+    branches:
+      - agent/v031-development
+    paths:
+      - 'research/o184_zip_dos_signed_mtime_court.py'
+      - 'docs/v031-research/2026-10-26-o184-zip-dos-time-*.md'
+      - '.github/workflows/v031-o184-zip-dos-signed-time.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-producer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install real CMPCT wheel
+        run: python -m pip install .
+      - name: Build independent signed-r24 original and ordinary control
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/o184"
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o184_zip_dos_signed_mtime_court.py" --role producer --directory "$RUNNER_TEMP/o184" --out "$RUNNER_TEMP/o184/linux-producer-result.json"
+      - name: Preserve original archive bytes plus raw source receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o184-authentic-linux-signed-archives
+          path: ${{ runner.temp }}/o184/
+          if-no-files-found: warn
+
+  three-host-consumers:
+    needs: linux-producer
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install real CMPCT distribution independently
+        run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          name: o184-authentic-linux-signed-archives
+          path: ${{ runner.temp }}/o184
+      - name: Compare exactly identical source archives and actual ZIP output
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o184_zip_dos_signed_mtime_court.py" --role consumer --directory "$RUNNER_TEMP/o184" --out "$RUNNER_TEMP/o184/consumer-result.json"
+      - name: Upload unmodified input and structured verdict on all outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o184-result-${{ matrix.os }}
+          path: ${{ runner.temp }}/o184/
+          if-no-files-found: warn
