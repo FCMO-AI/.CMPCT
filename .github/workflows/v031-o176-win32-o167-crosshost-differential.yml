@@ -1,0 +1,108 @@
+# ci-lane: fast
+name: v031 O176 exact Linux archive / Win32 historical-vs-O167 differential
+
+on:
+  pull_request:
+    branches:
+      - agent/phased3-v031-o171-linux-windows-one-archive-falsifier-20261026
+    paths:
+      - 'research/o176_win32_o167_crosshost_differential.py'
+      - 'docs/v031-research/2026-10-26-o176-win32-o167-crosshost-*.md'
+      - '.github/workflows/v031-o176-win32-o167-crosshost-differential.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-linux-producer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact producer source
+        run: python -m pip install .
+      - name: Build one original archive; keep O165 controls unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse HEAD:research/o165_one_archive_cross_host_court.py)" = "2fb9cf5c9ecc072a0e692a64f21b6273f0b28fd6"
+          test "$(git rev-parse HEAD:research/o171_linux_to_windows_same_archive_court.py)" = "8c943128f135607dd36abd083bf1019bc9e4433a"
+          mkdir -p "$RUNNER_TEMP/o176"
+          python research/o165_one_archive_cross_host_court.py \
+            --role producer \
+            --archive "$RUNNER_TEMP/o176/origin.cmpct" \
+            --receipt "$RUNNER_TEMP/o176/producer.json" \
+            --output "$RUNNER_TEMP/o176/producer-result.json"
+      - name: Preserve raw Linux archive, receipt, and negative evidence if produced
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o176-original-linux-r24
+          path: ${{ runner.temp }}/o176/
+          if-no-files-found: warn
+
+  native-win32-differential:
+    needs: original-linux-producer
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install historical O171-derived source as a noneditable wheel
+        run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          name: o176-original-linux-r24
+          path: ${{ runner.temp }}/o176/
+      - name: Prove genuine O171 same-archive negative on Windows
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -ne $env:EVIDENCE_HEAD) { throw 'source checkout mismatch' }
+          python research/o176_win32_o167_crosshost_differential.py --phase baseline --archive "$env:RUNNER_TEMP\o176\origin.cmpct" --receipt "$env:RUNNER_TEMP\o176\producer.json" --output "$env:RUNNER_TEMP\o176\baseline-result.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Checkout PINNED existing O167 owner, without modifying its branch
+        uses: actions/checkout@v4
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 841c32d435494f6e4d83c44cd00a1a2f8f7ab148
+          path: o167-source
+          fetch-depth: 1
+      - name: Install source-exact independent O167 candidate
+        shell: pwsh
+        run: |
+          if ((git -C o167-source rev-parse HEAD).Trim() -ne '841c32d435494f6e4d83c44cd00a1a2f8f7ab148') { throw 'donor checkout mismatch' }
+          python -m pip install --force-reinstall --no-deps .\o167-source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run UNMODIFIED original O171 physical court using installed O167 wheel
+        shell: pwsh
+        run: |
+          python research/o176_win32_o167_crosshost_differential.py --phase candidate --archive "$env:RUNNER_TEMP\o176\origin.cmpct" --receipt "$env:RUNNER_TEMP\o176\producer.json" --donor-checkout "$env:GITHUB_WORKSPACE\o167-source" --baseline-result "$env:RUNNER_TEMP\o176\baseline-result.json" --o171-result "$env:RUNNER_TEMP\o176\o171-unmodified-court.json" --output "$env:RUNNER_TEMP\o176\candidate-result.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve BOTH Windows controls and source identity even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o176-native-windows-differential
+          path: ${{ runner.temp }}/o176/*.json
+          if-no-files-found: warn
