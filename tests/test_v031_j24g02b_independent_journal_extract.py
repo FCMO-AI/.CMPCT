@@ -62,7 +62,9 @@ def test_independent_signed_journal_extractall_exact_physical_tree(
         assert sorted(reader.by) == sorted(expected)
         reader.extractall(output, metadata=False, max_bytes=1024 * 1024)
 
-    actual = sorted(p.relative_to(output).as_posix() for p in output.rglob("*") if p.is_file())
+    # Count every filesystem entry, not just regular files: an unexpected
+    # empty directory or link is also an incorrect committed logical tree.
+    actual = sorted(p.relative_to(output).as_posix() for p in output.rglob("*"))
     assert actual == sorted(expected)
     for name, receipt in expected.items():
         target = output / name
