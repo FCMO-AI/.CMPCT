@@ -66,6 +66,17 @@ def reader_class(source: Path, is_candidate: bool):
     return module.CMPCT
 
 
+def linux_current_resident_bytes():
+    """Secondary /proc sample; never substitute for process high-water RSS."""
+    if sys.platform != "linux":
+        return None
+    try:
+        pages = int(Path("/proc/self/statm").read_text().split()[1])
+        return pages * os.sysconf("SC_PAGE_SIZE")
+    except (OSError, ValueError, IndexError):
+        return None
+
+
 def worker(args) -> int:
     source = Path(args.base_reader)
     source_identity_check(source, BASE_READER_BLOB)
@@ -74,10 +85,17 @@ def worker(args) -> int:
     dest = Path(args.destination)
     dest.mkdir(parents=True, exist_ok=False)
 
-    observations = dict(calls=0, requested_bytes=0, maximum_write_bytes=0)
+    observations = dict(calls=0, requested_bytes=0, maximum_write_bytes=0,
+                        pre_extract_resident_bytes=None,
+                        first_write_resident_bytes=None,
+                        last_write_resident_bytes=None)
     original_write = os.write
     def observed_write(fd, payload):
         length = len(payload)
+        current = linux_current_resident_bytes()
+        if observations["calls"] == 0:
+            observations["first_write_resident_bytes"] = current
+        observations["last_write_resident_bytes"] = current
         observations["calls"] += 1
         observations["requested_bytes"] += length
         observations["maximum_write_bytes"] = max(observations["maximum_write_bytes"], length)
@@ -87,6 +105,8 @@ def worker(args) -> int:
     # Python syscall wrapper and therefore retain genuine Reader timings.
     if args.trace_writes:
         os.write = observed_write
+    if args.trace_writes:
+        observations["pre_extract_resident_bytes"] = linux_current_resident_bytes()
     start = time.perf_counter_ns()
     cpu0 = time.process_time_ns()
     try:
@@ -121,6 +141,9 @@ def worker(args) -> int:
         trace_writes=args.trace_writes, write_calls=observations["calls"] if args.trace_writes else None,
         write_requested_bytes=observations["requested_bytes"] if args.trace_writes else None,
         max_write_bytes=observations["maximum_write_bytes"] if args.trace_writes else None,
+        pre_extract_resident_bytes=observations["pre_extract_resident_bytes"] if args.trace_writes else None,
+        first_write_resident_bytes=observations["first_write_resident_bytes"] if args.trace_writes else None,
+        last_write_resident_bytes=observations["last_write_resident_bytes"] if args.trace_writes else None,
         source_blob=CHILD_READER_BLOB if args.arm == "window" else BASE_READER_BLOB,
         python=sys.version.split()[0], platform=sys.platform, pid=os.getpid()
     )
@@ -166,6 +189,9 @@ def controller(args) -> int:
                    cwd=ROOT, check=True)
     import cmpct.reader as shipping_reader
     source_identity_check(Path(shipping_reader.__file__), CHILD_READER_BLOB)
+    subprocess.run(["git", "merge-base", "--is-ancestor",
+                    "845a2e835c858fd7986cb455bf801a48e30f7610", "HEAD"],
+                   cwd=ROOT, check=True)
 
     all_cases = []
     with tempfile.TemporaryDirectory(prefix="j24f06-") as temporary:
