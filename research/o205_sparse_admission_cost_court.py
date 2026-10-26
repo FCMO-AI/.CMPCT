@@ -90,7 +90,8 @@ def worker(args):
     assert got_sha == args.archive_sha, "archive changed"
 
     # Peak is process-level RSS. tracemalloc is additional Python-allocation-only evidence.
-    tracemalloc.start()
+    if args.trace_memory:
+        tracemalloc.start()
     start_wall = time.perf_counter_ns()
     start_cpu = time.process_time_ns()
     if args.mode in ("B", "C"):
@@ -111,12 +112,16 @@ def worker(args):
         count = len(row[6][1])
     wall = time.perf_counter_ns() - start_wall
     cpu = time.process_time_ns() - start_cpu
-    _, py_peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
+    if args.trace_memory:
+        _, py_peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+    else:
+        py_peak = None
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     # Linux ru_maxrss is KiB; this court only runs Ubuntu.
     return {
         "mode": args.mode,
+        "trace_memory": args.trace_memory,
         "wall_ns": wall,
         "cpu_ns": cpu,
         "python_tracemalloc_peak_bytes": py_peak,
@@ -243,33 +248,40 @@ def run(args):
             shift = round_idx % 4
             order = MODES[shift:] + MODES[:shift]
             for mode in order:
-                command = [
-                    sys.executable, str(Path(__file__).resolve()), "--worker",
-                    "--mode", mode, "--archive", str(archive), "--archive-sha", record["archive_sha256"]
-                ]
-                p = subprocess.run(command, cwd=base, capture_output=True, text=True, timeout=120)
-                if p.returncode:
-                    raise RuntimeError(f"worker {mode} round {round_idx} failed rc={p.returncode}: {p.stderr[-3000:]}")
-                sample = json.loads(p.stdout.strip().splitlines()[-1])
-                assert sample["mode"] == mode and sample["archive_sha256"] == record["archive_sha256"]
-                assert sample["extents"] == count
-                assert sample["installed_reader_normalized_sha256"] == record["installed_reader_normalized_sha256"]
-                sample["round"] = round_idx
-                record["raw_workers"].append(sample)
+                for trace_memory in (False, True):
+                    command = [
+                        sys.executable, str(Path(__file__).resolve()), "--worker",
+                        "--mode", mode, "--archive", str(archive), "--archive-sha", record["archive_sha256"]
+                    ]
+                    if trace_memory:
+                        command.append("--trace-memory")
+                    p = subprocess.run(command, cwd=base, capture_output=True, text=True, timeout=120)
+                    if p.returncode:
+                        raise RuntimeError(f"worker {mode} trace={trace_memory} round {round_idx} failed rc={p.returncode}: {p.stderr[-3000:]}")
+                    sample = json.loads(p.stdout.strip().splitlines()[-1])
+                    assert sample["mode"] == mode and sample["trace_memory"] is trace_memory
+                    assert sample["archive_sha256"] == record["archive_sha256"]
+                    assert sample["extents"] == count
+                    assert sample["installed_reader_normalized_sha256"] == record["installed_reader_normalized_sha256"]
+                    sample["round"] = round_idx
+                    record["raw_workers"].append(sample)
 
         summaries = {}
+        traced_summaries = {}
         for mode in MODES:
-            xs = [r for r in record["raw_workers"] if r["mode"] == mode]
-            assert len(xs) == ROUNDS
-            summaries[mode] = {
-                "median_wall_ms": statistics.median(r["wall_ns"] for r in xs) / 1e6,
-                "median_cpu_ms": statistics.median(r["cpu_ns"] for r in xs) / 1e6,
-                "median_peak_rss_kib": statistics.median(r["process_peak_rss_kib"] for r in xs),
-                "median_peak_tracemalloc_bytes": statistics.median(r["python_tracemalloc_peak_bytes"] for r in xs),
-                "min_wall_ms": min(r["wall_ns"] for r in xs) / 1e6,
-                "max_wall_ms": max(r["wall_ns"] for r in xs) / 1e6,
-            }
+            for trace_memory, output in ((False, summaries), (True, traced_summaries)):
+                xs = [r for r in record["raw_workers"] if r["mode"] == mode and r["trace_memory"] is trace_memory]
+                assert len(xs) == ROUNDS
+                output[mode] = {
+                    "median_wall_ms": statistics.median(r["wall_ns"] for r in xs) / 1e6,
+                    "median_cpu_ms": statistics.median(r["cpu_ns"] for r in xs) / 1e6,
+                    "median_peak_rss_kib": statistics.median(r["process_peak_rss_kib"] for r in xs),
+                    "median_peak_tracemalloc_bytes": statistics.median(r["python_tracemalloc_peak_bytes"] for r in xs) if trace_memory else None,
+                    "min_wall_ms": min(r["wall_ns"] for r in xs) / 1e6,
+                    "max_wall_ms": max(r["wall_ns"] for r in xs) / 1e6,
+                }
         record["summaries"] = summaries
+        record["traced_summaries"] = traced_summaries
         record["incremental_full_preflight_wall_ms"] = summaries["C"]["median_wall_ms"] - summaries["A"]["median_wall_ms"]
         record["incremental_full_preflight_peak_rss_kib"] = summaries["C"]["median_peak_rss_kib"] - summaries["A"]["median_peak_rss_kib"]
         record["incremental_geometry_only_wall_ms"] = summaries["D"]["median_wall_ms"] - summaries["A"]["median_wall_ms"]
@@ -287,6 +299,7 @@ def run(args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--worker", action="store_true")
+    ap.add_argument("--trace-memory", action="store_true")
     ap.add_argument("--archive", type=Path)
     ap.add_argument("--archive-sha")
     ap.add_argument("--mode", choices=MODES)
