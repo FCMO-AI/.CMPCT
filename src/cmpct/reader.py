@@ -537,6 +537,12 @@ class CMPCT:
             with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=level,allowZip64=True) as z:
                 for rel,k,mode,mt,size,h,storage in self.files:
                     zi=zipfile.ZipInfo(rel.rstrip('/')+'/' if k==K_DIR else rel)
+                    # ZIP64 fallback must use the same authenticated DOS-local calendar
+                    # as the fast writer. ZipInfo's default 1980 date silently discards
+                    # ordinary and signed CMPCT mtimes (O191; O190 bounds the calendar).
+                    ztime,zdate=self._zip_dos_time(mt)
+                    zi.date_time=(1980+(zdate>>9),(zdate>>5)&15,zdate&31,
+                                  ztime>>11,(ztime>>5)&63,(ztime&31)*2)
                     zi.create_system=3
                     typ=stat.S_IFDIR if k==K_DIR else (stat.S_IFLNK if k==K_SYMLINK else stat.S_IFREG)
                     zi.external_attr=((typ|mode)&0xffff)<<16
