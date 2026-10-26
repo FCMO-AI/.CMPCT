@@ -1,0 +1,13 @@
+# O205c — prospective separation of admission wall cost from tracemalloc observer effect
+
+**Timestamp:** 2026-10-26, following exact-source hosted run [40398621917](https://github.com/FCMO-AI/.CMPCT/actions/runs/40398621917) (result artifact **12686634336**, ZIP SHA-256 `206c7e1c47f1c4f8e596faa3d83e9219352fc8c18c197ceb909978b1750ebfdd`). This note is **preregistered before** modification of the instrument.
+
+## First result, preserved, not silently overwritten
+On genuine Builder-selected 4 GiB `S_SPARSE`, 4,096 physical extents, 533,466-byte CMPCT, 16 MiB allocated source, 8 independent worker repetitions/mode all source authentic: A open 14.2058995 ms; B index preflight + open 199.001381 ms; C full strict preflight + open 226.415045 ms; D one-pass geometry + open 25.9515205 ms. RSS median 54,420 KiB in all arms. Original preregistered cost fork output was **`ADMISSION_COST_FORK_AMBIGUOUS`**. *All timed arms had `tracemalloc.start()` enabled*, so these are **instrumented allocation-tracing costs, not ordinary Reader open latency**.
+
+## New causal uncertainty and disproof
+Python `tracemalloc` instruments allocations and can disproportionately charge the allocation-heavy repeated-preflight path. If this is the dominant cause of the 212.21-ms incremental C cost, an untraced fresh-worker repetition will be materially faster despite unchanged data, parser, runner and code. A strong simpler control is to run the *same four paths without allocation tracing*; still obtain process-wide `ru_maxrss` without `tracemalloc`. The tracing-enabled numbers remain independently valid as an observer-effect control, not product cost.
+
+**Prospective correction:** Add a `--trace-memory` worker flag. In each of 8 rotating A/B/C/D rounds, run one truly **untraced** and one **traced** worker per arm, recording each as independent process. Use untraced series for the *identical original preregistered 30-ms/16-MiB C and 5-ms D decision thresholds*; show traced series separately, including raw wall/CPU/RSS and allocation peaks. Do not change selection, scope, semantics, profiles, expected SHA, validators or cutoffs to rescue a hypothesis. If untraced C is still >30 ms and untraced D >5 ms, retain AMBIGUOUS, identify both costs. The evidence remains one warmed-page-cache Ubuntu profile, not release/promotable correctness.
+
+**Non-credit:** Original first hosted result contains real valid product data but not untraced full-product latency. The new run may be inconclusive if no 8×4 matrix per instrumentation state, if archive/Reader source differs, or if selection controls fail.
