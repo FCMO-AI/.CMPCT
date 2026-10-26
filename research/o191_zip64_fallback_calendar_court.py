@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 import platform
 import subprocess
+import stat
 import sys
 import time
 import traceback
@@ -66,6 +67,10 @@ def run(directory: Path) -> dict:
                 got = tuple(info.date_time)
                 assert got == expected, (label, got, expected)
                 assert info.file_size == len(data["content"])
+                assert info.create_system == 3
+                assert (info.external_attr >> 16) == (
+                    (stat.S_IFREG | original_row[2]) & 0xffff
+                ), "fallback changed authenticated POSIX mode/type"
                 assert info.CRC == __import__("binascii").crc32(data["content"]) & 0xffffffff
 
             assert o190.sha(archive_path) == before
