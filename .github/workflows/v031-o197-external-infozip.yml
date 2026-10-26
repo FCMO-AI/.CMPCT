@@ -1,0 +1,79 @@
+# ci-lane: fast
+name: v031 O197 authentic 4GiB CMPCT ZIP64 to independent Info-ZIP
+on:
+  pull_request:
+    branches:
+      - agent/phased3-v031-o196-authentic-sparse-4gib-crosshost-20261026
+    paths:
+      - 'research/o197_external_infozip_court.py'
+      - '.github/workflows/v031-o197-external-infozip.yml'
+      - 'docs/v031-research/2026-10-26-o197-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o197-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authentic-infozip:
+    name: Genuine CMPCT 4GiB ZIP64 Info-ZIP CRC SHA and corruption
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact O197 source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify independent mature reader and install exact CMPCT externally
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v unzip
+          unzip -v
+          python -m pip install .
+      - name: Generate authentic 4 GiB sparse revision-24 CMPCT source ONCE
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          TZ: UTC
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/o197-input"
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o196_authentic_crosshost_zip64.py" --mode produce --artifact-dir "$RUNNER_TEMP/o197-input" --out "$RUNNER_TEMP/o197-producer.json"
+      - name: Export genuine installed Reader ZIP64 with full inherited CPython SHA CRC
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          TZ: UTC
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o196_authentic_crosshost_zip64.py" --mode consume --artifact-dir "$RUNNER_TEMP/o197-input" --out "$RUNNER_TEMP/o197-consumer.json"
+      - name: Independent Info-ZIP CRC and full streamed 4GiB SHA with hostile control
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          TZ: UTC
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o197_external_infozip_court.py" --directory "$RUNNER_TEMP/o197-input" --producer-receipt "$RUNNER_TEMP/o197-producer.json" --consumer-receipt "$RUNNER_TEMP/o197-consumer.json" --out "$RUNNER_TEMP/o197-infozip.json"
+      - name: Persist independent success/failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o197-authentic-infozip-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/o197-producer.json
+            ${{ runner.temp }}/o197-consumer.json
+            ${{ runner.temp }}/o197-infozip.json
+          if-no-files-found: warn
+          retention-days: 14
