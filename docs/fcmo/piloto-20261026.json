@@ -1,0 +1,208 @@
+{
+  "schema": "fcmo-cmpct-archive-pilot-v1",
+  "started_cdmx": "2026-10-26 13:29:10 CST",
+  "limits": {
+    "workers_max": 4,
+    "nice": 10,
+    "tool_timeout_seconds": 1200
+  },
+  "runtime": {
+    "python": "/var/tmp/kyrion-test/venv-cmpct/bin/python",
+    "python_version": "3.13.5",
+    "cmpct_root_commit": "e0bf2163815b7152ee1e1b73ee647a604fee1dda",
+    "zstd_version": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***",
+    "gnu_time": "/usr/bin/time -v",
+    "cmpct_runtime_probe": {
+      "exit_code": 0,
+      "error": null
+    }
+  },
+  "corpora": [
+    {
+      "name": "bundles",
+      "regular_file_bytes": 85471511,
+      "file_count": 539,
+      "symlink_count": 0,
+      "selected_file_bytes": 1053993,
+      "cmpct": {
+        "create": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 0.802,
+          "max_rss_kib": 473432
+        },
+        "archive_bytes": 85320094,
+        "verify": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 0.313,
+          "max_rss_kib": 201384
+        },
+        "extract": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 0.239,
+          "max_rss_kib": 131888
+        },
+        "roundtrip": {
+          "byte_exact": true,
+          "source_entries": 539,
+          "restored_entries": 539,
+          "differing_entry_count": 0
+        },
+        "selective": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 0.087,
+          "max_rss_kib": 27800,
+          "byte_exact": true
+        }
+      },
+      "tar_zstd": {
+        "create": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 13.02,
+          "max_rss_kib": 417252
+        },
+        "archive_bytes": 81967369,
+        "extract": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 0.08,
+          "max_rss_kib": 13504
+        },
+        "roundtrip": {
+          "byte_exact": true,
+          "source_entries": 539,
+          "restored_entries": 539,
+          "differing_entry_count": 0,
+          "source_entry_delta_from_start": 0
+        },
+        "selective": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 0.042,
+          "max_rss_kib": 13776,
+          "byte_exact": true
+        }
+      }
+    },
+    {
+      "name": "logs-texto",
+      "regular_file_bytes": 1081863092,
+      "file_count": 620,
+      "symlink_count": 0,
+      "selected_file_bytes": 1094053,
+      "cmpct": {
+        "create": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 10.397,
+          "max_rss_kib": 1820612
+        },
+        "archive_bytes": 143989190,
+        "verify": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 3.043,
+          "max_rss_kib": 1252492
+        },
+        "extract": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 2.765,
+          "max_rss_kib": 1238240
+        },
+        "roundtrip": {
+          "byte_exact": true,
+          "source_entries": 620,
+          "restored_entries": 620,
+          "differing_entry_count": 0
+        },
+        "selective": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 0.075,
+          "max_rss_kib": 28584,
+          "byte_exact": true
+        }
+      },
+      "tar_zstd": {
+        "create": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 83.873,
+          "max_rss_kib": 579928
+        },
+        "archive_bytes": 65014889,
+        "extract": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 1.183,
+          "max_rss_kib": 13588
+        },
+        "roundtrip": {
+          "byte_exact": true,
+          "source_entries": 620,
+          "restored_entries": 620,
+          "differing_entry_count": 0,
+          "source_entry_delta_from_start": 0
+        },
+        "selective": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 0.951,
+          "max_rss_kib": 13436,
+          "byte_exact": true
+        }
+      }
+    },
+    {
+      "name": "codigo-entorno",
+      "regular_file_bytes": 617908216,
+      "file_count": 39964,
+      "symlink_count": 0,
+      "selected_file_bytes": 104060,
+      "cmpct": {
+        "create": {
+          "status": "failed",
+          "exit_code": 1,
+          "wall_seconds": 25.656,
+          "max_rss_kib": 694000
+        },
+        "archive_bytes": null
+      },
+      "tar_zstd": {
+        "create": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 152.085,
+          "max_rss_kib": 681648
+        },
+        "archive_bytes": 242234031,
+        "extract": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 1.812,
+          "max_rss_kib": 13592
+        },
+        "roundtrip": {
+          "byte_exact": true,
+          "source_entries": 39964,
+          "restored_entries": 39964,
+          "differing_entry_count": 0,
+          "source_entry_delta_from_start": 0
+        },
+        "selective": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 0.861,
+          "max_rss_kib": 13660,
+          "byte_exact": true
+        }
+      }
+    }
+  ],
+  "finished_cdmx": "2026-10-26 13:34:38 CST"
+}

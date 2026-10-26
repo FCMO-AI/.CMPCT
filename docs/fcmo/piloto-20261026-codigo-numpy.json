@@ -1,0 +1,68 @@
+{
+  "schema": "fcmo-cmpct-archive-pilot-v1",
+  "started_cdmx": "2026-10-26 13:35:21 CST",
+  "limits": {
+    "workers_max": 4,
+    "nice": 10,
+    "tool_timeout_seconds": 1200
+  },
+  "runtime": {
+    "python": "/var/tmp/kyrion-test/venv-cmpct/bin/python",
+    "python_version": "3.13.5",
+    "cmpct_root_commit": "e0bf2163815b7152ee1e1b73ee647a604fee1dda",
+    "zstd_version": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***",
+    "gnu_time": "/usr/bin/time -v",
+    "cmpct_runtime_probe": {
+      "exit_code": 0,
+      "error": null
+    }
+  },
+  "corpora": [
+    {
+      "name": "codigo-entorno",
+      "regular_file_bytes": 617908216,
+      "file_count": 39964,
+      "symlink_count": 0,
+      "selected_file_bytes": 104060,
+      "cmpct": {
+        "create": {
+          "status": "failed",
+          "exit_code": 1,
+          "wall_seconds": 21.946,
+          "max_rss_kib": 700676
+        },
+        "archive_bytes": null
+      },
+      "tar_zstd": {
+        "create": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 133.955,
+          "max_rss_kib": 682176
+        },
+        "archive_bytes": 242234031,
+        "extract": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 2.054,
+          "max_rss_kib": 13792
+        },
+        "roundtrip": {
+          "byte_exact": true,
+          "source_entries": 39964,
+          "restored_entries": 39964,
+          "differing_entry_count": 0,
+          "source_entry_delta_from_start": 0
+        },
+        "selective": {
+          "status": "ok",
+          "exit_code": 0,
+          "wall_seconds": 1.232,
+          "max_rss_kib": 13868,
+          "byte_exact": true
+        }
+      }
+    }
+  ],
+  "finished_cdmx": "2026-10-26 13:38:12 CST"
+}
