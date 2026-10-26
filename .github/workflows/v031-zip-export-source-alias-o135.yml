@@ -1,0 +1,84 @@
+# ci-lane: fast
+name: v031 O135 ZIP-export own-source inode alias court
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-o135-export-source-inode-alias-20261026
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o135-source-alias-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  original-versus-candidate:
+    name: ${{ matrix.os }} / ${{ matrix.engine }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+        engine: [original, candidate]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout immutable O135 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          clean: true
+      - name: Assert candidate source HEAD and frozen independent golden
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object tests/conformance/v24-direct-codecs.json)" = "d10b7dab9126d39e819a74279c186363a163f2ef"
+          test "$(git rev-parse --is-shallow-repository)" = false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install real CMPCT package plus tests
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Bind baseline engine to authentic parent commit
+        shell: bash
+        run: |
+          if [ "${{ matrix.engine }}" = "original" ]; then
+            git worktree add --detach "$RUNNER_TEMP/o135-original" 2e493d2d941f9c144c0c5050b41c88dc7c6e57dd
+            test "$(git -C "$RUNNER_TEMP/o135-original" rev-parse HEAD)" = 2e493d2d941f9c144c0c5050b41c88dc7c6e57dd
+            test "$(git -C "$RUNNER_TEMP/o135-original" hash-object src/cmpct/reader.py)" = b0c8eb5eddd5591524b3e9c9a640d9266ccbbbdb
+            echo "O135_PRODUCT_SRC=$RUNNER_TEMP/o135-original/src" >> "$GITHUB_ENV"
+            echo "O135_EXPECT=original" >> "$GITHUB_ENV"
+          else
+            echo "O135_PRODUCT_SRC=$GITHUB_WORKSPACE/src" >> "$GITHUB_ENV"
+            echo "O135_EXPECT=candidate" >> "$GITHUB_ENV"
+          fi
+      - name: Execute eight authentic exported-archive cells
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p o135-evidence
+          python -m pytest -vv -s tests/test_v031_zip_export_source_alias_o135.py \
+            --junitxml=o135-evidence/junit.xml 2>&1 | tee o135-evidence/pytest.log
+      - name: Preserve source custody
+        shell: bash
+        if: always()
+        run: |
+          mkdir -p o135-evidence
+          git rev-parse HEAD > o135-evidence/candidate-head.sha
+          git hash-object src/cmpct/reader.py > o135-evidence/candidate-reader.blob
+          git hash-object tests/test_v031_zip_export_source_alias_o135.py > o135-evidence/test.blob
+          git hash-object tests/conformance/v24-direct-codecs.json > o135-evidence/frozen-golden.blob
+          printf 'engine=%s\nos=%s\nsource=%s\n' "${{ matrix.engine }}" "${{ matrix.os }}" "${O135_PRODUCT_SRC:-UNSET}" > o135-evidence/environment.txt
+      - name: Preserve genuine raw test receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o135-${{ matrix.os }}-${{ matrix.engine }}-${{ github.sha }}
+          path: o135-evidence/
+          if-no-files-found: error
