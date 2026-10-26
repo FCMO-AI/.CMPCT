@@ -21,7 +21,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD_NS = -315619200_000_000_000  # 1960-01-01 UTC, within signed i64.
-NORMAL_NS = 949449600_000_000_000  # 2000-02-03 UTC.
+NORMAL_NS = 949449600_000_000_000  # 2000-02-02 UTC.
 OLD_BYTES = b"O184 pre-1970 signed timestamp payload, authentic r24."
 NORMAL_BYTES = b"O184 ordinary DOS-compatible timestamp control."
 EXPECTED = {
