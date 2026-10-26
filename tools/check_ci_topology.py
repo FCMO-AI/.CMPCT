@@ -23,6 +23,9 @@ CANCEL_FALSE_RE = re.compile(r"(?m)^\s+cancel-in-progress:\s*false\s*$")
 PRESERVE_EXACT_RECEIPT_RE = re.compile(r"(?m)^# ci-cancel-policy: preserve-running-exact-receipt\s*$")
 SPLIT_RECEIPT_RE = re.compile(r"(?m)^# ci-cancel-policy: split-classifier-preserve-receipts\s*$")
 HEAD_CHANGE_GATE_RE = re.compile(r"(?m)^# ci-pr-scope: latest-head-commit-gate\s*$")
+FULL_PR_TREE_GATE_RE = re.compile(r"(?m)^# ci-pr-scope: full-pr-tree-diff-gate\s*$")
+FULL_PR_CLASSIFIER_RE = re.compile(r"(?m)^\s+python tools/classify_zip_parity_scope\.py(?:\s|$)")
+FULL_HISTORY_CHECKOUT_RE = re.compile(r"(?m)^\s+fetch-depth:\s*0\s*$")
 HEAD_CHANGE_DIFF_RE = re.compile(r"git diff-tree --no-commit-id --name-only -r HEAD")
 RETIRED_MANUAL_ONLY_RE = re.compile(r"(?m)^# ci-auto-policy: retired-manual-only\s*$")
 PR_EXACT_HEAD_BINDING_RE = re.compile(
@@ -125,6 +128,19 @@ def validate(path: Path) -> list[str]:
 
     if HEAD_CHANGE_GATE_RE.search(text) and not HEAD_CHANGE_DIFF_RE.search(text):
         errors.append("latest-head-commit gate directive requires an exact HEAD diff-tree classifier")
+    if FULL_PR_TREE_GATE_RE.search(text):
+        # Full-PR tree admission is an alternative to latest-commit scope.
+        # An attacker can evade a release comparison merely by appending a
+        # workflow-only commit (#318); require a classifier that consults the
+        # event base and enough history to compute a genuine merge-base.
+        if not PULL_REQUEST_RE.search(text):
+            errors.append("full PR tree gate requires a pull_request event")
+        if not FULL_PR_CLASSIFIER_RE.search(text):
+            errors.append("full PR tree gate missing immutable-range scope classifier")
+        if not FULL_HISTORY_CHECKOUT_RE.search(text):
+            errors.append("full PR tree gate requires fetch-depth: 0")
+        if not PR_EXACT_HEAD_BINDING_RE.search(text) or not EXACT_HEAD_CHECKOUT_RE.search(text):
+            errors.append("full PR tree gate must bind checkout and receipt to exact event HEAD")
 
     if RETIRED_MANUAL_ONLY_RE.search(text) and auto_events:
         errors.append(
