@@ -1,0 +1,52 @@
+# ci-lane: fast
+name: v031 J24S01 charged sparse-hole DEFLATE research oracle
+on:
+  pull_request:
+    paths:
+      - 'research/j24s01_sparse_hole_deflate_oracle.py'
+      - '.github/workflows/v031-j24s01-hole-deflate.yml'
+      - 'docs/v031-research/2026-10-26-j24s01-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24s01-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  charged-decode-court:
+    name: Exact-source 256 MiB sparse DEFLATE A/B and independent decode
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Source identity, offline charged oracle, and public receipt
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git hash-object research/j24s01_sparse_hole_deflate_oracle.py | tee "$RUNNER_TEMP/j24s01-source-blob.txt"
+          python -m py_compile research/j24s01_sparse_hole_deflate_oracle.py
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24s01_sparse_hole_deflate_oracle.py" \
+            --mib 256 --nonhole-mib 64 --repeats 3 --levels 1,6 \
+            --output "$RUNNER_TEMP/j24s01-result.json"
+      - name: Retain exact observations even if experiment fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24s01-charged-deflate-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/j24s01-result.json
+            ${{ runner.temp }}/j24s01-source-blob.txt
+          if-no-files-found: warn
