@@ -124,6 +124,12 @@ def run() -> dict:
         assert len(manifest_a["hardlink_classes"]) == 1
         assert any(x["path_hex"] == b"file-\xff".hex() for x in manifest_a["entries"])
 
+        # A target suddenly materializing *outside* the selected root must not
+        # alter an in-tree symlink's raw-target/type witness.
+        write(base / "outside-no-such-file", b"fresh-external-bytes")
+        link_target_created, _ = oracle.strict_digest(a)
+        assert link_target_created == expected, "oracle followed external symlink"
+
         write(b / "sub" / "original", b"changed")
         mutated, _ = oracle.strict_digest(b)
         assert mutated != expected
@@ -150,7 +156,7 @@ def run() -> dict:
         observations["controls"] = {
             "same_tree_recreated_inode_independence": expected == identical,
             "raw_surrogateescaped_filename": True,
-            "dangling_symlink_no_follow": True,
+            "dangling_symlink_no_follow": link_target_created == expected,
             "mutation_detection": mutated != expected,
             "permission_mode_detection": mode_mutated != expected,
             "fifo_refused": refused_special,
