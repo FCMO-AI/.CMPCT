@@ -62,7 +62,13 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m pytest -q -s tests/test_v031_o137_direct_fifo_leaf_preflight.py --junitxml=o137-evidence/junit.xml 2>&1 | tee o137-evidence/pytest.txt
+          # Historical tests/conftest.py imports unrelated experiment runtimes and
+          # a Linux-named libzstd.so on macOS; that collection failure predates
+          # O137. Run a byte-identical copy of this focused instrument outside
+          # the inherited directory-wide conftest without changing any test.
+          cp tests/test_v031_o137_direct_fifo_leaf_preflight.py o137-evidence/test_v031_o137_direct_fifo_leaf_preflight.py
+          cmp tests/test_v031_o137_direct_fifo_leaf_preflight.py o137-evidence/test_v031_o137_direct_fifo_leaf_preflight.py
+          python -m pytest -q -s o137-evidence/test_v031_o137_direct_fifo_leaf_preflight.py --junitxml=o137-evidence/junit.xml 2>&1 | tee o137-evidence/pytest.txt
       - name: Preserve original evidence even on failure
         if: always()
         uses: actions/upload-artifact@v4
