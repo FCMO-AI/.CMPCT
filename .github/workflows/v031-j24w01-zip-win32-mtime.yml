@@ -1,0 +1,154 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-stale-head
+# J24W01 crosses two independently owned changes without editing their tests.
+name: CMPCT J24W01 O160 ZIP x O167 Win32 mtime composition
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24w01-zip-win32-mtime-20261026
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/_win32_times.py'
+      - 'tests/test_v031_o167_win32_mtime.py'
+      - '.github/workflows/v031-j24w01-zip-win32-mtime.yml'
+      - 'docs/v031-research/2026-10-26-j24w01-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24w01-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  three-host-independent-acceptance:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O167_RECEIPT_DIR: ${{ github.workspace }}/j24w01-evidence/o167
+    steps:
+      - name: Checkout exactly the proposed candidate and authentic Git history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Check owner ancestry, imported original tests, reader and helper blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24w01-evidence
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 03a82b5c1227ed37733d45c8ebe661dd871f5236 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 88b6706ba748306b6a4a13274fff2220eec0c32a
+          test "$(git rev-parse HEAD:src/cmpct/_win32_times.py)" = 70308f454c74fad7b247db6ee36aa8cc7d38c99c
+          test "$(git rev-parse HEAD:tests/test_v031_o167_win32_mtime.py)" = 4d93ee6ba26f198bd35d826c64a009a83e5eecde
+          test "$(git rev-parse HEAD:research/o160_zip_name_parity_court.py)" = 1a493b5971a35a21a64232e7d647bd649b3acfec
+          test "$(git rev-parse HEAD:tests/test_v031_o149_zip_export_atomic_publication.py)" = d394c1dd66eb229f5b24ccbd3713825f5e95cd89
+          test "$(git rev-parse HEAD:tests/test_v031_o140_zip_export_nonregular.py)" = 063493b35b22f48d3b95a18c0b4ae41e761de1cf
+          test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
+          printf '%s\n' "$EVIDENCE_HEAD" > j24w01-evidence/HEAD
+          git status --porcelain > j24w01-evidence/status.txt
+          git rev-parse HEAD:src/cmpct/reader.py > j24w01-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/_win32_times.py > j24w01-evidence/win32-helper.blob
+          python -m py_compile src/cmpct/reader.py src/cmpct/_win32_times.py
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install real candidate outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j24w01-installed" "$GITHUB_WORKSPACE" "zstandard>=0.22"
+          python -m pip install --disable-pip-version-check pytest
+          echo "PYTHONPATH=$RUNNER_TEMP/j24w01-installed" >> "$GITHUB_ENV"
+          # The original O149 tests consume the independent frozen v24 codec fixture by this named contract.
+          echo "CMPCT_FIXTURE_JSON=$GITHUB_WORKSPACE/tests/conformance/v24-direct-codecs.json" >> "$GITHUB_ENV"
+          echo "O140_PRODUCT_SRC=$RUNNER_TEMP/j24w01-installed" >> "$GITHUB_ENV"
+          echo "O140_ENGINE=candidate" >> "$GITHUB_ENV"
+      - name: Attest independently installed Python source, including Win32 source normalization
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import os,pathlib,subprocess,hashlib
+          import cmpct.reader,cmpct._win32_times
+          repo=pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          for module,rel,expected in (
+              (cmpct.reader,'src/cmpct/reader.py','88b6706ba748306b6a4a13274fff2220eec0c32a'),
+              (cmpct._win32_times,'src/cmpct/_win32_times.py','70308f454c74fad7b247db6ee36aa8cc7d38c99c')
+          ):
+              installed=pathlib.Path(module.__file__).resolve()
+              assert not installed.is_relative_to(repo),(installed,repo)
+              source=subprocess.check_output(['git','show',os.environ['EVIDENCE_HEAD']+':'+rel],cwd=repo)
+              contents=installed.read_bytes()
+              assert contents.replace(b'\r\n',b'\n')==source,(rel,'installed code mismatch')
+              blob=hashlib.sha1(b'blob '+str(len(source)).encode()+b'\0'+source).hexdigest()
+              assert blob==expected,(rel,blob,expected)
+              print('J24W01_INSTALLED_SOURCE',rel,blob,installed)
+          PY
+      - name: Run unchanged independent O160 ZIP namespace court on installed candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          python research/o160_zip_name_parity_court.py 2>&1 | tee j24w01-evidence/o160.log
+      - name: Independently check all O160 codec/name/serializer cases and three collisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('o160-evidence/result.json').read_text())
+          assert x['schema']=='cmpct-o160-zip-name-parity-court-v1'
+          assert x['status']=='ZIP_CANONICAL_NAMES_POSITIVE_SCOPED'
+          assert x['cases_count']==len(x['cases'])==18
+          assert len(x['collision_refusals'])==3
+          assert {a['codec'] for a in x['cases']}=={'raw','zstd','deflate'} or len({a['codec'] for a in x['cases']})==3
+          assert {a['case'] for a in x['cases']}=={'unchanged','slash','backslash'}
+          assert {a['serializer'] for a in x['cases']}=={'fast','forced_stdlib'}
+          assert all(a['content_exact'] and a['namespace_agreement'] for a in x['cases'])
+          assert all(a['exported_name']=='nested/leaf.bin' for a in x['cases'] if a['case']=='backslash')
+          assert x['release_credit'] is False
+          Path('j24w01-evidence/zip-audit.json').write_text(json.dumps({'status':'PASS','cases':18,'collision_refusals':3},indent=2)+'\n')
+          PY
+      - name: Run original O167 physical Win32 timestamp/reparse tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -c /dev/null -vv -s "$GITHUB_WORKSPACE/tests/test_v031_o167_win32_mtime.py" --junitxml="$GITHUB_WORKSPACE/j24w01-evidence/o167.xml" 2>&1 | tee "$GITHUB_WORKSPACE/j24w01-evidence/o167.log"
+      - name: Retain original O149 ZIP failure-atomicity controls
+        shell: bash
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -c /dev/null -vv -s "$GITHUB_WORKSPACE/tests/test_v031_o149_zip_export_atomic_publication.py" --junitxml="$GITHUB_WORKSPACE/j24w01-evidence/o149.xml" 2>&1 | tee "$GITHUB_WORKSPACE/j24w01-evidence/o149.log"
+      - name: Retain original O140 POSIX special-output admission controls
+        if: matrix.os != 'windows-2022'
+        shell: bash
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -c /dev/null -vv -s "$GITHUB_WORKSPACE/tests/test_v031_o140_zip_export_nonregular.py" --junitxml="$GITHUB_WORKSPACE/j24w01-evidence/o140.xml" 2>&1 | tee "$GITHUB_WORKSPACE/j24w01-evidence/o140.log"
+      - name: Preserve success, negative or incomplete original receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-j24w01-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: |
+            j24w01-evidence/
+            o160-evidence/
+          if-no-files-found: error
+          retention-days: 90
