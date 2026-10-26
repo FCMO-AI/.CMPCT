@@ -43,6 +43,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git merge-base --is-ancestor 5a594f4986cad99955deacab6d03fdec1a2186f9 HEAD
           git merge-base --is-ancestor f59a6ca5d5a777a018db0cc1944fc2f436b5474c HEAD
+          git merge-base --is-ancestor efec0b5a3b6fcb6bf9dd05b24ae493be90484300 HEAD
           git merge-base --is-ancestor 16bfcf12adcb6cb1025896c4ece0f8aab7c79646 HEAD
           git diff --exit-code 16bfcf12adcb6cb1025896c4ece0f8aab7c79646 HEAD -- src/ native/ tests/ benchmarks/
           mkdir -p o202-evidence
@@ -53,6 +54,7 @@ jobs:
           git rev-parse HEAD:research/o202_native_sparse_geometry_abi_court.py > o202-evidence/o202-court.blob
           git rev-parse HEAD:docs/v031-research/2026-10-26-o202-native-python-sparse-prereg.md > o202-evidence/prereg.blob
           git rev-parse HEAD:docs/v031-research/2026-10-26-o202b-root-schema-prereg.md > o202-evidence/superseding-prereg.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o202c-classifier-correction-prereg.md > o202-evidence/classifier-prereg.blob
           cp native/cmpct-core/Cargo.lock "$RUNNER_TEMP/o202-cargo.lock"
       - name: Set up exact Python runtime
         uses: actions/setup-python@v5
