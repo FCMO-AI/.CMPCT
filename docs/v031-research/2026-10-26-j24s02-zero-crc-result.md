@@ -40,7 +40,7 @@ A different **cached per-length transition-matrix architecture** might address r
 ## Losses, ambiguity and negative evidence
 
 - A single contiguous 256MiB zero run wins; 16 repeated shorter structural zero runs catastrophically lose. The stronger mixed control must win at product generality; it does not.
-- The `bulk` arm pays for an explicit 8MiB zero buffer; current candidate uses 1MiB seed and Python matrix state. No independent per-arm peak RSS evidence was obtained.
+- The `bulk` arm pays for an explicit 8MiB zero buffer **allocated at module import, hence resident in the same process for every arm**, including algebra and no-hole. This experimental design cannot establish a lower physical-RSS bound for the candidate or true no-hole memory fallback; separate-process memory measurement would be required. The candidate algorithm itself uses a 1MiB seed and Python matrix state. No independent per-arm peak RSS evidence was obtained.
 - Whole SHA256 was fully charged, limiting maximum theoretical wins; neither same-UID source mutation nor malformed extent geometry was tested here.
 - The benchmark uses deterministic standalone J24S01-shaped spans, **not a valid CMPCT archive nor real ZIP64 Reader**. No whole-system 4GiB I/O, memory, publication, recovery, platform, security, real filesystem or release claims.
 - Benchmark time includes encoder SHA/CRC/DEFLATE in the oracle but not disk I/O or Python startup. Independent compressed-byte verification is outside the timed encoder and is a correctness check, never a claimed speedup.
