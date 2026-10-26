@@ -41,7 +41,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git cat-file -e 8fe424ac8575da10bf5ecfdb9660d4b5831f638b^{commit}
-          test "$(git hash-object tests/test_v031_o102_win32_mtime_roundtrip.py 2>/dev/null || true)" = "" || echo "O102 frozen test is a separate owner; do not modify it"
+          git merge-base --is-ancestor 8fe424ac8575da10bf5ecfdb9660d4b5831f638b HEAD
       - name: Install Python 3.11
         uses: actions/setup-python@v5
         with:
