@@ -1,0 +1,137 @@
+# ci-lane: fast
+name: v031 O180 J24W01 Win32 symlink / same archive native contrast
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o180-j24w01-win32-symlink-crosshost-20261026
+  pull_request:
+    branches:
+      - agent/phased3-v031-o176-win32-crosshost-reader-repair-differential-20261026
+    paths:
+      - 'research/o180_j24w01_*.py'
+      - 'docs/v031-research/2026-10-26-o180-*.md'
+      - '.github/workflows/v031-o180-j24w01-win32-symlink-crosshost.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-linux-producer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact producer source
+        run: python -m pip install .
+      - name: Build one original archive; keep O165 controls unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse HEAD:research/o165_one_archive_cross_host_court.py)" = "2fb9cf5c9ecc072a0e692a64f21b6273f0b28fd6"
+          test "$(git rev-parse HEAD:research/o171_linux_to_windows_same_archive_court.py)" = "8c943128f135607dd36abd083bf1019bc9e4433a"
+          mkdir -p "$RUNNER_TEMP/o176"
+          python research/o165_one_archive_cross_host_court.py \
+            --role producer \
+            --archive "$RUNNER_TEMP/o176/origin.cmpct" \
+            --receipt "$RUNNER_TEMP/o176/producer.json" \
+            --output "$RUNNER_TEMP/o176/producer-result.json"
+      - name: Preserve raw Linux archive, receipt, and negative evidence if produced
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o180-original-linux-r24
+          path: ${{ runner.temp }}/o176/
+          if-no-files-found: warn
+
+  native-win32-differential:
+    needs: original-linux-producer
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install historical O171-derived source as a noneditable wheel
+        run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          name: o180-original-linux-r24
+          path: ${{ runner.temp }}/o176/
+      - name: Prove genuine O171 same-archive negative on Windows
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -ne $env:EVIDENCE_HEAD) { throw 'source checkout mismatch' }
+          python research/o176_win32_o167_crosshost_differential.py --phase baseline --archive "$env:RUNNER_TEMP\o176\origin.cmpct" --receipt "$env:RUNNER_TEMP\o176\producer.json" --output "$env:RUNNER_TEMP\o176\baseline-result.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Checkout PINNED existing O167 owner, without modifying its branch
+        uses: actions/checkout@v4
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 841c32d435494f6e4d83c44cd00a1a2f8f7ab148
+          path: o167-source
+          fetch-depth: 1
+      - name: Install source-exact independent O167 candidate
+        shell: pwsh
+        run: |
+          if ((git -C o167-source rev-parse HEAD).Trim() -ne '841c32d435494f6e4d83c44cd00a1a2f8f7ab148') { throw 'donor checkout mismatch' }
+          python -m pip install --force-reinstall --no-deps .\o167-source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run UNMODIFIED original O171 physical court using installed O167 wheel
+        shell: pwsh
+        run: |
+          python research/o176_win32_o167_crosshost_differential.py --phase candidate --archive "$env:RUNNER_TEMP\o176\origin.cmpct" --receipt "$env:RUNNER_TEMP\o176\producer.json" --donor-checkout "$env:GITHUB_WORKSPACE\o167-source" --baseline-result "$env:RUNNER_TEMP\o176\baseline-result.json" --o171-result "$env:RUNNER_TEMP\o176\o171-unmodified-court.json" --output "$env:RUNNER_TEMP\o176\candidate-result.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Checkout PINNED J24W01 composition owner, without modifying its branch
+        uses: actions/checkout@v4
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 7436bb34e5019639b8e00541b437b5153dee7462
+          path: j24w01-source
+          fetch-depth: 1
+      - name: Install source-exact J24W01 independently after positive O167 control
+        shell: pwsh
+        run: |
+          if ((git -C j24w01-source rev-parse HEAD).Trim() -ne '7436bb34e5019639b8e00541b437b5153dee7462') { throw 'J24W01 owner checkout drift' }
+          python -m pip install --force-reinstall --no-deps .\j24w01-source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise unchanged original O171 physical court using exact J24W01 distribution
+        shell: pwsh
+        run: |
+          python research/o180_j24w01_win32_same_archive_differential.py --phase candidate --archive "$env:RUNNER_TEMP\o176\origin.cmpct" --receipt "$env:RUNNER_TEMP\o176\producer.json" --donor-checkout "$env:GITHUB_WORKSPACE\j24w01-source" --baseline-result "$env:RUNNER_TEMP\o176\baseline-result.json" --o171-result "$env:RUNNER_TEMP\o176\j24w01-original-o171.json" --output "$env:RUNNER_TEMP\o176\j24w01-candidate.json"
+          $nativeCode = $LASTEXITCODE
+          if ($nativeCode -ne 0 -and $nativeCode -ne 1) { throw "unexpected native court exit $nativeCode" }
+          Write-Output "O180 raw donor court exit = $nativeCode; scientific disposition follows"
+          exit 0
+      - name: Scientifically classify expected loss or unexpected fidelity without weakening any court
+        shell: pwsh
+        run: |
+          python research/o180_j24w01_native_disposition.py --archive "$env:RUNNER_TEMP\o176\origin.cmpct" --receipt "$env:RUNNER_TEMP\o176\producer.json" --baseline "$env:RUNNER_TEMP\o176\baseline-result.json" --positive "$env:RUNNER_TEMP\o176\candidate-result.json" --candidate "$env:RUNNER_TEMP\o176\j24w01-candidate.json" --court "$env:RUNNER_TEMP\o176\j24w01-original-o171.json" --output "$env:RUNNER_TEMP\o176\o180-decision.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve historical, O167, and J24W01 raw source evidence on any result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o180-native-win32-triple-source-contrast
+          path: ${{ runner.temp }}/o176/*.json
+          if-no-files-found: warn
