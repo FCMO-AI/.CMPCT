@@ -54,19 +54,19 @@ def test_independent_v24_journal_framing():
     witness = oracle["witness"]
     raw = variants["committed"]
     magic, version, flags, primary_cs, primary_us, initial_data_span, index_sha = HEADER.unpack_from(raw)
-    assert magic == b"CMPCT24\\0" and version == 24 and flags == 0
+    assert magic == b"CMPCT24\0" and version == 24 and flags == 0
     assert HEADER.size + primary_cs == witness["record_base"]
     assert initial_data_span > BLOB_HEADER.size
     assert index_sha.hex() == witness["initial_index_sha256"]
 
     base_footer = FOOTER.unpack_from(raw, witness["initial_footer_offset"])
-    assert base_footer[0] == b"CMPTF24\\0"
+    assert base_footer[0] == b"CMPTF24\0"
     assert base_footer[1:5] == (0, 1, 0, 0)  # checkpoint, Zstd, flags, reserved
     assert base_footer[7] == 0  # no previous generation
     assert base_footer[8].hex() == witness["initial_index_sha256"]
 
     delta_footer = FOOTER.unpack_from(raw, witness["delta_footer_offset"])
-    assert delta_footer[0] == b"CMPTF24\\0"
+    assert delta_footer[0] == b"CMPTF24\0"
     assert delta_footer[1:5] == (1, 1, 0, 0)  # signed delta, Zstd
     assert delta_footer[7] == witness["initial_footer_offset"]
     assert delta_footer[8].hex() == witness["delta_index_sha256"]
