@@ -14,7 +14,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: j24f05-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  group: j24f05-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
