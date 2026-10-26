@@ -26,6 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -33,6 +34,7 @@ jobs:
       - name: Check Reader source custody and exact checkout
         shell: bash
         run: |
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
           git show -s --format='%H %s' HEAD
       - name: Install exact source as ordinary Python package
