@@ -1,0 +1,120 @@
+# ci-lane: fast
+name: CMPCT v0.31 O150 ZIP transactional publication
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-o150-zip-transactional-publication-20261026
+  pull_request:
+    paths:
+      - '.github/workflows/v031-o150-zip-transactional-publication.yml'
+      - 'tests/test_v031_o150_zip_transactional_publication.py'
+      - 'docs/v031-research/2026-10-26-o150-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o150-${{github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  zip-failure-atomicity:
+    runs-on: ${{matrix.os }}
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      SOURCE_HEAD: ${{github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout source-exact stacked O140 parent with immutable preregistration
+        uses: actions/checkout@v4
+        with:
+          ref: ${{env.SOURCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind source, candidate Reader and frozen independent vector
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_HEAD"
+          git merge-base --is-ancestor d8b69758dbcbb66fe28fa7cf59598916df160d2d HEAD
+          git merge-base --is-ancestor 2971c0623c357b5120f4c66211789bf7706e578e HEAD
+          test "$(git hash-object src/cmpct/reader.py)" = "f38662c8db4132895778951263d83d24022f9296"
+          test "$(git hash-object tests/conformance/v24-direct-codecs.json)" = "d10b7dab9126d39e819a74279c186363a163f2ef"
+          test "$(git hash-object tests/test_v031_o150_zip_transactional_publication.py)" = "102bb045734102c377c0552274a5185f57a64c18"
+          mkdir -p o150-evidence
+          git rev-parse HEAD > o150-evidence/head.sha
+          git hash-object src/cmpct/reader.py > o150-evidence/reader.blob
+          git hash-object tests/conformance/v24-direct-codecs.json > o150-evidence/vector.blob
+          git hash-object tests/test_v031_o150_zip_transactional_publication.py > o150-evidence/test.blob
+          python -m pip install --disable-pip-version-check . pytest
+      - name: Prove installed Reader outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import os,pathlib
+          import cmpct.reader
+          source=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          module=pathlib.Path(cmpct.reader.__file__).resolve()
+          assert not module.is_relative_to(source),(module,source)
+          print("O150_INSTALLED_READER="+str(module),flush=True)
+          PY
+      - name: Run preregistered positive transactional repair court
+        shell: bash
+        env:
+          CMPCT_FIXTURE_JSON: ${{github.workspace }}/tests/conformance/v24-direct-codecs.json
+        run: |
+          set -euo pipefail
+          cp tests/test_v031_o150_zip_transactional_publication.py o150-evidence/
+          cd "$RUNNER_TEMP"
+          python -m pytest -vv -s "$GITHUB_WORKSPACE/o150-evidence/test_v031_o150_zip_transactional_publication.py" \
+            --junitxml="$GITHUB_WORKSPACE/o150-evidence/junit.xml" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o150-evidence/court.log"
+      - name: Independent audit of four positive witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from xml.etree import ElementTree
+          evidence=Path("o150-evidence")
+          cases=list(ElementTree.parse(evidence/"junit.xml").getroot().iter("testcase"))
+          assert len(cases)==4, len(cases)
+          assert all(all(c.find(k) is None for k in ("failure","error","skipped")) for c in cases)
+          rows=[json.loads(l.split("O150_CASE=",1)[1]) for l in (evidence/"court.log").read_text().splitlines() if "O150_CASE=" in l]
+          assert len(rows)==4,rows
+          assert {(x["case"],x["result"]) for x in rows} == {
+              ("frozen_raw_crc","prior_regular_zip_preserved"),
+              ("builder_late_payload","prior_regular_zip_preserved_after_late_failure"),
+              ("clean_regular_replace","exact_zip_new_inode_old_hardlink_unchanged"),
+              ("absent_target","failed_export_no_public_zip"),
+          }, rows
+          assert all(x["target_before_sha"]==x["target_after_sha"] and x["read_error"] and x["export_error"] for x in rows if x["case"] in ("frozen_raw_crc","builder_late_payload"))
+          manifest={k:(evidence/v).read_text().strip() for k,v in {
+              "source_sha":"head.sha","reader_blob":"reader.blob",
+              "vector_blob":"vector.blob","test_blob":"test.blob",
+          }.items()}
+          manifest.update({"scope":"installed O150 candidate ZIP exporter; positive exception-atomicity", "cases":rows,
+                           "pass":4,"fail":0,"skip":0})
+          (evidence/"result.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n")
+          print("O150_AUDIT="+json.dumps({k:v for k,v in manifest.items() if k!="cases"},sort_keys=True))
+          PY
+      - name: Preserve original scientific evidence even on failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o150-${{matrix.os }}-${{env.SOURCE_HEAD }}
+          path: o150-evidence/
+          retention-days: 30
+          if-no-files-found: warn
