@@ -125,7 +125,7 @@ def bound_raw_window_court(root: Path):
     from j24f04_raw_chunk_immutable_transfer import independent_revision24
     from j24f05_raw_window_court import large_chunks
     from cmpct.reader import CMPCT
-    from cmpct.format import CODEC_RAW
+    from cmpct.codec import CODEC_RAW
 
     chunks = large_chunks()
     expected = b"".join(chunks)
