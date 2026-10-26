@@ -202,6 +202,31 @@ def execute(args: argparse.Namespace, result: dict) -> None:
                 record["expected_target"] = source_target
                 if observed_target.replace("\\", "/") != source_target:
                     failures.append(f"symlink target changed: {row['path_hex']}")
+                # Win32 distinguishes *file* and *directory* symlink kinds.
+                # The stored text can look perfect even when the OS created
+                # an unusable file-symlink to a directory. Prove usability
+                # against the linked member's authenticated source type/hash.
+                relative_raw = bytes.fromhex(row["path_hex"])
+                parent_raw = relative_raw.rsplit(b"/", 1)[0] if b"/" in relative_raw else b""
+                destination_raw = ((parent_raw + b"/") if parent_raw else b"") + bytes.fromhex(row["target_hex"])
+                target_row = next((r for r in rows if r["path_hex"] == destination_raw.hex()), None)
+                if target_row is None:
+                    failures.append(f"fixture symlink target not in source manifest: {row['path_hex']}")
+                elif target_row["type"] == "directory":
+                    record["directory_target_usable"] = p.is_dir()
+                    if not record["directory_target_usable"]:
+                        failures.append(f"directory symlink cannot be traversed: {row['path_hex']}")
+                elif target_row["type"] == "file":
+                    record["file_target_usable"] = p.is_file()
+                    if record["file_target_usable"]:
+                        try:
+                            record["dereferenced_sha256"] = sha256(p)
+                        except OSError:
+                            record["file_target_usable"] = False
+                    if not record["file_target_usable"] or record.get("dereferenced_sha256") != target_row["sha256"]:
+                        failures.append(f"file symlink dereference differs: {row['path_hex']}")
+                else:
+                    failures.append(f"unsupported source fixture symlink target type: {row['path_hex']}")
             observations.append(record)
         result["physical_observations"] = observations
         link_checks = []
