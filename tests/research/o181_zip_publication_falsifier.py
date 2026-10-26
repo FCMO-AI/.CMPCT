@@ -87,8 +87,9 @@ def test_clean_same_source_zip_exact(tmp_path, monkeypatch, stdlib):
            details={"observed":"AUTHENTIC_ZIP", "target_is_symlink":dest.is_symlink()})
 
 
+@pytest.mark.parametrize("forgery", ["foreign_member", "same_name_wrong_bytes"])
 @pytest.mark.parametrize("stdlib", [False, True], ids=["fast", "stdlib"])
-def test_regular_attacker_zip_replaces_verified_stage_at_rename(tmp_path, monkeypatch, stdlib):
+def test_regular_attacker_zip_replaces_verified_stage_at_rename(tmp_path, monkeypatch, stdlib, forgery):
     src, dest, victim, source_bytes, prior, victim_original = setup_case(tmp_path)
     if stdlib:
         monkeypatch.setattr(CMPCT, "_zip64_offset_fallback_required", lambda self: True)
@@ -107,12 +108,17 @@ def test_regular_attacker_zip_replaces_verified_stage_at_rename(tmp_path, monkey
         # Deterministic concurrency schedule: another authorized directory writer
         # substitutes the name AFTER Reader's identity check but BEFORE rename.
         stage.unlink()
+        forged = ({"attacker.txt": b"not derived from CMPCT contents"}
+                  if forgery == "foreign_member"
+                  else {"raw.bin": b"X" * 64})
         with zipfile.ZipFile(stage, "w") as foreign:
-            foreign.writestr("attacker.txt", b"not derived from CMPCT contents")
+            for name, data in forged.items():
+                foreign.writestr(name, data)
         injected_inode = stage.stat().st_ino
-        assert zip_members(stage) == {
-            "attacker.txt":b"not derived from CMPCT contents"}
-        assert injected_inode != correct_inode
+        assert zip_members(stage) == forged
+        assert forged != {"raw.bin": bytes(range(64))}
+        # A same-number inode allocation after unlink does not make wrong bytes
+        # authentic. On Windows, physical file IDs may be recycled after close.
         seen.append({"verified_stage_inode":correct_inode,
                      "foreign_stage_inode":injected_inode})
         return original_replace(stage, target, *args, **kwargs)
@@ -122,13 +128,19 @@ def test_regular_attacker_zip_replaces_verified_stage_at_rename(tmp_path, monkey
             assert reader.export_zip(dest) == dest
     assert len(seen) == 1
     assert not dest.is_symlink()
-    assert zip_members(dest) == {
-        "attacker.txt":b"not derived from CMPCT contents"}
-    record("foreign_valid_zip_" + ("stdlib" if stdlib else "fast"),
+    forged = ({"attacker.txt": b"not derived from CMPCT contents"}
+              if forgery == "foreign_member" else {"raw.bin": b"X" * 64})
+    assert zip_members(dest) == forged
+    assert zip_members(dest) != {"raw.bin": bytes(range(64))}
+    case = ("foreign_valid_zip_" if forgery == "foreign_member"
+            else "same_name_forged_zip_") + ("stdlib" if stdlib else "fast")
+    record(case,
            src=src, source_bytes=source_bytes, victim=victim,
            victim_original=victim_original, dest=dest, prior=prior,
            details={"published_is_regular":True,
-                    "expected_member_absent":True, "interleaving":seen[0]})
+                    "expected_member_absent":forgery=="foreign_member",
+                    "same_name_wrong_contents":forgery=="same_name_wrong_bytes",
+                    "attacker_zip_crc_valid":True, "interleaving":seen[0]})
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX directory-name alias pivot")
