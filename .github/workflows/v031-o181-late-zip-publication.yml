@@ -104,7 +104,9 @@ jobs:
           assert all(r["victim_before_sha"]==r["victim_after_sha"] for r in rows)
           assert all(r["source_sha"]==rows[0]["source_sha"] for r in rows)
           assert all(r["prior_zip_sha"]!=r["published_zip_sha"] for r in rows)
-          attack=[r for r in rows if r["case"].startswith(("foreign_valid_zip","late_"))]
+          attack=[r for r in rows if r["case"].startswith(
+              ("foreign_valid_zip","same_name_forged_zip","late_"))]
+          assert len(attack)==(4 if os.name=="nt" else 6),len(attack)
           assert all(r["result"]=="AUTHENTIC_CLEAN_CONTROL" for r in rows
                      if r["case"].startswith("clean_"))
           assert all(r["result"]=="POSTCHECK_NAME_SUBSTITUTION_ACCEPTED" for r in attack)
