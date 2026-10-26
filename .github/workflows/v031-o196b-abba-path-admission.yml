@@ -1,0 +1,119 @@
+# ci-lane: fast
+name: CMPCT O196b ABBA path CDC admission
+on:
+  pull_request:
+    paths:
+      - "research/o196b_abba_path_cdc_probe.py"
+      - "docs/v031-research/2026-10-26-o196b-abba-path-cdc-prereg.md"
+      - "native/cmpct_cdc.c"
+      - "src/cmpct/codec.py"
+      - "pyproject.toml"
+      - ".github/workflows/v031-o196b-abba-path-admission.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o196b-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  direct-base-vs-candidate-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      BASE_SHA: "62792a7fc61b033b306b4445c337ed123946514d"
+    steps:
+      - name: Fetch exact candidate and authentic direct base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Bind the only changed native source and verify inherited Python loader is identical
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object native/cmpct_cdc.c)" = "a6253beece20ce8aad3cdb605a6d9fcaa50d9364"
+          test -s docs/v031-research/2026-10-26-o196b-abba-path-cdc-prereg.md
+          test -s research/o196b_abba_path_cdc_probe.py
+          mkdir -p o196b-evidence
+          git worktree add --detach /tmp/o196b-direct-base "$BASE_SHA"
+          git diff --exit-code "$BASE_SHA" "$EVIDENCE_HEAD" -- src/cmpct/codec.py src/cmpct/builder.py src/cmpct/native_codec.py pyproject.toml
+          {
+            echo "candidate_sha=$EVIDENCE_HEAD"
+            echo "direct_base_sha=$(git -C /tmp/o196b-direct-base rev-parse HEAD)"
+            echo "codec_blob=$(git hash-object src/cmpct/codec.py)"
+            echo "cdc_blob=$(git hash-object native/cmpct_cdc.c)"
+            echo "probe_blob=$(git hash-object research/o196b_abba_path_cdc_probe.py)"
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            uname -a
+          } | tee o196b-evidence/source.txt
+
+      - name: Set up official gate Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Reproduce normal candidate editable install and base Rust materialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e . 2>&1 | tee o196b-evidence/candidate-editable-install.log
+          python tools/materialize_performance_base_native.py \
+            /tmp/o196b-direct-base --receipt o196b-evidence/base-native.json \
+            2>&1 | tee o196b-evidence/base-native-build.log
+
+      - name: Use exact source-path imports in independent interpreter processes
+        shell: bash
+        env:
+          PROBE: ${{ github.workspace }}/research/o196b_abba_path_cdc_probe.py
+          REPO: ${{ github.workspace }}
+          ARTIFACT_ROOT: ${{ github.workspace }}/o196b-evidence
+        run: |
+          set -euo pipefail
+          cd /tmp
+          env -u PYTHONPATH PYTHONPATH=/tmp/o196b-direct-base/src \
+            python "$PROBE" --arm base --expected-src /tmp/o196b-direct-base/src \
+            --out "$ARTIFACT_ROOT/base.json" > "$ARTIFACT_ROOT/base.stdout.txt"
+          env -u PYTHONPATH PYTHONPATH="$REPO/src" \
+            python "$PROBE" --arm candidate --expected-src "$REPO/src" \
+            --out "$ARTIFACT_ROOT/candidate.json" > "$ARTIFACT_ROOT/candidate.stdout.txt"
+
+      - name: Compare admission without reclassifying performance failures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path('o196b-evidence/base.json').read_text())
+          b=json.loads(Path('o196b-evidence/candidate.json').read_text())
+          assert a['arm'] == 'base' and b['arm'] == 'candidate'
+          assert a['source_sha256'] == b['source_sha256']
+          assert a['input_sha256'] == b['input_sha256']
+          assert a['fixed_lengths'] == b['fixed_lengths']
+          assert a['exact_reassembly'] and b['exact_reassembly']
+          if not a['native_cdc_loaded'] and not b['native_cdc_loaded']:
+              assert a['adjacent_native_file'] is False and b['adjacent_native_file'] is False
+              assert a['observed_lengths'] == a['fixed_lengths']
+              assert b['observed_lengths'] == b['fixed_lengths']
+              print('O196B_DECISION=ABBA_PATHS_BOTH_CDC_ABSENT')
+          else:
+              print('O196B_DECISION=PREDICTION_FALSIFIED_OR_PARTIAL_ADMISSION')
+              print('O196B_BASE_NATIVE=' + str(a['native_cdc_loaded']))
+              print('O196B_CANDIDATE_NATIVE=' + str(b['native_cdc_loaded']))
+          print('O196B_EXACT_SOURCE_PATH_AND_REASSEMBLY=PASS')
+          PY
+
+      - name: Retain all source-bound positive and negative raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o196b-abba-cdc-admission-${{ env.EVIDENCE_HEAD }}
+          path: o196b-evidence/
+          if-no-files-found: warn
+
+# Observing both arms on fallback is attribution evidence, NOT evidence to override a red ABBA.
