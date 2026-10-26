@@ -1,0 +1,64 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24F04 RAW source immutable transfer acceptance
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24f04_raw_chunk_immutable_transfer.py'
+      - '.github/workflows/v031-j24f04-raw-source-immutable.yml'
+      - 'docs/v031-research/2026-10-26-j24f04-raw-source-immutable-transfer-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24f04-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  j24f04-exact-source-installed-court:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind exact product and preregistered ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          test "$HEAD_SHA" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "8b5910725260e7b4db155ee0b393eb48a42f7efa"
+          test "$(git merge-base --is-ancestor 2344b1617fb52e50801961bf54be7f5cfe62e301 HEAD; echo $?)" = 0
+          git show -s --format='%H %s' HEAD
+      - name: Install exactly current candidate source
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Verify real r24 S_CHUNKS and S_CDC external source mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence-artifacts
+          python research/j24f04_raw_chunk_immutable_transfer.py --output "${{ github.workspace }}/evidence-artifacts/j24f04.json" | tee evidence-artifacts/stdout.txt
+          test -s evidence-artifacts/j24f04.json
+      - name: Retain actual source bound observations, even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24f04-${{ runner.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: evidence-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
