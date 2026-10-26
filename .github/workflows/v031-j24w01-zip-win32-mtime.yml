@@ -52,6 +52,8 @@ jobs:
           test "$(git rev-parse HEAD:src/cmpct/_win32_times.py)" = 70308f454c74fad7b247db6ee36aa8cc7d38c99c
           test "$(git rev-parse HEAD:tests/test_v031_o167_win32_mtime.py)" = 4d93ee6ba26f198bd35d826c64a009a83e5eecde
           test "$(git rev-parse HEAD:research/o160_zip_name_parity_court.py)" = 1a493b5971a35a21a64232e7d647bd649b3acfec
+          test "$(git rev-parse HEAD:tests/test_v031_o149_zip_export_atomic_publication.py)" = d394c1dd66eb229f5b24ccbd3713825f5e95cd89
+          test "$(git rev-parse HEAD:tests/test_v031_o140_zip_export_nonregular.py)" = 063493b35b22f48d3b95a18c0b4ae41e761de1cf
           test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
           printf '%s\n' "$EVIDENCE_HEAD" > j24w01-evidence/HEAD
           git status --porcelain > j24w01-evidence/status.txt
