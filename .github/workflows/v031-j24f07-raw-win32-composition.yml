@@ -1,0 +1,94 @@
+# ci-lane: fast
+# J24F07: source-exact *product candidate* composition court. No release credit.
+name: v031 J24F07 bounded RAW x Win32 fd-mode
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24f07-raw-window-win32-compose-20261026
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24f05-bounded-raw-window-custody-20261026
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24f07-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-source-three-host:
+    name: Source-authenticated RAW/Win32 coexistence (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - name: Checkout exact candidate with history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Assert prereg ancestry, parent source and change scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 1885cb0658cacd34a50d05e45b541ecb76fc8497 HEAD
+          git merge-base --is-ancestor 1da186ce326e37331b4af0d46d0a59e0885ff5e1 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "a29421456c7c8d46157490fa03594a4c620a483d"
+          test "$(git diff --name-only 1885cb0658cacd34a50d05e45b541ecb76fc8497 HEAD -- src/)" = "src/cmpct/reader.py"
+          git diff --check 1885cb0658cacd34a50d05e45b541ecb76fc8497 HEAD
+          mkdir -p j24f07-evidence
+          git rev-parse HEAD > j24f07-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > j24f07-evidence/reader.blob
+          git rev-parse HEAD:research/j24f07_composition_court.py > j24f07-evidence/court.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-j24f07-raw-win32-prereg.md > j24f07-evidence/prereg.blob
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install genuine candidate package, not checkout imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          import cmpct.reader
+          checkout=Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          installed=Path(cmpct.reader.__file__).resolve()
+          assert not installed.is_relative_to(checkout), (installed,checkout)
+          actual=hashlib.sha256(installed.read_bytes()).digest()
+          source=hashlib.sha256((checkout/"src/cmpct/reader.py").read_bytes()).digest()
+          assert actual==source
+          print(f"J24F07_INSTALLED_READER=PASS file={installed} fchmod_available={hasattr(os,'fchmod')}")
+          PY
+      - name: Source-exact three-host frozen wire, Builder, and 8MiB RAW
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24f07_composition_court.py" --out "$GITHUB_WORKSPACE/j24f07-evidence/composition.json" 2>&1 | tee "$GITHUB_WORKSPACE/j24f07-evidence/composition.log"
+          test -s "$GITHUB_WORKSPACE/j24f07-evidence/composition.json"
+      - name: Reexecute all inherited J24F05 source-mutation cases on POSIX
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24f07_legacy_raw_hostile.py" --output "$GITHUB_WORKSPACE/j24f07-evidence/hostile.json" 2>&1 | tee "$GITHUB_WORKSPACE/j24f07-evidence/hostile.log"
+          test -s "$GITHUB_WORKSPACE/j24f07-evidence/hostile.json"
+      - name: Retain raw original receipts even when red
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24f07-${{ runner.os }}-${{ github.sha }}
+          path: j24f07-evidence/
+          if-no-files-found: warn
+          retention-days: 30
