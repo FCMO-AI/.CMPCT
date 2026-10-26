@@ -1,0 +1,55 @@
+# ci-lane: fast
+name: v031 O193 authentic small-archive ZIP64 streaming mechanism court
+on:
+  pull_request:
+    branches:
+      - agent/phased3-v031-o191-zip64-dos-metadata-20261026
+      - agent/v031-development
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/o193_zip64_stream_court.py'
+      - '.github/workflows/v031-o193-zip64-stream.yml'
+      - 'docs/v031-research/2026-10-26-o193-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o193-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-stream:
+    name: Authentic installed Reader streamed member (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact candidate as package
+        run: python -m pip install .
+      - name: Generate real r24 source and test bounded ZIP streaming
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o193_zip64_stream_court.py" --out "$RUNNER_TEMP/o193-result.json"
+      - name: Persist raw source-bound result
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o193-stream-${{ matrix.os }}-${{ github.sha }}
+          path: ${{ runner.temp }}/o193-result.json
+          if-no-files-found: warn
