@@ -1,0 +1,57 @@
+name: O192 — bounded reuse-informed cache admission oracle
+on:
+  pull_request:
+    paths:
+      - "research/o192_twoqueue_oracle.py"
+      - "docs/v031-research/2026-10-26-o192-2q-prereg.md"
+      - ".github/workflows/v031-o192-twoqueue.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: o192-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  charged-twoqueue:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Original control custody and synthetic oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "HEAD=$(git rev-parse HEAD)" > o192-source.txt
+          echo "O188_SOURCE_BLOB=$(git rev-parse HEAD:research/o188_cache_admission_oracle.py)" >> o192-source.txt
+          echo "O192_SOURCE_BLOB=$(git rev-parse HEAD:research/o192_twoqueue_oracle.py)" >> o192-source.txt
+          python research/o192_twoqueue_oracle.py > o192-result.json
+          python - <<'PY'
+          import json
+          d=json.load(open('o192-result.json',encoding='utf-8'))
+          assert len(d['traces'])==8
+          assert d['budget_bytes']==64*1024*1024
+          assert d['model_metadata_bytes_per_key']==128
+          assert all(len(v)==7 for v in d['traces'].values())
+          assert all(x['peak_keys']<=32768 for v in d['traces'].values() for x in v.values())
+          assert all(x['peak_model_bytes_or_legacy_payload_bytes']<=d['budget_bytes'] for v in d['traces'].values() for x in v.values())
+          for t,v in d['traces'].items():
+              total={'forward96':288,'reverse96':192,'fit48':144,'phase_B48':384,
+                     'hot16':352,'vzip_proxy':416,'cold512':512,'zero40000':40000}[t]
+              for p,x in v.items(): assert x['hits']+x['misses']==total, (t,p,x)
+          print('O192_DECISION='+d['decision'])
+          print('O192_PROSPECTIVE='+str(d['prospective_conditions']))
+          PY
+          sha256sum research/o192_twoqueue_oracle.py research/o188_cache_admission_oracle.py o192-result.json > o192-sha256.txt
+      - name: Preserve raw outcome and original source IDs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o192-twoqueue-oracle-${{ github.sha }}
+          path: |
+            o192-result.json
+            o192-sha256.txt
+            o192-source.txt
+          if-no-files-found: warn
