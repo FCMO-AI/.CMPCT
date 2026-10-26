@@ -1,0 +1,59 @@
+# ci-lane: deep
+name: O206 enabled WAVFLAC exact-source three-host conformance
+on:
+  push:
+    branches:
+      - agent/phased2-v031-o206-wavflac-extras-source-exact-20261026
+  pull_request:
+    paths:
+      - 'research/o206_wavflac_extras_court.py'
+      - '.github/workflows/o206-wavflac-extras.yml'
+      - 'docs/v031-research/2026-10-26-o206-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o206-audio-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  supported-wavflac:
+    name: Installed PCM16 and frozen WAVFLAC (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - name: Checkout actual PR head, with immutable historical source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic package and declared optional audio dependencies
+        shell: bash
+        run: |
+          python -m venv .o206-venv
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            PY=.o206-venv/Scripts/python.exe
+          else
+            PY=.o206-venv/bin/python
+          fi
+          "$PY" -m pip install --disable-pip-version-check --no-input -e '.[audio]'
+          "$PY" -c "import numpy,soundfile; from cmpct.native_codec import _library_path; print(numpy.__version__,soundfile.__version__,_library_path())"
+          "$PY" research/o206_wavflac_extras_court.py --result "$RUNNER_TEMP/o206-result.json"
+      - name: Preserve every host's measured outcome even when negative
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o206-enabled-wavflac-${{ matrix.os }}
+          path: ${{ runner.temp }}/o206-result.json
+          if-no-files-found: warn
+          retention-days: 30
