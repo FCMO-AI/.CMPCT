@@ -96,3 +96,38 @@ def test_missing_fchmod_does_not_weaken_corrupt_chunk_atomicity(
                 ar.extractall(out, metadata=False)
     assert target.read_bytes() == b"PRESERVE-EXISTING"
     assert not list(out.glob(".*.cmpct-part-*"))
+
+
+@pytest.mark.parametrize("error_type", [OSError, ValueError], ids=["unavailable-mode-best-effort", "unexpected-mode-error"])
+def test_fd_chmod_error_boundary_keeps_original_exception_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    """Missing capability is best-effort, while unexpected API misuse must remain visible.
+
+    Footnote: a broad AttributeError/Exception catch around the entire extraction could hide real
+    data-path problems; patching the optional primitive's behavior isolates that boundary.
+    """
+    record = _records()[0]
+    source = _archive(tmp_path, record)
+    out = tmp_path / "out"
+    out.mkdir()
+    target = out / record["name"]
+    target.write_bytes(b"OLD-DATA")
+
+    def fake_fd_chmod(fd: int, mode: int) -> None:
+        raise error_type("synthetic fd mode failure")
+
+    with CMPCT(source) as ar:
+        with monkeypatch.context() as m:
+            m.setattr(os, "fchmod", fake_fd_chmod, raising=False)
+            if error_type is OSError:
+                ar.extractall(out, metadata=False)
+            else:
+                with pytest.raises(ValueError, match="synthetic fd mode failure"):
+                    ar.extractall(out, metadata=False)
+
+    if error_type is OSError:
+        assert hashlib.sha256(target.read_bytes()).hexdigest() == record["logical_sha256"]
+    else:
+        assert target.read_bytes() == b"OLD-DATA"
+    assert not list(out.glob(".*.cmpct-part-*"))
