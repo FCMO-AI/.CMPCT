@@ -115,14 +115,33 @@ def test_win32_reparse_leaf_does_not_modify_target(tmp_path: Path) -> None:
     target.write_bytes(PAYLOAD)
     os.utime(target, ns=(STAMP_NS, STAMP_NS))
     link = tmp_path / "symlink.bin"
+    kind = "symlink"
     try:
         os.symlink(target, link)
-    except (OSError, NotImplementedError) as exc:
-        pytest.skip(f"symlink creation unavailable on host: {exc}")
-    before_ns = target.stat().st_mtime_ns
-    with pytest.raises(OSError):
-        restore_win32_leaf_mtime(link, DIFFERENT_NS, directory=False)
-    assert link.is_symlink()
-    assert target.read_bytes() == PAYLOAD
-    assert target.stat().st_mtime_ns == before_ns
-    _receipt("reparse", {"platform": sys.platform, "external_target_mtime_unchanged": True, "reparse_refused": True})
+    except (OSError, NotImplementedError):
+        # Some hosted Windows users lack the privilege to create symlinks.
+        # A directory junction is also a final-component reparse point; it
+        # supplies an independently real kernel witness without weakening the
+        # requirement to reject such leaves.
+        import subprocess
+        kind = "junction"
+        target_dir = tmp_path / "external-directory"
+        target_dir.mkdir()
+        os.utime(target_dir, ns=(STAMP_NS, STAMP_NS))
+        link = tmp_path / "directory-junction"
+        proc = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target_dir)],
+                              capture_output=True, text=True)
+        assert proc.returncode == 0, ("junction unavailable", proc.stdout, proc.stderr)
+        before_ns = target_dir.stat().st_mtime_ns
+        with pytest.raises(OSError):
+            restore_win32_leaf_mtime(link, DIFFERENT_NS, directory=True)
+        assert target_dir.stat().st_mtime_ns == before_ns
+    else:
+        before_ns = target.stat().st_mtime_ns
+        with pytest.raises(OSError):
+            restore_win32_leaf_mtime(link, DIFFERENT_NS, directory=False)
+        assert link.is_symlink()
+        assert target.read_bytes() == PAYLOAD
+        assert target.stat().st_mtime_ns == before_ns
+    _receipt("reparse", {"platform": sys.platform, "reparse_kind": kind,
+                         "external_target_mtime_unchanged": True, "reparse_refused": True})
