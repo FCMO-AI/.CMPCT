@@ -67,6 +67,8 @@ jobs:
           python -m pip install --disable-pip-version-check pytest
           echo "PYTHONPATH=$RUNNER_TEMP/o160-installed" >> "$GITHUB_ENV"
           echo "CMPCT_FIXTURE_JSON=$GITHUB_WORKSPACE/tests/conformance/v24-direct-codecs.json" >> "$GITHUB_ENV"
+          echo "O140_PRODUCT_SRC=$RUNNER_TEMP/o160-installed" >> "$GITHUB_ENV"
+          echo "O140_ENGINE=candidate" >> "$GITHUB_ENV"
       - name: Verify installed source custody
         shell: bash
         run: |
