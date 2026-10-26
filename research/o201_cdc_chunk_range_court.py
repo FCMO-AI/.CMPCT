@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """O201: actual r24 cdc descriptor-length/read_range discrepancy.
-Preregistered independently in docs/v031-research/2026-10-26-o201-cdc-chunk-range-prereg.md.
+Preregistered independently in docs/v031-research/2026-10-26-o201-cdc-descriptor-range-prereg.md.
 """
 from __future__ import annotations
 import argparse
@@ -114,7 +114,7 @@ def main() -> int:
     mismatch=(bad['verify']=={'ok':True,'value':1} and
               bad['full_read']=={'ok':True,'value':PAYLOAD.hex()} and
               bad['extract'].get('ok') is False and 'chunk length failure' in bad['extract'].get('error','') and
-              bad['late_range']=={'ok':True,'value':bytes(2).hex()})
+              bad['late_range']=={'ok':True,'value':b''.hex()})
     record['positive_control_pass']=bool(baseline)
     record['hostile_mismatch_observed']=bool(mismatch)
     record['decision']=('INCONCLUSIVE_POSITIVE_CONTROL_FAILED' if not baseline else
