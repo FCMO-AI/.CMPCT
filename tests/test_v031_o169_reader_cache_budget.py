@@ -70,7 +70,7 @@ def test_empty_payload_count_is_bounded_and_lru_refreshes():
     for idx in range(cap + 3):
         obj._retain_decoded(idx % 2, idx, b"")
     assert obj._cached_decoded(0, 0) is None
-    assert obj._cached_decoded(1, cap + 2) == b""
+    assert obj._cached_decoded((cap + 2) % 2, cap + 2) == b""
     assert obj._cache_bytes == 0
     _assert_accounting(obj)
 
