@@ -599,6 +599,11 @@ class CMPCT:
         except FileNotFoundError: target_stat=None
         if target_stat is not None and (source_stat.st_dev,source_stat.st_ino)==(target_stat.st_dev,target_stat.st_ino):
             raise IOError('ZIP export destination aliases its own CMPCT source archive')
+        # Reuse the same stat: opening a pre-existing FIFO for writing may wait forever for a
+        # reader, while devices/sockets cannot be safely treated as regular ZIP artifacts.
+        # This is a static kind gate; a concurrent path swap still requires fd-bound custody.
+        if target_stat is not None and not stat.S_ISREG(target_stat.st_mode):
+            raise IOError('ZIP export destination is nonregular')
         entries=[];offset=0
         # Authenticate each unique physical Deflate blob before opening the ZIP.
         # The fast path must not turn a source rejected by read() into a successful

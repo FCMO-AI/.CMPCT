@@ -1,0 +1,110 @@
+# ci-lane: fast
+# O140 differential court: installed original O135 ZIP exporter vs static nonregular leaf gate.
+name: CMPCT O140 ZIP export nonregular-output court
+
+on:
+  push:
+    branches: [agent/phased1-v031-o140-zip-export-nonregular-destination-20261026]
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_v031_o140_zip_export_nonregular.py'
+      - '.github/workflows/v031-o140-zip-export-nonregular.yml'
+      - 'docs/v031-research/2026-10-26-o140-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o140-zip-export-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-court:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+        engine: [original, candidate]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Verify exact HEAD and frozen source/fixture/test identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          test "$(git hash-object src/cmpct/reader.py)" = e46e6121842d485cb209118576ebf3ba3719080d
+          test "$(git hash-object tests/test_v031_o140_zip_export_nonregular.py)" = 063493b35b22f48d3b95a18c0b4ae41e761de1cf
+          test "$(git hash-object tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install authentic CMPCT package and test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -e '.[test]'
+
+      - name: Resolve physically distinct original or candidate package
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.engine }}" = original ]; then
+            git worktree add --detach "$RUNNER_TEMP/o140-o135-original" 24fcc2897578c9628819971fe85d1fd264b885e2
+            test "$(git -C "$RUNNER_TEMP/o140-o135-original" rev-parse HEAD)" = 24fcc2897578c9628819971fe85d1fd264b885e2
+            test "$(git -C "$RUNNER_TEMP/o140-o135-original" hash-object src/cmpct/reader.py)" = f1c945ac3bd93d73226c81099e95ff1a2d0a0f9d
+            python -m pip install --disable-pip-version-check --no-deps --target "$RUNNER_TEMP/o140-original-installed" "$RUNNER_TEMP/o140-o135-original"
+            echo "O140_PRODUCT_SRC=$RUNNER_TEMP/o140-original-installed" >> "$GITHUB_ENV"
+            echo "O135_PRODUCT_SRC=$RUNNER_TEMP/o140-original-installed" >> "$GITHUB_ENV"
+            echo "O135_EXPECT=candidate" >> "$GITHUB_ENV"
+          else
+            echo "O140_PRODUCT_SRC=$GITHUB_WORKSPACE/src" >> "$GITHUB_ENV"
+            echo "O135_PRODUCT_SRC=$GITHUB_WORKSPACE/src" >> "$GITHUB_ENV"
+            echo "O135_EXPECT=candidate" >> "$GITHUB_ENV"
+          fi
+          echo "O140_ENGINE=${{ matrix.engine }}" >> "$GITHUB_ENV"
+
+      - name: Source-authentic ZIP export FIFO / ordinary / O135 regression
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p o140-evidence
+          python -m pytest --noconftest -c /dev/null -vv -s \
+            tests/test_v031_o140_zip_export_nonregular.py \
+            tests/test_v031_zip_export_source_alias_o135.py \
+            --junitxml=o140-evidence/junit.xml 2>&1 | tee o140-evidence/pytest.log
+
+      - name: Preserve source and original raw results
+        shell: bash
+        if: always()
+        run: |
+          mkdir -p o140-evidence
+          git rev-parse HEAD > o140-evidence/source-head.sha
+          git hash-object src/cmpct/reader.py > o140-evidence/candidate-reader.blob
+          git hash-object tests/test_v031_o140_zip_export_nonregular.py > o140-evidence/test.blob
+          git hash-object tests/conformance/v24-direct-codecs.json > o140-evidence/golden.blob
+          printf 'engine=%s\nos=%s\nsource=%s\n' "${{ matrix.engine }}" "${{ matrix.os }}" "${O140_PRODUCT_SRC:-UNSET}" > o140-evidence/environment.txt
+
+      - name: Preserve raw receipts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o140-${{ matrix.os }}-${{ matrix.engine }}-${{ github.sha }}
+          path: o140-evidence/
+          if-no-files-found: error
