@@ -41,12 +41,15 @@ jobs:
         run: |
           mkdir -p j24z01-artifacts
           python research/j24z01_zstd_stream_oracle.py run j24z01-artifacts/oracle.json 5
-      - name: Retain raw result including negative cases
+      - name: J24Z01b independent fresh-child bounded-call granularity comparison
+        run: |
+          python research/j24z01b_window_court.py run j24z01-artifacts/window-result.json 5
+      - name: Retain raw results including negative cases
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: j24z01-${{ env.EVIDENCE_HEAD }}
-          path: j24z01-artifacts/oracle.json
+          path: j24z01-artifacts/*.json
           if-no-files-found: warn
 
 # Research only: not the package-owned Zstd decoder; no product/release promotion.
