@@ -1,0 +1,119 @@
+# ci-lane: fast
+# O151 — test-only independent comparison of existing O140/O149/O150 owners.
+name: CMPCT O151 ZIP publication cross-candidate semantic court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o151-zip-publication-semantic-delta-20261026
+  pull_request:
+    paths:
+      - '.github/workflows/v031-o151-zip-publication-semantics.yml'
+      - 'tests/test_v031_o151_zip_publication_semantics.py'
+      - 'docs/v031-research/2026-10-26-o151-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o151-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-comparison:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+        include: []
+        engine: [o140, o149, o150]
+    env:
+      HARNESS_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact test-only court and nonshallow ancestry
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.HARNESS_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+          clean: true
+
+      - name: Bind original preregistered instrument and select existing owner
+        shell: bash
+        env:
+          ENGINE: ${{ matrix.engine }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HARNESS_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor a4a6ae0f6c8c2b1801dbc708a07b7458d5736d16 HEAD
+          test "$(git hash-object tests/test_v031_o151_zip_publication_semantics.py)" = "01f14a1fbbc24b7cbbf85f7230b5bdbc9e0df393"
+          cp tests/test_v031_o151_zip_publication_semantics.py "$RUNNER_TEMP/o151_case.py"
+          mkdir -p o151-evidence
+          git rev-parse HEAD > o151-evidence/harness-head.sha
+          git hash-object "$RUNNER_TEMP/o151_case.py" > o151-evidence/test.blob
+          case "$ENGINE" in
+            o140)
+              SRC="d8b69758dbcbb66fe28fa7cf59598916df160d2d"
+              READER="e46e6121842d485cb209118576ebf3ba3719080d" ;;
+            o149)
+              SRC="ca01d885fedc8ffc343b9c3c624eddd134158452"
+              READER="496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332" ;;
+            o150)
+              SRC="48bbb41661f8b19d369c50b06bec1018cd4400e9"
+              READER="f38662c8db4132895778951263d83d24022f9296" ;;
+            *) exit 2 ;;
+          esac
+          echo "O151_ENGINE=$ENGINE" >> "$GITHUB_ENV"
+          echo "SOURCE_HEAD=$SRC" >> "$GITHUB_ENV"
+          echo "SOURCE_READER=$READER" >> "$GITHUB_ENV"
+          git fetch --no-tags origin "$SRC"
+          git -c advice.detachedHead=false checkout --detach "$SRC"
+          test "$(git rev-parse HEAD)" = "$SRC"
+          test "$(git hash-object src/cmpct/reader.py)" = "$READER"
+          test "$(git hash-object tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
+          git rev-parse HEAD > o151-evidence/product-head.sha
+          git hash-object src/cmpct/reader.py > o151-evidence/reader.blob
+          git hash-object tests/conformance/v24-direct-codecs.json > o151-evidence/vector.blob
+
+      - name: Use Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install selected genuine product outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/o151-installed" "$GITHUB_WORKSPACE"
+          echo "PYTHONPATH=$RUNNER_TEMP/o151-installed" >> "$GITHUB_ENV"
+          echo "CMPCT_FIXTURE_JSON=$GITHUB_WORKSPACE/tests/conformance/v24-direct-codecs.json" >> "$GITHUB_ENV"
+          echo "O151_RESULT_PATH=$GITHUB_WORKSPACE/o151-evidence/result.json" >> "$GITHUB_ENV"
+
+      - name: Run isolated original/competitor POSIX semantics witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$RUNNER_TEMP/o151_case.py" 2>&1 | tee "$GITHUB_WORKSPACE/o151-evidence/court.log"
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          record=json.loads(Path(os.environ["O151_RESULT_PATH"]).read_text())
+          assert record["engine"]==os.environ["O151_ENGINE"]
+          assert record["actual"]==record["predicted"]
+          assert len(record["captured_replaces"])==record["predicted"]["stage_count"]
+          print("O151_AUDIT_PASS="+json.dumps({"engine":record["engine"],"host":record["host"],"actual":record["actual"]},sort_keys=True))
+          PY
+
+      - name: Preserve raw scientific outcomes, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o151-${{ matrix.os }}-${{ matrix.engine }}-${{ env.HARNESS_HEAD }}
+          path: o151-evidence/
+          retention-days: 30
+          if-no-files-found: warn
