@@ -101,7 +101,10 @@ def execute(py: str) -> dict:
         raise AssertionError("Not a minimal runtime: numpy is importable")
     if importlib.util.find_spec("soundfile") is not None:
         raise AssertionError("Not a minimal runtime: soundfile is importable")
-    candidate_codec = (ROOT / "src/cmpct/codec.py").read_bytes()
+    # Always hash repository blob bytes, not checkout bytes (Windows core.autocrlf
+    # may convert LF to CRLF without changing the committed source identity).
+    candidate_codec = expected_success(
+        command(["git", "show", "HEAD:src/cmpct/codec.py"]), "git-show-candidate-codec")
     assert blob_sha(candidate_codec) == CAND_CODEC_BLOB, "candidate codec source changed"
     base_codec = expected_success(
         command(["git", "show", BASE_COMMIT + ":src/cmpct/codec.py"]), "git-show-base-codec")
@@ -121,8 +124,23 @@ def execute(py: str) -> dict:
         t = Path(temp)
         candidate = t / "candidate"
         baseline = t / "historical"
+        # CMPCT requires its compiled package-owned native Zstd core. Install the
+        # unmodified real package (without audio extras) once, then copy the *same*
+        # binary to each isolated historical/candidate source tree. This is not an
+        # optional audio dependency and is identical in both arms of the A/B.
+        native_env = os.environ.copy()
+        native_env["PYTHONPATH"] = str(ROOT / "src")
+        native_path = Path(expected_success(
+            command([py, "-c",
+                     "from cmpct.native_codec import _library_path; print(_library_path())"],
+                    native_env), "real native core path").decode().strip())
+        assert native_path.is_file(), native_path
+        result["native_library_filename"] = native_path.name
+        result["native_library_sha256"] = hashlib.sha256(native_path.read_bytes()).hexdigest()
         for dst in (candidate, baseline):
             shutil.copytree(ROOT / "src/cmpct", dst / "cmpct")
+            shutil.copy2(native_path, dst / "cmpct" / native_path.name)
+            (dst / "cmpct/codec.py").write_bytes(candidate_codec)
         (baseline / "cmpct/codec.py").write_bytes(base_codec)
 
         corpus = t / "mixed"
