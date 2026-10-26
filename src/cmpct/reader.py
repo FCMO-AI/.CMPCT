@@ -4,6 +4,7 @@ from __future__ import annotations
 # silently drop recovery, range-read, path-safety, transactional-generation, or metadata semantics.
 
 import base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, mmap, os, shutil, secrets, stat, struct, sys, tempfile, threading, time, zipfile, zlib
+from contextlib import nullcontext
 from pathlib import Path
 import msgpack
 
@@ -602,26 +603,41 @@ class CMPCT:
         if target_stat is not None and not stat.S_ISREG(target_stat.st_mode):
             raise IOError('ZIP export destination is nonregular')
 
-        # O_EXCL prevents following a pre-planted candidate symlink; normal 0666
-        # creation honors the caller's umask, unlike mkstemp's fixed 0600 mode.
-        stage=None
+        # Keep the exact O_EXCL-created descriptor: never reopen an attacker-mutable
+        # sibling name for writing. O157 proved both symlink and regular-hardlink pivots.
+        stage=None;stage_fd=-1
         for _ in range(8):
             candidate=out.with_name(f'.{out.name}.cmpct-zip-{secrets.token_hex(16)}.tmp')
             try:
-                fd=os.open(candidate,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o666)
+                stage_fd=os.open(candidate,os.O_WRONLY|os.O_CREAT|os.O_EXCL|getattr(os,'O_BINARY',0),0o666)
             except FileExistsError:
                 continue
-            os.close(fd);stage=candidate;break
+            stage=candidate;break
         if stage is None:raise FileExistsError('unable to allocate private ZIP export staging file')
         try:
-            self._export_zip_direct_unpublished(stage,level)
-            # Keep an existing regular destination's basic permissions where
-            # possible. Owner, xattrs, inode and hardlink identity do not survive
-            # replacement and remain explicit promotion/compatibility debt.
+            # closefd=False closes the Python wrapper without surrendering the original
+            # OS descriptor; both fast writer and ZipFile's fallback use this same stream.
+            with os.fdopen(stage_fd,'wb',closefd=False) as stage_stream:
+                self._export_zip_direct_unpublished(stage_stream,level)
+                stage_stream.flush()
             if target_stat is not None:
-                os.chmod(stage,stat.S_IMODE(target_stat.st_mode))
+                if hasattr(os,'fchmod'):
+                    os.fchmod(stage_fd,stat.S_IMODE(target_stat.st_mode))
+                # Windows does not reliably expose descriptor-based chmod; do not
+                # mutate an attacker-swapped name to simulate POSIX mode fidelity.
+            owned=os.fstat(stage_fd)
+            named=os.stat(stage,follow_symlinks=False)
+            if (owned.st_dev,owned.st_ino)!=(named.st_dev,named.st_ino) or not stat.S_ISREG(named.st_mode):
+                raise IOError('ZIP export staging pathname lost exclusive file identity')
+            # On Windows a CRT-open stage can prevent replacement until closed. The
+            # writer has already completed using the original fd. The subsequent
+            # rename is still a pathname race, not an atomic FD-bound publication.
+            if os.name=='nt':
+                os.close(stage_fd);stage_fd=-1
             os.replace(stage,out)
         finally:
+            if stage_fd>=0:
+                os.close(stage_fd)
             try:os.unlink(stage)
             except FileNotFoundError:pass
         return out
@@ -635,13 +651,19 @@ class CMPCT:
         local records. Members without a reusable stream are compressed normally; if Deflate grows
         them, STORE is selected instead. ZIP64-sized members fall back to ZipFile in this prototype.
         """
-        out=Path(out)
+        # A file-like stage is already the exclusively created output inode. For
+        # callers using a pathname, retain the original static admission checks.
+        descriptor_output=hasattr(out,'write') and hasattr(out,'fileno')
+        if not descriptor_output:out=Path(out)
         # The exported ZIP must never truncate the still-open CMPCT archive. Comparing path strings
         # would miss hardlinks and symlinks; compare the destination with the source's open inode.
         # This is a static admission check, not a claim of safety against concurrent path swaps.
         source_stat=os.fstat(self.f.fileno())
-        try: target_stat=os.stat(out)
-        except FileNotFoundError: target_stat=None
+        if descriptor_output:
+            target_stat=os.fstat(out.fileno())
+        else:
+            try: target_stat=os.stat(out)
+            except FileNotFoundError: target_stat=None
         if target_stat is not None and (source_stat.st_dev,source_stat.st_ino)==(target_stat.st_dev,target_stat.st_ino):
             raise IOError('ZIP export destination aliases its own CMPCT source archive')
         # Reuse the same stat: opening a pre-existing FIFO for writing may wait forever for a
@@ -677,7 +699,7 @@ class CMPCT:
                     zi.external_attr=((typ|mode)&0xffff)<<16
                     z.writestr(zi,b'' if k==K_DIR else self.read(rel),compress_type=(zipfile.ZIP_STORED if k==K_DIR else zipfile.ZIP_DEFLATED),compresslevel=level)
             return out
-        with open(out,'wb') as f:
+        with (nullcontext(out) if descriptor_output else open(out,'wb')) as f:
             for row in self.files:
                 rel,k,mode,mt,size,h,storage=row
                 name=(rel.rstrip('/')+'/' if k==K_DIR else rel).encode('utf-8');flags=0x800
