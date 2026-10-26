@@ -1,0 +1,125 @@
+# ci-lane: fast
+# O175 independent genuine r24 Reader memory/scan economics, no release credit.
+name: CMPCT O175 real Reader cache RSS ABBA
+on:
+  push:
+    branches: [agent/phased2-v031-o175-real-reader-cache-rss-abba-20261026]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o175-real-reader-cache
+  cancel-in-progress: true
+
+jobs:
+  authentic-reader-abba:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact source and historical objects
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Pin original and candidate reader source blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 62792a7fc61b033b306b4445c337ed123946514d HEAD
+          test "$(git rev-parse 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 1434c0b1485bfa59bd3dfe6f604ab555e35002a8
+          test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "$(git rev-parse 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/codec.py)"
+          mkdir -p o175-evidence
+          git show 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/reader.py > "$RUNNER_TEMP/o175-historical-reader.py"
+          test "$(git hash-object "$RUNNER_TEMP/o175-historical-reader.py")" = e716233403dabd0966863c45635e18fa5ac6afb8
+          git rev-parse HEAD > o175-evidence/head.sha
+          git rev-parse HEAD:tests/research/o175_installed_cache_abba.py > o175-evidence/test.blob
+          git rev-parse HEAD:src/cmpct/reader.py > o175-evidence/candidate-reader.blob
+          printf '%s\n' e716233403dabd0966863c45635e18fa5ac6afb8 > o175-evidence/historical-reader.blob
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install one real CMPCT package outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/o175-installed" .
+          echo "PYTHONPATH=$RUNNER_TEMP/o175-installed" >> "$GITHUB_ENV"
+      - name: Verify installed candidate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import cmpct.reader,hashlib,os,pathlib
+          f=pathlib.Path(cmpct.reader.__file__).resolve()
+          assert not f.is_relative_to(pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve())
+          b=f.read_bytes(); digest=hashlib.sha1(f"blob {len(b)}\0".encode()+b).hexdigest()
+          assert digest=='1434c0b1485bfa59bd3dfe6f604ab555e35002a8',(digest,f)
+          print('O175_INSTALLED_READER_BLOB='+digest+' PATH='+str(f),flush=True)
+          PY
+      - name: Build one independently authenticated revision-24 RAW corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/o175_installed_cache_abba.py" make --root "$RUNNER_TEMP/o175-data" | tee "$GITHUB_WORKSPACE/o175-evidence/archive.log"
+          cp "$RUNNER_TEMP/o175-data/o175-manifest.json" "$GITHUB_WORKSPACE/o175-evidence/manifest.json"
+      - name: Source authentic fresh-process A-B-B-A
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          for arm in historical candidate candidate historical; do
+            python "$GITHUB_WORKSPACE/tests/research/o175_installed_cache_abba.py" "$arm" --root "$RUNNER_TEMP/o175-data" --original-reader "$RUNNER_TEMP/o175-historical-reader.py" 2>&1 | tee -a "$GITHUB_WORKSPACE/o175-evidence/abba.log"
+          done
+      - name: Audit exact archive/source and preserve every negative result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,pathlib,statistics,platform
+          out=pathlib.Path('o175-evidence'); manifest=json.loads((out/'manifest.json').read_text())
+          lines=(out/'abba.log').read_text().splitlines()
+          records=[json.loads(line.split('O175_RESULT=',1)[1]) for line in lines if line.startswith('O175_RESULT=')]
+          assert [x['arm'] for x in records]==['historical','candidate','candidate','historical'],records
+          refs={'historical':'e716233403dabd0966863c45635e18fa5ac6afb8','candidate':'1434c0b1485bfa59bd3dfe6f604ab555e35002a8'}
+          folds=set()
+          for rec in records:
+            assert rec['source_blob']==refs[rec['arm']],rec
+            assert rec['archive_sha256']==manifest['archive_sha256'],rec
+            assert rec['count']==96 and rec['size_each']==1048576
+            assert len(rec['passes'])==2
+            for p in rec['passes']:
+              assert p['max_rss_bytes']>0 and p['wall_ns']>0 and p['cpu_ns']>0,p
+              assert p['retained_cache_payload_bytes']==(96 if rec['arm']=='historical' else 64)*1048576,p
+              folds.add(p['fold_sha256'])
+          assert len(folds)==1,folds
+          result={'scope':'installed real archive selective-read, NOT full product parity',
+                  'source_head':(out/'head.sha').read_text().strip(),
+                  'archive_sha256':manifest['archive_sha256'],'os':platform.platform(),
+                  'order':[x['arm'] for x in records],'records':records,
+                  'decision':'REAL_RSS_AND_SCAN_TRADEOFF_MEASURED_NO_RELEASE_CREDIT'}
+          (out/'audit.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          for arm in ['historical','candidate']:
+            rs=[x for x in records if x['arm']==arm]
+            print('O175_SUMMARY='+json.dumps({
+              'arm':arm,
+              'rss_median_bytes':statistics.median(x['passes'][-1]['max_rss_bytes'] for x in rs),
+              'second_scan_wall_median_ms':statistics.median(x['passes'][-1]['wall_ns']/1e6 for x in rs),
+              'retained_payload_bytes':rs[0]['passes'][-1]['retained_cache_payload_bytes'],
+              'archive_sha256':manifest['archive_sha256']},sort_keys=True),flush=True)
+          PY
+      - name: Preserve source-bound raw evidence on both success and failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o175-installed-cache-rss-abba
+          path: o175-evidence/
+          retention-days: 30
+          if-no-files-found: warn
