@@ -1,4 +1,4 @@
-# ci-lane: scientific
+# ci-lane: fast
 name: CMPCT O166 CDC cold-start TSan differential
 on:
   pull_request:
@@ -10,6 +10,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-o166-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   differential:
