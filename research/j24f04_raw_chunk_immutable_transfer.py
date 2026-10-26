@@ -115,7 +115,8 @@ def trial(directory, storage_kind, mutate_future=False):
         foreign_chunk if i == selected else chunk
         for i, chunk in enumerate(chunks))
     name, archive_bytes, payload_offset = independent_revision24(chunks, storage_kind)
-    archive = directory / f"source-{name}.cmpct"
+    flavor = "future" if mutate_future else "post-snapshot"
+    archive = directory / f"source-{flavor}-{name}.cmpct"
     archive.write_bytes(archive_bytes)
     source_start = os.stat(archive)
     source_sha_before = sha(archive.read_bytes())
@@ -132,13 +133,13 @@ def trial(directory, storage_kind, mutate_future=False):
         assert bytes(row[5]) == hashlib.sha256(original).digest()
         assert reader.read(name) == original
         assert reader.verify() == 1
-        regular = directory / f"regular-{name}"
+        regular = directory / f"regular-{flavor}-{name}"
         reader.extractall(regular, metadata=False)
         assert (regular / name).read_bytes() == original
         # The ordinary control is against the identical source before external mutation.
         assert sha(archive.read_bytes()) == source_sha_before
 
-        attacked = directory / f"attacked-{name}"
+        attacked = directory / f"attacked-{flavor}-{name}"
         attacked.mkdir()
         sentinel = b"existing verified destination, preserve on SHA failure"
         if mutate_future:
