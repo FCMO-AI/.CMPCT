@@ -4,6 +4,8 @@ name: CMPCT J24P02 Linux fd-bound no-clobber publication oracle
 on:
   push:
     branches: [agent/phased2-v031-j24p02-otmpfile-fd-noclobber-20261026]
+  pull_request:
+    branches: [agent/phased2-v031-o181-zip-postcheck-substitution-20261026]
   workflow_dispatch:
 
 permissions:
