@@ -1,0 +1,90 @@
+# ci-lane: fast
+name: v031 O168 one macOS archive to Linux topology
+
+on:
+  pull_request:
+    branches:
+      - agent/phased3-v031-o165-linux-macos-one-archive-transfer-20261026
+    paths:
+      - 'research/o168_macos_linux_one_archive_court.py'
+      - 'docs/v031-research/2026-10-26-o168-reverse-one-archive-*.md'
+      - '.github/workflows/v031-o168-reverse-one-archive.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-origin:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install original exact CMPCT package on macOS
+        run: python -m pip install .
+      - name: Create one original macOS binary and strict origin receipt
+        env:
+          EVIDENCE_HEAD: \${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/o168"
+          python research/o168_macos_linux_one_archive_court.py \
+            --role producer \
+            --archive "$RUNNER_TEMP/o168/original.cmpct" \
+            --receipt "$RUNNER_TEMP/o168/macos-origin.json" \
+            --output "$RUNNER_TEMP/o168/macos-result.json"
+      - name: Preserve original macOS archive and strict receipts even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o168-macos-original-binary
+          path: \${{ runner.temp }}/o168/
+          if-no-files-found: warn
+
+  linux-receiver:
+    needs: macos-origin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install same exact CMPCT source independently on Ubuntu
+        run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          name: o168-macos-original-binary
+          path: \${{ runner.temp }}/o168
+      - name: Verify transferred original bytes, restore tree and hostile topology
+        env:
+          EVIDENCE_HEAD: \${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o168_macos_linux_one_archive_court.py \
+            --role receiver \
+            --archive "$RUNNER_TEMP/o168/original.cmpct" \
+            --receipt "$RUNNER_TEMP/o168/macos-origin.json" \
+            --output "$RUNNER_TEMP/o168/linux-result.json"
+      - name: Preserve complete Linux independent result on failure or success
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o168-linux-receiver-evidence
+          path: \${{ runner.temp }}/o168/linux-result.json
+          if-no-files-found: warn
