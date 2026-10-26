@@ -139,6 +139,8 @@ def test_j24f01_fixed_chunk_publication(frozen_archive, leaf):
     assert "J24F01_INDEX_OPENED" in result["stdout"], ("no real Reader open", name, leaf, result)
     if leaf == "corrupt":
         assert result["code"] != 0, ("corrupt physical chunk unexpectedly published", name, result)
+        last_error = next((x.strip().lower() for x in reversed(result["stderr"].splitlines()) if x.strip()), "")
+        assert any(x in last_error for x in ("zstd", "deflate", "integrity", "corrupt", "checksum", "decode")), ("not a codec/integrity refusal", name, last_error)
         assert target.read_bytes() == sentinel
         assert os.lstat(target).st_ino == old_stat.st_ino
         assert not list(dest.glob(f".{name}.cmpct-part-*")), "staging leak after rejection"
