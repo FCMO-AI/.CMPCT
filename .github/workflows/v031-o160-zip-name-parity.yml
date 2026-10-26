@@ -1,0 +1,119 @@
+# ci-lane: fast
+# O160 positive product conformance; negative O156 remains unchanged in independent PR #498.
+name: CMPCT O160 canonical ZIP member name acceptance
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-o160-zip-canonical-names-20261026
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/o160_zip_name_parity_court.py'
+      - '.github/workflows/v031-o160-zip-name-parity.yml'
+      - 'docs/v031-research/2026-10-26-o160-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o160-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  canonical-zip-namespace:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source and real history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Check source custody, O149 parent, preregistered question
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor ca01d885fedc8ffc343b9c3c624eddd134158452 HEAD
+          git merge-base --is-ancestor 5fed0b2bf0e03743fd15767eccff925d66868062 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "f29885574c892a2c2dd819f13b7595d1af59a903"
+          test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = "d10b7dab9126d39e819a74279c186363a163f2ef"
+          python -m py_compile research/o160_zip_name_parity_court.py
+          mkdir -p o160-evidence
+          git rev-parse HEAD > o160-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o160-evidence/reader.blob
+          git rev-parse HEAD:research/o160_zip_name_parity_court.py > o160-evidence/test.blob
+          git rev-parse HEAD:tests/conformance/v24-direct-codecs.json > o160-evidence/golden.blob
+      - name: Configure Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic candidate outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/o160-installed" "$GITHUB_WORKSPACE"
+          echo "PYTHONPATH=$RUNNER_TEMP/o160-installed" >> "$GITHUB_ENV"
+      - name: Verify installed source custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,os,pathlib
+          import cmpct.reader
+          installed=pathlib.Path(cmpct.reader.__file__).resolve()
+          workspace=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          assert not installed.is_relative_to(workspace),(installed,workspace)
+          data=installed.read_bytes()
+          git_blob=hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest()
+          assert git_blob=="f29885574c892a2c2dd819f13b7595d1af59a903",(installed,git_blob)
+          print("O160_INSTALLED_READER_GIT_BLOB="+git_blob)
+          PY
+      - name: Execute independent authenticated golden and ZIP filesystem parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          python research/o160_zip_name_parity_court.py | tee o160-evidence/run.log
+      - name: Independently audit decision and complete matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          e=Path("o160-evidence")
+          o=json.loads((e/"result.json").read_text())
+          assert o["schema"]=="cmpct-o160-zip-name-parity-court-v1"
+          assert o["status"]=="ZIP_CANONICAL_NAMES_POSITIVE_SCOPED"
+          assert o["cases_count"]==18==len(o["cases"])
+          assert len(o["collision_refusals"])==3
+          assert {x["serializer"] for x in o["cases"]}=={"fast","forced_stdlib"}
+          assert {x["case"] for x in o["cases"]}=={"unchanged","slash","backslash"}
+          assert len({x["codec"] for x in o["cases"]})==3
+          assert all(x["namespace_agreement"] and x["content_exact"] for x in o["cases"])
+          assert all(x["exported_name"]=="nested/leaf.bin" for x in o["cases"] if x["case"]=="backslash")
+          assert o["release_credit"] is False
+          (e/"audit.json").write_text(json.dumps({"head":(e/"head.sha").read_text().strip(),"cases":18,"collision_refusals":3,"status":"PASS"},sort_keys=True,indent=2)+"\n")
+          print("O160_INDEPENDENT_AUDIT_PASS")
+          PY
+      - name: Preserve raw exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o160-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o160-evidence/
+          retention-days: 30
+          if-no-files-found: warn
