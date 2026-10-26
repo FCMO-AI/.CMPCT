@@ -90,6 +90,23 @@ jobs:
               print("O132_EVIDENCE",r["method"],r["scan_storage"],r["final_storage"],phys["st_blocks"],phys["sparse_returned_none"])
           print("O132_INDEPENDENT_AUDIT_PASS")
           PY
+      - name: Independent fixed-byte v24 S_SPARSE destination safety control
+        shell: bash
+        run: |
+          set -euo pipefail
+          git hash-object tests/conformance/v24-sparse.json | tee o132-evidence/golden-sparse.blob
+          test "$(cat o132-evidence/golden-sparse.blob)" = 002d29f71384bfe0213605eccc952f5ebc20df0b
+          cp tests/test_v031_o132_golden_sparse_leaf.py o132-evidence/test_v031_o132_golden_sparse_leaf.py
+          cmp -s tests/test_v031_o132_golden_sparse_leaf.py o132-evidence/test_v031_o132_golden_sparse_leaf.py
+          python -m pytest -q o132-evidence/test_v031_o132_golden_sparse_leaf.py --junitxml=o132-evidence/golden-junit.xml 2>&1 | tee o132-evidence/golden.log
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          cases=list(ET.parse('o132-evidence/golden-junit.xml').getroot().iter('testcase'))
+          assert len(cases)==2,cases
+          assert all(c.find(k) is None for c in cases for k in ('failure','error','skipped')),cases
+          print('O132_INDEPENDENT_GOLDEN_SPARSE_TWO_TEST_AUDIT_PASS')
+          PY
       - name: Preserve original negative/positive scientific measurements
         if: always()
         uses: actions/upload-artifact@v4
