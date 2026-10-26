@@ -31,6 +31,14 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def file_digest(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fp:
+        for chunk in iter(lambda: fp.read(4 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def payload(i: int) -> bytes:
     # Construct independently of all of CMPCT's encoders; uniform pseudo-random
     # bytes make 96 distinct RAW physical records deterministic across runs.
@@ -84,7 +92,7 @@ def make_archive(root: Path) -> None:
     actual_size = archive.stat().st_size
     assert actual_size == codec.HDR.size + len(compressed_index) * 2 + data_bytes + codec.FTR.size
     manifest = {
-        "archive_sha256": digest(archive.read_bytes()),
+        "archive_sha256": file_digest(archive),
         "archive_bytes": actual_size,
         "index_sha256": h.hex(),
         "files": names,
@@ -118,7 +126,7 @@ def run_child(root: Path, source_name: str, old_source: Path | None) -> None:
 
     manifest = json.loads((root / "o175-manifest.json").read_text())
     archive = root / "o175-raw-96.cmpct"
-    archive_hash = digest(archive.read_bytes())
+    archive_hash = file_digest(archive)
     assert archive_hash == manifest["archive_sha256"], "shared archive identity drift"
     assert len(manifest["files"]) == COUNT
     assert list(manifest["files"]) == [f"blob_{i:03d}.bin" for i in range(COUNT)]
