@@ -201,7 +201,7 @@ def trial(directory, storage_kind, mutate_future=False):
     # the backing source cannot retroactively alter the copied payload.
     immutable_original = bytes(chunks[0])
     assert sha(immutable_original) == injected[0]["before_sha"]
-    assert immutable_original != foreign0
+    assert immutable_original != bytes(x ^ 0xA5 for x in chunks[0])
 
     result = dict(
         vector=name, storage_kind=storage_kind, archive_sha_before=source_sha_before,
