@@ -110,7 +110,19 @@ def run():
                             chunk = zh.read(MIB)
                             if not chunk:break
                             payload_hash.update(chunk)
-                    assert payload_hash.digest() == (bytes(h) if h is not None else rd.file_sha256(rel)), name
+                    # Compare against the original on-disk source, not a Reader
+                    # helper which itself materializes S_PACK through read().
+                    # This differently rooted oracle also checks any absent row SHA.
+                    expected_source_hash=hashlib.sha256()
+                    if kind == 2:
+                        expected_source_hash.update(os.fsencode(os.readlink(root / rel)))
+                    else:
+                        with (root / rel).open("rb") as source_stream:
+                            while True:
+                                block=source_stream.read(MIB)
+                                if not block:break
+                                expected_source_hash.update(block)
+                    assert payload_hash.digest() == expected_source_hash.digest(), name
                     assert info.compress_type == zipfile.ZIP_DEFLATED, name
                     meta.append({"name": name, "bytes": size, "sha256": payload_hash.hexdigest()})
                 result["members"] = meta
