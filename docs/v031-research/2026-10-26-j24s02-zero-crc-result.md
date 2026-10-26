@@ -46,6 +46,10 @@ A different **cached per-length transition-matrix architecture** might address r
 - Benchmark time includes encoder SHA/CRC/DEFLATE in the oracle but not disk I/O or Python startup. Independent compressed-byte verification is outside the timed encoder and is a correctness check, never a claimed speedup.
 - Product source, format revision 24, exact-head release gates, historical comparators, and shared `docs/discovery/STATE.json` are unchanged.
 
+## Primary mature-implementation counterfactual — not tested here
+
+After the prospective negative was frozen, primary zlib documentation exposed an important distinct implementation class: zlib's C API [`crc32_combine_gen(len2)` and `crc32_combine_op(crc1, crc2, op)`](https://zlib.net/manual.html) explicitly separates reusable length-dependent CRC transition-operator generation from cheap repeated composition. Unlike J24S02's uncached Python implementation, this can amortize matrix generation over repeated same-length runs; it is **not** a verified new CMPCT win, and it cannot eliminate whole-byte SHA256. Any native operator-cache attempt must separately pre-register and measure both small, frequent zero extents and large ones; compare the real C-zlib and direct-checksum controls, include ABI/platform/fallback costs, and satisfy all input-identity and output-equivalence gates. This counterfactual is prospective enough to change the *implementation-family choice*, not to rewrite J24S02's recorded negative. The hosted experiment did **not** call these C functions.
+
 ## Transferable lesson and next decision
 
 This negative should retire the current **uncached portable-Python GF2 implementation** as a product optimization. It does **not** prove all CRC-combine architectures incapable: the specific causal weakness is repeated rebuilding of a parameterized polynomial operator. If a future independently preregistered owner tests operator caching, charge matrix construction/retention, exact CRC/SHA, heterogeneous sparse run patterns and actual J24S01 ZIP64 product economics before credit. More urgent product leverage remains end-to-end O193/J24S01 ZIP64 integration and correctness/security debt.
