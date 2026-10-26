@@ -4,6 +4,7 @@ from __future__ import annotations
 # silently drop recovery, range-read, path-safety, transactional-generation, or metadata semantics.
 
 import base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, mmap, os, shutil, stat, struct, sys, tempfile, threading, time, zipfile, zlib
+from collections import OrderedDict
 from pathlib import Path
 import msgpack
 
@@ -23,6 +24,11 @@ def _safe_output_path(dest:Path,rel:str)->Path:
 
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
+    # Bound the *retained decoded payload*, not the caller's current result, index, mmap, or
+    # in-flight parallel decoders. The count ceiling also bounds empty/tiny-value key overhead.
+    _DECODED_CACHE_MAX_BYTES = 64 * 1024 * 1024
+    _DECODED_CACHE_MAX_ENTRIES = 32768
+
     def __init__(self,path:Path):
         self.path=Path(path);self.f=open(path,'rb');self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};
         if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
@@ -37,7 +43,7 @@ class CMPCT:
                 canonical_seen.add(key)
         except ValueError as exc:
             raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
-        self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
+        self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._cache_order=OrderedDict();self._cache_bytes=0;self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
     def close(self):
         if getattr(self,'mm',None):self.mm.close();self.mm=None
         if self._zdict_decoder:self._zdict_decoder.close();self._zdict_decoder=None
@@ -127,9 +133,43 @@ class CMPCT:
                 self._zdict_decoder=DictDecoder(self._blob(self.dict_idx))
             return self._zdict_decoder.decompress(comp,usize)
 
-    def _blob(self,idx:int)->bytes:
+    def _cached_decoded(self,kind:int,idx:int):
+        """Return a retained byte string and refresh its shared blob/VZIP LRU position."""
         with self._cache_lock:
-            cached=self.cache.get(idx)
+            resident=self.cache if kind==0 else self.vcache
+            cached=resident.get(idx)
+            if cached is not None:
+                self._cache_order.move_to_end((kind,idx))
+            return cached
+
+    def _retain_decoded(self,kind:int,idx:int,raw:bytes):
+        """Admit exact bytes without retaining unbounded distinct decoded members.
+
+        The shared byte/entry budgets include both physical blobs and reconstructed VZIP
+        members. A caller still owns the returned bytes even if this cache declines/evicts them.
+        Two threads may decode the same miss, but insertion and LRU accounting are serialized.
+        """
+        if len(raw)>self._DECODED_CACHE_MAX_BYTES:return raw
+        with self._cache_lock:
+            resident=self.cache if kind==0 else self.vcache
+            old=resident.get(idx)
+            if old is not None:
+                self._cache_order.move_to_end((kind,idx))
+                return old
+            while self._cache_order and (
+                self._cache_bytes+len(raw)>self._DECODED_CACHE_MAX_BYTES
+                or len(self._cache_order)>=self._DECODED_CACHE_MAX_ENTRIES
+            ):
+                evicted_kind,evicted_idx=self._cache_order.popitem(last=False)[0]
+                evicted=(self.cache if evicted_kind==0 else self.vcache).pop(evicted_idx)
+                self._cache_bytes-=len(evicted)
+            resident[idx]=raw
+            self._cache_order[(kind,idx)]=None
+            self._cache_bytes+=len(raw)
+        return raw
+
+    def _blob(self,idx:int)->bytes:
+        cached=self._cached_decoded(0,idx)
         if cached is not None:return cached
         off,us,cs,codec,ml=self.blobs[idx];pos=self.record_base+off
         # Immutable committed generations are memory-mapped. Slicing an mmap avoids seek/read
@@ -148,7 +188,7 @@ class CMPCT:
         if len(raw)!=rus or (binascii.crc32(raw)&0xffffffff)!=rcrc:raise IOError('blob integrity failure')
         # Cache only modest blobs; huge archives should not become accidental RAM copies.
         if len(raw)<=2*1024*1024:
-            with self._cache_lock:self.cache[idx]=raw
+            return self._retain_decoded(0,idx,raw)
         return raw
     def _stream(self,mode:int,idx:int,level:int=-1)->bytes:
         if mode==1:
@@ -210,9 +250,9 @@ class CMPCT:
             raw=bytes(buf)
         elif sk==S_VZIP:
             rid=storage[1]
-            raw=self.vcache.get(rid)
+            raw=self._cached_decoded(1,rid)
             if raw is None:
-                raw=rebuild_vzip(self.recipes[rid],self._blob,self._stream);self.vcache[rid]=raw
+                raw=self._retain_decoded(1,rid,rebuild_vzip(self.recipes[rid],self._blob,self._stream))
             # rebuild_vzip has already verified the virtual file's exact SHA-256.
             if len(raw)!=size:raise IOError(f'file size failure: {name}')
             return raw
