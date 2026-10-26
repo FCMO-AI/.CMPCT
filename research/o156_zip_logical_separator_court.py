@@ -31,7 +31,7 @@ def digest(data: bytes) -> bytes:
 
 def rename_authenticated(golden: bytes, new_name: str) -> tuple[bytes, bytes]:
     magic, version, flags, csize, usize, span, index_hash = HDR.unpack_from(golden)
-    assert (magic, version, flags) == (b"CMPCT24\\0", 24, 0)
+    assert (magic, version, flags) == (b"CMPCT24\0", 24, 0)
     primary = golden[HDR.size:HDR.size + csize]
     decoded = zstd.ZstdDecompressor().decompress(primary, max_output_size=usize)
     assert len(decoded) == usize and digest(decoded) == index_hash
@@ -42,7 +42,7 @@ def rename_authenticated(golden: bytes, new_name: str) -> tuple[bytes, bytes]:
     compressed = zstd.ZstdCompressor(level=12).compress(updated)
     original_span = golden[HDR.size + csize:HDR.size + csize + span]
     assert len(original_span) == span
-    tail = FTR.pack(b"CMPTF24\\0", 0, 1, 0, 0, len(compressed), len(updated), 0, digest(updated))
+    tail = FTR.pack(b"CMPTF24\0", 0, 1, 0, 0, len(compressed), len(updated), 0, digest(updated))
     result = (
         HDR.pack(magic, version, flags, len(compressed), len(updated), span, digest(updated))
         + compressed + original_span + compressed + tail
@@ -74,7 +74,7 @@ def main() -> None:
             for case, stored_name in (
                 ("unchanged", vector["name"]),
                 ("slash", "nested/leaf.bin"),
-                ("backslash", "nested\\\\leaf.bin"),
+                ("backslash", "nested\\leaf.bin"),
             ):
                 if case == "unchanged":
                     archive = original
