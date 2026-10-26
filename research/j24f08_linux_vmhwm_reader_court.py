@@ -94,7 +94,7 @@ def child(args) -> int:
 
     highwaters = [s["VmHWM"] for s in (before, opened, extracted, closed)]
     if highwaters != sorted(highwaters):
-        raise AssertionError("VmHWM unexpectedly not monotonic")
+        raise AssertionError(f"VmHWM unexpectedly not monotonic: stages={highwaters} samples={json.dumps(dict(before=before, opened=opened, extracted=extracted, closed=closed), sort_keys=True)}")
     target = dest / args.member
     digest = digest_path(target)  # excluded from measured Reader work and VmHWM sample
     size = target.stat().st_size
