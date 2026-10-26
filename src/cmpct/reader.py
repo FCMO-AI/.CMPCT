@@ -590,7 +590,16 @@ class CMPCT:
         local records. Members without a reusable stream are compressed normally; if Deflate grows
         them, STORE is selected instead. ZIP64-sized members fall back to ZipFile in this prototype.
         """
-        out=Path(out);entries=[];offset=0
+        out=Path(out)
+        # The exported ZIP must never truncate the still-open CMPCT archive. Comparing path strings
+        # would miss hardlinks and symlinks; compare the destination with the source's open inode.
+        # This is a static admission check, not a claim of safety against concurrent path swaps.
+        source_stat=os.fstat(self.f.fileno())
+        try: target_stat=os.stat(out)
+        except FileNotFoundError: target_stat=None
+        if target_stat is not None and (source_stat.st_dev,source_stat.st_ino)==(target_stat.st_dev,target_stat.st_ino):
+            raise IOError('ZIP export destination aliases its own CMPCT source archive')
+        entries=[];offset=0
         # Authenticate each unique physical Deflate blob before opening the ZIP.
         # The fast path must not turn a source rejected by read() into a successful
         # but corrupt exported ZIP; validate once even for multiply referenced data.
