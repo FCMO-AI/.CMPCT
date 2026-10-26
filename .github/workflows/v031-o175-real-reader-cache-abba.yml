@@ -30,16 +30,16 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse --is-shallow-repository)" = false
           git merge-base --is-ancestor 62792a7fc61b033b306b4445c337ed123946514d HEAD
-          test "$(git rev-parse 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa6afb8
+          test "$(git rev-parse 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 1434c0b1485bfa59bd3dfe6f604ab555e35002a8
           test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "$(git rev-parse 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/codec.py)"
           mkdir -p o175-evidence
           git show 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b:src/cmpct/reader.py > "$RUNNER_TEMP/o175-historical-reader.py"
-          test "$(git hash-object "$RUNNER_TEMP/o175-historical-reader.py")" = e716233403dabd0966863c45635e18fa6afb8
+          test "$(git hash-object "$RUNNER_TEMP/o175-historical-reader.py")" = e716233403dabd0966863c45635e18fa5ac6afb8
           git rev-parse HEAD > o175-evidence/head.sha
           git rev-parse HEAD:tests/research/o175_installed_cache_abba.py > o175-evidence/test.blob
           git rev-parse HEAD:src/cmpct/reader.py > o175-evidence/candidate-reader.blob
-          printf '%s\n' e716233403dabd0966863c45635e18fa6afb8 > o175-evidence/historical-reader.blob
+          printf '%s\n' e716233403dabd0966863c45635e18fa5ac6afb8 > o175-evidence/historical-reader.blob
       - name: Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -88,7 +88,7 @@ jobs:
           lines=(out/'abba.log').read_text().splitlines()
           records=[json.loads(line.split('O175_RESULT=',1)[1]) for line in lines if line.startswith('O175_RESULT=')]
           assert [x['arm'] for x in records]==['historical','candidate','candidate','historical'],records
-          refs={'historical':'e716233403dabd0966863c45635e18fa6afb8','candidate':'1434c0b1485bfa59bd3dfe6f604ab555e35002a8'}
+          refs={'historical':'e716233403dabd0966863c45635e18fa5ac6afb8','candidate':'1434c0b1485bfa59bd3dfe6f604ab555e35002a8'}
           folds=set()
           for rec in records:
             assert rec['source_blob']==refs[rec['arm']],rec
