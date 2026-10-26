@@ -114,10 +114,10 @@ def run() -> dict:
         raw_name_results = []
         for root in (a,b):
             (root / "sub").mkdir()
-            write(root / "sub" / "original", b"\\x00\\xff\\x7f" * 2048)
+            write(root / "sub" / "original", b"\x00\xff\x7f" * 2048)
             os.link(root / "sub" / "original", root / "link")
             (root / "dangling").symlink_to("../outside-no-such-file")
-            raw = os.fsencode(root) + b"/file-\\xff"
+            raw = os.fsencode(root) + b"/file-\xff"
             try:
                 with open(raw, "wb") as f:
                     f.write(b"raw-posix-name")
@@ -134,7 +134,8 @@ def run() -> dict:
         identical, manifest_b = oracle.strict_digest(b)
         assert expected == identical and manifest_a == manifest_b
         assert len(manifest_a["hardlink_classes"]) == 1
-        assert any(x["path_hex"] == b"file-\xff".hex() for x in manifest_a["entries"])
+        if raw_name_supported:
+            assert any(x["path_hex"] == b"file-\xff".hex() for x in manifest_a["entries"])
 
         # A target suddenly materializing *outside* the selected root must not
         # alter an in-tree symlink's raw-target/type witness.
