@@ -604,6 +604,29 @@ class CMPCT:
         # This is a static kind gate; a concurrent path swap still requires fd-bound custody.
         if target_stat is not None and not stat.S_ISREG(target_stat.st_mode):
             raise IOError('ZIP export destination is nonregular')
+        # Materialize privately in the same directory, then publish exactly once after
+        # the ZIP central directory closes. A failed logical read must never turn a
+        # previously valid regular destination into an empty or partial ZIP. The
+        # sibling keeps os.replace on one filesystem (not crash-durable).
+        import tempfile
+        fd, stage_name = tempfile.mkstemp(prefix='.cmpct-zip-', suffix='.tmp', dir=out.parent)
+        stage = Path(stage_name)
+        try:
+            # A pre-existing regular target retains its permission bits, even though
+            # transactional publication changes inode and hardlink relationships.
+            if target_stat is not None and hasattr(os, 'fchmod'):
+                os.fchmod(fd, stat.S_IMODE(target_stat.st_mode))
+        finally:
+            os.close(fd)
+        try:
+            self._export_zip_unstaged(stage, level)
+            os.replace(stage, out)
+        finally:
+            stage.unlink(missing_ok=True)
+        return out
+
+    def _export_zip_unstaged(self, out:Path, level=6):
+        """Serialize only into a caller-owned private sibling; never publish it."""
         entries=[];offset=0
         # Authenticate each unique physical Deflate blob before opening the ZIP.
         # The fast path must not turn a source rejected by read() into a successful
