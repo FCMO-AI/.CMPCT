@@ -27,6 +27,7 @@ from j24f06_raw_extract_economics import (
 
 PARENT_HEAD = "dd01be99ec33e820517f7e54b9beead416b20e19"
 PREREG = "202a13484ee567e3cb6cac97d776bbd08e7f3535"
+COUNTER_CORRECTION_PREREG = "edc2cbc19dcf13659d2a275db2e7736ac693e936"
 WIN_THRESHOLD_BYTES = 32 * 1024 * 1024
 
 
@@ -93,8 +94,14 @@ def child(args) -> int:
     closed = kernel_memory()
 
     highwaters = [s["VmHWM"] for s in (before, opened, extracted, closed)]
-    if highwaters != sorted(highwaters):
-        raise AssertionError(f"VmHWM unexpectedly not monotonic: stages={highwaters} samples={json.dumps(dict(before=before, opened=opened, extracted=extracted, closed=closed), sort_keys=True)}")
+    # J24F08b: original J24F08 rejected an empirically false Linux /proc
+    # monotonicity assumption; preserve every phase reading and take their
+    # maximum rather than silently forcing the final reading to be the peak.
+    # See prereg edc2cbc19dcf13659d2a275db2e7736ac693e936 and BOTH failed
+    # original hosted attempts. This changes only the research meter.
+    sampled_peak = max(highwaters)
+    max_backward_step = max((a - b for a, b in zip(highwaters, highwaters[1:])
+                             if b < a), default=0)
     target = dest / args.member
     digest = digest_path(target)  # excluded from measured Reader work and VmHWM sample
     size = target.stat().st_size
@@ -111,11 +118,13 @@ def child(args) -> int:
         wall_ns=wall_ns, cpu_ns=cpu_ns,
         kernel_before=before, kernel_after_open=opened,
         kernel_after_extract=extracted, kernel_after_close=closed,
-        peak_vmhwm_bytes=closed["VmHWM"],
-        incremental_vmhwm_bytes=closed["VmHWM"] - before["VmHWM"],
+        peak_vmhwm_bytes=sampled_peak,
+        end_vmhwm_bytes=closed["VmHWM"],
+        sampled_vmhwm_max_backstep_bytes=max_backward_step,
+        incremental_vmhwm_bytes=sampled_peak - before["VmHWM"],
         ru_maxrss_reported_kib=ru_kib,
-        ru_vs_kernel_bytes=int(ru_kib) * 1024 - closed["VmHWM"],
-        proc_note="VmHWM is kernel child high-water; ru_maxrss is diagnostic only",
+        ru_vs_kernel_bytes=int(ru_kib) * 1024 - sampled_peak,
+        proc_note="sample-max child VmHWM; raw per-phase counters retained; ru_maxrss diagnostic only",
         python=sys.version.split()[0],
     )
     Path(args.receipt).write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
@@ -146,7 +155,7 @@ def controller(args) -> int:
         raise RuntimeError("Linux-only court")
     if git("rev-parse", "HEAD:src/cmpct/reader.py") != CHILD_READER_BLOB:
         raise AssertionError("candidate Reader source drift")
-    for predecessor in (BASE_COMMIT, PARENT_HEAD, PREREG):
+    for predecessor in (BASE_COMMIT, PARENT_HEAD, PREREG, COUNTER_CORRECTION_PREREG):
         subprocess.run(["git", "merge-base", "--is-ancestor", predecessor, "HEAD"],
                        cwd=ROOT, check=True)
     import cmpct.reader as actual
@@ -163,11 +172,12 @@ def controller(args) -> int:
 
     def save(decision):
         output_path.write_text(json.dumps(dict(
-            decision=decision, prereg_sha=PREREG, parent_head=PARENT_HEAD,
+            decision=decision, prereg_sha=PREREG,
+            vmhwm_correction_prereg=COUNTER_CORRECTION_PREREG, parent_head=PARENT_HEAD,
             source_whole=BASE_READER_BLOB, source_window=CHILD_READER_BLOB,
             head=git("rev-parse", "HEAD"), host=platform.platform(),
             positive_control=positive, cases=records,
-            claim_scope="Linux child /proc VmHWM only; no product promotion",
+            claim_scope="Linux child max-of-four-sampled /proc VmHWM only; all raw counters preserved; no product promotion",
         ), indent=2, sort_keys=True) + "\n")
 
     with tempfile.TemporaryDirectory(prefix="j24f08-") as temp:
