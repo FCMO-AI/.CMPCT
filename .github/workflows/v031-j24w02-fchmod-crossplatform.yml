@@ -1,0 +1,93 @@
+# ci-lane: fast
+# Product-candidate acceptance, not a release/performance-credit gate.
+name: CMPCT J24W02 chunked Windows fchmod availability
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24w02-fchmod-crossplatform-20261026
+  pull_request:
+    branches:
+      - agent/phased3-v031-o193-zip64-streamed-fallback-20261026
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_chunked_extract_platform_fchmod.py'
+      - '.github/workflows/v031-j24w02-fchmod-crossplatform.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24w02-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authentic-installed-reader:
+    name: Frozen chunk extraction and inherited streaming (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - name: Checkout exact branch head with history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify source, prereg ancestry and scope of mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 17e5b567ab18345d640c00f337d9c08f73521b00 HEAD
+          git merge-base --is-ancestor 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD
+          test "$(git diff --name-only 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD -- src/)" = "src/cmpct/reader.py"
+          mkdir -p j24w02-evidence
+          git rev-parse HEAD > j24w02-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > j24w02-evidence/reader.blob
+          git rev-parse HEAD:tests/test_chunked_extract_platform_fchmod.py > j24w02-evidence/test.blob
+          git rev-parse HEAD:research/j24w02_fchmod_court.py > j24w02-evidence/court.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-j24w02-fchmod-prereg.md > j24w02-evidence/prereg.blob
+          git diff --check 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact CMPCT source and pytest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Native-host package extraction and corruption acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          # tests/conftest.py imports root-level experiments; the Python package itself
+          # remains independently installed in site-packages (src/ is NOT on PYTHONPATH).
+          export PYTHONPATH="$GITHUB_WORKSPACE"
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          import cmpct.reader
+          checkout = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          actual = Path(cmpct.reader.__file__).resolve()
+          assert not actual.is_relative_to(checkout), (actual, checkout)
+          assert hashlib.sha256(actual.read_bytes()).digest() == hashlib.sha256((checkout/"src/cmpct/reader.py").read_bytes()).digest()
+          print(f"J24W02_INSTALLED_SOURCE=PASS path={actual} fchmod_available={hasattr(os, 'fchmod')}")
+          PY
+          # Native-host standalone court imports installed CMPCT, not tests/conftest.py,
+          # whose unrelated historical experiment chain requires platform-specific libzstd.so.
+          python "$GITHUB_WORKSPACE/research/j24w02_fchmod_court.py" \
+            --out "$GITHUB_WORKSPACE/j24w02-evidence/decision.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24w02-evidence/test.log"
+      - name: Preserve exact head and results even when red
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24w02-chunked-${{ matrix.os }}-${{ github.sha }}
+          path: j24w02-evidence/
+          if-no-files-found: warn
