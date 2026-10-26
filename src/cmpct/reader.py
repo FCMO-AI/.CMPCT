@@ -133,9 +133,36 @@ class CMPCT:
                 self._zdict_decoder=DictDecoder(self._blob(self.dict_idx))
             return self._zdict_decoder.decompress(comp,usize)
 
+    def _initialize_decoded_cache_if_needed(self):
+        """Adopt constructor-bypassing legacy Reader views without losing cache accounting.
+
+        Historical compact-control adapters initialize Reader fields directly for their
+        independent extraction court, not through CMPCT.__init__. Preserve that inherited
+        behavior while bringing any preseeded entries under exactly the same memory budget.
+        Caller must hold _cache_lock; this is a cold compatibility path only.
+        """
+        if hasattr(self,'_cache_order'):return
+        self._cache_order=OrderedDict()
+        self._cache_bytes=0
+        for kind,resident in ((0,self.cache),(1,self.vcache)):
+            for idx,raw in list(resident.items()):
+                if len(raw)>self._DECODED_CACHE_MAX_BYTES:
+                    resident.pop(idx,None)
+                    continue
+                while self._cache_order and (
+                    self._cache_bytes+len(raw)>self._DECODED_CACHE_MAX_BYTES
+                    or len(self._cache_order)>=self._DECODED_CACHE_MAX_ENTRIES
+                ):
+                    evicted_kind,evicted_idx=self._cache_order.popitem(last=False)[0]
+                    evicted=(self.cache if evicted_kind==0 else self.vcache).pop(evicted_idx)
+                    self._cache_bytes-=len(evicted)
+                self._cache_order[(kind,idx)]=None
+                self._cache_bytes+=len(raw)
+
     def _cached_decoded(self,kind:int,idx:int):
         """Return a retained byte string and refresh its shared blob/VZIP LRU position."""
         with self._cache_lock:
+            self._initialize_decoded_cache_if_needed()
             resident=self.cache if kind==0 else self.vcache
             cached=resident.get(idx)
             if cached is not None:
@@ -151,6 +178,7 @@ class CMPCT:
         """
         if len(raw)>self._DECODED_CACHE_MAX_BYTES:return raw
         with self._cache_lock:
+            self._initialize_decoded_cache_if_needed()
             resident=self.cache if kind==0 else self.vcache
             old=resident.get(idx)
             if old is not None:
