@@ -1,0 +1,50 @@
+name: v031 O155 strict filesystem topology evidence
+
+on:
+  pull_request:
+    branches:
+      - agent/v031-development
+    paths:
+      - 'tools/research/o155_strict_tree_oracle.py'
+      - 'research/o155_tree_fidelity_court.py'
+      - 'docs/v031-research/2026-10-26-o155-fs-tree-fidelity-custody-*.md'
+      - '.github/workflows/v031-o155-strict-tree-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-o155:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify checkout identity and execute the unchanged source-bound court
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/transactions.py)" = "964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c"
+          python research/o155_tree_fidelity_court.py --output o155-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o155-static-tree-${{ matrix.os }}
+          path: o155-result.json
+          if-no-files-found: warn
