@@ -44,8 +44,13 @@ jobs:
               for p,x in v.items(): assert x['hits']+x['misses']==total, (t,p,x)
           print('O192_DECISION='+d['decision'])
           print('O192_PROSPECTIVE='+str(d['prospective_conditions']))
+          for trace,phase in [('forward96','pass2'),('reverse96','descending'),('phase_B48','B2'),('fit48','pass2')]:
+              cases=d['traces'][trace]
+              raw={p:cases[p]['phases'][phase]['hits'] for p in ('historical_lru_payload_only','historical_fixed_pin_payload_only','charged_lru','two_queue_2q')}
+              print('O192_OBS='+trace+'/'+phase+' '+json.dumps(raw,sort_keys=True))
           PY
           sha256sum research/o192_twoqueue_oracle.py research/o188_cache_admission_oracle.py o192-result.json > o192-sha256.txt
+          cat o192-sha256.txt
       - name: Preserve raw outcome and original source IDs
         if: always()
         uses: actions/upload-artifact@v4
