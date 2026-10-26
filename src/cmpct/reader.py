@@ -612,13 +612,13 @@ class CMPCT:
         fd, stage_name = tempfile.mkstemp(prefix='.cmpct-zip-', suffix='.tmp', dir=out.parent)
         stage = Path(stage_name)
         try:
-            # A pre-existing regular target retains its permission bits, even though
-            # transactional publication changes inode and hardlink relationships.
-            if target_stat is not None and hasattr(os, 'fchmod'):
-                os.fchmod(fd, stat.S_IMODE(target_stat.st_mode))
-        finally:
-            os.close(fd)
-        try:
+            try:
+                # Existing regular outputs retain POSIX permission bits; this does
+                # not preserve inode identity, hardlinks, ownership or xattrs.
+                if target_stat is not None and hasattr(os, 'fchmod'):
+                    os.fchmod(fd, stat.S_IMODE(target_stat.st_mode))
+            finally:
+                os.close(fd)
             self._export_zip_unstaged(stage, level)
             os.replace(stage, out)
         finally:
