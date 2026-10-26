@@ -1,0 +1,153 @@
+# ci-lane: fast
+# O157 independent negative research: prove/falsify close-then-reopen stage pathname custody.
+name: CMPCT O157 ZIP stage close-reopen identity court
+
+on:
+  push:
+    branches: [agent/phased2-v031-o157-zip-stage-reopen-identity-20261026]
+  pull_request:
+    paths:
+      - 'tests/test_v031_o157_zip_stage_identity.py'
+      - '.github/workflows/v031-o157-zip-stage-reopen-identity.yml'
+      - 'docs/v031-research/2026-10-26-o157-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o157-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-negative-court:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+        engine: [o149, o150]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O157_ENGINE: ${{ matrix.engine }}
+    steps:
+      - name: Checkout exact source with original historic Git objects
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Verify current head, parents, immutable product/fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor ca01d885fedc8ffc343b9c3c624eddd134158452 HEAD
+          git merge-base --is-ancestor 961741a0f7b253591861d0865f92a74c2be10f97 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
+          test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
+          mkdir -p o157-evidence
+          git rev-parse HEAD > o157-evidence/head.sha
+          git rev-parse HEAD:tests/test_v031_o157_zip_stage_identity.py > o157-evidence/test.blob
+          git rev-parse HEAD:src/cmpct/reader.py > o157-evidence/o149-reader.blob
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Resolve authentic independent installed product
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$O157_ENGINE" = o150 ]; then
+            git cat-file -e '48bbb41661f8b19d369c50b06bec1018cd4400e9^{commit}'
+            git worktree add --detach "$RUNNER_TEMP/o157-o150-source" 48bbb41661f8b19d369c50b06bec1018cd4400e9
+            test "$(git -C "$RUNNER_TEMP/o157-o150-source" rev-parse HEAD)" = 48bbb41661f8b19d369c50b06bec1018cd4400e9
+            test "$(git -C "$RUNNER_TEMP/o157-o150-source" rev-parse HEAD:src/cmpct/reader.py)" = f38662c8db4132895778951263d83d24022f9296
+            echo "O157_PRODUCT_SOURCE=$RUNNER_TEMP/o157-o150-source" >> "$GITHUB_ENV"
+            echo "48bbb41661f8b19d369c50b06bec1018cd4400e9" > o157-evidence/product-head.sha
+            echo "f38662c8db4132895778951263d83d24022f9296" > o157-evidence/product-reader.blob
+          else
+            echo "O157_PRODUCT_SOURCE=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+            echo "ca01d885fedc8ffc343b9c3c624eddd134158452" > o157-evidence/product-head.sha
+            echo "496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332" > o157-evidence/product-reader.blob
+          fi
+          echo "CMPCT_FIXTURE_JSON=$GITHUB_WORKSPACE/tests/conformance/v24-direct-codecs.json" >> "$GITHUB_ENV"
+
+      - name: Install actual Reader package outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/o157-installed" "$O157_PRODUCT_SOURCE"
+          echo "PYTHONPATH=$RUNNER_TEMP/o157-installed" >> "$GITHUB_ENV"
+
+      - name: Verify clean installed Reader/source fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,os,pathlib,cmpct.reader
+          actual=pathlib.Path(cmpct.reader.__file__).resolve()
+          workspace=pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          assert not actual.is_relative_to(workspace), (actual,workspace)
+          digest=hashlib.sha1(("blob "+str(actual.stat().st_size)+"\0").encode()+actual.read_bytes()).hexdigest()
+          expected=(workspace/'o157-evidence/product-reader.blob').read_text().strip()
+          assert digest==expected,(digest,expected)
+          print('O157_INSTALLED_READER_BLOB='+digest+' PATH='+str(actual),flush=True)
+          PY
+
+      - name: Run bounded synthetic negative court
+        shell: bash
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -c /dev/null -vv -s "$GITHUB_WORKSPACE/tests/test_v031_o157_zip_stage_identity.py" --junitxml="$GITHUB_WORKSPACE/o157-evidence/junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/o157-evidence/pytest.log"
+
+      - name: Independently audit actual destructive side effect and positive control
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as E
+          import json
+          out=Path('o157-evidence')
+          tests=list(E.parse(out/'junit.xml').getroot().iter('testcase'))
+          assert len(tests)==2,len(tests)
+          assert all(all(t.find(n) is None for n in ('failure','error','skipped')) for t in tests)
+          rows=[json.loads(s.split('O157_CASE=',1)[1]) for s in (out/'pytest.log').read_text(errors='replace').splitlines() if 'O157_CASE=' in s]
+          assert len(rows)==2,rows
+          assert {r['case'] for r in rows}=={'unpivoted','post_close_symlink_pivot'},rows
+          normal=next(r for r in rows if r['case']=='unpivoted')
+          pivot=next(r for r in rows if r['case']=='post_close_symlink_pivot')
+          assert normal['result']=='exact_zip_and_victim_preserved'
+          assert normal['victim_before_sha']==normal['victim_after_sha']
+          assert pivot['result']=='unrelated_regular_victim_modified_by_exporter'
+          assert pivot['victim_before_sha']!=pivot['victim_after_sha']
+          assert pivot['target_is_symlink']
+          assert pivot['archive_sha']==normal['archive_sha']
+          receipt={'scope':'O157 negative research, not product repair', 'head':(out/'head.sha').read_text().strip(),
+                   'product_head':(out/'product-head.sha').read_text().strip(),
+                   'reader_blob':(out/'product-reader.blob').read_text().strip(),
+                   'test_blob':(out/'test.blob').read_text().strip(),
+                   'engine':normal['engine'],'host':__import__('platform').platform(),
+                   'count':len(tests),'pass':len(tests),'fail':0,'skip':0,'cases':rows}
+          (out/'result.json').write_text(json.dumps(receipt,sort_keys=True,indent=2)+'\n')
+          print('O157_AUDIT='+json.dumps({k:v for k,v in receipt.items() if k!='cases'},sort_keys=True))
+          PY
+
+      - name: Preserve raw JUnit, logs and hashes even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o157-${{ matrix.os }}-${{ matrix.engine }}-${{ env.EVIDENCE_HEAD }}
+          path: o157-evidence/
+          retention-days: 30
+          if-no-files-found: warn
