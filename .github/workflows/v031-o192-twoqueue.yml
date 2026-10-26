@@ -5,6 +5,7 @@ on:
     paths:
       - "research/o192_twoqueue_oracle.py"
       - "docs/v031-research/2026-10-26-o192-2q-prereg.md"
+      - "docs/v031-research/2026-10-26-o192-2q-result.md"
       - ".github/workflows/v031-o192-twoqueue.yml"
   workflow_dispatch:
 permissions:
