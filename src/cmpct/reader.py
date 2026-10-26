@@ -312,20 +312,15 @@ class CMPCT:
             lengths=[int(x[0]) for x in storage[1]];ids=[x[1] for x in storage[1]]
         else:raise ValueError('chunked extraction requires fixed or CDC storage')
 
-        # A borrowed mmap view is not a stable hash/write ownership unit: a concurrent writer
-        # to the archive inode could change its bytes after SHA-256 saw them but before write(2).
-        # Detach ONE RAW chunk at a time so the same immutable bytes are hashed and written. This
-        # spends a bounded copy to preserve extraction authenticity under mutable-source races.
+        # Borrowed mmap may change between hash and write. Keep the borrowed view only as a
+        # source cursor; copy at most one 64-KiB immutable window, and hash/write *that same*
+        # owned window before obtaining the next. This binds authenticated bytes to output
+        # without allocating an entire (potentially 1-GiB) RAW physical chunk.
         # Compressed/mixed files retain the ordinary parallel decoder.
         raw_direct=bool(ids) and all(self.blobs[idx][3]==CODEC_RAW for idx in ids)
+        raw_window=64*1024
         if raw_direct:
-            def owned_raw_chunks():
-                for idx in ids:
-                    borrowed=self._raw_blob_view_for_extract(idx)
-                    try:chunk=bytes(borrowed)
-                    finally:borrowed.release()
-                    yield chunk
-            decoded=owned_raw_chunks()
+            decoded=(self._raw_blob_view_for_extract(idx) for idx in ids)
         elif len(ids)>=4:
             if self._executor is None:self._executor=concurrent.futures.ThreadPoolExecutor(max_workers=min(8,os.cpu_count() or 4))
             decoded=self._executor.map(self._blob,ids)
@@ -343,18 +338,24 @@ class CMPCT:
             for expected,b in zip(lengths,decoded):
                 try:
                     if len(b)!=expected:raise IOError(f'chunk length failure while extracting {rel}')
-                    digest.update(b);written+=len(b);view=memoryview(b)
-                    try:
-                        while view:
-                            n=os.write(fd,view)
-                            if n<=0:raise IOError(f'short write while extracting {rel}')
-                            view=view[n:]
-                    finally:
-                        try:view.release()
-                        except ValueError:pass
+                    # RAW mmap is only borrowed for source access: each detached window is the
+                    # single immutable object consumed by both the logical digest and write(2).
+                    # A future source mutation is still caught by the indexed whole-file SHA,
+                    # so the unverified stage is never promoted to a successful destination.
+                    pieces=(bytes(b[start:start+raw_window])
+                            for start in range(0,len(b),raw_window)) if raw_direct else (b,)
+                    for piece in pieces:
+                        digest.update(piece);written+=len(piece);view=memoryview(piece)
+                        try:
+                            while view:
+                                n=os.write(fd,view)
+                                if n<=0:raise IOError(f'short write while extracting {rel}')
+                                view=view[n:]
+                        finally:
+                            try:view.release()
+                            except ValueError:pass
                 finally:
-                    # Defensively release a view from any future decoded iterator; RAW snapshots
-                    # are owned bytes and no longer carry borrowed source lifetime past hashing.
+                    # Always release the borrowed RAW mmap view, including on short writes.
                     if isinstance(b,memoryview):b.release()
             if written!=size or h is None or digest.digest()!=bytes(h):
                 raise IOError(f'file integrity failure: {rel}')
