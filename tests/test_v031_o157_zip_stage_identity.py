@@ -134,3 +134,78 @@ def test_post_exclusive_creation_stage_pivot_overwrites_unrelated_regular_file(
            victim_after_sha=sha(after), victim_before_bytes=len(sentinel),
            victim_after_bytes=len(after), target_prior_sha=sha(prior_target),
            target_is_symlink=target.is_symlink(), stage_witness=attacked[0])
+
+
+def test_post_exclusive_creation_stage_hardlink_pivot_overwrites_unrelated_regular_file(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """O157b distinct alias falsifier: NOFOLLOW cannot detect a replacement hardlink.
+
+    This is NOT a repair test. A passing test demonstrates the installed Reader
+    writes through an ordinary *regular* inode it did not exclusively create.
+    """
+    source, target, victim, archive_bytes, prior_target, sentinel = setup_case(tmp_path)
+    original_close = os.close
+    attacked = []
+
+    def stage_hardlink_interleaving(fd: int) -> None:
+        if not attacked:
+            stage_paths = [
+                p for p in tmp_path.iterdir()
+                if ".cmpct-zip-" in p.name and p.name.endswith(".tmp")
+            ]
+            if stage_paths:
+                assert len(stage_paths) == 1, stage_paths
+                stage = stage_paths[0]
+                before = os.lstat(stage)
+                opened = os.fstat(fd)
+                assert stat.S_ISREG(before.st_mode)
+                assert before.st_dev == opened.st_dev
+                assert before.st_ino == opened.st_ino
+                assert before.st_ino != victim.stat().st_ino
+                assert victim.read_bytes() == sentinel
+                original_close(fd)
+                stage.unlink()
+                os.link(victim, stage)
+                assert not stage.is_symlink()
+                assert stat.S_ISREG(os.lstat(stage).st_mode)
+                assert stage.stat().st_ino == victim.stat().st_ino
+                assert victim.read_bytes() == sentinel
+                attacked.append({"stage_basename": stage.name,
+                                 "old_stage_inode": before.st_ino,
+                                 "victim_inode": victim.stat().st_ino})
+                return
+        original_close(fd)
+
+    with CMPCT(source) as ar:
+        assert ar.read("raw.bin") == bytes(range(64))
+        with monkeypatch.context() as patch:
+            patch.setattr(os, "close", stage_hardlink_interleaving)
+            ar.export_zip(target)
+
+    assert len(attacked) == 1, "hardlink interleaving was not reached"
+    after = victim.read_bytes()
+    assert after != sentinel, "falsified: original external regular victim was preserved"
+    assert len(after) == 176, len(after)
+    assert zipfile.is_zipfile(victim)
+    with zipfile.ZipFile(victim) as zf:
+        assert zf.namelist() == ["raw.bin"]
+        assert zf.read("raw.bin") == bytes(range(64))
+        assert zf.testzip() is None
+    assert not target.is_symlink(), "pivot output should be a regular hardlink"
+    assert target.stat().st_ino == victim.stat().st_ino
+    assert target.read_bytes() == after
+    assert source.read_bytes() == archive_bytes
+    assert not any(".cmpct-zip-" in p.name for p in tmp_path.iterdir())
+
+    report("post_close_hardlink_pivot",
+           result="unrelated_regular_hardlink_victim_modified_by_exporter",
+           archive_sha=sha(archive_bytes),
+           victim_before_sha=sha(sentinel),
+           victim_after_sha=sha(after),
+           victim_before_bytes=len(sentinel),
+           victim_after_bytes=len(after),
+           target_prior_sha=sha(prior_target),
+           target_is_symlink=target.is_symlink(),
+           target_aliases_victim=(target.stat().st_ino == victim.stat().st_ino),
+           stage_witness=attacked[0])
