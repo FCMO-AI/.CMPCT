@@ -1,0 +1,120 @@
+# ci-lane: fast
+# Distinct diagnostic; O160 three-host metadata=True extraction remains a separate red gate.
+name: CMPCT O164 Windows ZIP-only canonical names
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-o164-win32-zip-only-court-20261026
+  pull_request:
+    paths:
+      - 'research/o164_win32_zip_only_court.py'
+      - '.github/workflows/v031-o164-win32-zip-only.yml'
+      - 'docs/v031-research/2026-10-26-o164-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o164-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  win32-zip-only:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact HEAD and full provenance
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify immutable Reader and preregistered chronology
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 327809e8bed99134fefb48ab12a508435d54587d HEAD
+          git merge-base --is-ancestor 03a82b5c1227ed37733d45c8ebe661dd871f5236 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "f29885574c892a2c2dd819f13b7595d1af59a903"
+          test "$(git rev-parse HEAD:research/o160_zip_name_parity_court.py)" = "1a493b5971a35a21a64232e7d647bd649b3acfec"
+          test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = "d10b7dab9126d39e819a74279c186363a163f2ef"
+          python -m py_compile research/o164_win32_zip_only_court.py
+          mkdir -p o164-evidence
+          git rev-parse HEAD > o164-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o164-evidence/reader.blob
+          git rev-parse HEAD:research/o164_win32_zip_only_court.py > o164-evidence/instrument.blob
+      - name: Configure Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact product outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/o164-installed" "$GITHUB_WORKSPACE" "zstandard>=0.22" "msgpack>=1"
+          echo "PYTHONPATH=$RUNNER_TEMP/o164-installed" >> "$GITHUB_ENV"
+      - name: Check installed Reader byte provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,os,pathlib,subprocess
+          import cmpct.reader
+          installed=pathlib.Path(cmpct.reader.__file__).resolve()
+          workspace=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          assert not installed.is_relative_to(workspace),(installed,workspace)
+          original=subprocess.check_output(["git","show",os.environ["EVIDENCE_HEAD"]+":src/cmpct/reader.py"],cwd=workspace)
+          data=installed.read_bytes()
+          assert data.replace(b"\r\n",b"\n")==original
+          blob=hashlib.sha1(b"blob "+str(len(original)).encode()+b"\0"+original).hexdigest()
+          assert blob=="f29885574c892a2c2dd819f13b7595d1af59a903",blob
+          print("O164_INSTALLED_READER_GIT_BLOB="+blob)
+          PY
+      - name: Execute ZIP-only authentic representation and physical ZIP extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          python research/o164_win32_zip_only_court.py | tee o164-evidence/run.log
+      - name: Independently audit scoped decision
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("o164-evidence")
+          doc=json.loads((root/"result.json").read_text())
+          assert doc["schema"]=="cmpct-o164-windows-zip-only-v1"
+          assert doc["decision"]=="ZIP_ONLY_NAMESPACE_SCOPED_PASS"
+          assert doc["host"]=="nt"
+          assert len(doc["cases"])==18
+          assert len(doc["collision_refusals"])==3
+          assert len({x["codec"] for x in doc["cases"]})==3
+          assert {x["serializer"] for x in doc["cases"]}=={"fast","forced_stdlib"}
+          assert {x["spelling"] for x in doc["cases"]}=={"unchanged","slash","backslash"}
+          assert all(x["physical_exact"] for x in doc["cases"])
+          assert all(x["zip_member"]=="nested/leaf.bin" for x in doc["cases"] if x["spelling"]=="backslash")
+          assert all(x["refused"] for x in doc["collision_refusals"])
+          assert not doc["direct_extract_metadata_validated"]
+          assert doc["original_o160_win32_red_preserved"]
+          assert not doc["full_product_acceptance"]
+          assert not doc["release_credit"]
+          (root/"audit.json").write_text(json.dumps({"decision":"SCOPED_PASS","source_head":(root/"head.sha").read_text().strip(),"zip_cases":18,"collision_refusals":3,"strict_metadata_gate":"STILL_OPEN"},indent=2,sort_keys=True)+"\n")
+          PY
+      - name: Preserve raw artifacts on failures and successes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o164-win32-${{ env.EVIDENCE_HEAD }}
+          path: o164-evidence/
+          if-no-files-found: warn
+          retention-days: 30
