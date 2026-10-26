@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: O206 enabled WAVFLAC exact-source three-host conformance
 on:
   push:
