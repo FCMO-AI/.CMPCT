@@ -30,7 +30,7 @@ LEAVES = ("fresh", "regular", "fifo", "symlink_fifo", "symlink_regular",
 def frozen_archive(request, tmp_path_factory):
     assert os.name == "posix" and hasattr(os, "mkfifo"), "POSIX fixture prerequisite"
     golden = Path(os.environ["CMPCT_GOLDEN_PATH"])
-    assert hashlib.sha1(golden.read_bytes()).hexdigest(), "golden source unreadable"
+    assert golden.is_file(), "golden source unavailable"
     doc = json.loads(golden.read_text(encoding="utf-8"))
     assert doc["schema"] == "cmpct-v24-golden-chunk-maps-v1"
     assert doc["format_revision"] == 24
