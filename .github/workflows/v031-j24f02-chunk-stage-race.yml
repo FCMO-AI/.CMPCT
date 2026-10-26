@@ -42,12 +42,12 @@ jobs:
       - name: Reproduce post-verification stage replacement on installed Reader
         shell: bash
         run: |
-          python research/j24f02_chunked_postcheck_publication.py --output j24f02-${{ runner.os }}.json
+          python research/j24f02_chunked_postcheck_publication.py --output "${{ github.workspace }}/j24f02-${{ runner.os }}.json"\n          test -s "${{ github.workspace }}/j24f02-${{ runner.os }}.json"\n          ls -l "${{ github.workspace }}/j24f02-${{ runner.os }}.json"
       - name: Preserve exact observations, including failures
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: j24f02-${{ runner.os }}-${{ github.sha }}
-          path: j24f02-*.json
+          path: ${{ github.workspace }}/j24f02-*.json
           if-no-files-found: warn
           retention-days: 30
