@@ -1,0 +1,135 @@
+# ci-lane: fast
+# O179 positive fd-bound stage publication, stacked on exact O149; not release credit.
+name: CMPCT O179 ZIP fd-bound stage identity
+on:
+  push:
+    branches: [agent/phased2-v031-o179-fd-bound-zip-stage-20261026]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o179-fd-bound-zip
+  cancel-in-progress: true
+
+jobs:
+  installed-reader-positive:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - name: Checkout source and original historical objects
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Pin original owners, authentic vectors and updated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor ca01d885fedc8ffc343b9c3c624eddd134158452 HEAD
+          git merge-base --is-ancestor 5672cf11faf9430eef6fa70d39c56ac16be0b71c HEAD
+          test "$(git rev-parse ca01d885fedc8ffc343b9c3c624eddd134158452:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
+          test "$(git rev-parse HEAD:tests/test_v031_o149_zip_export_atomic_publication.py)" = d394c1dd66eb229f5b24ccbd3713825f5e95cd89
+          test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
+          mkdir -p o179-evidence
+          git rev-parse HEAD > o179-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o179-evidence/reader.blob
+          git rev-parse HEAD:tests/test_v031_o179_zip_fd_stage.py > o179-evidence/test.blob
+          git rev-parse ca01d885fedc8ffc343b9c3c624eddd134158452:src/cmpct/reader.py > o179-evidence/original-reader.blob
+          python -m py_compile src/cmpct/reader.py tests/test_v031_o179_zip_fd_stage.py
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual candidate outside repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/o179-installed" .
+          echo "PYTHONPATH=$RUNNER_TEMP/o179-installed" >> "$GITHUB_ENV"
+          echo "CMPCT_FIXTURE_JSON=$GITHUB_WORKSPACE/tests/conformance/v24-direct-codecs.json" >> "$GITHUB_ENV"
+          echo "O140_PRODUCT_SRC=$RUNNER_TEMP/o179-installed" >> "$GITHUB_ENV"
+          echo "O140_ENGINE=candidate" >> "$GITHUB_ENV"
+      - name: Confirm exact installed Reader Git blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import os,pathlib,hashlib,cmpct.reader
+          installed=pathlib.Path(cmpct.reader.__file__).resolve()
+          checkout=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          assert not installed.is_relative_to(checkout),(installed,checkout)
+          raw=installed.read_bytes()
+          if os.name=="nt":
+              raw=raw.replace(b"\r\n",b"\n")
+          blob=hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
+          expect=pathlib.Path(os.environ["GITHUB_WORKSPACE"]+"/o179-evidence/reader.blob").read_text().strip()
+          assert blob==expect,(blob,expect)
+          print("O179_INSTALLED_SOURCE="+blob,flush=True)
+          PY
+      - name: Execute O179 positive fd-ownership court and untouched O149 original tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -c /dev/null -vv -s \
+            "$GITHUB_WORKSPACE/tests/test_v031_o179_zip_fd_stage.py" \
+            "$GITHUB_WORKSPACE/tests/test_v031_o149_zip_export_atomic_publication.py" \
+            --junitxml="$GITHUB_WORKSPACE/o179-evidence/junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/o179-evidence/test.log"
+      - name: Execute unchanged O140 static destination safety court
+        if: matrix.os != 'windows-2022'
+        shell: bash
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -c /dev/null -vv -s \
+            "$GITHUB_WORKSPACE/tests/test_v031_o140_zip_export_nonregular.py" \
+            --junitxml="$GITHUB_WORKSPACE/o179-evidence/o140-junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/o179-evidence/o140.log"
+      - name: Independently audit outcomes with intact source controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,pathlib,xml.etree.ElementTree as ET
+          e=pathlib.Path("o179-evidence")
+          cases=list(ET.parse(e/"junit.xml").getroot().iter("testcase"))
+          expected=9
+          assert len(cases)==expected,(len(cases),expected)
+          assert not [c for c in cases if c.find("failure") is not None or c.find("error") is not None]
+          skips=[c for c in cases if c.find("skipped") is not None]
+          assert len(skips)==(2 if os.name=="nt" else 0),len(skips)
+          rows=[json.loads(line.split("O179_CASE=",1)[1]) for line in (e/"test.log").read_text(errors="replace").splitlines() if "O179_CASE=" in line]
+          needed={"clean_fast","clean_zipfile"}| (set() if os.name=="nt" else {"stage_symlink","stage_hardlink"})
+          assert {x["case"] for x in rows}==needed,rows
+          assert all(r["victim_before_sha"]==r["victim_after_sha"] for r in rows)
+          if os.name!="nt":
+              inherited=list(ET.parse(e/"o140-junit.xml").getroot().iter("testcase"))
+              assert len(inherited)==24,len(inherited)
+              assert not [c for c in inherited if any(c.find(k) is not None for k in ("failure","error","skipped"))]
+          result={"head":(e/"head.sha").read_text().strip(),
+                  "reader_git_blob":(e/"reader.blob").read_text().strip(),
+                  "original_reader_blob":(e/"original-reader.blob").read_text().strip(),
+                  "o179_result":"SCOPED_FD_WRITER_VICTIM_INTACT",
+                  "tests":len(cases),"skips":len(skips),"o179_cases":rows,
+                  "o140_executed":os.name!="nt",
+                  "scope":"O157 before-writer swaps only; not universal atomic compare-and-rename"}
+          (e/"audit.json").write_text(json.dumps(result,sort_keys=True,indent=2)+"\n")
+          print("O179_AUDIT="+json.dumps({k:v for k,v in result.items() if k!="o179_cases"},sort_keys=True))
+          PY
+      - name: Persist raw evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o179-fd-bound-${{ matrix.os }}-${{ github.sha }}
+          path: o179-evidence/
+          retention-days: 30
+          if-no-files-found: warn
