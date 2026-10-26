@@ -1,0 +1,52 @@
+# ci-lane: fast
+name: J24Z01 authenticated bounded Zstd streaming oracle
+on:
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: j24z01-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  j24z01-linux:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'agent/phased2-v031-j24z01-zstd-stream-physical-bound-20261026'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Verify exact HEAD
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install real CMPCT package and check native libzstd
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python - <<'PY'
+          import ctypes, ctypes.util
+          assert ctypes.util.find_library('zstd'), 'Linux native Zstd streaming library unavailable'
+          import cmpct.reader
+          print('real source installed; native research decoder available')
+          PY
+      - name: Original unchanged Reader versus fully authenticated bounded Zstd stream
+        run: |
+          mkdir -p j24z01-artifacts
+          python research/j24z01_zstd_stream_oracle.py run j24z01-artifacts/oracle.json 5
+      - name: Retain raw result including negative cases
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24z01-${{ env.EVIDENCE_HEAD }}
+          path: j24z01-artifacts/oracle.json
+          if-no-files-found: warn
+
+# Research only: not the package-owned Zstd decoder; no product/release promotion.
