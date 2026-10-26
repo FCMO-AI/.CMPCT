@@ -52,8 +52,16 @@ def frozen_archive(request, tmp_path_factory):
         assert len(expected) == vec["logical_size"]
         assert hashlib.sha256(expected).hexdigest() == vec["logical_sha256"]
         assert reader.verify() == 1
-        # The first indexed physical chunk is a real payload, not an index.
-        off, us, cs, codec, meta_len = reader.blobs[0]
+        # Corrupt the *last* physical chunk: earlier chunks must already have
+        # entered the staging file before this checksum refusal occurs.
+        # A first-chunk error would not exercise partial-staging cleanup.
+        mapping = matching[0][6][1]
+        chunk_ids = list(mapping) if storage == S_CHUNKS else [int(x[1]) for x in mapping]
+        assert len(chunk_ids) == len(vec["chunk_codecs"]) == 3
+        tail_idx = chunk_ids[-1]
+        off, us, cs, codec, meta_len = reader.blobs[tail_idx]
+        assert codec == vec["chunk_codecs"][-1] == 0
+        assert cs > 0 and all(reader.blobs[i][1] > 0 for i in chunk_ids[:-1])
         payload_at = reader.record_base + off + BHDR.size + meta_len
         assert 0 <= payload_at < payload_at + cs <= len(raw), (name, payload_at, cs)
     print("J24F01_ARCHIVE=" + json.dumps({
