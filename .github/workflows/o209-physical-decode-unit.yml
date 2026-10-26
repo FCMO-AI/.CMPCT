@@ -1,0 +1,43 @@
+# ci-lane: fast
+name: O209 compressed physical-unit RSS
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  o209:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'agent/phased3-v031-o209-decode-unit-amplification-20261026'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact PR source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Exact HEAD identity
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install original source
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Authentic 64MiB physical-frame / 1MiB requested-range A/B
+        run: |
+          mkdir -p o209-artifacts
+          python research/o209_physical_decode_unit_court.py run o209-artifacts/o209-result.json 3
+      - name: Retain raw measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o209-${{ env.EVIDENCE_HEAD }}
+          path: o209-artifacts/o209-result.json
+          if-no-files-found: warn
+
+# This research court never modifies Writer/Reader/release thresholds. The producer verifies both
+# authentic r24 archives; range RSS is measured only in new isolated child processes.
