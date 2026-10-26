@@ -41,6 +41,7 @@ jobs:
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "41efeb9d3301fc06b1df56ab6bd42d9ee91f6d5e"
           test "$(git rev-parse d5aa5cbc1ef1e00b6e3c8c72cdd1598192d563a3:src/cmpct/reader.py)" = "8b5910725260e7b4db155ee0b393eb48a42f7efa"
           test "$(git rev-parse HEAD:research/j24f08_linux_vmhwm_reader_court.py)" = "66eace9b2fbc1f8f7e83a7618c7cc54a20b852ef"
+          test "$(git rev-parse HEAD:research/j24f08_independent_receipt_audit.py)" = "34b75627f5c484a786c1df4b2b1cf4ae6d996c7b"
           git merge-base --is-ancestor 202a13484ee567e3cb6cac97d776bbd08e7f3535 HEAD
           git merge-base --is-ancestor dd01be99ec33e820517f7e54b9beead416b20e19 HEAD
       - name: Install genuine native CMPCT package
@@ -71,6 +72,11 @@ jobs:
                                    'NO_CONFIRMED_BOTH_MODE_MEMORY_WIN')
           print('J24F08_RESULT_BEARING_KERNEL_COURT=PASS SCIENCE_ONLY', x['decision'])
           PY
+      - name: Independently audit all native-source receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24f08_independent_receipt_audit.py j24f08-evidence/result.json --output j24f08-evidence/independent-audit.json | tee j24f08-evidence/independent-audit.stdout
       - name: Preserve raw success and failure receipts
         if: always()
         uses: actions/upload-artifact@v4
