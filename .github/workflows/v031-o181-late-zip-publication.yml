@@ -1,0 +1,126 @@
+# ci-lane: fast
+# O181 negative / scientific court only. A passing run proves a scoped weakness,
+# not ZIP publication safety. Exact O179 Reader is installed separately.
+name: CMPCT O181 late ZIP publication authenticity falsifier
+on:
+  push:
+    branches: [agent/phased2-v031-o181-zip-postcheck-substitution-20261026]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o181-late-zip-publication
+  cancel-in-progress: true
+
+jobs:
+  source-authenticated-late-rename:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout historical source and preregistered prediction
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fail closed on wrong historical Reader or fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 427a47badc2c6bf6f32c97ec0b35d00d6a8a9ff8 HEAD
+          git merge-base --is-ancestor 7e1053413056c1d5788e57cc5e9c735c6c1e8b0a HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 9e399aa9cbc25c3d7b7c8663f5a039ade9d80aa7
+          test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
+          mkdir -p o181-evidence
+          git rev-parse HEAD > o181-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o181-evidence/reader.blob
+          git rev-parse HEAD:tests/research/o181_zip_publication_falsifier.py > o181-evidence/test.blob
+          python -m py_compile tests/research/o181_zip_publication_falsifier.py
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact candidate in independent path
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/o181-installed" .
+          echo "PYTHONPATH=$RUNNER_TEMP/o181-installed" >> "$GITHUB_ENV"
+          echo "CMPCT_FIXTURE_JSON=$GITHUB_WORKSPACE/tests/conformance/v24-direct-codecs.json" >> "$GITHUB_ENV"
+      - name: Independently verify installed Reader source bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,os,pathlib,cmpct.reader
+          installed=pathlib.Path(cmpct.reader.__file__).resolve()
+          workspace=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          assert not installed.is_relative_to(workspace)
+          raw=installed.read_bytes()
+          if os.name=="nt":
+              raw=raw.replace(b"\r\n",b"\n")
+          digest=hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
+          expect=(workspace/"o181-evidence/reader.blob").read_text().strip()
+          assert digest==expect,(digest,expect)
+          print("O181_INSTALLED_READER="+digest,flush=True)
+          PY
+      - name: Execute clean controls and adversarial late publication court
+        shell: bash
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -c /dev/null -vv -s \
+            "$GITHUB_WORKSPACE/tests/research/o181_zip_publication_falsifier.py" \
+            --junitxml="$GITHUB_WORKSPACE/o181-evidence/junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/o181-evidence/test.log"
+      - name: Audit that positive pytest means negative product witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,pathlib,xml.etree.ElementTree as ET
+          root=pathlib.Path("o181-evidence")
+          cases=list(ET.parse(root/"junit.xml").getroot().iter("testcase"))
+          assert len(cases)==6,len(cases)
+          assert not [c for c in cases if any(c.find(k) is not None for k in ("failure","error"))]
+          skips=[c for c in cases if c.find("skipped") is not None]
+          assert len(skips)==(2 if os.name=="nt" else 0),len(skips)
+          rows=[json.loads(s.split("O181_CASE=",1)[1]) for s in
+                (root/"test.log").read_text(errors="replace").splitlines()
+                if "O181_CASE=" in s]
+          expected={"clean_fast","clean_stdlib",
+                    "foreign_valid_zip_fast","foreign_valid_zip_stdlib"}
+          if os.name!="nt":
+              expected|={"late_symlink","late_hardlink"}
+          assert {r["case"] for r in rows}==expected,rows
+          assert all(r["victim_before_sha"]==r["victim_after_sha"] for r in rows)
+          assert all(r["source_sha"]==rows[0]["source_sha"] for r in rows)
+          assert all(r["prior_zip_sha"]!=r["published_zip_sha"] for r in rows)
+          attack=[r for r in rows if r["case"].startswith(("foreign_valid_zip","late_"))]
+          assert all(r["result"]=="POSTCHECK_NAME_SUBSTITUTION_ACCEPTED" for r in attack)
+          assert all(r["expected_member_absent"] for r in attack
+                     if r["case"].startswith("foreign_valid_zip"))
+          result={"classification":"NEGATIVE_PRODUCT_WITNESS_NOT_RELEASE_CREDIT",
+                  "head":(root/"head.sha").read_text().strip(),
+                  "reader_blob":(root/"reader.blob").read_text().strip(),
+                  "cases":len(cases),"skips":len(skips),"attacks":len(attack),
+                  "decision":"POSTCHECK_SUBSTITUTION_PUBLISHES_UNAUTHENTICATED_OUTPUT",
+                  "scope":"deterministic actor with directory write; no exploitation probability or universal security claim"}
+          (root/"audit.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
+          print("O181_AUDIT="+json.dumps(result,sort_keys=True),flush=True)
+          PY
+      - name: Keep raw results even when negative witness or infrastructure fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o181-late-zip-${{ matrix.os }}-${{ github.sha }}
+          path: o181-evidence/
+          retention-days: 30
+          if-no-files-found: warn
