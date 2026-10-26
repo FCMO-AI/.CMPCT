@@ -36,7 +36,10 @@ jobs:
           git merge-base --is-ancestor ca01d885fedc8ffc343b9c3c624eddd134158452 HEAD
           git merge-base --is-ancestor 5672cf11faf9430eef6fa70d39c56ac16be0b71c HEAD
           test "$(git rev-parse ca01d885fedc8ffc343b9c3c624eddd134158452:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
-          test "$(git rev-parse HEAD:tests/test_v031_o149_zip_export_atomic_publication.py)" = d394c1dd66eb229f5b24ccbd3713825f5e95cd89
+          test "$(git rev-parse ca01d885fedc8ffc343b9c3c624eddd134158452:tests/test_v031_o149_zip_export_atomic_publication.py)" = d394c1dd66eb229f5b24ccbd3713825f5e95cd89
+          # O179 ports only the injected partial-writer fault from pathname to
+          # the original live stream; source-parent tests remain frozen in Git.
+          test "$(git rev-parse HEAD:tests/test_v031_o149_zip_export_atomic_publication.py)" = 13a0f79ca6a1a802a70bfd96cffe8b59d4b294ae
           test "$(git rev-parse HEAD:tests/conformance/v24-direct-codecs.json)" = d10b7dab9126d39e819a74279c186363a163f2ef
           mkdir -p o179-evidence
           git rev-parse HEAD > o179-evidence/head.sha
