@@ -52,7 +52,12 @@ jobs:
             git worktree add --detach "$RUNNER_TEMP/o135-original" 2e493d2d941f9c144c0c5050b41c88dc7c6e57dd
             test "$(git -C "$RUNNER_TEMP/o135-original" rev-parse HEAD)" = 2e493d2d941f9c144c0c5050b41c88dc7c6e57dd
             test "$(git -C "$RUNNER_TEMP/o135-original" hash-object src/cmpct/reader.py)" = b0c8eb5eddd5591524b3e9c9a640d9266ccbbbdb
-            echo "O135_PRODUCT_SRC=$RUNNER_TEMP/o135-original/src" >> "$GITHUB_ENV"
+            # A Git worktree is only source; import from an independently built,
+            # package-owned native-library installation of the *exact original*.
+            python -m pip install --disable-pip-version-check --no-deps --target "$RUNNER_TEMP/o135-original-installed" "$RUNNER_TEMP/o135-original"
+            test -f "$RUNNER_TEMP/o135-original-installed/cmpct/reader.py"
+            test "$(git -C "$RUNNER_TEMP/o135-original" hash-object src/cmpct/reader.py)" = b0c8eb5eddd5591524b3e9c9a640d9266ccbbbdb
+            echo "O135_PRODUCT_SRC=$RUNNER_TEMP/o135-original-installed" >> "$GITHUB_ENV"
             echo "O135_EXPECT=original" >> "$GITHUB_ENV"
           else
             echo "O135_PRODUCT_SRC=$GITHUB_WORKSPACE/src" >> "$GITHUB_ENV"
@@ -63,7 +68,9 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p o135-evidence
-          python -m pytest -vv -s tests/test_v031_zip_export_source_alias_o135.py \
+          # Isolate this differential court from unrelated root conftest imports
+          # (the macOS runner has no Linux-specific experimental libzstd.so).
+          python -m pytest --noconftest -c /dev/null -vv -s tests/test_v031_zip_export_source_alias_o135.py \
             --junitxml=o135-evidence/junit.xml 2>&1 | tee o135-evidence/pytest.log
       - name: Preserve source custody
         shell: bash
