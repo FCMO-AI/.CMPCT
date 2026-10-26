@@ -1,0 +1,60 @@
+# ci-lane: fast
+name: v031 O162 authentic POSIX tree roundtrip
+
+on:
+  pull_request:
+    branches:
+      - agent/phased3-v031-o155-strict-tree-identity-20261026
+    paths:
+      - 'research/o162_authentic_tree_roundtrip_court.py'
+      - 'docs/v031-research/2026-10-26-o162-authentic-tree-roundtrip-*.md'
+      - '.github/workflows/v031-o162-authentic-tree-roundtrip.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-exact-tree:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify immutable source and build independent installed distribution
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = 663ef0922992b1fbb8f19e6eea88d55c10a56044
+          test "$(git hash-object src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          test "$(git hash-object src/cmpct/transactions.py)" = 964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c
+          test "$(git hash-object tools/research/o155_strict_tree_oracle.py)" = 0bef46e8d1944ff327063c66edc9bbc29fa58481
+          python -m pip install .
+      - name: Authentic create verify extract and independent structural negative control
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -eu
+          python research/o162_authentic_tree_roundtrip_court.py --output "$RUNNER_TEMP/o162-result.json"
+      - name: Preserve raw scientific result (including red outcome)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o162-real-r24-tree-${{ matrix.os }}
+          path: ${{ runner.temp }}/o162-result.json
+          if-no-files-found: warn
