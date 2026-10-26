@@ -14,7 +14,7 @@ import zipfile
 from pathlib import Path
 
 from cmpct.reader import CMPCT
-from research.o160_zip_name_parity_court import (
+from o160_zip_name_parity_court import (
     GOLDEN, HDR, digest, rename_authenticated,
 )
 
