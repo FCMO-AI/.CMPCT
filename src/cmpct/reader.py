@@ -331,10 +331,14 @@ class CMPCT:
         fd,tmp=tempfile.mkstemp(prefix=prefix,dir=parent);committed=False
         digest=hashlib.sha256();written=0
         try:
-            # Match the ordinary extraction path's requested basic mode even though mkstemp starts at
-            # 0600. Extended metadata restoration still remains governed by extractall(metadata=...).
-            try:os.fchmod(fd,mode or 0o666)
-            except OSError:pass
+            # Match the ordinary extraction mode through the already-owned descriptor when supported.
+            # Win32 Python can omit os.fchmod entirely: never reopen the stage by mutable pathname
+            # just to change a best-effort mode, since that would create another path-substitution seam.
+            # Extended metadata restoration remains governed by extractall(metadata=...).
+            fd_chmod=getattr(os,'fchmod',None)
+            if fd_chmod is not None:
+                try:fd_chmod(fd,mode or 0o666)
+                except OSError:pass
             for expected,b in zip(lengths,decoded):
                 try:
                     if len(b)!=expected:raise IOError(f'chunk length failure while extracting {rel}')
