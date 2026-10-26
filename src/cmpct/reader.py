@@ -378,6 +378,23 @@ class CMPCT:
                     try:os.setxattr(full,name,value,follow_symlinks=False)
                     except OSError:pass
 
+    @staticmethod
+    def _restore_regular_mtime(full, mt, *, directory):
+        """Preserve archived mtimes on Win32 without following a final reparse point.
+
+        Python's no-follow utime is unsupported on Windows; swallowing that
+        exception loses authenticated file/directory timestamps. Reuse O167's
+        handle-based type/reparse check only where the native API requires it.
+        Ancestor-directory reparenting remains outside this scoped guarantee.
+        """
+        try:
+            os.utime(full, ns=(mt, mt), follow_symlinks=False)
+        except NotImplementedError:
+            if os.name != 'nt':
+                raise
+            from ._win32_times import restore_win32_leaf_mtime
+            restore_win32_leaf_mtime(full, mt, directory=directory)
+
     def extractall(self,dest:Path,metadata=True,max_bytes:int|None=None,safe_symlinks=True):
         """Extract the logical tree with a low-syscall fast path.
 
@@ -471,14 +488,14 @@ class CMPCT:
                     # os.open created the requested mode on new files; chmod is needed only when an
                     # existing destination had a different mode (or umask masked creation bits).
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
-                    os.utime(full,ns=(mt,mt),follow_symlinks=False)
+                    self._restore_regular_mtime(full,mt,directory=False)
                 except OSError:pass
         if metadata:
             self._restore_extra_metadata(clean)
             for full,mode,mt in sorted(dirs,key=lambda x:x[0].count(os.sep),reverse=True):
                 try:
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
-                    os.utime(full,ns=(mt,mt),follow_symlinks=False)
+                    self._restore_regular_mtime(full,mt,directory=True)
                 except OSError:pass
     def verify(self):
         n=0
