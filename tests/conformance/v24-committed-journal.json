@@ -1,0 +1,64 @@
+{
+  "schema": "cmpct-v24-independent-committed-journal-v1",
+  "format_revision": 24,
+  "provenance": {
+    "construction": "independent handwritten r24 struct, msgpack, libzstd and hashlib; NEVER cmpct.builder/transactions",
+    "zstd_level": 12,
+    "msgpack_version": "1.1.2",
+    "purpose": "fixed two-generation authenticity, replay order and incomplete/invalid-head recovery"
+  },
+  "expected": {
+    "base": {
+      "alpha.txt": {
+        "hex": "617263686976652d6f6c642d636f6e74656e740a",
+        "sha256": "32a3197525a59058c79d4abb98bd47f0422c4c215eb73eca27d5697bcc9f092c"
+      },
+      "keep.txt": {
+        "hex": "617263686976652d6b6570742d636f6e74656e740a",
+        "sha256": "186d334d92f5570516ed75136221a2f0d20c8c855f7623dc4909627c19ab2ab7"
+      }
+    },
+    "latest": {
+      "alpha.txt": {
+        "hex": "6e65772d6a6f75726e616c2d636f6e74656e740a",
+        "sha256": "0d73815a8e11ccd4bb79ab5eb560d3d6bd8c9163531861fa49f289358398afd8"
+      },
+      "archived.txt": {
+        "hex": "617263686976652d6f6c642d636f6e74656e740a",
+        "sha256": "32a3197525a59058c79d4abb98bd47f0422c4c215eb73eca27d5697bcc9f092c"
+      }
+    }
+  },
+  "witness": {
+    "record_base": 240,
+    "initial_footer_offset": 581,
+    "new_blob_record_offset_relative_base": 409,
+    "delta_footer_offset": 831,
+    "initial_index_sha256": "71448e69dd15d62d8fb2a7c298305d0c3f7d9cc811ba63d59cf6d5f65612df74",
+    "delta_index_sha256": "22f8d704eebee6f598b5fecfe93aae7a7a57a795c7c84c54aba9054bb728ea46"
+  },
+  "archives": {
+    "base": {
+      "bytes": 649,
+      "sha256": "b2c45646f2c8a6556631430e745be296651aaf3155d1bbc3946a46056983e338"
+    },
+    "committed": {
+      "bytes": 899,
+      "sha256": "ab23ad7f631afb3e667424dc449f2572baf671a4f009386b4dbddfb62892111a"
+    },
+    "corrupt_successor": {
+      "bytes": 1004,
+      "sha256": "bc36972b4c6cdcaa8788cf07b7d48f1335bac47ce9931196628fbeea723e03f9"
+    },
+    "incomplete_successor": {
+      "bytes": 930,
+      "sha256": "f6d283792847306c481c92f28eb12c9ddf86ef015a66bd514da05edd2801031e"
+    }
+  },
+  "segments": {
+    "base": "Q01QQ1QyNAAYAAAArAAAAAAAAAC1AAAAAAAAAKkAAAAAAAAAcUSOad0V1i2PsqfCmDBdDD99nMgRumPVnPbV9lYS33QotS/9ILUdBQACyiQokKc6D92lI2hB7Y3tpLd2ANF2yt0iv7SGoUV2PBL70gzD0bMYLgVJAXBjR5KhRPm+WY/brzCxi0+BGzkERQKxj2MEzh39spNR3v87YZSze90sySVBdTbHAHkJ7DOAO9i2fPOcRjlDr+E+UE2SRaWKIFpNZyRkriOBmBuZpTo3RA2OBf3pD/tAcDVrOsPnXAapYCAEAFkkjKiAACB8xXwCQ01BNAAAAAAUAAAAAAAAABQAAAAAAAAAAAAAAIWMf74yoxl1JaWQWMedSruYvUfwQixMIV63Pson1Wl7zJ8JLGFyY2hpdmUtb2xkLWNvbnRlbnQKQ01BNAAAAAAVAAAAAAAAABUAAAAAAAAAAAAAAALozMYYbTNNkvVXBRbtdRNiIaLw0gyMhV92I9xJCWJ8Gasqt2FyY2hpdmUta2VwdC1jb250ZW50Cii1L/0gtR0FAALKJCiQpzoP3aUjaEHtje2kt3YA0XbK3SK/tIahRXY8EvvSDMPRsxguBUkBcGNHkqFE+b5Zj9uvMLGLT4EbOQRFArGPYwTOHf2yk1He/zthlLN73SzJJUF1NscAeQnsM4A72LZ885xGOUOv4T5QTZJFpYogWk1nJGSuI4GYG5mlOjdEDY4F/ekP+0BwNWs6w+dcBqlgIAQAWSSMqIAAIHzFfAJDTVBURjI0AAABAACsAAAAAAAAALUAAAAAAAAAAAAAAAAAAABxRI5p3RXWLY+yp8KYMF0MP32cyBG6Y9Wc9tX2VhLfdA==",
+    "committed_delta": "Q01BNAAAAAAUAAAAAAAAABQAAAAAAAAAAAAAAOXtCQcNc4FajhHM1Lt5q161YNPWvYyRY1MYYfpJ8ok1g5iv2G5ldy1qb3VybmFsLWNvbnRlbnQKKLUv/SBdzQIA9ASCpWJsb2JzkZXNAZkUFAAAo29wc5OTo3JlbqlhbHBoYS50eHSsYXJjaGl2ZWSSo3B1dJcAzQGkzgdbzRUUwJIAApKjZGVsqGtlZXAudHh0AgBAbSlYswxDTVBURjI0AAEBAABiAAAAAAAAAF0AAAAAAAAARQIAAAAAAAAi+NcE7r7m9Zi1/s/pOq56elenlcfITFSrqQVLtyjqRg==",
+    "invalid_successor": "KLUv/SAc4QAAgqVibG9ic5Cjb3BzkZKjZGVsqWFscGhhLnR4dENNUFRGMjQAAQEAACUAAAAAAAAAHAAAAAAAAAA/AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "incomplete_successor": "cGVuZGluZy11bmNvbW1pdHRlZC10YWlsKLUv/SAc4Q=="
+  }
+}
