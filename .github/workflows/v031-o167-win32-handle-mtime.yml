@@ -1,0 +1,120 @@
+# ci-lane: fast
+name: CMPCT O167 installed Win32 handle-bound mtime fidelity
+
+on:
+  pull_request:
+    paths:
+      - "src/cmpct/reader.py"
+      - "src/cmpct/_win32_times.py"
+      - "tests/test_v031_o167_win32_mtime.py"
+      - ".github/workflows/v031-o167-win32-handle-mtime.yml"
+      - "docs/v031-research/2026-10-26-o167-win32-handle-mtime-prereg.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o167-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-physical-mtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      O167_RECEIPT_DIR: o167-artifacts
+    steps:
+      - name: Checkout exact candidate and historic objects
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+          fetch-depth: 0
+      - name: Bind checkout and preregistered source lineage
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git cat-file -e 8fe424ac8575da10bf5ecfdb9660d4b5831f638b^{commit}
+          git merge-base --is-ancestor 8fe424ac8575da10bf5ecfdb9660d4b5831f638b HEAD
+      - name: Install Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install authentic CMPCT wheel and pytest
+        shell: bash
+        run: python -m pip install . pytest
+      - name: Validate installed Reader and Win32 helper against Git source
+        shell: bash
+        run: |
+          python - <<'PY'
+          import cmpct, cmpct.reader, cmpct._win32_times
+          import pathlib, subprocess
+          root=pathlib.Path(cmpct.__file__).resolve().parent
+          assert "site-packages" in str(root).lower(), root
+          for stem in ("reader", "_win32_times"):
+              installed=(root/(stem+".py")).read_bytes().replace(b"\r\n",b"\n")
+              original=subprocess.check_output(["git","show","HEAD:src/cmpct/"+stem+".py"]).replace(b"\r\n",b"\n")
+              assert installed==original, (stem,"not the committed source")
+          print("O167_INSTALLED_EXACT_SOURCE:",root)
+          PY
+      - name: Run genuine r24 physical metadata and hostile reparse court
+        shell: bash
+        run: |
+          mkdir -p o167-artifacts
+          cp tests/test_v031_o167_win32_mtime.py o167-artifacts/test_v031_o167_win32_mtime.py
+          python - <<'PY'
+          import hashlib, pathlib
+          a=pathlib.Path("tests/test_v031_o167_win32_mtime.py").read_bytes()
+          b=pathlib.Path("o167-artifacts/test_v031_o167_win32_mtime.py").read_bytes()
+          assert hashlib.sha256(a).digest()==hashlib.sha256(b).digest()
+          print("O167_SOURCE_EXACT_TEST_SHA256:",hashlib.sha256(a).hexdigest())
+          PY
+          python -m pytest -q -s o167-artifacts/test_v031_o167_win32_mtime.py --junitxml=o167-artifacts/junit.xml
+      - name: Audit raw physical receipts and case census independently
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys, xml.etree.ElementTree as ET
+          out=pathlib.Path("o167-artifacts")
+          root=ET.parse(out/"junit.xml").getroot()
+          suite=root if root.tag=="testsuite" else root.find("testsuite")
+          assert suite is not None
+          tests=int(suite.attrib.get("tests",-1))
+          bad=int(suite.attrib.get("failures",-1))+int(suite.attrib.get("errors",-1))
+          skip=int(suite.attrib.get("skipped",-1))
+          assert tests==4 and bad==0, (tests,bad,skip)
+          receipt=json.loads((out/"physical.json").read_text())
+          assert receipt["platform"]==sys.platform
+          assert receipt["read_verified"] is True
+          assert receipt["file_error_ns"]<=3_000_000_000 and receipt["dir_error_ns"]<=3_000_000_000
+          if sys.platform=="win32":
+              helper=json.loads((out/"helper.json").read_text())
+              assert helper["regular"]=="pass" and helper["directory"]=="pass"
+              assert helper["type_change"]=="refused"
+              # A symlink or a junction must prove that a final reparse leaf is rejected.
+              assert (out/"reparse.json").exists(), "unproven Win32 reparse refusal"
+              assert skip==0, (tests,skip)
+          else:
+              assert skip==1, (tests,skip)
+          report={"host":sys.platform,"source_head":pathlib.Path(".git/HEAD").read_text().strip(),
+                  "tests":tests,"errors_plus_failures":bad,"skipped":skip,"physical":receipt}
+          (out/"auditor.json").write_text(json.dumps(report,sort_keys=True,indent=2)+"\n")
+          print("O167_AUDIT:",json.dumps(report,sort_keys=True))
+          PY
+      - name: Preserve raw results even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o167-mtime-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: o167-artifacts/
+          if-no-files-found: warn
+
+# Scope: physical file/dir timestamps with no final-reparse following on Win32.
+# NOT a claim of safe ancestor traversal, power loss, atomic whole-tree metadata
+# publication, or complete xattr/ACL fidelity.
