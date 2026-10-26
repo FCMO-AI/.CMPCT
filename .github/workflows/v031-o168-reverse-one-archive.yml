@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: \${{ github.workflow }}-\${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: \${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -34,7 +34,7 @@ jobs:
         run: python -m pip install .
       - name: Create one original macOS binary and strict origin receipt
         env:
-          EVIDENCE_HEAD: \${{ github.event.pull_request.head.sha || github.sha }}
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -49,7 +49,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: o168-macos-original-binary
-          path: \${{ runner.temp }}/o168/
+          path: ${{ runner.temp }}/o168/
           if-no-files-found: warn
 
   linux-receiver:
@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: \${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -69,10 +69,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: o168-macos-original-binary
-          path: \${{ runner.temp }}/o168
+          path: ${{ runner.temp }}/o168
       - name: Verify transferred original bytes, restore tree and hostile topology
         env:
-          EVIDENCE_HEAD: \${{ github.event.pull_request.head.sha || github.sha }}
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -86,5 +86,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: o168-linux-receiver-evidence
-          path: \${{ runner.temp }}/o168/linux-result.json
+          path: ${{ runner.temp }}/o168/linux-result.json
           if-no-files-found: warn
