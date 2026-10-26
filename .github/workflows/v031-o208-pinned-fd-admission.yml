@@ -1,0 +1,105 @@
+# ci-lane: fast
+# O208 SCIENCE ONLY: a green court supports a Linux inode/immutability distinction,
+# not safe Reader admission, a portability contract, or a release.
+name: CMPCT O208 authenticated source-identity court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o208-pinned-fd-admission-court-20261026
+  pull_request:
+    branches:
+      - agent/phased3-v031-o193-zip64-streamed-fallback-20261026
+    paths:
+      - 'research/o208_pinned_fd_admission_court.py'
+      - '.github/workflows/v031-o208-pinned-fd-admission.yml'
+      - 'docs/v031-research/2026-10-26-o208-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o208-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pinned-inode-vs-mutable-byte-source:
+    name: Authentic r24 source identity and old-inode mutation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact scientific source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+          clean: true
+      - name: Check parent, prior prereg and untouched product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD
+          git merge-base --is-ancestor e8697fcfc0a9391069214dc53f37bd478a194689 HEAD
+          git diff --exit-code 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD -- src/ native/ tests/ benchmarks/
+          mkdir -p o208-evidence
+          git rev-parse HEAD > o208-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o208-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/validation.py > o208-evidence/validation.blob
+          git rev-parse HEAD:research/o208_pinned_fd_admission_court.py > o208-evidence/instrument.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o208-pinned-fd-admission-prereg.md > o208-evidence/prereg.blob
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install actual Reader+preflight independent of checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile research/o208_pinned_fd_admission_court.py
+      - name: Execute preregistered authenticated archive experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o208_pinned_fd_admission_court.py" \
+            --out "$GITHUB_WORKSPACE/o208-evidence/result.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o208-evidence/court.log"
+      - name: Independently check complete identity and opposing negative
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('o208-evidence/result.json')
+          x=json.loads(p.read_text())
+          assert x['source_head']==Path('o208-evidence/head.sha').read_text().strip()
+          assert x['decision']=='PINNED_INODE_BINDS_TWO_READS_BUT_NOT_SOURCE_IMMUTABILITY'
+          assert x['unpinned']['preflight_source_sha256'] != x['unpinned']['reader_source_sha256']
+          assert x['unpinned']['preflight_inode'] != x['unpinned']['reader_inode']
+          assert x['unpinned']['reader_returns_replacement'] is True
+          assert x['pinned']['held_original_sha256'] != x['pinned']['replacement_sha256']
+          assert x['pinned']['held_original_sha256'] != x['pinned']['mutated_same_inode_sha256']
+          assert x['pinned']['held_inode'] == x['pinned']['reader_inode']
+          assert x['pinned']['held_inode'] != x['pinned']['external_path_inode']
+          assert x['pinned']['pinned_returns_original_after_rename'] is True
+          assert x['pinned']['same_inode_write_invalidates_strict_preflight'].startswith('ValidationError:')
+          assert x['pinned']['opened_reader_caches_original_index_after_header_mutation'] is True
+          for name in ('reader','validation'):
+              blob=Path(f'o208-evidence/{name}.blob').read_text().strip()
+              assert x['provenance'][name+'_git_blob']==blob
+          assert x['source_files_modified'] is False and x['no_product_promotion'] is True
+          print("O208_DECISION="+x['decision']+" NO_PRODUCT_PROMOTION")
+          PY
+      - name: Always preserve raw result, source identities and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o208-linux-source-identity-${{ github.sha }}
+          path: o208-evidence/
+          if-no-files-found: warn
+          retention-days: 14
