@@ -1,0 +1,82 @@
+# ci-lane: fast
+# O188b: separately preregistered held-out adversarial trace; no product credit.
+name: CMPCT O188b cache reverse-order hostile falsifier
+on:
+  push:
+    branches: [agent/phased2-v031-o188-cache-scan-admission-oracle-20261026]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-o188b-cache-hostile
+  cancel-in-progress: true
+
+jobs:
+  order-admission-negative:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Checkout current source and prospective control
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Enforce preregistration and original owner code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 9664bf5427b12e83507233c06241cec6e082ada6 HEAD
+          git merge-base --is-ancestor b07eea21e9fdf76ceee58c80bbc8388fff54bfca HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 1434c0b1485bfa59bd3dfe6f604ab555e35002a8
+          mkdir -p o188b-evidence
+          git rev-parse HEAD > o188b-evidence/head.sha
+          git rev-parse HEAD:research/o188_cache_admission_oracle.py > o188b-evidence/base-oracle.blob
+          git rev-parse HEAD:research/o188b_heldout_order_oracle.py > o188b-evidence/heldout-oracle.blob
+          git rev-parse HEAD:docs/v031-research/2026-10-26-o188b-heldout-order-prereg.md > o188b-evidence/prereg.blob
+      - name: Execute independently frozen hostile trajectories
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 research/o188b_heldout_order_oracle.py > o188b-evidence/heldout.json
+      - name: Independent hostile-result audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib,hashlib
+          root=pathlib.Path("o188b-evidence")
+          data=(root/"heldout.json").read_bytes()
+          f=json.loads(data)["families"]
+          assert set(f)=={"reverse96","fit_shift48","same_fit64"}
+          def hits(family,policy,phase):
+              return f[family][policy]["phases"][phase]["hits"]
+          assert hits("reverse96","lru","reverse")==64
+          assert hits("reverse96","fixed_pin","reverse")==64
+          assert hits("reverse96","guard_48_16","reverse")==16
+          assert hits("fit_shift48","lru","B2")==48
+          assert hits("fit_shift48","guard_48_16","B2")==0
+          assert hits("fit_shift48","fixed_pin","B2")==0
+          assert hits("fit_shift48","guard_48_16","B4")==48
+          for p in ("lru","fixed_pin","guard_48_16"):
+              assert hits("same_fit64",p,"pass2")==64
+          for policies in f.values():
+              for v in policies.values():
+                  assert v["peak_retained_bytes"]<=67108864
+                  assert v["peak_entries"]<=32768
+          audit={"head":(root/"head.sha").read_text().strip(),
+                 "heldout_sha256":hashlib.sha256(data).hexdigest(),
+                 "decision":"GUARD_48_16_FALSIFIED_AS_GENERIC_READER_REPLACEMENT",
+                 "scope":"simulated online policy only; no measured physical Reader performance"}
+          (root/"audit.json").write_text(json.dumps(audit,indent=2,sort_keys=True)+"\n")
+          print("O188B_AUDIT="+json.dumps(audit,sort_keys=True))
+          PY
+      - name: Save raw negative and positive controls
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-o188b-hostile-${{ github.sha }}
+          path: o188b-evidence/
+          retention-days: 30
+          if-no-files-found: warn
