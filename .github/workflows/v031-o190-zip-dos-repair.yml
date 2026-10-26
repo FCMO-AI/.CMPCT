@@ -57,7 +57,9 @@ jobs:
           print('installed-Reader-sha256',hashlib.sha256(actual).hexdigest())
           PY
           cd "$RUNNER_TEMP"
-          python -m pytest "$GITHUB_WORKSPACE/tests/test_v031_o190_zip_dos_time.py" -q --junitxml="$RUNNER_TEMP/o190-unit-junit.xml"
+          # O190 is source-independent: full-suite conftest imports unrelated research packages.
+          # Global CI still runs conftest without alterations; this narrow court imports the wheel.
+          python -m pytest "$GITHUB_WORKSPACE/tests/test_v031_o190_zip_dos_time.py" --noconftest -q --junitxml="$RUNNER_TEMP/o190-unit-junit.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
