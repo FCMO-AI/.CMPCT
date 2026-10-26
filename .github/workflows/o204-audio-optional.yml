@@ -44,11 +44,17 @@ jobs:
           "$PY" -m pip install --disable-pip-version-check --no-input -e .
           "$PY" -c "from cmpct.native_codec import _library_path; print(_library_path())"
           "$PY" research/o204_audio_optional_court.py --result "$RUNNER_TEMP/o204-result.json"
+          # O204b is a distinct prospectively registered environment: NumPy is
+          # available; SoundFile is absent. Retain the original O204 JSON too.
+          "$PY" -m pip install --disable-pip-version-check --no-input 'numpy>=1.26'
+          O204_AUDIO_MODE=numpy-only "$PY" research/o204_audio_optional_court.py --result "$RUNNER_TEMP/o204-numpy-only-result.json"
       - name: Preserve exact source identities and per-case observations
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: o204-minimal-audio-${{ matrix.os }}
-          path: ${{ runner.temp }}/o204-result.json
+          path: |
+            ${{ runner.temp }}/o204-result.json
+            ${{ runner.temp }}/o204-numpy-only-result.json
           if-no-files-found: warn
           retention-days: 30
