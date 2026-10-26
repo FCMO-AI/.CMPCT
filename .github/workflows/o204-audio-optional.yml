@@ -32,7 +32,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install only the shipping mandatory dependency and execute the genuine CLI
+      - name: Install genuine native package with declared mandatory runtime dependencies only
         shell: bash
         run: |
           python -m venv .o204-venv
@@ -41,7 +41,8 @@ jobs:
           else
             PY=.o204-venv/bin/python
           fi
-          "$PY" -m pip install --disable-pip-version-check --no-input 'msgpack>=1.0'
+          "$PY" -m pip install --disable-pip-version-check --no-input -e .
+          "$PY" -c "from cmpct.native_codec import _library_path; print(_library_path())"
           "$PY" research/o204_audio_optional_court.py --result "$RUNNER_TEMP/o204-result.json"
       - name: Preserve exact source identities and per-case observations
         if: always()
