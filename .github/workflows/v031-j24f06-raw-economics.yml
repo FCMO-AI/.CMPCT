@@ -1,0 +1,77 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24F06 authenticated RAW extraction physical costs
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24f06-raw-extract-physical-economics-20261026
+  pull_request:
+    paths:
+      - 'research/j24f06_raw_extract_economics.py'
+      - '.github/workflows/v031-j24f06-raw-economics.yml'
+      - 'docs/v031-research/2026-10-26-j24f06-raw-extract-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24f06-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-r24-extract-cost:
+    name: Same-archive Reader extraction A/B (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - name: Checkout exact result-bearing source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate baseline, candidate and frozen prereg
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "41efeb9d3301fc06b1df56ab6bd42d9ee91f6d5e"
+          test "$(git rev-parse d5aa5cbc1ef1e00b6e3c8c72cdd1598192d563a3:src/cmpct/reader.py)" = "8b5910725260e7b4db155ee0b393eb48a42f7efa"
+          git merge-base --is-ancestor d4c0c4a48e5584d49c59439d3664c01f0683b074 HEAD
+      - name: Install genuine native CMPCT from candidate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Measure fresh-process genuine r24 extraction CPU wall peak RSS and syscalls
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24f06-evidence
+          python research/j24f06_raw_extract_economics.py --output j24f06-evidence/results.json | tee j24f06-evidence/stdout.txt
+          python - <<'PY'
+          import json
+          x=json.load(open('j24f06-evidence/results.json'))
+          assert x['decision']=='EXACT_R24_EXTRACTION_A_B_MEASURED_NO_PRODUCT_PROMOTION'
+          assert len(x['cases'])==4
+          for c in x['cases']:
+              assert len(c['timed_trials'])==8 and len(c['trace_controls'])==2
+              assert all(t['sha256']==c['logical_sha256'] for t in c['timed_trials']+c['trace_controls'])
+              assert all(t['peak_rss_bytes']>0 and t['wall_ns']>0 and t['cpu_ns']>0 for t in c['timed_trials'])
+          print('J24F06_EXACT_R24_COMPLETE_COST_COURT=PASS SCIENCE_ONLY')
+          PY
+      - name: Preserve all success/failure records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24f06-${{ runner.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24f06-evidence/
+          if-no-files-found: warn
+          retention-days: 30
