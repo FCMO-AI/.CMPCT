@@ -1,0 +1,66 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24F05 immutable RAW window custody
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24f05_raw_window_court.py'
+      - 'research/j24f04_raw_chunk_immutable_transfer.py'
+      - '.github/workflows/v031-j24f05-raw-window.yml'
+      - 'docs/v031-research/2026-10-26-j24f05-raw-window-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24f05-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  raw-window-hostile-court:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate source, fixed parent and prereg order
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "41efeb9d3301fc06b1df56ab6bd42d9ee91f6d5e"
+          git merge-base --is-ancestor 361a7f995da69e83f63ab41de4656ced82f5ceea HEAD
+          git merge-base --is-ancestor d5aa5cbc1ef1e00b6e3c8c72cdd1598192d563a3 HEAD
+          git show -s --format='%H %s' HEAD
+      - name: Install candidate into independent Python package environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Execute inherited and large RAW r24 hostile source-write cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence-artifacts
+          python research/j24f05_raw_window_court.py --output "${{ github.workspace }}/evidence-artifacts/j24f05.json" | tee evidence-artifacts/stdout.txt
+          test -s evidence-artifacts/j24f05.json
+      - name: Preserve result-bearing artifact even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24f05-${{ runner.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: evidence-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
