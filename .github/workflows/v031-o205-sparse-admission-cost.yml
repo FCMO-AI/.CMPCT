@@ -41,6 +41,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git merge-base --is-ancestor cf00530b763daef9d7ca252177e06d701b31ddfe HEAD
+          git merge-base --is-ancestor d4d3707f4e82a1f336d0e8356c5c4be6b115bd0a HEAD
           git merge-base --is-ancestor 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD
           git diff --exit-code 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD -- src/ native/ tests/ benchmarks/
           mkdir -p o205-evidence
@@ -84,7 +85,11 @@ jobs:
           assert data['indexed_sparse_extent_count']>=2048
           assert data['oracle_rejects_unsorted_control'] is True
           assert data['oracle_rejects_length_mismatch_control'] is True
-          assert sorted(x['mode'] for x in data['raw_workers']) == sorted(list('ABCD')*8)
+          assert len(data['raw_workers'])==64
+          assert sorted((x['mode'],x['trace_memory']) for x in data['raw_workers']) == sorted([(m,t) for m in 'ABCD' for t in (False,True) for _ in range(8)])
+          assert set(data['traced_summaries'])==set('ABCD')
+          assert all(data['summaries'][m]['median_peak_tracemalloc_bytes'] is None for m in 'ABCD')
+          assert all(data['traced_summaries'][m]['median_peak_tracemalloc_bytes'] is not None for m in 'ABCD')
           assert data['decision'] in (
               'FULL_STRICT_PREFLIGHT_CHEAP_ENOUGH_FOR_NEXT_OWNER_INTEGRATION_TEST',
               'PREFER_STUDYING_SHARED_INDEX_TIME_ADMISSION_OVER_DUPLICATE_PREFLIGHT',
