@@ -52,12 +52,12 @@ def physical_fixture(root, size_mib):
         f.seek(size - 4096)
         f.write(b"Z" * 4096)
     assert file.stat().st_size == size
-    os.link(file, src / 'alias.bin')
+    os.link(file, src / 'z-alias.bin')
     target = root / ("sparse-" + str(size_mib) + ".cmpct")
     Builder(src).build(target)
     with CMPCT(target) as reader:
         assert len(reader.files) == 2, reader.files
-        assert reader.by['alias.bin'][1] == K_HARDLINK
+        assert reader.by['z-alias.bin'][1] == K_HARDLINK
         row = reader.by["payload.bin"]
         assert row[1] == K_FILE and row[6][0] == S_SPARSE, "Builder did not emit S_SPARSE"
         assert row[4] == file.stat().st_size
