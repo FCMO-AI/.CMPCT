@@ -38,9 +38,21 @@ New positive controls retain byte-exact valid single, distinct and repeated chun
 
 Linux reran a separately installed, source-exact O214 parent on exactly the same r24 hostile semantics, producing `PARENT_SELECTIVE_IN_BOUNDS_SHORT_READ`, while the candidate refused the archive before exposing ranges. Raw per-host logs and SHA-tagged uploaded CI receipts remain in the run above; this document does not replace them.
 
-## New held-out question / current evidence boundary
+## Held-out 4096-reference confirmation and final-head custody
 
-Follow-up test commit `705302acf354110ee2acb32019c07138de50bd0e` adds a 4,096-reference valid fixed-chunk member with repeated physical ownership and direct ranges crossing early, middle and final references, alongside one out-of-range declared-total hostile. This **new test was not part of the first successful 11-case run**. Its hosted result and exact final HEAD must be checked independently; do not count it as passed until then.
+Follow-up test commit `705302acf354110ee2acb32019c07138de50bd0e` added a **4,096-reference** valid fixed-chunk member (16,384 logical bytes, one physical four-byte RAW blob referenced repeatedly) and explicit early/middle/end range checks plus a malformed declared-size control. This was not included in the initial 11-case run.
+
+**Documented final test-and-result HEAD:** `483520c35b4c0cc31616bc53296ea082dcf8f0b3`. Result-bearing [GitHub Actions #40446255537](https://github.com/FCMO-AI/.CMPCT/actions/runs/40446255537) completed **SUCCESS on Ubuntu/macOS/Windows**. Exact HEAD was checked in source checkout and verified against independently installed Reader/validation bytes. All three hosts recorded **12/12 O215 tests** and the **unchanged 25 inherited O212/O214 tests + 9 subtests** PASS. The Linux job additionally reinstalled the genuine parent Reader and reproduced `PARENT_SELECTIVE_IN_BOUNDS_SHORT_READ`. CI uses a synthetic PR merge SHA in artifact filenames; `EVIDENCE_HEAD` and checkout bind the actual tested branch HEAD `483520c...`, not that synthetic SHA.
+
+Original provider ZIP receipts at this result-bearing run have the following GitHub artifact SHA-256 digests:
+
+| Host | SHA-256 of original provider evidence ZIP |
+| --- | --- |
+| Ubuntu | `f7c452a7037ad95d270b269b61fce25f49ee5607a28ae37d71cc9f1259f1555a` |
+| macOS | `5ab45dd202a55ed802aca9779599831bb4117c0f76d39e196192a6be179599f3` |
+| Windows | `1ad0051bea830d8df6bf1367666113e5cdce98af0e3b5d5ca8115a35acc4db36` |
+
+**CI at that source HEAD:** specialized, Engineering Evidence, Version Discipline, CI Topology, R36 Attribution, Native Core, and workflow performance gate reported SUCCESS. The performance workflow success does **not** replace a new numeric cold-open CPU/RSS benchmark. General CMPCT tests and continuous fuzzing had not finished at the last recorded inspection. The present documentary commit occurs after the result-bearing source HEAD, so its own status must be reconciled separately.
 
 ## What changed scientifically
 
