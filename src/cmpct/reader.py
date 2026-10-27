@@ -303,7 +303,10 @@ class CMPCT:
         rel,k,mode,mt,size,h,storage=row
         raw=self.read(rel)
         if len(raw)!=size:raise IOError(f'file size failure: {rel}')
-        parent=os.path.dirname(full) or '.';prefix=f'.{os.path.basename(full)}.cmpct-part-'
+        # Preserve the full 255-byte POSIX leaf name: a stage basename derived
+        # from the final basename would exceed NAME_MAX, despite a valid destination.
+        # The short sibling stage retains mkstemp O_EXCL ownership and same-dir replace.
+        parent=os.path.dirname(full) or '.';prefix='.cmpct-part-'
         fd,tmp=tempfile.mkstemp(prefix=prefix,dir=parent);committed=False
         try:
             # Apply an optional mode only through the descriptor we already own.
