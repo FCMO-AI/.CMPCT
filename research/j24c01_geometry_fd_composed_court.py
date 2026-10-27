@@ -38,7 +38,7 @@ def main():
     installed = Path(module.__file__).resolve()
     source = Path(__file__).resolve().parents[1] / "src" / "cmpct" / "reader.py"
     # Git blob bytes, not a mutable interpreted approximation.
-    git_blob = b"blob " + str(installed.stat().st_size).encode() + b"\\0" + installed.read_bytes()
+    git_blob = b"blob " + str(installed.stat().st_size).encode() + b"\0" + installed.read_bytes()
     actual_blob = hashlib.sha1(git_blob).hexdigest()
     if actual_blob != args.expected_reader_blob:
         raise AssertionError(("installed Reader provenance mismatch", actual_blob, args.expected_reader_blob))
