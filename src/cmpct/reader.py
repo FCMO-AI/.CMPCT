@@ -67,19 +67,39 @@ def _publish_unnamed_chunk_fd(fd:int,parentfd:int,leaf:str)->str:
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
     def __init__(self,path:Path):
-        self.path=Path(path);self.f=open(path,'rb');self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};
-        if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
-        # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This
-        # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map
-        # one-to-one onto a destination filesystem.
-        canonical_seen=set()
+        self.path=Path(path)
+        self.f=open(path,'rb')
+        self._io_lock=threading.Lock()
         try:
+            self.index,self.record_base=self._load_index()
+            self.files=self.index['files']
+            self.by={x[0]:x for x in self.files}
+            if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
+            # The authenticated effective index must have one host-visible spelling for each member.
+            # Sparse extents and CDC chunk descriptors must agree with their referenced blob sizes:
+            # otherwise full read() and selective read_range() can silently disagree (#533, O201).
+            # Validate this SAME in-memory index, never a separately reopened pathname (#546).
+            canonical_seen=set()
+            sparse_validator=None
             for row in self.files:
-                key,_=canonical_logical_path(row[0])
+                try:
+                    key,_=canonical_logical_path(row[0])
+                except ValueError as exc:
+                    raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
                 if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
                 canonical_seen.add(key)
-        except ValueError as exc:
-            raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
+                storage=row[6]
+                if row[1]==K_FILE and isinstance(storage,list) and storage and storage[0] in (S_SPARSE, S_CDC):
+                    if sparse_validator is None:
+                        from .validation import _validate_storage
+                        sparse_validator=_validate_storage
+                    sparse_validator(row[0],row[1],row[4],storage,self.index['blobs'],self.index['recipes'])
+            # Allocate mmap only after structural admission. Rejected hostile indexes do not leak
+            # a mapped source, and failures above close the one source descriptor opened here.
+            self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ)
+        except BaseException:
+            self.f.close()
+            raise
         self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
     def close(self):
         if getattr(self,'mm',None):self.mm.close();self.mm=None
