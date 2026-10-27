@@ -105,3 +105,14 @@ This is a representation-specific safety increment, not a replacement for full n
 ## Revision rule
 
 No format revision bump is required for this increment because it writes **no new field, record, codec, transform or storage semantic**. If later hardening requires a reader-visible on-disk rule, that change must follow the repository's normal revision/spec/history/current-state/conformance gate.
+
+## Unreleased index-rewrite research boundary
+
+`experiments/cold_index_window.py` is a research checkpoint rewriter, not the canonical reader or
+encoder. It runs existing preflight, requires the primary index hash and byte-identical redundant
+index/footer, rejects journals/trailing bytes, and exclusively creates its destination. Tests cover
+recovered-but-invalid primaries, trailing bytes, output preservation, complete-byte fallback and
+independent index/payload equality. Its source must stay immutable during the rewrite; it does not
+provide a transaction against concurrent mutation. Package-owned decoder/window resource limits,
+native recovery and platform acceptance remain unverified. See the cold-tree dossier; no hostile-input
+or release acceptance is inferred from the diagnostic backend. Canonical parsing policy is unchanged.
