@@ -44,3 +44,24 @@ No product source, format revision, ABI, codec default, Reader cache/validator, 
 ## Next owner action
 
 Offer J24C02 #569 the serial control as a low-complexity candidate with exact negative and memory evidence, requiring independent integrated prospective A/B, cross-platform codecs/owners, full extraction and corruption custody, cold-open admission economics and official benchmark before any merge or release. **No merge/release of O226 proposed.**
+
+## Fully charged source-bound economics supplement
+
+The primary table above shows complete session wall and VmHWM. The same original 108 hosted child receipts also recorded complete wire bytes, decoded logical bytes, process CPU, and separated open/read wall (all CPU and wall figures are medians, milliseconds; bytes are physical archive file bytes including index/metadata). No new benchmark is claimed here.
+
+| Family | Storage | Archive B | Logical B | Eager session CPU ms | Serial session CPU ms | Eager read wall ms | Serial read wall ms | Eager open wall ms | Serial open wall ms |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| zstd_entropy_once | fixed | 37751040 | 37748736 | 97.811 | 80.038 | 88.874 | 78.402 | 1.568 | 1.608 |
+| zstd_entropy_once | cdc | 37751066 | 37748736 | 98.725 | 80.759 | 90.110 | 79.233 | 1.605 | 1.566 |
+| deflate_entropy_once | fixed | 37761556 | 37748736 | 100.048 | 81.680 | 90.534 | 79.894 | 1.586 | 1.614 |
+| deflate_entropy_once | cdc | 37761582 | 37748736 | 100.490 | 80.638 | 92.135 | 78.993 | 1.638 | 1.658 |
+| zstd_entropy_twice | fixed | 37751068 | 75497472 | 177.013 | 157.096 | 159.858 | 155.423 | 1.662 | 1.694 |
+| zstd_entropy_twice | cdc | 37751104 | 75497472 | 177.503 | 154.250 | 159.174 | 152.686 | 1.675 | 1.619 |
+| deflate_entropy_twice | fixed | 37761584 | 75497472 | 182.348 | 155.925 | 165.267 | 154.269 | 1.568 | 1.612 |
+| deflate_entropy_twice | cdc | 37761620 | 75497472 | 180.130 | 154.308 | 162.736 | 152.694 | 1.593 | 1.619 |
+| zstd_pattern_twice | fixed | 54096 | 75497472 | 154.930 | 143.886 | 139.661 | 142.738 | 1.144 | 1.173 |
+| zstd_pattern_twice | cdc | 54132 | 75497472 | 157.528 | 146.061 | 142.333 | 144.929 | 1.185 | 1.150 |
+| deflate_pattern_twice | fixed | 276514 | 75497472 | 160.184 | 148.590 | 144.153 | 147.260 | 1.333 | 1.330 |
+| deflate_pattern_twice | cdc | 276548 | 75497472 | 161.050 | 145.358 | 145.316 | 144.052 | 1.366 | 1.329 |
+
+The entropy-only-once archives are slightly larger than their input logical bytes; **there is no archive-size compression win** on those inputs. Twice profiles reuse the same physical blobs and double logical output. Patterned Zstd/Deflate archives are very small but still must decode a 3 MiB unit for every repeated reference because the Reader cache excludes decoded units over 2 MiB. Executor and parallel decoder costs, not format superiority, are being compared. Process launch is recorded separately; it is excluded from Reader session wall. Native dependency depth, cold filesystem cache state, temporary extraction materialization, update/recovery, physical I/O bytes and real product create/extract are unmeasured, not inferred from these figures.
