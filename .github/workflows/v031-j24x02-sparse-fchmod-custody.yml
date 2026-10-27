@@ -1,0 +1,101 @@
+# ci-lane: fast
+name: CMPCT J24X02 sparse fchmod custody
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24x02-sparse-extract-fchmod-custody-20261027
+  pull_request:
+    paths:
+      - 'src/cmpct/sparse_extract.py'
+      - 'research/j24x02_sparse_fchmod_custody_court.py'
+      - '.github/workflows/v031-j24x02-sparse-fchmod-custody.yml'
+      - 'docs/v031-research/2026-10-27-j24x02-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24x02-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sparse-verified-mode:
+    name: Installed sparse verified-mode custody (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout actual exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Prove owner/prereg ancestry and isolated candidate change
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor 5a5909d6a902e22778463eb2ea11b3e732c988d2 HEAD
+          git merge-base --is-ancestor 0bb402c0f541148727498efce806567292a63bcf HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 231fc44f8cfb0b1d8c5776a48267e28bc07258c4
+          test "$(git rev-parse HEAD:src/cmpct/sparse_extract.py)" = b6fef1e54357ccaa7ba66ea1af49f9201aede270
+          test "$(git rev-parse 5a5909d6a902e22778463eb2ea11b3e732c988d2:src/cmpct/sparse_extract.py)" = ec20b16ddab7624db21dca35d29f5f73a579c9db
+          test "$(git diff --name-only 5a5909d6a902e22778463eb2ea11b3e732c988d2 HEAD -- src/ | wc -l | tr -d ' ')" = 1
+          mkdir -p j24x02-evidence
+          git rev-parse HEAD > j24x02-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > j24x02-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/sparse_extract.py > j24x02-evidence/helper.blob
+          git rev-parse HEAD:research/j24x02_sparse_fchmod_custody_court.py > j24x02-evidence/court.blob
+          git show 5a5909d6a902e22778463eb2ea11b3e732c988d2:src/cmpct/sparse_extract.py > j24x02-evidence/previous_sparse_extract.py
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install actual CMPCT package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Assert independent installation and current source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          from pathlib import Path
+          import inspect, os
+          import cmpct.reader as r
+          import cmpct.sparse_extract as s
+          repo=Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for mod,filename in ((r,"reader.py"),(s,"sparse_extract.py")):
+              installed=Path(inspect.getfile(mod)).resolve()
+              canonical=(repo/"src"/"cmpct"/filename).resolve()
+              norm=lambda b:b.replace(b"\r\n",b"\n")
+              assert installed!=canonical
+              assert norm(installed.read_bytes())==norm(canonical.read_bytes())
+              print("INSTALLED_SOURCE_MATCH",filename,installed)
+          PY
+      - name: Independent historical/candidate eight-case court
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24x02_sparse_fchmod_custody_court.py" \
+            --base-helper "$GITHUB_WORKSPACE/j24x02-evidence/previous_sparse_extract.py" \
+            --out "$GITHUB_WORKSPACE/j24x02-evidence/results.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24x02-evidence/stdout.log"
+          grep -q '^J24X02_PORTABILITY_CUSTODY_PASS=YES' "$GITHUB_WORKSPACE/j24x02-evidence/stdout.log"
+      - name: Preserve full results including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24x02-sparse-${{ matrix.os }}-${{ github.sha }}
+          path: j24x02-evidence/
+          if-no-files-found: warn

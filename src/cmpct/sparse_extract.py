@@ -61,10 +61,14 @@ def write_sparse_verified(reader, row, full: str) -> None:
         if digest.digest() != bytes(expected):
             raise IOError(f'sparse logical integrity failure: {rel}')
         # Keep staging private until verification; failure must preserve existing target bytes.
-        try:
-            os.fchmod(fd, mode or 0o666)
-        except OSError:
-            pass
+        # Windows may omit fchmod entirely; descriptor-only permission restoration
+        # is optional. Do not reopen the temporary name after logical SHA proof.
+        fd_chmod = getattr(os, 'fchmod', None)
+        if fd_chmod is not None:
+            try:
+                fd_chmod(fd, mode or 0o666)
+            except OSError:
+                pass
         os.close(fd)
         fd = -1
         os.replace(tmp, full)
