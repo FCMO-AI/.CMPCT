@@ -13,6 +13,7 @@ on:
       - 'tests/test_o214_cdc_admission.py'
       - 'research/j24f11_fd_fresh_chunk_publication_court.py'
       - 'research/j24f12_opath_wx_parent_court.py'
+      - 'research/j24c01_geometry_fd_composed_court.py'
       - '.github/workflows/v031-j24c01-geometry-fd-composition.yml'
       - 'docs/v031-research/2026-10-27-j24c01-*'
   workflow_dispatch:
@@ -110,6 +111,17 @@ jobs:
             --output "$PWD/j24c01-evidence/inherited-j24f12.json" \
             | tee j24c01-evidence/inherited-j24f12.log
           grep -q 'J24F12_DECISION=WX_ONLY_PARENT_EXACT_FD_TRANSFER_PASS' j24c01-evidence/inherited-j24f12.log
+      - name: Integrated hostile/positive CDC geometry × anonymous published inode
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          blob="$(git rev-parse HEAD:src/cmpct/reader.py)"
+          python research/j24c01_geometry_fd_composed_court.py \
+            --expected-reader-blob "$blob" \
+            --output "$PWD/j24c01-evidence/integrated-cdc-publication.json" \
+            | tee j24c01-evidence/integrated-cdc-publication.log
+          grep -q 'J24C01_DECISION=COMPOSED_CDC_ADMISSION_AND_FD_PUBLICATION_PASS' j24c01-evidence/integrated-cdc-publication.log
       - name: Preserve raw results including failure
         if: always()
         uses: actions/upload-artifact@v4
