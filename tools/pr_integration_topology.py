@@ -94,7 +94,25 @@ def live_snapshot(repo: str, numbers: list[int], limit: int, workers: int = 6) -
         }
 
     with ThreadPoolExecutor(max_workers=max(1, min(8, workers))) as pool:
-        return sorted(pool.map(read_one, selected), key=lambda p: p["number"])
+        observed = sorted(pool.map(read_one, selected), key=lambda p: p["number"])
+    # PR metadata and changed-file endpoints are separate reads. Another
+    # activation may push in between; require a second source-identity witness
+    # rather than binding the new file list to an obsolete exact HEAD.
+    for item in observed:
+        latest = _get_json(f"{base}/pulls/{item['number']}", token)
+        second = (
+            latest["head"]["sha"], latest["head"]["ref"],
+            (latest["head"].get("repo") or {}).get("full_name") or "",
+            latest["base"]["sha"], latest["base"]["ref"],
+            (latest["base"].get("repo") or {}).get("full_name") or "",
+        )
+        first = (
+            item["head_sha"], item["head_ref"], item["head_repo"],
+            item["base_sha"], item["base_ref"], item["base_repo"],
+        )
+        if second != first:
+            raise ValueError(f"PR #{item['number']} changed during source/file witness")
+    return observed
 
 
 def analyze(prs: list[dict], *, canonical_branches: tuple[str, ...] = ("main",)) -> dict:
