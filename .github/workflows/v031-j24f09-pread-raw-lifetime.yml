@@ -8,6 +8,7 @@ on:
       - 'research/j24f09_pread_raw_source_lifetime_court.py'
       - '.github/workflows/v031-j24f09-pread-raw-lifetime.yml'
       - 'docs/v031-research/2026-10-26-j24f09-pread-raw-prereg.md'
+      - 'docs/v031-research/2026-10-26-j24f09-posix-raw-truncation-hosted-result.md'
   workflow_dispatch:
 
 permissions:
