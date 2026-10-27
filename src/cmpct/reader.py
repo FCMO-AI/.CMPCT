@@ -224,7 +224,19 @@ class CMPCT:
         if row[1]==K_HARDLINK:return self.read_range(storage[0],start,length)
         if start<0 or length<0 or end>size:raise ValueError('range outside member')
         if storage[0]==S_PACK:
-            pack=self._blob(storage[1]);base=storage[2];return pack[base+start:base+end]
+            # A signed index is not necessarily a structurally valid one: Python slices silently
+            # clamp out-of-bounds ranges. Validate the complete physical view, even for a zero-byte
+            # selected range, before loading its owner (J24K01: authenticated hostile PACK indexes).
+            if len(storage)!=4 or any(type(v) is not int for v in storage[1:]):
+                raise IOError(f'packed storage geometry failure: {name}')
+            idx,base,packed_size=storage[1:]
+            if idx<0 or idx>=len(self.blobs) or base<0 or packed_size<0 or packed_size!=size:
+                raise IOError(f'packed storage geometry failure: {name}')
+            owner_size=self.blobs[idx][1]
+            if type(owner_size) is not int or owner_size<0 or base>owner_size or packed_size>owner_size-base:
+                raise IOError(f'packed storage geometry failure: {name}')
+            pack=self._blob(idx)
+            return pack[base+start:base+end]
         if storage[0]==S_BLOB:
             # STORE/raw members can be range-read straight from the mmap without copying/decompressing
             # the rest of the file. This matters for already-compressed media where recompression is
