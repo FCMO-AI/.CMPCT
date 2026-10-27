@@ -1,0 +1,57 @@
+# ci-lane: fast
+name: J24Z02 pooled Zstd streaming buffer ownership science
+on:
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: j24z02-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  j24z02-linux:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'agent/phased2-v031-j24z02-stream-buffer-ownership-20261026'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact science HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+          fetch-depth: 10
+      - name: Verify source ancestry and checkout identity
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f research/j24z01_zstd_stream_oracle.py
+          git merge-base --is-ancestor 6e5b4e70b6f1fc402e829c3d1f4cc86a741e4385 "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 7e1d52b3badec55e0fb5556028a19b231e94fb31 "$EVIDENCE_HEAD"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic CMPCT package and validate syntax
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m py_compile research/j24z02_pooled_stream_court.py
+          python - <<'PY'
+          import ctypes.util
+          assert ctypes.util.find_library('zstd'), 'No libzstd research decoder'
+          import cmpct.reader
+          print('Installed real CMPCT Reader and system libzstd available')
+          PY
+      - name: Source-exact A/B/C, original integrity plus pooled candidate hostile cases
+        run: |
+          mkdir -p j24z02-artifacts
+          python research/j24z02_pooled_stream_court.py run j24z02-artifacts/court.json 5
+      - name: Upload original structured results, even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24z02-${{ env.EVIDENCE_HEAD }}
+          path: j24z02-artifacts/*.json
+          if-no-files-found: warn
+# Experimental oracle only; no Reader ABI / codec / release change.
