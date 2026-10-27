@@ -1,5 +1,5 @@
 # ci-lane: research
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: cancel-stale
 # ci-pr-scope: source-exact-evidence
 name: CMPCT v0.31 J24E03 full-parity evidence composition
 
@@ -21,7 +21,7 @@ permissions:
 
 concurrency:
   group: cmpct-v031-j24e03-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
