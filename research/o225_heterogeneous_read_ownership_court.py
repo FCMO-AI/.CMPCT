@@ -146,11 +146,15 @@ def child(args):
         opened_wall = time.perf_counter_ns()
         opened_cpu = time.process_time_ns()
         got = read_method(reader,args.kind,args.arm)
-        read_end_wall = time.perf_counter_ns()
-        read_end_cpu = time.process_time_ns()
         if len(got)!=args.logical_bytes or digest(got)!=args.logical_sha:
             raise AssertionError("incorrect complete logical reconstruction")
-        mem = own_memory()
+    # Charge the same Reader.close() boundary to every arm. The eager arm owns
+    # an internal thread pool that would otherwise shut down AFTER measurement,
+    # while bounded64 shuts its pool before returning; omitting this boundary
+    # would produce a hidden candidate-asymmetric setup/teardown comparison.
+    read_end_wall = time.perf_counter_ns()
+    read_end_cpu = time.process_time_ns()
+    mem = own_memory()
     result = {
         "kind":args.kind,"family":args.family,"arm":args.arm,
         "logical_sha256":digest(got),"expected_sha256":args.logical_sha,
