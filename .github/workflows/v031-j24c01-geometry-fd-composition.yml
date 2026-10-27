@@ -11,6 +11,7 @@ on:
       - 'src/cmpct/reader.py'
       - 'tests/test_o212_sparse_admission.py'
       - 'tests/test_o214_cdc_admission.py'
+      - 'tests/test_chunked_extract_platform_fchmod.py'
       - 'research/j24f11_fd_fresh_chunk_publication_court.py'
       - 'research/j24f12_opath_wx_parent_court.py'
       - 'research/j24c01_geometry_fd_composed_court.py'
@@ -53,9 +54,11 @@ jobs:
           test "$(git rev-parse --is-shallow-repository)" = false
           git merge-base --is-ancestor dd723d128b5a020f154b4c9f7d37c6eedc929f24 HEAD
           git merge-base --is-ancestor 2e6ff5b89c0a0fba32e306ee1ce47a78a093c9ac HEAD
+          git merge-base --is-ancestor ad1c1a923d20da8c2f737b923af725c69484e875 HEAD
           test "$(git rev-parse HEAD:src/cmpct/validation.py)" = "$(git rev-parse dd723d128b5a020f154b4c9f7d37c6eedc929f24:src/cmpct/validation.py)"
           test "$(git rev-parse HEAD:tests/test_o212_sparse_admission.py)" = 10605b0a255c90c9ebe2473bf7aefdb14e9b4ea3
           test "$(git rev-parse HEAD:tests/test_o214_cdc_admission.py)" = ce5bb0c6da2f6d38dcf2b32956b6dfc08e05eaec
+          test "$(git rev-parse HEAD:tests/test_chunked_extract_platform_fchmod.py)" = 8261888e8067da2f417ebe9e50bbb648c2838b19
           python -m py_compile src/cmpct/reader.py tests/test_o212_sparse_admission.py tests/test_o214_cdc_admission.py
           mkdir -p j24c01-evidence
           git rev-parse HEAD > j24c01-evidence/head.sha
@@ -92,8 +95,11 @@ jobs:
           set -euo pipefail
           cp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
           cp "$GITHUB_WORKSPACE/tests/test_o214_cdc_admission.py" "$RUNNER_TEMP/test_o214_cdc_admission.py"
+          cp "$GITHUB_WORKSPACE/tests/test_chunked_extract_platform_fchmod.py" "$RUNNER_TEMP/test_chunked_extract_platform_fchmod.py"
+          mkdir -p "$RUNNER_TEMP/conformance"
+          cp "$GITHUB_WORKSPACE/tests/conformance/v24-chunk-maps.json" "$RUNNER_TEMP/conformance/v24-chunk-maps.json"
           cd "$RUNNER_TEMP"
-          python -m pytest -q test_o212_sparse_admission.py test_o214_cdc_admission.py \
+          python -m pytest -q test_o212_sparse_admission.py test_o214_cdc_admission.py test_chunked_extract_platform_fchmod.py \
             2>&1 | tee "$GITHUB_WORKSPACE/j24c01-evidence/geometry-tests.log"
       - name: Re-run inherited Linux fd-ownership and write-search-only publication courts
         if: runner.os == 'Linux'
