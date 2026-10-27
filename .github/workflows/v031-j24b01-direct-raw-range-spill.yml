@@ -1,0 +1,48 @@
+# ci-lane: fast
+name: CMPCT v031 J24B01 direct RAW signed-range scientific court
+on:
+  pull_request:
+    paths:
+      - 'research/j24b01_direct_raw_range_spill_court.py'
+      - 'research/j24b01_direct_raw_range_referee.py'
+      - 'docs/v031-research/2026-10-27-j24b01-raw-direct-range-boundary-prereg.md'
+      - '.github/workflows/v031-j24b01-direct-raw-range-spill.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  signed-raw-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install actual released-line CMPCT
+        run: python -m pip install -e '.[test]'
+      - name: Execute independent signed-index physical spill court
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          mkdir -p benchmark-artifacts
+          git rev-parse HEAD > benchmark-artifacts/source-sha.txt
+          python research/j24b01_direct_raw_range_spill_court.py > benchmark-artifacts/court.json
+          cat benchmark-artifacts/court.json
+          python research/j24b01_direct_raw_range_referee.py benchmark-artifacts/court.json --adversarial | tee benchmark-artifacts/referee.json
+      - name: Validate workflow topology
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24b01-direct-raw-range-spill.yml
+      - name: Preserve artifacts on success or scientific failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24b01-raw-range-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
