@@ -5,6 +5,7 @@ import errno
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 MODES = ("native", "absent", "absent-fault", "oserror", "valueerror", "native-fault")
@@ -21,7 +22,14 @@ def check(report, root, head):
     assert fixture["format_revision"] == 24 and len(fixture["vectors"]) == 3
     assert report["schema"] == "cmpct-j24d05-r1"
     assert report["head_sha"] == head
-    assert report["reader_blob"] == gitblob((root / "src/cmpct/reader.py").read_bytes())
+    # Git stores canonical LF blob bytes even when Windows autocrlf materializes
+    # CRLF in checkout. Bind to the exact immutable Git object, then separately
+    # require that checkout bytes normalize to that object (no weaker SHA gate).
+    canonical = subprocess.check_output(
+        ["git", "show", f"{head}:src/cmpct/reader.py"], cwd=root)
+    checkout = (root / "src/cmpct/reader.py").read_bytes()
+    assert checkout.replace(b"\\r\\n", b"\\n") == canonical
+    assert report["reader_blob"] == gitblob(canonical)
     rows = report["cases"]
     assert len(rows) == 18
     score = 4
