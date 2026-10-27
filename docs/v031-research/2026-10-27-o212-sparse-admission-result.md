@@ -61,3 +61,18 @@ One-sentence causal conclusion: **validation logic was already present; joining 
 4. If high-extent admission overhead or source identity undermines the result, preserve regression and narrow/revert; do not downgrade strict validator.
 
 No Discovery policy/STATE write, format change, merge or release in O212.
+
+
+## Held-out multi-reference extent and final-code rerun (append-only update)
+
+After the 14/host source-bound court above, O212 added **one additional independently discriminating test** (commit `70af15ea10885c2571742fd5280320b46c06d018`, court blob `10605b0a255c90c9ebe2473bf7aefdb14e9b4ea3`): a valid `S_SPARSE` extent `[0,8,[0,0]]` reuses a 4-byte authenticated physical blob *twice* to reconstruct `ABCDABCD` (full read/verify and range `CDAB`), while an otherwise identical extents descriptor claiming `[0,4,[0,0]]` must be rejected **at Reader open** with original bytes unchanged. This falsifies an overly shallow fix that compares declared length to the **first** referenced blob instead of the sum.
+
+**Hosted actual source code rerun:** [GitHub Actions #40436198457](https://github.com/FCMO-AI/.CMPCT/actions/runs/40436198457) on product/test HEAD `70af15ea10885c2571742fd5280320b46c06d018` completed **3/3 SUCCESS**: Ubuntu **15 PASSED in 2.85s**, macOS **15 PASSED in 2.13s**, Windows **15 PASSED in 2.14s**; 45 hosted test successes. The installed product Reader blob remains `ee598eec46531c4da44d90d37b67f783b0ab3299` and strict validation blob remains `51c2849061f99a4afeddb7666956b24566ce7de0`.
+
+Three fresh raw artifact ZIPs were independently downloaded, their ZIP SHA-256 matched the GitHub API, ZIP CRCs all passed, and all six embedded receipts per host independently preserved the expected Git HEAD, installed Reader/validator/test blob IDs and exact-only `src/cmpct/reader.py` production diff. Artifact identifiers and ZIP SHA:
+
+- macOS [#12704720592](https://github.com/FCMO-AI/.CMPCT/actions/runs/40436198457/artifacts/12704720592): `ec35bc12cba3b1192d61c4ea05b9df28a5a0bdf8dab470416d72c440cf27b1ef`.
+- Ubuntu [#12704780272](https://github.com/FCMO-AI/.CMPCT/actions/runs/40436198457/artifacts/12704780272): `c129e7bb9bcb7d8301cd41977494a6cc4ee77411bbc7e09d1a7ca8e3c06797da`.
+- Windows [#12704118065](https://github.com/FCMO-AI/.CMPCT/actions/runs/40436198457/artifacts/12704118065): `963f4a2f10fdb78b4ec76383e1b0d00107c522fdf3a450bb12de859f2979f2d5`.
+
+Independent audit JSON SHA `4efad9825e4ab76c65997f3a5854c700d74b8c562832d16557603dd27ec1c173`; audited original files are linked above. No release or general product speed claim. The historical 14/host science and infrastructure negative remain immutable and correctly distinguished from the new 15/host run. This late **documentation-only** commit will necessarily have a different HEAD and requires fresh exact-HEAD CI; the two scientific source/test HEADs above remain explicitly identified and are not silently relabelled.
