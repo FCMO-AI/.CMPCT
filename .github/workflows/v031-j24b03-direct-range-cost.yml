@@ -1,0 +1,61 @@
+# ci-lane: fast
+name: CMPCT v031 J24B03-P source-exact direct range economics
+on:
+  pull_request:
+    paths:
+      - 'research/j24b03_direct_range_cost.py'
+      - 'research/j24b03_direct_range_cost_referee.py'
+      - 'research/j24b03_direct_blob_size_court.py'
+      - 'docs/v031-research/2026-10-27-j24b03-direct-range-cost-prereg.md'
+      - '.github/workflows/v031-j24b03-direct-range-cost.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  direct-range-abba:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 80c358f8824ec1b20d349c92ed94c898090969b0
+          path: frozen-baseline
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install both genuine original and candidate native-backed trees
+        run: |
+          set -euo pipefail
+          python -m pip install -e './frozen-baseline[test]'
+          python -m pip install -e '.[test]'
+      - name: Same-input ABBA fresh process instrument and detached referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git -C frozen-baseline rev-parse HEAD)" = 80c358f8824ec1b20d349c92ed94c898090969b0
+          mkdir -p benchmark-artifacts
+          git rev-parse HEAD > benchmark-artifacts/candidate-head.txt
+          git hash-object src/cmpct/reader.py > benchmark-artifacts/candidate-reader-blob.txt
+          git -C frozen-baseline hash-object src/cmpct/reader.py > benchmark-artifacts/frozen-reader-blob.txt
+          python research/j24b03_direct_range_cost.py --run
+          python research/j24b03_direct_range_cost_referee.py benchmark-artifacts/j24b03-p-results.json |
+            tee benchmark-artifacts/j24b03-p-referee.json
+      - name: Verify CI topology
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24b03-direct-range-cost.yml
+      - name: Preserve originals even after failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24b03-p-range-cost-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
