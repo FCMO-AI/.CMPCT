@@ -17,6 +17,8 @@ def audit(filename):
     assert raw["sample_bytes"]==4<<20 and raw["full_bytes"]==16<<20
     path=Path(__file__).with_name("o229_prefix_chunker_court.py")
     assert hashlib.sha256(path.read_bytes()).hexdigest()==raw["source_sha256"]
+    native=Path(__file__).resolve().parents[1]/"native"/"cmpct_cdc.c"
+    assert hashlib.sha256(native.read_bytes()).hexdigest()==raw["native_c_sha256"]
     assert len(raw["rows"])==117
     groups=defaultdict(list)
     for row in raw["rows"]:
@@ -56,6 +58,7 @@ def audit(filename):
                 wall=med(x["total_wall_ns"] for x in rows),
                 cpu=med(x["total_cpu_ns"] for x in rows),
                 rss=med(x["peak_vmhwm_kib"] for x in rows))
+        assert len({groups[(name,mode)][0]["sha"] for mode in MODES})==1
         assert by["fixed"]["bytes"]>0 and by["native"]["bytes"]>0
         assert by["admitted"]["sha"]==by[by["admitted"]["selected"]]["sha"]
         records.append(dict(name=name,by=by,gifted=min(by["fixed"]["bytes"],by["native"]["bytes"])))
