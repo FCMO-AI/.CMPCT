@@ -51,6 +51,10 @@
   ],
   "saturated_families": [
     {
+      "family": "compact-r24-executor-refinement",
+      "reason": "Historical family result: existing executor was decision-complete; only executing its frozen full matrix could change its scope. Not the current v0.31 primary; preserve historical negative without new product credit."
+    },
+    {
       "family": "pack-plan-compression-reuse",
       "reason": "PR #154 measured the duplicate-compression owner and merged PR #155 already productized bounded exact-length reuse in current v0.30."
     },
@@ -92,6 +96,10 @@
     {
       "lesson": "Under a strict joint size+create contract, representation evidence must be paired with execution ownership.",
       "evidence": "Bounded drift can flip Shifted bytes versus Zstd-19 while unchanged existing r25 search costs tens of seconds versus sub-second external controls."
+    },
+    {
+      "lesson": "Release receipt presence is not release authority; verify exact current fingerprint and current assertion schema.",
+      "evidence": "Historical v0.30 investigation: three receipts existed, zero bound then-current fingerprint, and native-r25 predated required assertions. Retain as historical lesson; published v0.30 superseded that gate."
     },
     {
       "lesson": "Intersect semantic eligibility with actual shipping control flow before summing optimization headroom.",
