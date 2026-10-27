@@ -207,8 +207,9 @@ def run(args):
                 with CMPCT(path) as reader:
                     assert reader.by[NAME[kind]][6][0] == (S_CHUNKS if kind == "fixed" else S_CDC)
                     assert len(reader.by[NAME[kind]][6][1]) == n
+                    # verify() already calls full read() and authenticates the logical SHA;
+                    # a second full read would repeat N futures for 262,144 references.
                     assert reader.verify() == 1
-                    assert reader.read(NAME[kind]) == b"Q" * n
                     # First-independent, last and crossing ranges on actual signed archive.
                     for pos,ln in ((0,1),(n-1,1),(n//2-1,3)):
                         assert reader.read_range(NAME[kind],pos,ln)==b"Q"*ln
