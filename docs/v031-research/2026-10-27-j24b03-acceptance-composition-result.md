@@ -51,3 +51,17 @@ The artifacts were enumerated via GitHub's hosted metadata, and the independent 
 A host-specific original 24-wire + H2 side-by-side execution is a cheaper decisive integration gate than inventing more malformed fixtures or rewriting the historically false premise. The prospective observable is **same source revision, same OS, two independent audited courts**. The mechanism can be reused when Composer #569 eventually pulls the guard. One successful evidence-integration run does **not** earn a new Discovery Engine policy: `docs/discovery/STATE.json` is staleable and its reconciliation belongs to #574; this PR did not mutate it.
 
 **Next:** hand the confirmed guard semantics/receipt to #569's owner, preserve their same-effective-index/fd-owned Reader constructor, minimize additional cold-open O(N) work, and run complete combined correctness/performance/recovery/portability gates before any merge or release. No source or on-disk format changed.
+
+## Post-result direct historical source-run reconciliation (2026-10-27 UTC)
+
+The preceding cautious statement about missing a released-`main` CI differential is **now superseded** by an actual existing archived original main run retrieved **after** the initial result was recorded:
+
+- Published `main@80c358f8824ec1b20d349c92ed94c898090969b0` [General CMPCT Tests #37243801009](https://github.com/FCMO-AI/.CMPCT/actions/runs/37243801009), executed **2026-10-04 UTC** on Ubuntu: **782 passed, four failed in 370.39 s**. Its raw [pytest artifact #11318004000](https://github.com/FCMO-AI/.CMPCT/actions/runs/37243801009/artifacts/11318004000) and actual full job log show exactly these failure test IDs:
+  1. `tests/test_performance_base_native_release_custody.py::test_historical_native_materializer_is_release_fingerprinted`;
+  2. `tests/test_public_attribution.py::test_surface_revision_records_attribution_campaign` (`0.30.a` vs test's `0.29.k`);
+  3. `tests/test_v030_ci_topology_split_receipts.py::test_authoritative_v2_classifier_is_release_fingerprint_driven`;
+  4. `tests/test_v030_release_fingerprint_surface.py::test_release_fingerprint_covers_r25_oracle_and_android_custody_inputs`.
+- At candidate source `afcffd59a0ab3ac1133f1a968fcf649fd96a9eda`, [General CMPCT Tests #40565134324](https://github.com/FCMO-AI/.CMPCT/actions/runs/40565134324) also directly executed **782 passed and these same four failed in 319.40 s**. Both are **genuine separate GitHub-run observations on different UTC dates/runners** and do not claim execution-time equivalence. They support a precise **inherited four-test failing-set** attribution. This is now stronger than the prior blob-identity-only inference, but still **does not authorize ignoring** the four failed release/evidence requirements.
+- At candidate `5c1b7748...`, [Native Authority workflow #40573053147](https://github.com/FCMO-AI/.CMPCT/actions/runs/40573053147) has overall conclusion SUCCESS **only because the `native-authority` job was SKIPPED** behind `latest-head-impact`. It **did not** repair or rerun the older actual native-authority command failure; do not report its workflow-level green as a Native Authority gate PASS. Similarly, `CI Topology` and `Engineering Evidence` truly ran and passed at that head.
+
+This post-result comparison changes the **cause attribution** of the four General Tests, not the product conclusion. Preserve the original cautious historical claim above as the earlier knowledge boundary rather than silently rewriting it.
