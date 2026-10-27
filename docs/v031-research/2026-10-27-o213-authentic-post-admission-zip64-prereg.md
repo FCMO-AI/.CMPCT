@@ -1,0 +1,27 @@
+# O213 — prospective genuine 4-GiB source and full ZIP64 parity court for O212
+
+**Preregistered 2026-10-27 UTC, before instrument and workflow creation.** This is a separate **independent replication/evidence** lane, not a competing implementation of the Reader. Exact parent O212 product-candidate PR #560 head at branching: `3249a7d6d09a9890cfa65b03e239a7973bf92614`; O193 base PR #521 original Reader head `392112ce859db5a7f85be593c82d1cabc1f5131f`. Released v0.30.0/r24 unaffected.
+
+## Primary question, observable, alternative
+
+Does O212's new **same-effective-index S_SPARSE admission** preserve authentic Builder-produced revision-24 **4 GiB** / thousands-of-extents content, complete ZIP64 export, independent full logical reconstruction and ZIP64 structure **after the guard**? Existing O196 PR #526 proves the historical O193 source on three operating systems, and O212 #560 demonstrates 15/host small signed-wire cases plus a 4GiB *selective* hand-built index. Neither substitutes for full 4GiB post-patch Builder-to-Reader reconstruction. This court directly tests the missing composition.
+
+Predict: on the one Linux-built sparse source, the Builder emits actual S_SPARSE with >=2048 extents; O212 accepts it; all three host Readers receive byte-identical CMPCT input, request no more than 1 MiB per ZIP64 range operation, export >4GiB *logical* ZIP64, and independently reconstruct **exactly 4,294,967,296 bytes** with expected SHA-256 and CRC; the independent ZIP64 local header must declare 64-bit sizes. Repeated Ubuntu O212 opens should have a finite measured incremental admission cost versus O193 on the **same archive** (prospective viability discriminator: medians <=30 ms incremental and no >16 MiB incremental peak-RSS on this Linux runner; these are research thresholds, not publication gates).
+
+Strong alternative: the new validator rejects a legitimate Builder-emitted sparse edge case or materially increases open CPU/RSS; a successful small synthetic-index court might hide full-output ZIP64 regression or wrong logical checksum under real materialized source. Another alternative is CI environment sparse extent coalescing; classify that as an infrastructure/fixture failure, not a product PASS or loss.
+
+## Stronger controls / method
+
+- Reuse the **actual O196 builder/reader ZIP64 source-exact instrument**, with explicit attribution, instead of inventing a different easier 4GiB oracle. The original upstream source is `research/o196_authentic_crosshost_zip64.py` Git blob `47f3ce4d4a1ef61f89748e3699e863e2ab104e0e` on PR #526. Preserve its live SHA, 4096×4096B sparse source construction and host reader controls; extend independently for post-O212 source and external Info-ZIP where possible.
+- Linux alone builds authentic physical sparse filesystem input, hashes all 4 GiB, builds CMPCT through installed Builder; 3 recipients (Linux, macOS, Windows) independently install the exact O212 source, compare full CMPCT archive SHA, export genuine ZIP64 and stream/verify the full 4 GiB SHA + CRC using CPython ZIP. Linux additionally attempts independent Info-ZIP CRC/full output stream if supported; do not count a missing/unavailable command as PASS.
+- Parse ZIP64 local extra fields with struct, independent from zipfile's own parser, and report exact 64-bit logical+compressed lengths. Record complete ZIP size, build/export CPU and wall, peak RSS (platform-qualified), chunk-call/logical work, temporary I/O whenever observable, actual Git HEAD and source/blob fingerprints.
+- For **same-runner** cold-read economics, isolate O193 vs O212 source in distinct installations; use the exact same produced archive and alternating independent process samples, with setup/executable import excluded from the timed constructor. Record raw observations and failures, including whether the O193 source has different semantics. If this sub-experiment cannot be executed cleanly, report unmeasured rather than erasing product-correctness evidence.
+- Preserve archive byte identity and original source hash at producer, after each receiver export and after any fault. Hold all inherited O198/O202 signed-hostile negatives: O213's genuine positive does **not** cancel these known defects on O193.
+
+## Kill / narrow conditions
+
+FAIL candidate parity on any one host when: O212 rejects authentic sparse; different SHA/bytes or missing full ZIP64 member; decoded SHA/CRC not exact; ZIP64 physical extra absent/malformed; ZIP exporter requests >1 MiB per call; source changed; or code source differs from recorded head. If sparse host preconditions missing or hosted work not actually executed, result is INFRA/BLOCKED, no product classification. Fail viability (but preserve correctness pass) if open overhead >30 ms median or >16 MiB incremental RSS under comparable same-runner conditions. One sample cannot assert generalized performance.
+
+## Boundary and coordination
+
+No Reader/Builder/Writer, format/codec/native, CI evaluator, threshold, release or historical benchmark change. No rewrite of O196 evidence. No merge/release. O213 will open a separate stacked draft PR based on #560, explicitly claim independent cross-host composition and inform owner #560/#521. It is not a duplicate Reader patch. Detailed result must be added append-only when evidence changes; `docs/discovery/STATE.json` remains a staleable cache, not a lock. Source-exact hosted CI must be independently checked before any positive claim. 
