@@ -76,11 +76,12 @@ class CMPCT:
             self.by={x[0]:x for x in self.files}
             if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
             # The authenticated effective index must have one host-visible spelling for each member.
-            # Sparse extents and CDC chunk descriptors must agree with their referenced blob sizes:
-            # otherwise full read() and selective read_range() can silently disagree (#533, O201).
+            # Sparse/CDC descriptors and fixed-chunk totals must agree with physical blob lengths.
+            # Otherwise authenticated metadata can admit logically in-bounds range reads that return
+            # too few bytes (O215); validate the SAME effective index before mmap (O208/O212/O214).
             # Validate this SAME in-memory index, never a separately reopened pathname (#546).
             canonical_seen=set()
-            sparse_validator=None
+            storage_validator=None
             for row in self.files:
                 try:
                     key,_=canonical_logical_path(row[0])
@@ -89,11 +90,11 @@ class CMPCT:
                 if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
                 canonical_seen.add(key)
                 storage=row[6]
-                if row[1]==K_FILE and isinstance(storage,list) and storage and storage[0] in (S_SPARSE, S_CDC):
-                    if sparse_validator is None:
+                if row[1]==K_FILE and isinstance(storage,list) and storage and storage[0] in (S_SPARSE, S_CDC, S_CHUNKS):
+                    if storage_validator is None:
                         from .validation import _validate_storage
-                        sparse_validator=_validate_storage
-                    sparse_validator(row[0],row[1],row[4],storage,self.index['blobs'],self.index['recipes'])
+                        storage_validator=_validate_storage
+                    storage_validator(row[0],row[1],row[4],storage,self.index['blobs'],self.index['recipes'])
             # Allocate mmap only after structural admission. Rejected hostile indexes do not leak
             # a mapped source, and failures above close the one source descriptor opened here.
             self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ)
