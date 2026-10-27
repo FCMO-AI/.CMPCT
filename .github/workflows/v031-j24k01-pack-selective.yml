@@ -1,4 +1,4 @@
-# ci-lane: scientific
+# ci-lane: fast
 name: J24K01 authenticated PACK selective integrity court
 
 on:
