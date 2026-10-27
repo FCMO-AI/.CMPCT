@@ -105,6 +105,7 @@ def test_fully_signed_vzip_declared_size_exceeds_physical_reconstruction(tmp_pat
     receipt["original_archive_sha256"] = golden["archive_sha256"]
     receipt["preflight"] = "UNMEASURED"
     receipt["full_read"] = "UNMEASURED"
+    receipt["verify"] = "UNMEASURED"
     receipt["selective"] = "UNMEASURED"
     try:
         preflight_archive(mutant)
@@ -118,6 +119,11 @@ def test_fully_signed_vzip_declared_size_exceeds_physical_reconstruction(tmp_pat
         except Exception as exc:
             receipt["full_read"] = "REJECT:" + type(exc).__name__
         try:
+            reader.verify()
+            receipt["verify"] = "ACCEPT"
+        except Exception as exc:
+            receipt["verify"] = "REJECT:" + type(exc).__name__
+        try:
             out = reader.read_range(name, len(original), 1)
             receipt["selective"] = "ACCEPT:" + out.hex()
             receipt["returned_bytes"] = len(out)
@@ -127,5 +133,6 @@ def test_fully_signed_vzip_declared_size_exceeds_physical_reconstruction(tmp_pat
     # A green research court means the preregistered defect was observed.
     assert receipt["preflight"] == "ACCEPT"
     assert receipt["full_read"].startswith("REJECT:")
+    assert receipt["verify"].startswith("REJECT:")
     assert receipt["selective"] == "ACCEPT:"
     assert receipt["returned_bytes"] == 0
