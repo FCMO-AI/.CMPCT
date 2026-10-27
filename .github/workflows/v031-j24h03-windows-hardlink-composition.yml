@@ -43,6 +43,27 @@ jobs:
           set -euo pipefail
           python -m pip install -e './candidate[test]' pytest
           python -m pip install --no-deps -e './historical'
+      - name: Rehydrate exact committed Reader bytes after checkout EOL conversion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import subprocess
+          for root, expected in (
+              ('candidate', '243b46d68211a2b125e07f7c92966535f5f0bdc9'),
+              ('historical', 'e716233403dabd0966863c45635e18fa5ac6afb8'),
+          ):
+              blob = subprocess.check_output(['git', '-C', root, 'show', 'HEAD:src/cmpct/reader.py'])
+              got = hashlib.sha1(b'blob ' + str(len(blob)).encode() + b'\\0' + blob).hexdigest()
+              assert got == expected, (root, 'committed blob wrong', got, expected)
+              p = Path(root) / 'src/cmpct/reader.py'
+              p.write_bytes(blob)
+              actual = p.read_bytes()
+              assert actual == blob, (root, 'imported Reader not exactly Git committed bytes')
+              print('J24H03B_IMPORTED_GIT_SOURCE=' + root + ':' + got)
+          PY
       - name: Bind immutable source identities and run O47 genuine filesystem tests
         shell: bash
         run: |
