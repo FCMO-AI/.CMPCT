@@ -128,3 +128,23 @@ def test_many_valid_sparse_extents_are_admitted_once(tmp_path):
         assert archive.read_range(PATH, 0, 4) == PAYLOAD
         assert archive.read_range(PATH, (count - 1) * stride, 4) == PAYLOAD
         assert archive.read_range(PATH, 5, 4) == b"\0" * 4
+
+@pytest.mark.parametrize(
+    "extents",
+    [
+        [[0, 4, [999]]],           # nonexistent physical blob
+        [[0, 4, []]],              # descriptor claims bytes with no physical owners
+        [[-1, 4, [0]]],            # negative physical offset
+        [[0, 0, [0]]],             # zero-length extent
+        [[0, 4, [0]], [2, 4, [0]]],  # overlapping physical ownership
+        [[8, 4, [0]], [0, 4, [0]]],  # out-of-order extents
+    ],
+)
+def test_adversarial_sparse_geometry_always_fails_closed(tmp_path, extents):
+    path = _write(tmp_path, _archive_bytes(extents, PAYLOAD + b"\\0" * 12), "shape")
+    before = path.read_bytes()
+    with pytest.raises(ValidationError):
+        preflight_archive(path)
+    with pytest.raises(ValidationError):
+        CMPCT(path)
+    assert path.read_bytes() == before
