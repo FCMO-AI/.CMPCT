@@ -138,6 +138,18 @@ def main() -> int:
     improvements: list[str] = []
     observations: list[str] = []
 
+    # Raw ABBA reducers also enforce within-arm semantic identity. Comparing
+    # only numbers here can still approve a base/candidate that were measured
+    # under different cache, timing or integrity contracts.
+    semantic_fields = (
+        "schema", "timing_statistic", "cache_semantics",
+        "integrity_semantics", "filesystem_semantic_mismatch",
+        "corpus_semantics",
+    )
+    for field in semantic_fields:
+        if base.get(field) != cand.get(field):
+            failures.append(f"benchmark semantics changed for {field}; base/candidate comparability not established")
+
     base_names = set(base["corpora"])
     cand_names = set(cand["corpora"])
     if base_names != cand_names:
