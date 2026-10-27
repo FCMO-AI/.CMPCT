@@ -324,6 +324,24 @@ class CMPCT:
             # Same-index admission checks strictly increasing extent ends and no overlaps.
             # Search those existing ends directly: no retained O(E) offset index or second parse.
             # A hole begins at the next extent; only overlapping physical owners are decoded.
+            # Short-vector sparse members need no metadata search: preserve the
+            # original bounded direct walk (and avoid a Python bisect callback).
+            # Four extents is a fixed, conservative short-vector class, not a
+            # corpus-dependent admission rule. Exact reconstruction is shared
+            # with the previously authenticated many-extent path below.
+            if len(extents)<=4:
+                for off,ln,ids in extents:
+                    if off>=end:break
+                    if off+ln<=start:continue
+                    q=off
+                    for idx in ids:
+                        bs=self.blobs[idx][1];chunk_end=q+bs
+                        if chunk_end>start and q<end:
+                            b=self._blob(idx);a=max(start,q)-q;z=min(end,chunk_end)-q
+                            out[max(q,start)-start:min(chunk_end,end)-start]=b[a:z]
+                        q=chunk_end
+                        if q>=end:break
+                return bytes(out)
             first=bisect.bisect_right(extents,start,key=lambda extent:extent[0]+extent[1])
             for extent_index in range(first,len(extents)):
                 off,ln,ids=extents[extent_index]
