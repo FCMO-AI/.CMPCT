@@ -165,6 +165,25 @@ class FixedChunkAdmissionContract(unittest.TestCase):
     def test_nonstrict_bool_reference_is_refused(self):
         self._invalid("bool-ref", [True], declared_size=4)
 
+    def test_high_reference_count_preserves_exact_selective_ranges(self):
+        # Held-out stress profile: 4096 references to one authenticated physical
+        # blob. The admission scan is linear in descriptors, not logical bytes;
+        # this catches false positives from duplicate physical ownership.
+        refs = [0] * 4096
+        logical = b"ABCD" * 4096
+        wire = _make_archive(refs, logical)
+        p = self._path("many-refs", wire)
+        self.assertEqual(preflight_archive(p, verify_blob_headers=True)["files"], 1)
+        with CMPCT(p) as reader:
+            self.assertEqual(reader.read_range(PATH, 0, 8), logical[:8])
+            self.assertEqual(reader.read_range(PATH, 8190, 13), logical[8190:8203])
+            self.assertEqual(reader.read_range(PATH, len(logical) - 13, 13), logical[-13:])
+            self.assertEqual(reader.verify(), 1)
+        self.assertEqual(hashlib.sha256(p.read_bytes()).hexdigest(),
+                         hashlib.sha256(wire).hexdigest())
+        self._invalid("many-refs-over", refs, logical=logical,
+                      declared_size=len(logical) + 1)
+
     def test_later_good_checkpoint_controls_effective_index(self):
         # Earlier contradictory index is superseded by a correctly committed one.
         wire = _make_archive([0], b"ABCD", declared_size=5,
