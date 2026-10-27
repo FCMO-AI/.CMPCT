@@ -38,6 +38,9 @@ jobs:
       - name: Install actual candidate CMPCT package
         shell: bash
         run: python -m pip install -e './candidate[test]'
+      - name: Compile package-owned native core in historical exact source checkout
+        shell: bash
+        run: python -m pip install --no-deps -e './historical'
       - name: Compare genuine unchanged historical source with existing candidate
         shell: bash
         run: |
