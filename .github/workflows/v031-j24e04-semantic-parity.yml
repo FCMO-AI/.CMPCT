@@ -1,0 +1,69 @@
+# ci-lane: fast
+name: CMPCT v0.31 J24E04 ABBA semantic custody
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24e04-abba-semantic-identity-20261027
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24e04-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-custody:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind exact historical owner and prereregistered source
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          prereg = 'dc2294684e7e25e3211539305e7f07e94840e9aa'
+          subprocess.run(['git', 'merge-base', '--is-ancestor', prereg, 'HEAD'], check=True)
+          for path, output, expected in [
+              ('tools/aggregate_parity_runs.py', 'j24e04-original-agg.py', 'c55780c9f2d9b1784567daa8f5b40ae9421adceb'),
+              ('tools/check_performance_regression.py', 'j24e04-original-checker.py', '691576229684df73da68ed39f77583ad870acd32'),
+          ]:
+              payload = subprocess.check_output(['git', 'show', prereg + '^:' + path])
+              dest = root / output
+              dest.write_bytes(payload)
+              actual = subprocess.check_output(['git', 'hash-object', str(dest)], text=True).strip()
+              assert actual == expected, (path, actual, expected)
+              current = subprocess.check_output(['git', 'hash-object', path], text=True).strip()
+              assert current != expected, (path, 'no candidate change detected')
+              print('historical_source', path, actual, 'candidate_source', current)
+          print('J24E04_HEAD', subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip())
+          PY
+      - name: Execute real original-vs-candidate semantics court
+        shell: bash
+        env:
+          J24E04_ORIGINAL_AGGREGATOR: ${{ runner.temp }}/j24e04-original-agg.py
+          J24E04_ORIGINAL_CHECKER: ${{ runner.temp }}/j24e04-original-checker.py
+        run: |
+          python -m unittest discover -s tests -p 'test_j24e04_*.py' -v 2>&1 | tee j24e04-court.log
+      - name: Preserve independent court log even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24e04-semantics-${{ matrix.os }}-${{ github.sha }}
+          path: j24e04-court.log
+          if-no-files-found: warn
+          retention-days: 90
