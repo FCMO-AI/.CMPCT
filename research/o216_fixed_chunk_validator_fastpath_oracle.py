@@ -116,7 +116,7 @@ def worker(path, logical_size, mode, runs):
     with CMPCT(Path(path)) as rd:
         assert len(rd.files) == 1 and rd.files[0][4] == logical_size
         # A first-range test exercises actual Reader semantic equivalence on valid input.
-        assert rd.read_range("f", 0, min(4, logical_size)) == b"ABCD"[:min(4, logical_size)]
+        assert rd.read_range("fixed.bin", 0, min(4, logical_size)) == b"ABCD"[:min(4, logical_size)]
     wall, cpu = [], []
     for _ in range(runs):
         t0, c0 = time.perf_counter_ns(), time.process_time_ns()
