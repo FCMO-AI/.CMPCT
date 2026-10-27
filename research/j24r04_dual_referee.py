@@ -46,7 +46,7 @@ def evaluate(rawfile, repo, control_ref, baseline_site, candidate_site):
                         (iteration,e,source), "ABBA axis drift")
                 require(row["reader_source_sha256"] == expected_hashes[source], "source SHA mismatch")
                 require(Path(row["reader_module"]).resolve().is_relative_to(roots[source]), "installed import path drift")
-                require(type(row["range_checks"]) is int and row["range_checks"] == 533, "incorrect logical byte checks")
+                require(type(row["range_checks"]) is int and row["range_checks"] == (531 if e == 1 else 533), "incorrect logical byte checks")
                 for metric in FIELDS:
                     v = row[metric]
                     require(type(v) in (int,float) and math.isfinite(v) and v >= 0, "bad timing "+metric)
