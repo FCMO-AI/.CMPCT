@@ -21,6 +21,7 @@ jobs:
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
           clean: true
+          fetch-depth: 10
       - name: Verify source ancestry and checkout identity
         run: |
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
