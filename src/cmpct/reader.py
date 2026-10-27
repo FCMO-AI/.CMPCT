@@ -3,7 +3,7 @@ from __future__ import annotations
 # Footnote: this module contains the compatibility contract that matters most. Refactors must not
 # silently drop recovery, range-read, path-safety, transactional-generation, or metadata semantics.
 
-import base64, binascii, concurrent.futures, ctypes, ctypes.util, errno, hashlib, io, json, mmap, os, shutil, stat, struct, sys, tempfile, threading, time, zipfile, zlib
+import base64, binascii, bisect, concurrent.futures, ctypes, ctypes.util, errno, hashlib, io, json, mmap, os, shutil, stat, struct, sys, tempfile, threading, time, zipfile, zlib
 from pathlib import Path
 import msgpack
 
@@ -318,10 +318,18 @@ class CMPCT:
                 if p>=end:break
             return b''.join(out)
         if storage[0]==S_SPARSE:
+            if length==0:return b''
             out=bytearray(length)
-            for off,ln,ids in storage[1]:
+            extents=storage[1]
+            # Same-index admission checks strictly increasing extent ends and no overlaps.
+            # Search those existing ends directly: no retained O(E) offset index or second parse.
+            # A hole begins at the next extent; only overlapping physical owners are decoded.
+            first=bisect.bisect_right(extents,start,key=lambda extent:extent[0]+extent[1])
+            for extent_index in range(first,len(extents)):
+                off,ln,ids=extents[extent_index]
+                if off>=end:break
                 extent_end=off+ln
-                if extent_end<=start or off>=end:continue
+                if extent_end<=start:continue
                 q=off
                 for idx in ids:
                     bs=self.blobs[idx][1];chunk_end=q+bs
