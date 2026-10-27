@@ -94,15 +94,18 @@ size_t cmpct_cdc_cut(const uint8_t *data, size_t n, size_t min_size, size_t avg_
     const uint64_t mask_late  = (uint64_t)(avg_size / 2 - 1);
     size_t count = 0, start = 0;
     while (start < n) {
-        size_t hard_end = start + max_size;
-        if (hard_end > n) hard_end = n;
-        size_t i = start + min_size;
-        if (i >= hard_end) {
+        /* The offsets are cumulative: never add an unbounded caller-supplied
+         * chunk limit to start.  Unsigned wrap could move hard_end backward,
+         * produce non-monotone cuts and revisit already processed input. */
+        const size_t remaining = n - start;
+        const size_t span = max_size < remaining ? max_size : remaining;
+        const size_t hard_end = start + span;
+        if (min_size >= span) {
             if (count >= cap) return 0;
             out[count++] = hard_end; start = hard_end; continue;
         }
-        size_t normal = start + avg_size;
-        if (normal > hard_end) normal = hard_end;
+        size_t i = start + min_size;
+        const size_t normal = start + (avg_size < span ? avg_size : span);
         uint64_t h = 0;
         size_t cut = hard_end;
         for (; i < hard_end; ++i) {
