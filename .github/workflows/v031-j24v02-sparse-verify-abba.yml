@@ -30,6 +30,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ env.EXPERIMENT_SHA }}
+          fetch-depth: 0
           path: candidate
           persist-credentials: false
       - name: Checkout original published v0.30.0
