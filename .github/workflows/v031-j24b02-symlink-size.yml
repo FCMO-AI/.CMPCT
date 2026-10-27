@@ -1,0 +1,61 @@
+# ci-lane: fast
+name: CMPCT v031 J24B02 symlink physical-size scientific court
+on:
+  pull_request:
+    paths:
+      - 'research/j24b02_symlink_size_court.py'
+      - 'research/j24b02_symlink_wire_referee.py'
+      - 'docs/v031-research/2026-10-27-j24b02-symlink-size-prereg.md'
+      - '.github/workflows/v031-j24b02-symlink-size.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  symlink-size-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install actual released-line CMPCT and detached wire dependencies
+        run: python -m pip install -e '.[test]' zstandard msgpack
+      - name: Execute preregistered symlink discrepancy on installed Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          mkdir -p benchmark-artifacts
+          git rev-parse HEAD > benchmark-artifacts/source-sha.txt
+          python research/j24b02_symlink_size_court.py > benchmark-artifacts/symlink-court.stdout
+          tail -n 1 benchmark-artifacts/symlink-court.stdout
+      - name: Independent r24 wire and hostile evidence checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24b02_symlink_wire_referee.py benchmark-artifacts/j24b02-raw.json | tee benchmark-artifacts/symlink-referee.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r = json.loads(Path('benchmark-artifacts/symlink-referee.json').read_text())
+          assert r['status'] == 'PASS'
+          assert r['result'] == 'SYMLINK_DECLARED_SIZE_IGNORED_BY_FULL_READ_AND_VERIFY'
+          assert r['independent_checks'] >= 40
+          assert r['forged_receipts_rejected'] == 8
+          PY
+      - name: Validate workflow topology
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24b02-symlink-size.yml
+      - name: Preserve authentic outcomes, including failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24b02-symlink-size-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
