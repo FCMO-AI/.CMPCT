@@ -1,0 +1,83 @@
+# ci-lane: fast
+name: CMPCT J24G01 read-only PR integration topology witness
+
+on:
+  pull_request:
+    paths:
+      - tools/pr_integration_topology.py
+      - tests/test_pr_integration_topology.py
+      - .github/workflows/v031-j24g01-pr-topology.yml
+      - docs/v031-research/2026-10-27-j24g01-pr-integration-topology-prereg.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: cmpct-j24g01-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Independent stateless graph/ancestry/overlap tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_pr_integration_topology.py -v
+          python -m compileall -q tools/pr_integration_topology.py
+          git rev-parse HEAD
+
+  live-pr-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: offline-court
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Read only the independently selected current CMPCT PR subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python tools/pr_integration_topology.py --repo FCMO-AI/.CMPCT --numbers 574,569,609,615,613,601,614,608 --output evidence/j24g01-pr-topology.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path("evidence/j24g01-pr-topology.json").read_text())
+          heads={x["number"]: x["head"] for x in data["heads"]}
+          assert set(heads)=={574,569,609,615,613,601,614,608}
+          assert all(len(x)==40 for x in heads.values())
+          edges={(e["parent"],e["child"]) for e in data["known_stacks"]}
+          assert (608,614) in edges, edges
+          overlap={(e["a"],e["b"]):e for e in data["shared_mutation_surfaces"]}
+          assert overlap[(608,614)]["relation"]=="known_stacked_shared_code"
+          assert overlap[(569,609)]["relation"]=="shared_code_ancestry_incomplete"
+          assert overlap[(569,609)]["code_paths"]==["src/cmpct/reader.py"]
+          assert overlap[(609,615)]["code_paths"]==["src/cmpct/validation.py"]
+          assert data["data_source"]=="live GitHub REST"
+          assert "no merge" in data["scope"]
+          print("J24G01_LIVE_SOURCE_BOUND_TOPOLOGY PASS heads=",heads)
+          print("J24G01_STACKS",edges)
+          PY
+          printf 'checked_commit=%s\n' "$(git rev-parse HEAD)" > evidence/j24g01-source.txt
+          printf 'tool_blob=%s\n' "$(git rev-parse HEAD:tools/pr_integration_topology.py)" >> evidence/j24g01-source.txt
+      - name: Preserve actual live read-only GitHub witness
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g01-pr-topology-${{ github.sha }}
+          path: evidence/j24g01-*
+          if-no-files-found: warn
+
+# This instrument never merges, writes source, modifies PRs, makes release
+# claims, or downgrades existing CI. Filename overlap is not a git conflict.
