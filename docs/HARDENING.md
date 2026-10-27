@@ -105,3 +105,12 @@ This is a representation-specific safety increment, not a replacement for full n
 ## Revision rule
 
 No format revision bump is required for this increment because it writes **no new field, record, codec, transform or storage semantic**. If later hardening requires a reader-visible on-disk rule, that change must follow the repository's normal revision/spec/history/current-state/conformance gate.
+
+
+## J24B03 — direct S_BLOB signed-size custody (draft, 2026-10-27)
+
+Historical, independently hosted [J24B01/J24B02 #604](https://github.com/FCMO-AI/.CMPCT/pull/604) and [tracking issue #605](https://github.com/FCMO-AI/.CMPCT/issues/605) show a concrete r24 gap: `K_FILE` and `K_SYMLINK` may declare a logical length different from the physical `S_BLOB` owner while carrying independently valid primary/tail index hashes and intact physical CRC/SHA. Released strict preflight accepts the contradiction; direct RAW selective reads can return encoded tail-index bytes, and the symlink full-read/verify route can accept the contradiction. This is a geometry/ownership check, not an external-signature forgery.
+
+Draft [J24B03 #609](https://github.com/FCMO-AI/.CMPCT/pull/609) adds constant-time `row.size == blobs[owner].usize` checks for direct files **and symlinks** at strict preflight and ordinary direct selected-read boundaries, plus the symlink full-read boundary and an exact RAW BHDR fast-path check. It was preregistered at `ac43bcfa58589047ab3133c3094119ac4ce69b61` before code changes. Its distinct paired-source court uses unchanged main and candidate on the same signed wire images, plus fixed independent r24 direct-codec vectors and malformed physical BHDR controls. **This is unmerged research/product candidate; check exact-head three-host GitHub Actions before asserting PASS.** The malformed historical #604 expectation must remain intact. Reader composition owner #569 and complete regression/performance/portability receipts still gate any release.
+
+Adjacent unresolved semantics: logical sizes of `K_HARDLINK` aliases versus their ultimate target, mutable mapped backing archive geometry, and inconsistent index-versus-physical blob envelopes beyond the direct-owner case. None are certified fixed by J24B03.
