@@ -39,7 +39,7 @@ jobs:
           git merge-base --is-ancestor cba3636f7cbc28562908ef02cedb69ba11f98afa HEAD
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 83c6600fa6cc951c1e6a136d239a39bb2c5d836b
           test -z "$(git diff --name-only dd723d128b5a020f154b4c9f7d37c6eedc929f24 HEAD -- src/ native/ tests/ benchmarks/)"
-          python -m py_compile research/j24p04_postlink_reader_court.py research/j24p04_receipt_audit.py
+          python -m py_compile research/j24p04_postlink_reader_court.py research/j24p04_receipt_audit.py research/j24p04_receipt_mutants.py
           mkdir -p j24p04-evidence
           git rev-parse HEAD > j24p04-evidence/source-head.txt
           git rev-parse HEAD:research/j24p04_postlink_reader_court.py > j24p04-evidence/instrument-blob.txt
@@ -60,6 +60,9 @@ jobs:
             2>&1 | tee j24p04-evidence/observations.txt
           grep -F "J24P04_DECISION=DIRECT_FD_LINK_AUTHENTIC_AT_SYSCALL_NOT_PERPETUAL_PATH_CUSTODY" j24p04-evidence/observations.txt
           python research/j24p04_receipt_audit.py j24p04-evidence/result.json | tee j24p04-evidence/independent-audit.txt
+          python research/j24p04_receipt_mutants.py j24p04-evidence/result.json j24p04-evidence/mutants.json \
+            | tee j24p04-evidence/mutants-stdout.txt
+          grep -F 'J24P04_AUDIT_MUTANT_DECISION=7_OF_7_REJECTED' j24p04-evidence/mutants-stdout.txt
           sha256sum j24p04-evidence/result.json > j24p04-evidence/result.sha256
       - name: Preserve original receipts, also on failure
         if: always()
