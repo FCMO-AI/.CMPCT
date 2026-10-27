@@ -48,7 +48,7 @@ def main() -> int:
     dup_timing = red.replace('"create_s_median":0.107',
                              '"create_s_median":0.107,"create_s_median":0.100')
     dup_corpora = red[:-1] + ',"corpora":' + clean.split('"corpora":', 1)[1]
-    dup_schema = red.replace('"schema":"cmpct-zip-parity-v1"',
+    dup_schema = clean.replace('"schema":"cmpct-zip-parity-v1"',
                              '"schema":"untrusted","schema":"cmpct-zip-parity-v1"')
     cases = {"dup_timing": dup_timing, "dup_corpora": dup_corpora,
              "dup_schema": dup_schema, "unique_aa": clean, "unique_red": red}
