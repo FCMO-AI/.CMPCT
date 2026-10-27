@@ -130,7 +130,7 @@ class AggregateEvidenceCourt(unittest.TestCase):
                 self.assertFalse(fixed_path.exists(), kind)
                 self.assertIn("ValueError", fixed_run.stderr, kind)
                 self.assertIn(
-                    "duplicate JSON object key" if not kind.startswith("zip-") else "nonfinite",
+                    "nonfinite" if kind in ("zip-NaN", "zip-Infinity", "zip--Infinity", "zip-overflow") else "duplicate JSON object key",
                     fixed_run.stderr, kind + ": " + fixed_run.stderr,
                 )
 
