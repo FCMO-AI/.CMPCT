@@ -1,0 +1,65 @@
+# ci-lane: fast
+# J24P03 is a Linux kernel-only scientific oracle, not a CMPCT product release test.
+name: CMPCT J24P03 existing-target fd publication boundary
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24p03-anonymous-overwrite-boundary-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24p03-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actual-kernel-court:
+    name: Nonroot O_TMPFILE replacement negative court
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source and ancestry
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert frozen prereg and no production-source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 9a73bbdeec998b117c62d02cbf35a141de4e2798 HEAD
+          git merge-base --is-ancestor dd723d128b5a020f154b4c9f7d37c6eedc929f24 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 83c6600fa6cc951c1e6a136d239a39bb2c5d836b
+          test -z "$(git diff --name-only dd723d128b5a020f154b4c9f7d37c6eedc929f24 HEAD -- src/ native/ tests/ benchmarks/)"
+          mkdir -p j24p03-evidence
+          git rev-parse HEAD > j24p03-evidence/source-head.txt
+          git rev-parse HEAD:research/j24p03_fd_replace_oracle.py > j24p03-evidence/oracle-blob.txt
+          git rev-parse HEAD:docs/v031-research/2026-10-27-j24p03-existing-leaf-rename-boundary-prereg.md > j24p03-evidence/prereg-blob.txt
+          id > j24p03-evidence/runner-identity.txt
+      - name: Python runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run real nonroot kernel syscalls with independent actor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24p03_fd_replace_oracle.py
+          python research/j24p03_fd_replace_oracle.py --output j24p03-evidence/result.json \
+            2>&1 | tee j24p03-evidence/observations.txt
+          grep -F 'J24P03_DECISION=RETIRE_VISIBLE_STAGE_PLUS_RENAME_EXISTING_TARGET_UNDER_HOSTILE_SAME_UID_WRITER' j24p03-evidence/observations.txt
+          sha256sum j24p03-evidence/result.json > j24p03-evidence/result.sha256
+      - name: Preserve original success and failure observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p03-existing-overwrite-${{ github.sha }}
+          path: j24p03-evidence/
+          if-no-files-found: warn
