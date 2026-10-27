@@ -63,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check pytest
-          python -m pytest -q tests/test_v031_parity_duplicate_key_truth_j24e01.py tests/test_v031_parity_metric_truth.py
+          python -m pytest --noconftest -q tests/test_v031_parity_duplicate_key_truth_j24e01.py tests/test_v031_parity_metric_truth.py
       - name: Preserve exact source and both original/candidate observations
         if: always()
         uses: actions/upload-artifact@v4
