@@ -31,7 +31,7 @@ def test_bounded_direct_and_logarithmic_same_exact_logical_bytes(tmp_path, count
     stride = 19
     physical = b"ABCD"
     extents = [[i * stride, 4, [0]] for i in range(count)]
-    logical = (physical + b"\\x00" * (stride - 4)) * (count - 1) + physical
+    logical = (physical + b"\x00" * (stride - 4)) * (count - 1) + physical
     wire = source._archive_bytes(extents, logical)
     path = tmp_path / f"j24r04-{count}.cmpct"
     path.write_bytes(wire)
@@ -65,7 +65,7 @@ def test_legacy_strict_sparse_geometry_rejects_under_short_vector(tmp_path):
         [[0, 4, []]],
     )
     for i, extents in enumerate(bad_cases):
-        wire = source._archive_bytes(extents, b"ABCD" + b"\\x00" * 16)
+        wire = source._archive_bytes(extents, b"ABCD" + b"\x00" * 16)
         path = tmp_path / f"invalid-{i}.cmpct"
         path.write_bytes(wire)
         with pytest.raises(ValidationError):
