@@ -395,11 +395,9 @@ class CMPCT:
                 # even though O_TMPFILE and linkat can publish there. O_PATH preserves
                 # the fd-bound fresh-leaf guarantee without requiring directory read rights.
                 parentfd=os.open(parent,os.O_PATH|os.O_DIRECTORY)
-                # Some Linux hosts reject O_TMPFILE/openat against an O_PATH
-                # dirfd with EBADF. /proc/self/fd anchors the same already-open
-                # directory inode without a second lookup of its mutable pathname.
-                # This still requires directory write/search, not read/list, access.
-                fd=os.open(f'/proc/self/fd/{parentfd}',os.O_TMPFILE|os.O_RDWR,0o600)
+                # Open relative to the pinned O_PATH parent. No second lookup
+                # of its mutable pathname or procfs dependency is required.
+                fd=os.open('.',os.O_TMPFILE|os.O_RDWR,0o600,dir_fd=parentfd)
                 unnamed=True
             except OSError as exc:
                 if parentfd>=0:os.close(parentfd);parentfd=-1
