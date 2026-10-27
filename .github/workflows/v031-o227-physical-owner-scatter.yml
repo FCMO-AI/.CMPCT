@@ -1,0 +1,90 @@
+# ci-lane: fast
+# O227: experimental owner-once physical scatter; no Reader/product changes.
+name: CMPCT O227 physical-owner scatter court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o227-physical-owner-scatter-oracle-20261027
+  pull_request:
+    branches:
+      - agent/phased3-v031-o226-decoder-unit-cache-boundary-court-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o227-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-owner-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source, prereg and parent
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify unmodified Reader and immutable prospective freeze
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 12a8b08a661746653a4af1801dfe89c00a39dd85 HEAD
+          git merge-base --is-ancestor f34fe69211fe07e09a368fda9ade7c7233a77520 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = dbd4ac576a05a47eae97e1e40de89cf1de440516
+          mkdir -p o227-evidence
+          git rev-parse HEAD > o227-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o227-evidence/reader.blob
+          git rev-parse HEAD:research/o227_owner_scatter_court.py > o227-evidence/instrument.blob
+          git rev-parse HEAD:research/o227_independent_owner_scatter_audit.py > o227-evidence/auditor.blob
+          git diff --stat 12a8b08a661746653a4af1801dfe89c00a39dd85 HEAD > o227-evidence/diff-stat.txt
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax, installed-source identity, and scientific dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/o227_owner_scatter_court.py research/o227_independent_owner_scatter_audit.py
+          python -m pip install .
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import cmpct.reader,hashlib,inspect,os
+          from pathlib import Path
+          installed=Path(inspect.getfile(cmpct.reader)).resolve()
+          original=Path(os.environ["GITHUB_WORKSPACE"])/"src/cmpct/reader.py"
+          norm=lambda p:p.read_bytes().replace(b"\r\n",b"\n")
+          assert installed!=original.resolve()
+          assert norm(installed)==norm(original)
+          print("INSTALLED_READER_SHA256="+hashlib.sha256(norm(installed)).hexdigest())
+          PY
+      - name: Full-source authenticated physical owner A/B with fresh PIDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o227_owner_scatter_court.py" \
+            --workspace "$GITHUB_WORKSPACE" \
+            --output "$GITHUB_WORKSPACE/o227-evidence/results.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o227-evidence/run.log"
+      - name: Audit raw measurements independently and reject tampered receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o227_independent_owner_scatter_audit.py o227-evidence/results.json \
+            | tee o227-evidence/audit.json
+      - name: Preserve independent original evidence on every outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o227-physical-owner-scatter-${{ env.EVIDENCE_HEAD }}
+          path: o227-evidence/
+          if-no-files-found: warn
