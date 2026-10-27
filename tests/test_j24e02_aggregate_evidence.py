@@ -174,6 +174,60 @@ class AggregateEvidenceCourt(unittest.TestCase):
                 self.assertIn("ValueError", fixed_run.stderr, kind)
                 self.assertIn("expected", fixed_run.stderr, kind + ": " + fixed_run.stderr)
 
+    def test_eight_corpus_ABBA_statistics_and_real_row_red_are_unchanged(self):
+        # This is a held-out realistic report *shape*, not a claim that the
+        # official frozen corpus was generated or timed during this test.
+        names = ("tiny", "source", "media", "binary", "dedup_links",
+                 "sparse", "nested", "combined")
+        base = _report()
+        base["repetitions"] = 7
+        base["corpora"] = {name: _row() for name in names}
+        rows = []
+        for offset in (-0.002, 0.002, 0.0, 0.0):
+            row = copy.deepcopy(base)
+            for j, name in enumerate(names):
+                row["corpora"][name]["logical_bytes"] += j * 97
+                for layer in ("library", "cli"):
+                    for fmt in ("cmpct", "zip"):
+                        row["corpora"][name][layer][fmt]["create_s_median"] += offset
+                        row["corpora"][name][layer][fmt]["extract_s_median"] += offset / 2
+            rows.append(row)
+
+        def aggregate_many(script, records, dest, prefix):
+            output = dest / f"{prefix}-aggregate.json"
+            files = []
+            for i, value in enumerate(records):
+                f = dest / f"{prefix}-{i}.json"
+                f.write_text(_dump(value), encoding="utf-8")
+                files.append(f)
+            run = _command(script, "--out", output, *files)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            return output
+
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            old = aggregate_many(ORIGINAL_AGG, rows, d, "old")
+            new = aggregate_many(CANDIDATE_AGG, rows, d, "new")
+            self.assertEqual(old.read_bytes(), new.read_bytes())
+            loaded = json.loads(new.read_text(encoding="utf-8"))
+            self.assertEqual(loaded["aggregate_runs"], 4)
+            self.assertEqual(loaded["source_repetitions_per_run"], [7] * 4)
+            self.assertEqual(set(loaded["corpora"]), set(names))
+            self.assertEqual(
+                loaded["corpora"]["tiny"]["library"]["cmpct"]["create_s_median"], 0.1,
+            )
+            aa = _command(CHECKER, "--base", new, "--candidate", old)
+            self.assertEqual(aa.returncode, 0, aa.stderr + aa.stdout)
+
+            bad_rows = copy.deepcopy(rows)
+            for record in bad_rows:
+                record["corpora"]["sparse"]["library"]["cmpct"]["create_s_median"] += 0.007
+            bad = aggregate_many(CANDIDATE_AGG, bad_rows, d, "real-red")
+            verdict = _command(CHECKER, "--base", new, "--candidate", bad)
+            self.assertEqual(verdict.returncode, 1, verdict.stderr + verdict.stdout)
+            self.assertIn("sparse/library/create_s_median", verdict.stdout)
+
+
 
 if __name__ == "__main__":
     unittest.main()
