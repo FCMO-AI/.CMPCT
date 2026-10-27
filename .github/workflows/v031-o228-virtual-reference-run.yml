@@ -1,0 +1,58 @@
+name: v0.31 O228 virtual reference-run scientific court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o228-virtual-reference-runs-20261027
+    paths:
+      - research/o228_virtual_reference_run_oracle.py
+      - research/o228_independent_audit.py
+      - docs/v031-research/*o228*
+      - .github/workflows/v031-o228-virtual-reference-run.yml
+  pull_request:
+    paths:
+      - research/o228_virtual_reference_run_oracle.py
+      - research/o228_independent_audit.py
+      - docs/v031-research/*o228*
+      - .github/workflows/v031-o228-virtual-reference-run.yml
+  workflow_dispatch:
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host and exact-source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          date -u +"%Y-%m-%dT%H:%M:%SZ"
+          git rev-parse HEAD | tee o228_head.txt
+          git hash-object research/o228_virtual_reference_run_oracle.py | tee o228_source_blob.txt
+          python --version
+          ldconfig -p | grep libzstd
+      - name: Install sole Python runtime requirement
+        run: python -m pip install 'msgpack==1.1.2'
+      - name: Independent fresh-process run-reference experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o228_virtual_reference_run_oracle.py --output o228_raw.json 2>&1 | tee o228_run.log
+          python research/o228_independent_audit.py o228_raw.json | tee o228_audit.json
+          sha256sum o228_raw.json o228_run.log o228_audit.json research/o228_virtual_reference_run_oracle.py research/o228_independent_audit.py | tee o228_checksums.txt
+      - name: Preserve science (success or failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o228-run-reference-raw-${{ github.sha }}
+          path: |
+            o228_head.txt
+            o228_source_blob.txt
+            o228_raw.json
+            o228_run.log
+            o228_audit.json
+            o228_checksums.txt
+          if-no-files-found: warn

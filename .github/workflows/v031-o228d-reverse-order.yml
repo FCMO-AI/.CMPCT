@@ -1,0 +1,52 @@
+name: v0.31 O228d native CDC reverse-order archive reproduction
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o228-virtual-reference-runs-20261027
+    paths:
+      - research/o228d_reverse_order_court.py
+      - docs/v031-research/*o228d*
+      - .github/workflows/v031-o228d-reverse-order.yml
+  pull_request:
+    paths:
+      - research/o228d_reverse_order_court.py
+      - docs/v031-research/*o228d*
+      - .github/workflows/v031-o228d-reverse-order.yml
+  workflow_dispatch:
+
+jobs:
+  reverse-order:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record source truth and compile unchanged optional CDC
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee o228d_head.txt
+          git hash-object native/cmpct_cdc.c src/cmpct/builder.py src/cmpct/codec.py research/o228b_builder_transfer_court.py research/o228d_reverse_order_court.py | tee o228d_blobs.txt
+          python -m pip install -e .
+          cc -O2 -fPIC -shared native/cmpct_cdc.c -o src/cmpct/libcmpct_cdc.so
+          sha256sum native/cmpct_cdc.c src/cmpct/libcmpct_cdc.so | tee o228d_helper_identity.txt
+          python -c "import cmpct.codec as c; assert c._cdc is not None"
+      - name: Prospective exact-archive replay (native first)
+        run: |
+          set -euo pipefail
+          python research/o228d_reverse_order_court.py --output o228d_raw.json 2>&1 | tee o228d_run.log
+          sha256sum o228d_raw.json o228d_run.log research/o228d_reverse_order_court.py | tee o228d_checksums.txt
+      - name: Preserve evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o228d-reverse-order-${{ github.sha }}
+          path: |
+            o228d_head.txt
+            o228d_blobs.txt
+            o228d_helper_identity.txt
+            o228d_raw.json
+            o228d_run.log
+            o228d_checksums.txt
+          if-no-files-found: warn

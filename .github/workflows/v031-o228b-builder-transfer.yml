@@ -1,0 +1,59 @@
+name: v0.31 O228b Builder CDC virtual-run transfer court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o228-virtual-reference-runs-20261027
+    paths:
+      - research/o228b_builder_transfer_court.py
+      - research/o228b_builder_transfer_audit.py
+      - docs/v031-research/*o228b*
+      - .github/workflows/v031-o228b-builder-transfer.yml
+  pull_request:
+    paths:
+      - research/o228b_builder_transfer_court.py
+      - research/o228b_builder_transfer_audit.py
+      - docs/v031-research/*o228b*
+      - .github/workflows/v031-o228b-builder-transfer.yml
+  workflow_dispatch:
+
+jobs:
+  builder-transfer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record actual source and environment
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee o228b_head.txt
+          git hash-object src/cmpct/builder.py src/cmpct/reader.py research/o228b_builder_transfer_court.py | tee o228b_blobs.txt
+          python --version
+          rustc --version
+          date -u +'%Y-%m-%dT%H:%M:%SZ'
+      - name: Install authentic CMPCT with owned native core
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+      - name: Build genuine archives and audit all charged comparisons
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o228b_builder_transfer_court.py --output o228b_raw.json 2>&1 | tee o228b_run.log
+          python research/o228b_builder_transfer_audit.py o228b_raw.json | tee o228b_audit.json
+          sha256sum o228b_raw.json o228b_run.log o228b_audit.json research/o228b_builder_transfer_court.py research/o228b_builder_transfer_audit.py | tee o228b_checksums.txt
+      - name: Preserve original evidence on success and failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o228b-builder-transfer-${{ github.sha }}
+          path: |
+            o228b_head.txt
+            o228b_blobs.txt
+            o228b_raw.json
+            o228b_run.log
+            o228b_audit.json
+            o228b_checksums.txt
+          if-no-files-found: warn
