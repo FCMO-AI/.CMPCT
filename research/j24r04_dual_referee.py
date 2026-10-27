@@ -110,7 +110,7 @@ def main():
         raise SystemExit("usage: referee original.json owner.json repo original-site owner-site candidate-site out.json")
     first,second,repo,orig,owner,candidate,out=map(Path,sys.argv[1:])
     report=audit(first,second,repo,orig,owner,candidate)
-    out.write_text(json.dumps(report,sort_keys=True,indent=2)+"\\n")
+    out.write_text(json.dumps(report,sort_keys=True,indent=2)+"\n")
     original=json.loads(first.read_text())
     original["observations"][0]["reader_source_sha256"]="0"*64
     corrupted=out.parent/"mutated-receipt.json"
