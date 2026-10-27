@@ -1,0 +1,69 @@
+# ci-lane: fast
+name: CMPCT v031 J24B01 independent observed RAW-wire referee
+on:
+  pull_request:
+    paths:
+      - 'research/j24b01_direct_raw_range_spill_court.py'
+      - 'research/j24b01_direct_raw_observed_referee.py'
+      - '.github/workflows/v031-j24b01-observed-raw-referee.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  observed-wire-referee:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install authentic CMPCT and detached wire dependencies
+        run: python -m pip install -e '.[test]' zstandard msgpack
+      - name: Re-execute frozen J24B01 question; preserve expected scientific failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          mkdir -p benchmark-artifacts
+          git rev-parse HEAD > benchmark-artifacts/observed-source-sha.txt
+          set +e
+          python research/j24b01_direct_raw_range_spill_court.py > benchmark-artifacts/frozen-court.stdout 2> benchmark-artifacts/frozen-court.stderr
+          rc=$?
+          set -e
+          printf '%s\n' "$rc" > benchmark-artifacts/frozen-court-exit-code.txt
+          if [ "$rc" -eq 0 ]; then
+            echo 'Unexpectedly successful frozen preregistration: expected preflight-rejection prediction to be false' >&2
+            exit 1
+          fi
+          test -s benchmark-artifacts/raw-observations.json
+      - name: Independently decode and authenticate observed bytes, including intentionally forged receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24b01_direct_raw_observed_referee.py benchmark-artifacts/raw-observations.json --adversarial | tee benchmark-artifacts/observed-referee.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r = json.loads(Path('benchmark-artifacts/observed-referee.json').read_text())
+          assert r['status'] == 'PASS'
+          assert r['decision'] == 'OBSERVED_PREFLIGHT_ACCEPTS_AND_RAW_RANGE_CROSSES_PHYSICAL_OWNER'
+          assert r['original_preregistered_preflight_prediction'] == 'FALSIFIED'
+          assert r['independent_checks'] >= 60
+          assert r['forged_receipts_rejected'] == 12
+          PY
+      - name: Check normal workflow contract
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24b01-observed-raw-referee.yml
+      - name: Preserve posthoc independent wire evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24b01-observed-wire-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
