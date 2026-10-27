@@ -1,0 +1,78 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24D01 direct-output write-failure fault court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24d01-direct-output-fault-20261027
+  pull_request:
+    paths:
+      - 'research/j24d01_*.py'
+      - '.github/workflows/v031-j24d01-direct-fault.yml'
+      - 'docs/v031-research/2026-10-27-j24d01-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24d01-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fault-court:
+    name: Installed revision-24 direct versus staged recovery (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout actual exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Assert unchanged product/fixture and freeze ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor 42b7d39dc841452cd7c2247780b2cfb7ef110988 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          git diff --quiet 80c358f8824ec1b20d349c92ed94c898090969b0 HEAD -- src/ tests/conformance/
+          python -m py_compile research/j24d01_direct_fault_court.py research/j24d01_receipt_referee.py
+      - name: Install independently, outside tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Execute genuine short-write fault and independent referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          export J24D01_HEAD_SHA="$SOURCE_SHA"
+          export J24D01_READER_BLOB="$(git rev-parse HEAD:src/cmpct/reader.py)"
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24d01_direct_fault_court.py" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/j24d01-raw.json"
+          python "$GITHUB_WORKSPACE/research/j24d01_receipt_referee.py" "$GITHUB_WORKSPACE/artifacts/j24d01-raw.json" "$GITHUB_WORKSPACE" "$SOURCE_SHA" | tee "$GITHUB_WORKSPACE/artifacts/j24d01-independent-referee.json"
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ['GITHUB_WORKSPACE'])/'artifacts'
+          (root/'sha256.json').write_text(json.dumps({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob('*.json') if p.name != 'sha256.json'},sort_keys=True,indent=2)+'\n')
+          PY
+      - name: Persist original artifacts even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24d01-${{ matrix.os }}-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
