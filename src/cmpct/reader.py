@@ -245,14 +245,20 @@ class CMPCT:
         if storage[0]==S_PACK:
             pack=self._blob(storage[1]);base=storage[2];return pack[base+start:base+end]
         if storage[0]==S_BLOB:
-            # STORE/raw members can be range-read straight from the mmap without copying/decompressing
-            # the rest of the file. This matters for already-compressed media where recompression is
-            # pointless but ZIP would still normally inflate the whole member to reach a late range.
+            # A direct RAW range needs only its requested bytes, not the full physical blob.
+            # Reuse the checked, original-inode descriptor source from chunked extraction:
+            # mmap can SIGBUS when the mapped archive inode is truncated after Reader open.
             idx=storage[1];off,us,cs,codec,ml=self.blobs[idx]
             if codec==CODEC_RAW:
-                pos=self.record_base+off;m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
-                base=pos+BHDR.size+rml
-                return self.mm[base+start:base+end]
+                source=self._raw_blob_view_for_extract(idx)
+                try:
+                    if end>len(source):
+                        raise IOError('direct RAW range exceeds physical blob')
+                    # POSIX pread returns owned bytes; on systems without pread the
+                    # historical mmap fallback is copied before its view is released.
+                    return bytes(source[start:end])
+                finally:
+                    if isinstance(source,memoryview):source.release()
             # Compressed small members remain one independent frame, preserving ZIP-like granularity.
             return self._blob(idx)[start:end]
         if storage[0]==S_CHUNKS:
