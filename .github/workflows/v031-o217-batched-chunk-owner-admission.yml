@@ -5,7 +5,7 @@ name: v031 O217 fixed-chunk strict validation batched-owner court
 on:
   push:
     branches:
-      - agent/phased3-v031-o217-fixed-chunk-fast-validator-oracle-20261027
+      - agent/phased1-v031-o217-batched-chunk-owner-admission-20261027
   pull_request:
     paths:
       - 'research/o217_batched_chunk_owner_admission_court.py'
