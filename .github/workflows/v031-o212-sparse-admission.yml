@@ -1,0 +1,100 @@
+# ci-lane: fast
+# O212 product candidate court: positive tests are NOT release or general CI authority.
+name: CMPCT O212 same-effective-index sparse admission
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o212-same-index-sparse-admission-20261027
+  pull_request:
+    branches:
+      - agent/phased3-v031-o193-zip64-streamed-fallback-20261026
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_o212_sparse_admission.py'
+      - '.github/workflows/v031-o212-sparse-admission.yml'
+      - 'docs/v031-research/2026-10-27-o212-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: o212-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  same-index-admission:
+    name: Actual installed Reader and authenticated hostile geometry (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout the candidate exact head and complete prereg history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Authenticate parent and narrow change surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 3db4edb1745ed731d2f6fd54969caab718e47e63 HEAD
+          git merge-base --is-ancestor 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD
+          mkdir -p o212-evidence
+          git rev-parse HEAD > o212-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o212-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/validation.py > o212-evidence/validation.blob
+          git rev-parse HEAD:tests/test_o212_sparse_admission.py > o212-evidence/court.blob
+          git diff --name-only 392112ce859db5a7f85be593c82d1cabc1f5131f HEAD -- src/ native/ benchmarks/ > o212-evidence/product-diff.txt
+          test "$(cat o212-evidence/product-diff.txt)" = "src/cmpct/reader.py"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact project independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+      - name: Authenticate installed Reader and run fully signed root-versioned positive/hostile cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,inspect,os,subprocess
+          from pathlib import Path
+          import cmpct.reader as r
+          import cmpct.validation as v
+          repo=Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()==os.environ['EVIDENCE_HEAD']
+          for mod,name in ((r,'reader'),(v,'validation')):
+              actual=Path(inspect.getfile(mod)).resolve()
+              original=(repo/'src'/'cmpct'/(name+'.py')).resolve()
+              assert actual!=original,('source not installed',actual)
+              norm=lambda b:b.replace(b'\r\n',b'\n')
+              assert norm(actual.read_bytes())==norm(original.read_bytes()),('module bytes drift',name)
+              print('O212_INSTALLED_SOURCE='+name+' SHA256='+hashlib.sha256(norm(actual.read_bytes())).hexdigest())
+          PY
+          # Preserve the exact committed test bytes while avoiding unrelated historical
+          # tests/conftest.py's v0.30 research-profile imports in this focused court.
+          # The inherited general test workflow still executes its normal conftest.
+          cp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          cmp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          python -m pytest -q "$RUNNER_TEMP/test_o212_sparse_admission.py" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o212-evidence/pytest.log"
+      - name: Preserve failures and source-bound evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o212-sparse-admission-${{ matrix.os }}-${{ github.sha }}
+          path: o212-evidence/
+          if-no-files-found: warn
