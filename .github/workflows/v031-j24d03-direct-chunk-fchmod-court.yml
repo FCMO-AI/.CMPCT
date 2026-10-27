@@ -1,0 +1,90 @@
+# ci-lane: fast
+# Research/product-candidate composition, NOT release promotion.
+name: CMPCT J24D03 direct rollback + chunked fd-mode three-host
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24d03-direct-chunk-fchmod-composition-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24d03-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-court:
+    name: Real installed five-vector fault + optional-mode (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - name: Fetch exact branch source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate composed source and inherited frozen evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor 8b171362abf93d778b7f2e7100c8e1a2aa94ca60 HEAD
+          git merge-base --is-ancestor 7e7634973ba0c6fdae12aec4fcc0925dc1c0bc0b HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "1273708b42d2164ac806eea9297ac6fc098104b4"
+          test "$(git diff --name-only 8b171362abf93d778b7f2e7100c8e1a2aa94ca60 HEAD -- src/)" = "src/cmpct/reader.py"
+          git diff --quiet 8b171362abf93d778b7f2e7100c8e1a2aa94ca60 HEAD -- tests/conformance/ research/j24d02_direct_stage_court.py research/j24d02_receipt_referee.py
+          git diff --check 8b171362abf93d778b7f2e7100c8e1a2aa94ca60 HEAD
+          python -m py_compile research/j24d02_direct_stage_court.py research/j24d03_mode_composition_court.py research/j24d03_receipt_referee.py src/cmpct/reader.py
+      - name: Independently install CMPCT
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Validate actual installed source and both original/adjacent fixed-vector courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          export J24D02_HEAD_SHA="$SOURCE_SHA"
+          export J24D02_READER_BLOB="$(git rev-parse HEAD:src/cmpct/reader.py)"
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,os
+          from pathlib import Path
+          import cmpct.reader
+          checkout=Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          source=Path(cmpct.reader.__file__).resolve()
+          assert checkout not in source.parents, (source,checkout)
+          assert hashlib.sha256(source.read_bytes()).digest()==hashlib.sha256((checkout/'src/cmpct/reader.py').read_bytes()).digest()
+          print(f"INSTALLED_J24D03_SOURCE_OK={source}")
+          PY
+          python "$GITHUB_WORKSPACE/research/j24d02_direct_stage_court.py" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/original-j24d02-raw.json"
+          python "$GITHUB_WORKSPACE/research/j24d03_mode_composition_court.py" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/j24d03-mode-raw.json"
+          python "$GITHUB_WORKSPACE/research/j24d03_receipt_referee.py" "$GITHUB_WORKSPACE/artifacts/original-j24d02-raw.json" "$GITHUB_WORKSPACE/artifacts/j24d03-mode-raw.json" "$GITHUB_WORKSPACE" "$SOURCE_SHA" | tee "$GITHUB_WORKSPACE/artifacts/j24d03-independent-audit.json"
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          p=Path(os.environ['GITHUB_WORKSPACE'])/'artifacts'
+          m={q.name:hashlib.sha256(q.read_bytes()).hexdigest() for q in p.glob('*.json')}
+          (p/'manifest.sha256.json').write_text(json.dumps(m,sort_keys=True,indent=2)+'\n')
+          PY
+      - name: Preserve all raw results even when red
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24d03-${{ matrix.os }}-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
