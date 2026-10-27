@@ -1,0 +1,66 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24V03 sparse hardlink verify
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_j24v03_sparse_hardlink_verify.py'
+      - 'tests/test_j24v01_sparse_verify_streamed.py'
+      - 'docs/v031-research/2026-10-27-j24v03-*'
+      - '.github/workflows/v031-j24v03-sparse-hardlink-verify.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24v03-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  installed-reader:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify exact head and Reader blob
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          mkdir -p evidence
+          printf '%s\n' "$SOURCE_SHA" > evidence/source-sha.txt
+          git hash-object src/cmpct/reader.py > evidence/reader-blob.txt
+          git hash-object tests/test_j24v03_sparse_hardlink_verify.py > evidence/test-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic Reader and test tool
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pytest
+      - name: J24V03 signed three-host hostile + linear chain + physical sparse court
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q -s --noconftest tests/test_j24v03_sparse_hardlink_verify.py 2>&1 | tee evidence/j24v03-court.txt
+      - name: Inherited unmodified J24V01 sparse verification
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q --noconftest tests/test_j24v01_sparse_verify_streamed.py 2>&1 | tee evidence/inherited-j24v01.txt
+      - name: Preserve receipts on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24v03-${{ matrix.os }}-${{ env.SOURCE_SHA }}
+          path: evidence/
+          if-no-files-found: error
