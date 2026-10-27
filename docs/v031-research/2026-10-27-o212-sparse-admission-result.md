@@ -26,7 +26,7 @@ The narrow guard does **not** upgrade all other storage/index grammar to strict 
 |---|---|---|
 | macOS 14 | **14 PASSED / 2.38s** | Reader+validator installed bytes equal committed source |
 | Ubuntu 24.04 | **14 PASSED / 2.86s** | Reader+validator installed bytes equal committed source |
-| Windows Server 2022 | **14 PASSED / ~3s** | Reader+validator installed bytes equal committed source |
+| Windows Server 2022 | **14 PASSED / 2.50s** | Reader+validator installed bytes equal committed source |
 
 Installed Reader SHA256 normalized CRLF: `7a7234be1974e2bb76ba8b8f7656c803e9932c5129da05074d53c44ebf2e6b95`; installed strict validator SHA256: `0c77dceeac0ae518b2e72f3dad8925c03225e8cb7b81b3f799a3f0c8de41e0eb`.
 
@@ -38,6 +38,10 @@ Artifact IDs from original hosted run (all head SHA `084bca...`):
 **Scope of 14 regression tests:** valid sparse with holes and physical blob reuse (full SHA via CMPCT.verify, read/range, extract); three declared-length 1/2/5 malformations rejected at opening with unchanged archive SHA; authenticated footer index with contradictory geometry (valid primary, invalid latest) rejected; ordinary direct RAW S_BLOB unchanged; 64 valid sparse extents random-access; six distinct malformed sparse geometry/references rejected without writes; and a valid **4GiB logical / 4096-extents** revision-24 archive with independently computed logical SHA, preflight and multiple actual Reader `read_range` slices. That giant smoke intentionally **does not** allocate/read/verify the full 4GiB with Reader; prior O196/O197 separate full-product courts remain independent controls.
 
 The GitHub artifact names may contain a synthetic pull-request merge SHA. The source/CI attribution above uses the actual PR head SHA `084bca...` from the workflow run's `head_sha` and the checked-out HEAD witness, not the artifact-name merge SHA.
+
+## Independent artifact bytes audit
+
+The original three 935/937-byte GitHub artifact ZIPs were downloaded separately and inspected using Python `zipfile`, with full ZIP SHA256 equality against GitHub's published artifact digests and CRC checks. An independent consistency instrument checked that all three receipts contain the identical original checked-out HEAD `084bca...`, exact Reader blob `ee598e...`, unchanged strict validator blob `51c284...`, identical test blob `df70e2...`, and `src/cmpct/reader.py` as **the only production file changed**; each archived pytest log independently reports `14 passed`. **Independent audit result: PASS for 3/3 artifacts, 42 total test successes.** Audit JSON SHA256 `1f2cbbc74b4a992d82b2d80e77e1dd2b03d68010bc731e05e8dbff026491e46d`, kept with the automation's original downloadable evidence; the immutable GitHub artifacts above are the long-term public source. This independently audits **receipts**, not full product reconstruction or test source execution in a second environment.
 
 ## Original infrastructure negative preserved
 
