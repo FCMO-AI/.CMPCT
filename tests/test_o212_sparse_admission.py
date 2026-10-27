@@ -183,3 +183,21 @@ def test_four_gib_4096_sparse_extents_selective_read_with_bounded_memory(tmp_pat
             assert reader.read_range(PATH, position + 4, 32) == b"\0" * 32
         assert reader.read_range(PATH, logical_size - 1, 1) == b"\0"
     assert hashlib.sha256(path.read_bytes()).digest() == before
+
+
+def test_multi_blob_sparse_extent_uses_sum_not_first_blob_size(tmp_path):
+    """Two references to one valid authenticated physical blob must account 8 logical bytes."""
+    logical = PAYLOAD + PAYLOAD
+    valid = _write(tmp_path, _archive_bytes([[0, 8, [0, 0]]], logical), "two-blobs-valid")
+    assert preflight_archive(valid)["files"] == 1
+    with CMPCT(valid) as reader:
+        assert reader.read(PATH) == logical
+        assert reader.verify() == 1
+        assert reader.read_range(PATH, 2, 4) == b"CDAB"
+    invalid = _write(tmp_path, _archive_bytes([[0, 4, [0, 0]]], logical), "two-blobs-invalid")
+    before = invalid.read_bytes()
+    with pytest.raises(ValidationError):
+        preflight_archive(invalid)
+    with pytest.raises(ValidationError):
+        CMPCT(invalid)
+    assert invalid.read_bytes() == before
