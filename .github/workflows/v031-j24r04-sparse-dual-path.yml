@@ -124,8 +124,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP"
-          python "$GITHUB_WORKSPACE/research/j24r01_sparse_range_abba.py" --repo "$GITHUB_WORKSPACE" --base-site "$RUNNER_TEMP/r04-original-site" --candidate-site "$RUNNER_TEMP/r04-dual-site" --out "$GITHUB_WORKSPACE/j24r04-evidence/original-vs-dual.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/original.log"
-          python "$GITHUB_WORKSPACE/research/j24r01_sparse_range_abba.py" --repo "$GITHUB_WORKSPACE" --base-site "$RUNNER_TEMP/r04-owner-site" --candidate-site "$RUNNER_TEMP/r04-dual-site" --out "$GITHUB_WORKSPACE/j24r04-evidence/owner-vs-dual.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/owner.log"
+          python "$GITHUB_WORKSPACE/research/j24r04_child_stderr_wrapper.py" "$GITHUB_WORKSPACE/research/j24r01_sparse_range_abba.py" --repo "$GITHUB_WORKSPACE" --base-site "$RUNNER_TEMP/r04-original-site" --candidate-site "$RUNNER_TEMP/r04-dual-site" --out "$GITHUB_WORKSPACE/j24r04-evidence/original-vs-dual.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/original.log"
+          python "$GITHUB_WORKSPACE/research/j24r04_child_stderr_wrapper.py" "$GITHUB_WORKSPACE/research/j24r01_sparse_range_abba.py" --repo "$GITHUB_WORKSPACE" --base-site "$RUNNER_TEMP/r04-owner-site" --candidate-site "$RUNNER_TEMP/r04-dual-site" --out "$GITHUB_WORKSPACE/j24r04-evidence/owner-vs-dual.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/owner.log"
       - name: Independent semantic SHA and median referee, including tampering test
         shell: bash
         run: |
