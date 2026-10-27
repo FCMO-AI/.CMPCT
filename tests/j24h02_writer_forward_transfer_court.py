@@ -69,12 +69,25 @@ def prepare(root: Path, expected_blob: str) -> dict:
     owner.write_bytes(CONTENT)
     os.link(owner, alias)
     assert_same_inode(owner, alias)
+    def _physical_stats(p: Path) -> dict:
+        st = p.stat()
+        return {"st_dev": st.st_dev, "st_ino": st.st_ino, "st_nlink": st.st_nlink}
+    print("J24H02_HOST_HARDLINK_STAT=" + json.dumps({
+        "owner": _physical_stats(owner),
+        "alias": _physical_stats(alias),
+        "samefile": os.path.samefile(owner, alias),
+        "host": platform.platform()
+    }, sort_keys=True), flush=True)
     original = root / ORIGINAL
     Builder(source, workers=1, reproducible=True).build(original)
     assert preflight_archive(original)["files"] == 2
     with CMPCT(original) as reader:
         assert reader.verify() == 2
         assert reader.by["b-owner"][1] == K_FILE
+        print("J24H02_BUILDER_HARDLINK_ROWS=" + json.dumps({
+            "b-owner": {"kind": reader.by["b-owner"][1], "storage": reader.by["b-owner"][6][0]},
+            "z-alias": {"kind": reader.by["z-alias"][1], "storage": reader.by["z-alias"][6][0]},
+        }, sort_keys=True, default=str), flush=True)
         assert reader.by["z-alias"][1] == K_HARDLINK
         assert reader.by["z-alias"][6] == ["b-owner"]
         assert reader.read("z-alias") == CONTENT
