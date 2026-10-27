@@ -1,0 +1,113 @@
+# ci-lane: fast
+# O214 sibling S_CDC admission court, stacked on O212; no release credit.
+name: CMPCT O214 same-effective-index CDC admission
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o214-cdc-same-index-admission-20261027
+  pull_request:
+    branches:
+      - agent/phased3-v031-o212-same-index-sparse-admission-20261027
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_o214_cdc_admission.py'
+      - '.github/workflows/v031-o214-cdc-admission.yml'
+      - 'docs/v031-research/2026-10-27-o214-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o214-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  same-effective-index-cdc:
+    name: Installed Reader CDC geometry + inherited sparse (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact commit and immutable preregistration
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Authenticate branch ancestry and narrow diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 9c7efbd301ef6dd45eead413360857216e9d2c9c HEAD
+          git merge-base --is-ancestor 3249a7d6d09a9890cfa65b03e239a7973bf92614 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          test "$(git diff --name-only 3249a7d6d09a9890cfa65b03e239a7973bf92614 HEAD -- src/ native/ benchmarks/)" = "src/cmpct/reader.py"
+          mkdir -p o214-evidence
+          git rev-parse HEAD > o214-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o214-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/validation.py > o214-evidence/validation.blob
+          git rev-parse HEAD:tests/test_o214_cdc_admission.py > o214-evidence/test.blob
+          git diff --stat 3249a7d6d09a9890cfa65b03e239a7973bf92614 HEAD > o214-evidence/diff-stat.txt
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact project separately from worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+      - name: Check installed module byte identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,inspect,os,subprocess
+          from pathlib import Path
+          import cmpct.reader as r
+          import cmpct.validation as v
+          repo=Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()==os.environ['EVIDENCE_HEAD']
+          for mod,name in ((r,'reader'),(v,'validation')):
+              actual=Path(inspect.getfile(mod)).resolve()
+              original=(repo/'src'/'cmpct'/(name+'.py')).resolve()
+              assert actual!=original,('not independent site-install',name)
+              norm=lambda b:b.replace(b'\r\n',b'\n')
+              assert norm(actual.read_bytes())==norm(original.read_bytes()),('module drift',name)
+              print('O214_SOURCE='+name+' SHA256='+hashlib.sha256(norm(actual.read_bytes())).hexdigest())
+          PY
+      - name: Run independently root-versioned CDC valid/hostile court
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          cp "$GITHUB_WORKSPACE/tests/test_o214_cdc_admission.py" "$RUNNER_TEMP/test_o214_cdc_admission.py"
+          cmp "$GITHUB_WORKSPACE/tests/test_o214_cdc_admission.py" "$RUNNER_TEMP/test_o214_cdc_admission.py"
+          python "$RUNNER_TEMP/test_o214_cdc_admission.py" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o214-evidence/cdc-admission.log"
+      - name: Reexecute O212 exact inherited sparse geometry regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          cp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          cmp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          python -m pytest -q "$RUNNER_TEMP/test_o212_sparse_admission.py" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o214-evidence/inherited-o212.log"
+      - name: Preserve all outcomes including failed evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o214-cdc-same-index-${{ matrix.os }}-${{ github.sha }}
+          path: o214-evidence/
+          if-no-files-found: warn
