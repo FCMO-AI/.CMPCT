@@ -175,7 +175,15 @@ class CMPCT:
         row=self.by[name];rel,k,mode,mt,size,h,storage=row
         if k==K_DIR:raise IsADirectoryError(name)
         if k==K_HARDLINK:return self.read(storage[0])
-        if k==K_SYMLINK:return self._blob(storage[1])
+        if k==K_SYMLINK:
+            # A symlink target has the same direct-blob size custody as a regular file.
+            # Without this check verify() can accept signed logical-size contradictions.
+            idx=storage[1]
+            if type(size) is not int or size!=self.blobs[idx][1]:
+                raise IOError(f'symlink size failure: {name}')
+            raw=self._blob(idx)
+            if len(raw)!=size:raise IOError(f'symlink size failure: {name}')
+            return raw
         sk=storage[0]
         if sk==S_PACK:
             pack=self._blob(storage[1]);raw=pack[storage[2]:storage[2]+storage[3]]
@@ -230,9 +238,21 @@ class CMPCT:
             # the rest of the file. This matters for already-compressed media where recompression is
             # pointless but ZIP would still normally inflate the whole member to reach a late range.
             idx=storage[1];off,us,cs,codec,ml=self.blobs[idx]
+            # The logical member must own exactly the physical uncompressed bytes.
+            # Validating the requested subrange alone misses empty/in-frame requests
+            # on an authenticated index whose declared size contradicts its owner.
+            if type(size) is not int or size!=us:
+                raise IOError(f'direct blob size failure: {name}')
             if codec==CODEC_RAW:
-                pos=self.record_base+off;m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+                pos=self.record_base+off
+                if pos<0 or pos+BHDR.size>len(self.mm):
+                    raise IOError('RAW blob header outside archive')
+                m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+                if m!=BMAGIC or c!=CODEC_RAW or rus!=us or rcs!=cs or rml!=ml or rcs!=rus:
+                    raise IOError('RAW blob header mismatch')
                 base=pos+BHDR.size+rml
+                if base<0 or base+rcs>len(self.mm) or end>rcs:
+                    raise IOError('RAW blob range outside physical owner')
                 return self.mm[base+start:base+end]
             # Compressed small members remain one independent frame, preserving ZIP-like granularity.
             return self._blob(idx)[start:end]
