@@ -49,9 +49,9 @@ def physical_fixture(root, size_mib):
         f.write(b"start-J24V02" * 61)
         f.seek(size // 2 + 4099)
         f.write(hashlib.sha256(str(size).encode()).digest() * 121)
-        f.seek(size - 8192)
-        f.write(b"end-J24V02" * 409)
-    assert file.stat().st_size == size - 8192 + 9 * 409
+        f.seek(size - 4096)
+        f.write(b"Z" * 4096)
+    assert file.stat().st_size == size
     target = root / ("sparse-" + str(size_mib) + ".cmpct")
     Builder(src).build(target)
     with CMPCT(target) as reader:
