@@ -63,6 +63,12 @@ jobs:
           assert norm(installed)==norm(original)
           print("INSTALLED_READER_SHA256="+hashlib.sha256(norm(installed)).hexdigest())
           PY
+      - name: Independently falsify inherited ru_maxrss custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o224_fork_ru_maxrss_custody.py --output o224-evidence/rss-custody.json \
+            | tee o224-evidence/rss-custody.log
       - name: Genuine signed-r24 fresh-process phase RSS court
         shell: bash
         run: |
