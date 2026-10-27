@@ -32,6 +32,7 @@ def audit(path):
     counts = collections.Counter()
     unique = set()
     checks = 0
+    nonmonotonic_total = 0
     for s in data["samples"]:
         key = (s["n"], s["kind"], s["layout"])
         assert s["n"] in EXPECTED_N and s["kind"] in KINDS and s["layout"] in LAYOUTS
@@ -62,7 +63,8 @@ def audit(path):
         times = [e["time_ns"] for e in s["events"]]
         assert times == sorted(times)
         hwm = [e["rss"]["VmHWM_kib"] for e in s["events"]]
-        assert hwm == sorted(hwm)
+        if hwm != sorted(hwm):
+            nonmonotonic_total += 1  # Explicit invalidation; preserve every raw observation.
         for event in s["events"]:
             mem = event["rss"]
             for k in ("VmRSS_kib", "VmHWM_kib", "VmSize_kib", "ru_maxrss_kib"):
@@ -95,7 +97,14 @@ def audit(path):
                         subset["instrumented"], left)
             winner = max(inc, key=inc.get) if inc else None
             ratio = inc[winner] / (c-before) if winner and c > before else None
+            nonmonotonic_staged = sum(
+                [e["rss"]["VmHWM_kib"] for e in row["events"]] != sorted(
+                    e["rss"]["VmHWM_kib"] for e in row["events"])
+                for row in subset["instrumented"])
             expected = {
+                "nonmonotonic_staged_samples": nonmonotonic_staged,
+                "valid_stage_claim": bool(not missing and not nonmonotonic_staged and
+                                          perturb <= .15 and c > before and winner),
                 "baseline_hwm_kib": a, "skip_hwm_kib": b,
                 "instrumented_hwm_kib": c, "no_validation_hwm_saving_kib": a-b,
                 "instrumentation_inflation_fraction": perturb,
@@ -111,12 +120,15 @@ def audit(path):
                     assert seen == v, (k,v,seen)
                 checks += 1
             alternative.append((perturb, a-b, ratio, winner, inc.get(winner, 0),
-                                bool(not missing and perturb <= .15 and c > before and winner)))
+                                bool(not missing and perturb <= .15 and c > before and winner),
+                                nonmonotonic_staged > 0))
     perturbed = any(r[0] > .15 for r in alternative)
-    owner = (not perturbed and all(r[5] and r[2] >= .60 and r[4] >= 65536 for r in alternative)
+    invalid_stage_hwm = any(r[6] for r in alternative)
+    owner = (not invalid_stage_hwm and not perturbed and all(r[5] and r[2] >= .60 and r[4] >= 65536 for r in alternative)
              and len({r[3] for r in alternative}) == 1)
     decision = {
-        "stage": "DOMINANT_PHASE_SCOPED" if owner else
+        "stage": "INVALID_STAGE_HWM_SEQUENCE" if invalid_stage_hwm else
+                 "DOMINANT_PHASE_SCOPED" if owner else
                  "MEASUREMENT_PERTURBED" if perturbed else "MIXED_OR_UNRESOLVED",
         "largest_stage": alternative[0][3] if owner else None,
         "validation_counterfactual": ("VALIDATOR_COUNTERFACTUAL_HEADROOM" if
@@ -124,7 +136,9 @@ def audit(path):
                                       "VALIDATOR_HWM_NOT_PROVEN"),
     }
     assert data["decision"] == decision, (decision, data["decision"])
-    return {"audit": "PASS", "schema": data["schema"], "sample_count": len(unique),
+    return {"audit": "PASS_NEGATIVE_STAGE_INVALID" if invalid_stage_hwm else "PASS",
+            "stage_hwm_nonmonotonic_samples": nonmonotonic_total,
+            "schema": data["schema"], "sample_count": len(unique),
             "metric_assertions": checks, "fixtures": len(fixtures),
             "decision": decision, "source_reader_blob": READER_BLOB}
 
