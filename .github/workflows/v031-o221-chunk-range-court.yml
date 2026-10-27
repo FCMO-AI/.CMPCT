@@ -77,6 +77,12 @@ jobs:
             --workspace "$GITHUB_WORKSPACE" \
             --output "$GITHUB_WORKSPACE/o221-evidence/results.json" --repeats 3 \
             2>&1 | tee "$GITHUB_WORKSPACE/o221-evidence/run.log"
+      - name: Independently audit full raw result matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o221_independent_receipt_audit.py o221-evidence/results.json \
+            2>&1 | tee o221-evidence/independent-audit.log
       - name: Preserve all outcomes including failure
         if: always()
         uses: actions/upload-artifact@v4
