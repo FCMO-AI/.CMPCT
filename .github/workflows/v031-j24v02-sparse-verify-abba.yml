@@ -1,0 +1,84 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24V02 source-exact sparse verify ABBA
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24v02-sparse-verify-source-abba-20261027
+  pull_request:
+    paths:
+      - research/j24v02_sparse_verify_abba.py
+      - research/j24v02_sparse_verify_referee.py
+      - .github/workflows/v031-j24v02-sparse-verify-abba.yml
+      - docs/v031-research/2026-10-27-j24v02-*
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24v02-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-exact-paired-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      BASE_SHA: 80c358f8824ec1b20d349c92ed94c898090969b0
+      OWNER_SHA: 3b2bf3c2e033fa27d77b2355821dc0087aa46873
+      EXPERIMENT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout actual candidate with experiment only
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPERIMENT_SHA }}
+          path: candidate
+          persist-credentials: false
+      - name: Checkout original published v0.30.0
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASE_SHA }}
+          path: released
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact Reader/source and scientific prereg custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C candidate rev-parse HEAD)" = "$EXPERIMENT_SHA"
+          test "$(git -C released rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git -C candidate rev-parse HEAD:src/cmpct/reader.py)" = b2b7774c13a5c8235ff89786d171b7ea3ff20710
+          test "$(git -C released rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          git -C candidate merge-base --is-ancestor "$OWNER_SHA" HEAD
+          git -C candidate log --format='%H %s' -5 > evidence/commit-lineage.txt
+          sha256sum candidate/src/cmpct/reader.py released/src/cmpct/reader.py > evidence/source-sha256.txt
+      - name: Install both genuine historic and candidate packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e ./released
+          python -m pip install -e ./candidate
+      - name: Source-exact fresh-process ABBA (64/256 MiB)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python candidate/research/j24v02_sparse_verify_abba.py court \
+            --baseline released --candidate candidate --output evidence \
+            2>&1 | tee evidence/scientific-stdout.txt
+      - name: Detached independent raw-data referee and tamper tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python candidate/research/j24v02_sparse_verify_referee.py \
+            evidence/abba-raw.json evidence/referee-result.json \
+            2>&1 | tee evidence/referee-stdout.txt
+      - name: Keep source-locked raw observations even if negative
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24v02-${{ env.EXPERIMENT_SHA }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
