@@ -14,7 +14,8 @@ def check(path: Path, report_path: Path):
     rows = document["observations"]
     os_names = {r["os_name"] for r in rows}
     assert len(os_names) == 1, os_names
-    expected_count = 24 if next(iter(os_names)) == "posix" else 18
+    os_name = next(iter(os_names))
+    expected_count = 24 if os_name == "posix" else 18
     assert len(rows) == document["expected_observations"] == expected_count
     indexed = {}
     for row in rows:
