@@ -61,6 +61,9 @@ def worker(path: str, logical_bytes: int, runs: int) -> None:
 
 
 def run_controller(parent_site: Path, output: Path) -> None:
+    # Load the original builder-independent O215 fixture from its exact repository test file.
+    # This instrument executes from research/, while hosted science runs from RUNNER_TEMP.
+    sys.path.insert(0, str(Path(os.environ["GITHUB_WORKSPACE"]) / "tests"))
     from test_o215_fixed_chunk_admission import _make_archive
 
     workspace = Path(os.environ["GITHUB_WORKSPACE"])
