@@ -7,6 +7,9 @@ on:
       - 'src/cmpct/validation.py'
       - 'research/j24b03_direct_blob_size_court.py'
       - 'research/j24b03_receipt_referee.py'
+      - 'research/j24b03_direct_range_cost.py'
+      - 'research/j24b03_direct_range_cost_referee.py'
+      - 'docs/v031-research/2026-10-27-j24b03-direct-range-cost-prereg.md'
       - 'docs/v031-research/2026-10-27-j24b03-direct-blob-size-guard-prereg.md'
       - '.github/workflows/v031-j24b03-direct-blob-size-guard.yml'
   workflow_dispatch:
@@ -60,6 +63,18 @@ jobs:
           J24B03_RECEIPT=benchmark-artifacts/baseline.json PYTHONPATH=frozen-baseline/src python research/j24b03_direct_blob_size_court.py --expect vulnerable
           J24B03_RECEIPT=benchmark-artifacts/candidate.json PYTHONPATH=src python research/j24b03_direct_blob_size_court.py --expect repaired
           python research/j24b03_receipt_referee.py benchmark-artifacts/baseline.json benchmark-artifacts/candidate.json | tee benchmark-artifacts/referee.json
+      - name: Prospective source-exact RAW range cost ABBA (science-only)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The paired performance instrument runs distinct baseline/candidate
+          # Python import paths in fresh subprocesses with same archived wire.
+          # A cost signal is research debt; never a safety-gate waiver.
+          python research/j24b03_direct_range_cost.py --run
+          python research/j24b03_direct_range_cost_referee.py \
+            benchmark-artifacts/j24b03-p-results.json \
+            | tee benchmark-artifacts/j24b03-p-referee.json
       - name: Verify workflow topology
         if: runner.os == 'Linux'
         run: python tools/check_ci_topology.py .github/workflows/v031-j24b03-direct-blob-size-guard.yml
