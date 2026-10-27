@@ -1,0 +1,69 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 O219 same-wire decode+native validation ceiling
+on:
+  push:
+    branches:
+      - agent/phased1-v031-o219-index-decode-bound-20261027
+  pull_request:
+    paths:
+      - 'research/o219_*.py'
+      - '.github/workflows/v031-o219-index-decode-bound.yml'
+      - 'docs/v031-research/2026-10-27-o219-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o219-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scientific:
+    name: Same-wire decode ceiling / CPython ${{ matrix.python-version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.13']
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Bind original native source, validator and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor c76e0b2f5b54ecbaffafa0adf0e14759b2c52a37 HEAD
+          git merge-base --is-ancestor 6372e780be99a31f5ea21b7a3c74fde92cf0bc45 HEAD
+          test "$(git rev-parse HEAD:research/o218_fastscan.c)" = a54f15181d9dbe667b9e8c9d52e927b09c80152f
+          test "$(git rev-parse HEAD:research/o218_native_validator_oracle.py)" = 0639d777be782909cbf7dd9c8553a358933b81ba
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          python -m py_compile research/o219_same_wire_decode_bound.py research/o219_independent_receipt_audit.py
+      - name: Install sole analysis dependency
+        run: python -m pip install 'msgpack==1.1.2'
+      - name: Same wire, independent raw wall/CPU samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python research/o219_same_wire_decode_bound.py --repeats 17 --output "artifacts/o219-${{ matrix.python-version }}-raw.json"
+          python research/o219_independent_receipt_audit.py "artifacts/o219-${{ matrix.python-version }}-raw.json" --output "artifacts/o219-${{ matrix.python-version }}-audit.json"
+          sha256sum artifacts/*.json | tee artifacts/sha256.txt
+      - name: Preserve source-bound raw evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o219-${{ matrix.python-version }}-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
