@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - agent/phased3-v031-o225-heterogeneous-read-ownership-20261027
+  pull_request:
+    branches:
+      - agent/phased3-v031-o223-bounded-reader-futures-20261027
   workflow_dispatch:
 
 permissions:
