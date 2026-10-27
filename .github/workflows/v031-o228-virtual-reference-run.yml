@@ -6,6 +6,8 @@ on:
       - agent/phased3-v031-o228-virtual-reference-runs-20261027
     paths:
       - research/o228_virtual_reference_run_oracle.py
+      - research/o228_independent_audit.py
+      - research/o228_independent_audit.py
       - docs/v031-research/*o228*
       - .github/workflows/v031-o228-virtual-reference-run.yml
   pull_request:
@@ -39,8 +41,8 @@ jobs:
         run: |
           set -euo pipefail
           python research/o228_virtual_reference_run_oracle.py --output o228_raw.json 2>&1 | tee o228_run.log
-          python research/o228_virtual_reference_run_oracle.py --audit o228_raw.json | tee o228_audit.json
-          sha256sum o228_raw.json o228_run.log o228_audit.json research/o228_virtual_reference_run_oracle.py | tee o228_checksums.txt
+          python research/o228_independent_audit.py o228_raw.json | tee o228_audit.json
+          sha256sum o228_raw.json o228_run.log o228_audit.json research/o228_virtual_reference_run_oracle.py research/o228_independent_audit.py | tee o228_checksums.txt
       - name: Preserve science (success or failure)
         if: always()
         uses: actions/upload-artifact@v4
