@@ -22,7 +22,8 @@ static int valid(const uint64_t *ends, size_t count, size_t n) {
 int main(void) {
     static const uint8_t witness[7] = {0x00,0xde,0x1a,0x53,0xf0,0x11,0x63};
     uint64_t ends[4] = {0,0,0,0};
-    if (sizeof(size_t) != 4 && sizeof(size_t) != 8) {
+    volatile size_t runtime_width = sizeof(size_t); /* Avoid MSVC C4127 in strict court. */
+    if (runtime_width != 4 && runtime_width != 8) {
         fputs("J24N03 UNSUPPORTED unexpected size_t width\n", stderr);
         return 2;
     }
@@ -35,7 +36,7 @@ int main(void) {
         fputs("J24N03 FAIL invalid witness partition\n",stderr);
         return 1;
     }
-    if (sizeof(size_t) == 4) {
+    if (runtime_width == 4) {
         if (count != 2 || ends[0] != 5 || ends[1] != 7) {
             fputs("J24N03 FALSIFIED predicted x86 [5,7]\n",stderr);
             return 1;
