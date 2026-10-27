@@ -1,0 +1,68 @@
+# ci-lane: research
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: source-exact-evidence
+name: CMPCT v0.31 J24E02 raw ABBA evidence court
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24e02-aggregate-evidence-ingestion-20261027
+  pull_request:
+    paths:
+      - "tools/aggregate_parity_runs.py"
+      - "tests/test_j24e02_aggregate_evidence.py"
+      - ".github/workflows/v031-j24e02-aggregate-json.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-j24e02-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  exact-source-ABBA-evidence:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Verify current source and materialize frozen original aggregator
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git show 2d0461ce3fdc07bc74fd6a0f3d09990b3b377186:tools/aggregate_parity_runs.py > "$RUNNER_TEMP/j24e02-original-aggregator.py"
+          test "$(git hash-object "$RUNNER_TEMP/j24e02-original-aggregator.py")" = "6e036f75528bd892d6552b8b04f5586770ff1744"
+          test "$(git hash-object tools/check_performance_regression.py)" = "22172ba4465b297bba54b0120f3419abe632cbd1"
+          echo "source_head=$(git rev-parse HEAD)"
+          echo "original_aggregator_blob=$(git hash-object "$RUNNER_TEMP/j24e02-original-aggregator.py")"
+          echo "candidate_aggregator_blob=$(git hash-object tools/aggregate_parity_runs.py)"
+          echo "strict_comparator_blob=$(git hash-object tools/check_performance_regression.py)"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Run genuine original-vs-candidate aggregator and unchanged comparator
+        shell: bash
+        env:
+          J24E02_ORIGINAL_AGGREGATOR: ${{ runner.temp }}/j24e02-original-aggregator.py
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_j24e02_aggregate_evidence.py' -v 2>&1 | tee j24e02-unittest.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24e02-raw-evidence-${{ matrix.os }}
+          path: j24e02-unittest.log
+          if-no-files-found: warn
+          retention-days: 30
