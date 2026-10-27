@@ -10,7 +10,15 @@ from o219_independent_receipt_audit import audit
 
 def mutate(d, label):
     if label == "drop_sample": d["samples"].pop()
-    elif label == "duplicate_repeat": d["samples"][0]["repeat"] = d["samples"][1]["repeat"]
+    elif label == "duplicate_repeat":
+        # Randomized order puts different methods in adjacent rows; mutate
+        # inside one SAME (profile, method) bucket to guarantee a real duplicate.
+        first=d["samples"][0]
+        later=next(row for row in d["samples"] if
+                   (row["n"],row["unique"],row["method"]) ==
+                   (first["n"],first["unique"],first["method"]) and
+                   row["repeat"] != first["repeat"])
+        first["repeat"]=later["repeat"]
     elif label == "forge_clock": d["samples"][0]["total_wall_ns"] += 42
     elif label == "forge_cpu": d["samples"][0]["total_cpu_ns"] += 42
     elif label == "forge_median": d["summary"][0]["methods"]["native"]["total_wall_ns"] *= 0.1
