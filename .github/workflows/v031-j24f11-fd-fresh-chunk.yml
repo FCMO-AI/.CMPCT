@@ -1,0 +1,68 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24F11 Linux descriptor-to-leaf authentic extraction
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24f11_fd_fresh_chunk_publication_court.py'
+      - '.github/workflows/v031-j24f11-fd-fresh-chunk.yml'
+      - 'docs/v031-research/2026-10-27-j24f11-fd-fresh-chunk-publication-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24f11-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fd-verified-new-leaf:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate source, ancestry and prospective preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 69e6a4eab51d9ed58164cca8a938b60677c9fd10 HEAD
+          git merge-base --is-ancestor 20d752c8c19d700512a38bcc7026d3d9b3b72b16 HEAD
+          python -m py_compile src/cmpct/reader.py research/j24f11_fd_fresh_chunk_publication_court.py
+          git show -s --format='%H %s'
+      - name: Install exact candidate independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Authentic source-bound Linux create-only court
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence-artifacts
+          blob="$(git hash-object src/cmpct/reader.py)"
+          echo "J24F11_HEAD=$(git rev-parse HEAD)" | tee evidence-artifacts/source.txt
+          echo "J24F11_READER_BLOB=$blob" | tee -a evidence-artifacts/source.txt
+          python research/j24f11_fd_fresh_chunk_publication_court.py \
+            --expected-blob "$blob" \
+            --output "$PWD/evidence-artifacts/j24f11.json" \
+            | tee evidence-artifacts/stdout.txt
+          test -s evidence-artifacts/j24f11.json
+          grep -q 'J24F11_DECISION=SCOPED_LINUX_FRESH_CHUNK_FD_PUBLISH_PASS' evidence-artifacts/stdout.txt
+      - name: Preserve evidence, including failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24f11-${{ runner.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: evidence-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
