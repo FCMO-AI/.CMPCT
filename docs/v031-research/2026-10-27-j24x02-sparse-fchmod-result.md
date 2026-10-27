@@ -16,3 +16,5 @@ This is a scoped portability candidate, not a complete release. Old sparse SHA v
 
 ## Next decision
 Hand to owners #255/#270 and reconcile the independent released-code failure #571/#572. Preserve inherited negative performance. No merge, no release, no Discovery policy change.
+## Evidence integration observation
+The initial Engineering Evidence CI reported missing PR dossier headings; a subsequent run reported a missing explicit quality-ratchet marker. These were PR-description completeness failures, not execution failures of the signed-wire court. The PR evidence was reconciled to the repository's exact section and falsifiability vocabulary; re-evaluate on a fresh PR event before claiming Engineering Evidence success. The two finished three-host scientific runs on code HEAD and first document HEAD remain independently positive; neither implies the official performance gate executed. Source-code helper and inherited Reader blob are unchanged by this documentation update.
