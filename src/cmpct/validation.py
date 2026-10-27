@@ -442,8 +442,9 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
     # safely marks the kind owned by each terminal trie node.
     namespace_root = {}
     hardlinks = {}
-    file_kinds = {}
-    file_sizes = {}
+    # Reuse already-owned index row objects: one mapping, not a second
+    # per-file size dictionary (max_files may be millions).
+    file_rows = {}
     for fi, row in enumerate(files):
         if not isinstance(row, list) or len(row) != 7:
             raise ValidationError(f"file row {fi} has invalid shape")
@@ -485,8 +486,7 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
         if kind in (K_FILE, K_HARDLINK) and any(k is not None for k in node):
             raise ValidationError(f"non-directory archive ancestor {path!r}")
         node[None] = kind
-        file_kinds[canonical_path] = kind
-        file_sizes[canonical_path] = size
+        file_rows[canonical_path] = row
         if kind == K_HARDLINK:
             try:
                 target_key, _ = canonical_logical_path(storage[0], max_path_bytes=limits.max_path_bytes)
@@ -517,14 +517,14 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
         # Portable hardlinks name regular inodes, never directories or symlinks.
         # A signed index can otherwise pass existence/cycle checks yet fail
         # extraction after earlier archive members have been published.
-        if file_kinds[owner] != K_FILE:
+        if file_rows[owner][1] != K_FILE:
             raise ValidationError(f"hardlink {path!r} must resolve to regular file owner {owner!r}")
         # A hardlink is another name for the same inode: every alias in the
         # authenticated chain must describe the terminal owner's exact size.
         # Validate during this already-memoized walk, not a new O(N^2) pass.
-        owner_size = file_sizes[owner]
+        owner_size = file_rows[owner][4]
         for alias in trail:
-            if file_sizes[alias] != owner_size:
+            if file_rows[alias][4] != owner_size:
                 raise ValidationError(
                     f"hardlink {alias!r} size disagrees with owner {owner!r}"
                 )
