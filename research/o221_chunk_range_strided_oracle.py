@@ -146,6 +146,46 @@ def child(args):
     }, sort_keys=True))
 
 
+
+def held_out_variable_payloads(workspace: Path):
+    """Differently rooted byte-sensitive range oracle; repeated b'Q' alone masks offsets."""
+    from cmpct.reader import CMPCT
+    from cmpct.validation import preflight_archive
+    payloads=(b"A", b"BC", b"DEF", b"GHIJ", b"KLMNO")
+    refs=[(i*i+3*i+1)%len(payloads) for i in range(173)]
+    logical=b"".join(payloads[i] for i in refs)
+    results=[]
+    with tempfile.TemporaryDirectory(prefix="o221-variable-") as td:
+        for kind in KINDS:
+            mod=load_py(workspace / ("tests/test_o215_fixed_chunk_admission.py"
+                                  if kind=="fixed" else "tests/test_o214_cdc_admission.py"))
+            if kind=="fixed":
+                wire=mod._make_archive(refs,logical,blobs=payloads)
+            else:
+                entries=[[len(payloads[idx]),idx] for idx in refs]
+                wire=mod._r24(entries,logical,blobs=payloads)
+            path=Path(td)/(kind+".cmpct")
+            path.write_bytes(wire)
+            assert preflight_archive(path,verify_blob_headers=True)["files"]==1
+            with CMPCT(path) as reader:
+                assert reader.verify()==1
+                assert reader.read(NAME[kind])==logical
+                anchors=build_anchors(reader,NAME[kind])
+                cases=0
+                for start in range(len(logical)+1):
+                    for length in (0,1,2,3,7,17,33):
+                        if start+length>len(logical):continue
+                        expected=logical[start:start+length]
+                        original=reader.read_range(NAME[kind],start,length)
+                        indexed=indexed_range(reader,NAME[kind],start,length,anchors)
+                        assert original==expected and indexed==expected, (kind,start,length)
+                        cases+=1
+                assert cases>1000
+            results.append({"kind":kind,"case_count":cases,"archive_sha256":digest(wire),
+                            "logical_sha256":digest(logical),"blob_lengths":list(map(len,payloads)),
+                            "repeated_reference_count":len(refs)})
+    return results
+
 def run(args):
     from cmpct.reader import CMPCT
     from cmpct.validation import preflight_archive
@@ -153,6 +193,7 @@ def run(args):
     root = Path(args.workspace).resolve()
     out = Path(args.output).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
+    variable_cases=held_out_variable_payloads(root)
     samples = []
     archives = []
     with tempfile.TemporaryDirectory(prefix="o221-r24-") as td:
@@ -228,6 +269,7 @@ def run(args):
             "exact_source_parent":"c5e13bb3fbb4cdade8b64246658ce7c7818de41f",
             "prereg_commit":"9114674cf217dd8b8b463f4f602fa8b91b825fee",
             "runner_python":sys.version,"samples":samples,"archives":archives,
+            "held_out_variable_payloads":variable_cases,
             "summary":summary,
             "decision":"CHARGED_RANDOM_RANGE_HEADROOM" if passed else "CHARGED_RANDOM_RANGE_NOT_PROVEN",
             "limitations":"Only repeated one-byte physical RAW refs; indexed adapter not production; parallelism, diverse codecs, update/recovery and release parity unmeasured."}
