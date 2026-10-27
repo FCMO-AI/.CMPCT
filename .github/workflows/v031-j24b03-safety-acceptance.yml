@@ -1,0 +1,91 @@
+# ci-lane: fast
+# New prospective same-head acceptance court. Historical J24B03-H's immutable
+# falsified prediction remains RED in the existing workflow; no test is waived.
+name: CMPCT v031 J24B03-A direct custody + H2 acceptance
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/validation.py'
+      - 'research/j24b03_direct_blob_size_court.py'
+      - 'research/j24b03_receipt_referee.py'
+      - 'research/j24b03_bhdr_offset_diagnostic.py'
+      - 'research/j24b03_bhdr_offset_referee.py'
+      - 'docs/v031-research/2026-10-27-j24b03-acceptance-composition-prereg.md'
+      - '.github/workflows/v031-j24b03-safety-acceptance.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  exact-head-safety-acceptance:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+        python: ['3.11']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 80c358f8824ec1b20d349c92ed94c898090969b0
+          path: frozen-baseline
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Build both immutable native-backed package trees separately
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e './frozen-baseline[test]'
+          python -m pip install -e '.[test]'
+      - name: Custody — exact original and candidate commits plus Reader identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git -C frozen-baseline rev-parse HEAD)" = '80c358f8824ec1b20d349c92ed94c898090969b0'
+          mkdir -p benchmark-artifacts
+          git rev-parse HEAD > benchmark-artifacts/candidate-head.txt
+          git -C frozen-baseline rev-parse HEAD > benchmark-artifacts/baseline-head.txt
+          git hash-object src/cmpct/reader.py > benchmark-artifacts/candidate-reader-blob.txt
+          git hash-object src/cmpct/validation.py > benchmark-artifacts/candidate-validator-blob.txt
+          git -C frozen-baseline hash-object src/cmpct/reader.py > benchmark-artifacts/baseline-reader-blob.txt
+          git -C frozen-baseline hash-object src/cmpct/validation.py > benchmark-artifacts/baseline-validator-blob.txt
+      - name: Unchanged J24B03 size court — paired signed wires and independent referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          J24B03_RECEIPT=benchmark-artifacts/original-baseline.json PYTHONPATH=frozen-baseline/src python research/j24b03_direct_blob_size_court.py --expect vulnerable
+          J24B03_RECEIPT=benchmark-artifacts/original-candidate.json PYTHONPATH=src python research/j24b03_direct_blob_size_court.py --expect repaired
+          python research/j24b03_receipt_referee.py benchmark-artifacts/original-baseline.json benchmark-artifacts/original-candidate.json | tee benchmark-artifacts/original-referee.json
+      - name: Unchanged separately preregistered H2 paired physical-header forensic
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python research/j24b03_bhdr_offset_diagnostic.py --generate --corpus benchmark-artifacts/h2-corpus
+          PYTHONPATH=frozen-baseline/src python research/j24b03_bhdr_offset_diagnostic.py --arm baseline --corpus benchmark-artifacts/h2-corpus --receipt benchmark-artifacts/h2-baseline.json
+          PYTHONPATH=src python research/j24b03_bhdr_offset_diagnostic.py --arm candidate --corpus benchmark-artifacts/h2-corpus --receipt benchmark-artifacts/h2-candidate.json
+          python research/j24b03_bhdr_offset_referee.py --corpus benchmark-artifacts/h2-corpus --baseline benchmark-artifacts/h2-baseline.json --candidate benchmark-artifacts/h2-candidate.json --out benchmark-artifacts/h2-audit.json
+          # H2's descriptive shift observation becomes a *new prospective* hard
+          # acceptance condition here, NOT a retroactive rewrite of frozen H.
+          python -c "import json; v=json.load(open('benchmark-artifacts/h2-audit.json')); assert v['audit']=='PASS' and v['mechanistic_rml_shift']=='CONFIRMED' and v['baseline_accepted']==10 and v['candidate_rejections']==10 and v['valid_controls']==2 and v['hostile_cases']==10"
+      - name: Validate CI lane ownership
+        if: runner.os == 'Linux'
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24b03-safety-acceptance.yml
+      - name: Retain all source IDs original wires and both independent referees
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24b03-a-${{ matrix.os }}-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: error
