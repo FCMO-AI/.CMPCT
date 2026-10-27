@@ -101,6 +101,17 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         raise ValueError("at least one record is required")
     names = list(records[0]["corpora"])
     exact([set(r["corpora"]) for r in records], "corpus set")
+    # All ABBA observations must describe the same experiment. Numeric-only
+    # equality cannot repair a run that used a different timing/cache/integrity
+    # regime; copying the first record would silently launder that conflict.
+    semantic_fields = (
+        "schema", "timing_statistic", "cache_semantics",
+        "integrity_semantics", "filesystem_semantic_mismatch",
+        "corpus_semantics",
+    )
+    for field in semantic_fields:
+        exact([record.get(field) for record in records], f"ABBA/{field}")
+
     out = copy.deepcopy(records[0])
     out["aggregate_runs"] = len(records)
     out["aggregate_statistic"] = "median of per-run medians"
