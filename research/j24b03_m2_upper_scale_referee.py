@@ -23,7 +23,7 @@ def digest(path):
 def audit(d):
     assert d["experiment"] == "J24B03-M2"
     assert d["rung"] == "authentic r24 source-exact direct session ABBA"
-    assert d["design"] == {"scales": [1, 4096, 65536], "order": list(ORDER), "rounds": 3}
+    assert d["design"] == {"scales": [1, 131072, 262144], "order": list(ORDER), "rounds": 3}
     source = d["source_sha256"]
     assert set(source) == {"baseline", "candidate"} and source["baseline"] != source["candidate"]
     for arm, root in (("baseline", Path("frozen-baseline/src")), ("candidate", Path("src"))):
