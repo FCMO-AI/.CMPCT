@@ -1,0 +1,77 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24V03 source-exact sparse hardlink ABBA
+on:
+  pull_request:
+    paths:
+      - 'research/j24v03_sparse_hardlink_abba.py'
+      - 'research/j24v03_sparse_hardlink_referee.py'
+      - '.github/workflows/v031-j24v03-sparse-hardlink-abba.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24v03-abba-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  paired-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      BASE_SHA: 3b2bf3c2e033fa27d77b2355821dc0087aa46873
+      EXPERIMENT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPERIMENT_SHA }}
+          fetch-depth: 0
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASE_SHA }}
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Source/ancestry custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C candidate rev-parse HEAD)" = "$EXPERIMENT_SHA"
+          test "$(git -C baseline rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git -C baseline rev-parse HEAD:src/cmpct/reader.py)" = b2b7774c13a5c8235ff89786d171b7ea3ff20710
+          git -C candidate merge-base --is-ancestor "$BASE_SHA" HEAD
+          git -C candidate log -5 --format='%H %s' > evidence/source-lineage.txt
+          sha256sum candidate/src/cmpct/reader.py baseline/src/cmpct/reader.py > evidence/reader-shas.txt
+      - name: Install both authentic source packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e ./baseline
+          python -m pip install -e ./candidate
+      - name: Run independent-process same-wire ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python candidate/research/j24v03_sparse_hardlink_abba.py court \
+            --baseline baseline --candidate candidate --output evidence \
+            2>&1 | tee evidence/scientific-stdout.txt
+      - name: Independent raw-receipt referee and receipt tamper suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          python candidate/research/j24v03_sparse_hardlink_referee.py \
+            evidence/abba-raw.json evidence/referee-result.json \
+            2>&1 | tee evidence/referee-stdout.txt
+      - name: Preserve source-exact artifacts including negative results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24v03-abba-${{ env.EXPERIMENT_SHA }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
