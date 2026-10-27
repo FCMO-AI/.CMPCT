@@ -35,6 +35,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           test "$(git rev-parse --is-shallow-repository)" = false
           git merge-base --is-ancestor 9a73bbdeec998b117c62d02cbf35a141de4e2798 HEAD
+          git merge-base --is-ancestor 5305a058dce7d874868ab63a8e61460d49dee669 HEAD
           git merge-base --is-ancestor dd723d128b5a020f154b4c9f7d37c6eedc929f24 HEAD
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 83c6600fa6cc951c1e6a136d239a39bb2c5d836b
           test -z "$(git diff --name-only dd723d128b5a020f154b4c9f7d37c6eedc929f24 HEAD -- src/ native/ tests/ benchmarks/)"
