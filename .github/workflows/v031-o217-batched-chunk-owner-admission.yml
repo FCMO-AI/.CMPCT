@@ -44,7 +44,7 @@ jobs:
           test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
           git merge-base --is-ancestor 6989b25640be2c82436bb77ec545dd15816f698b HEAD
           test "$(git rev-parse HEAD:research/o216_fixed_chunk_validator_fastpath_oracle.py)" = 7002fe2db2bfc41fffbc94584cc1904922d1c1fb
-          python -m py_compile research/o217_batched_chunk_owner_admission_court.py
+          python -m py_compile research/o217_batched_chunk_owner_admission_court.py research/o217_batched_chunk_artifact_audit.py
           mkdir -p o217-evidence
           git rev-parse HEAD > o217-evidence/head.sha
           git rev-parse HEAD:src/cmpct/reader.py > o217-evidence/reader.blob
@@ -68,6 +68,16 @@ jobs:
             --output o217-evidence/o217-raw.json 2>&1 | tee o217-evidence/o217-run.log
           test -s o217-evidence/o217-raw.json
           grep -q 'O217_DECISION=' o217-evidence/o217-run.log
+      - name: Independently audit original raw samples and all strict negative outcomes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o217_batched_chunk_artifact_audit.py \
+            --input o217-evidence/o217-raw.json \
+            --output o217-evidence/o217-independent.json \
+            2>&1 | tee o217-evidence/o217-independent.log
+          test -s o217-evidence/o217-independent.json
+          grep -q 'O217_INDEPENDENT_REPLAY=PASS' o217-evidence/o217-independent.log
       - name: Preserve raw evidence, even on failure
         if: always()
         uses: actions/upload-artifact@v4
