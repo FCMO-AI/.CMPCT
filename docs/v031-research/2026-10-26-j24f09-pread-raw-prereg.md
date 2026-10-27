@@ -1,0 +1,23 @@
+# J24F09 — descriptor-owned RAW windows versus live mmap truncation (preregistration)
+
+Date 2026-10-26. Prediction frozen **before** modifying the candidate or instrument. Research/product candidate stacked on J24F05 #540 HEAD `1885cb0658cacd34a50d05e45b541ecb76fc8497`, Reader blob `41efeb9d3301fc06b1df56ab6bd42d9ee91f6d5e`. Published v0.30.0/r24 unchanged.
+
+## Problem and primary question
+O103 #459 / Issue #460 proved an authentic read-only mmap on a same-inode truncated archive can SIGBUS the Reader process on Linux/macOS. J24F05 #540 fixes RAW hash/write custody with <=64-KiB detached windows, but those windows are copied *from mmap*, so their source dereference remains crash-prone. Can the already-open regular-file descriptor supply bounded immutable RAW windows without re-dereferencing the live mmap during S_CHUNKS/S_CDC RAW extraction, preserving signed SHA, rollback, and locality?
+
+## Counter-mechanism and strong controls
+POSIX `os.pread(fd, n, offset)` reads up to 64 KiB and returns owned immutable `bytes`; a concurrent shrink returns short data/EOF or an ordinary error rather than userland dereferencing an invalid mmap page. Cross-check RAW record header via descriptor and the authenticated logical blob table, and charge per-window syscalls/CPU/RSS. Retain exact J24F05 mmap fallback only where `os.pread` is absent (Windows), and retain mixed/compressed code unchanged. Most direct stronger control is the *actual* historical J24F05 Reader with the same real r24 fixture and truncator. O103 is an independent historic reader negative. A full immutable archive snapshot is safer globally but exports O(archive) I/O/storage; `fstat` before an mmap read is insufficient because the writer can race between them. A signal handler cannot safely catch a synchronous SIGBUS from memory-mapped file truncation.
+
+## Predictions / falsifiers
+- Positive controls: source-exact installed Reader, builder-independent physical r24 S_CHUNKS and S_CDC archives; exact full extraction SHA/length with no mutation on Linux/macOS.
+- Mutate the *same archive inode* by a separate process after the first genuine private RAW stage write, truncating to zero while the Reader has already mapped the full archive. Historical J24F05 control is predicted to die from SIGBUS; candidate must exit normally with an explicit Python integrity/I/O error, leave the pre-existing destination unmodified, and not publish unauthenticated bytes.
+- A different-inode path replacement after open should not force a new archive snapshot; descriptor remains pinned to the old source and authentic extraction should succeed.
+- Each `pread` request and stage write <=65,536 B; no full-block detached allocation; independent source hash/filename controls and actual attacker exit reported. Run cases in crash-isolated subprocesses; never let a SIGBUS kill the scientific controller.
+- If valid inputs regress, real crash persists in scope, any bad-SHA data is published, stage rollback breaks, or original source identity changes unnoticed, REJECT. If historical control does not reproduce, mark mechanism attribution AMBIGUOUS, not candidate PASS.
+- This does NOT solve arbitrary `read()` / compressed / metadata mmap SIGBUS, source-open races, pathname pivot publication Issue #528, full canonical source immutability, Win32 parity or official r24/ZIP benchmark. Any claim is restricted to the RAW extraction seam.
+
+## Evidence ladder and cost
+Start with static proof + deterministic process-isolated negative/positive control; then exact-head installed Ubuntu/macOS court. Require whole-product held-out create/extract/read, system RSS and CPU, cold-open, short reads, temporaries, 64-KiB syscall amplification, Windows behavior and full unmodified release gates before promotion. The existing source-bound J24F05 court may reject different Reader blob by design: preserve it; a new court should replay its semantic tests without editing its historical fingerprint/threshold. If a simpler source immutability contract is ultimately adopted, this candidate may be retired without release.
+
+## Concurrency, decision and continuity
+Existing O103 owns the original negative; J24F05 owns bounded RAW custody; J24F07 owns Windows composition. No discovered active branch/PR owns *descriptor-window RAW truncation* specifically at preregistration. This stacked draft will not overwrite those owners. Primary decision: can POSIX RAW extraction survive same-inode truncation while retaining exact immutable-window semantics? If yes, hand off for product integration; if no, retain negative and change the source-lifetime model. No Discovery Engine policy change without repeat evidence.
