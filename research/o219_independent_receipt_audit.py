@@ -5,6 +5,8 @@ import hashlib
 import json
 import math
 import statistics
+import random
+import msgpack
 from pathlib import Path
 
 EXPECTED = {(65536,1),(65536,65536),(262144,1),(262144,262144)}
@@ -33,6 +35,19 @@ def audit(path):
         require(c["wire_bytes"]>0, "nonempty wire")
         require(len(c["wire_sha256"])==64 and all(ch in "0123456789abcdef" for ch in c["wire_sha256"]), "digest")
         require(c["declared"]>=0,"declared")
+        # Independent fixture reconstruction, not a call into benchmark code.
+        n,u=c["n"],c["unique"]
+        rng=random.Random(218+n+u)
+        owners=min(n,u)
+        rebuilt_blobs=[[i*37,17+i%7,33,0,0] for i in range(owners)]
+        rebuilt_refs=([0]*n if u==1 else list(range(n)) if u==n
+                      else [rng.randrange(owners) for _ in range(n)])
+        rebuilt=msgpack.packb({"r":rebuilt_refs,"b":rebuilt_blobs},use_bin_type=True)
+        require(c["wire_bytes"]==len(rebuilt),"wire length versus independent fixture")
+        require(c["wire_sha256"]==hashlib.sha256(rebuilt).hexdigest(),
+                "wire SHA versus independent fixture")
+        require(c["declared"]==sum(rebuilt_blobs[i][1] for i in rebuilt_refs),
+                "logical size versus independent fixture")
     samples = d["samples"]
     require(len(samples)==4*3*d["repeats"], "sample count")
     buckets = {}
