@@ -43,3 +43,7 @@ The decisive lower-rung experiment was already available in PR #291: compare a r
 ## Integration and next decision
 
 PR #558 remains draft and stacked on PR #291; safely rebase/cherry-pick only after owner review. No version, format, benchmark, public claim or released Reader changed. The highest-leverage remaining recovery work is a separately preregistered bounded scanner or authenticated salvage mode with strict codec/decompression limits, disk/RSS economics and independent commitment proofs. Promotion requires inherited CI, hostile-input compatibility and release law, not just this three-host court.
+
+## Dossier signal and exact-head check
+
+A historical Engineering Evidence failure on the original PR event was **metadata-only**: the initial dossier omitted exact required section names; a later queued rerun used the earlier immutable event payload and therefore still reported stale missing markers. The live PR body now explicitly supplies the mandatory **disproof** and **quality-ratchet** markers, with honest hard stop conditions. Only a *new pull_request synchronize event* can prove whether that live correction satisfies the unmodified checker. Re-run evidence must be associated with its own exact HEAD and event; the previously successful source-level tests remain valid at their recorded result heads.
