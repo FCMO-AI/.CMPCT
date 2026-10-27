@@ -56,7 +56,7 @@ jobs:
               ('historical', 'e716233403dabd0966863c45635e18fa5ac6afb8'),
           ):
               blob = subprocess.check_output(['git', '-C', root, 'show', 'HEAD:src/cmpct/reader.py'])
-              got = hashlib.sha1(b'blob ' + str(len(blob)).encode() + b'\\0' + blob).hexdigest()
+              got = hashlib.sha1(b'blob ' + str(len(blob)).encode() + b'\0' + blob).hexdigest()
               assert got == expected, (root, 'committed blob wrong', got, expected)
               p = Path(root) / 'src/cmpct/reader.py'
               p.write_bytes(blob)
