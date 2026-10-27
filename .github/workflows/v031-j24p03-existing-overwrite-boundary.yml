@@ -55,6 +55,8 @@ jobs:
           python research/j24p03_fd_replace_oracle.py --output j24p03-evidence/result.json \
             2>&1 | tee j24p03-evidence/observations.txt
           grep -F 'J24P03_DECISION=RETIRE_VISIBLE_STAGE_PLUS_RENAME_EXISTING_TARGET_UNDER_HOSTILE_SAME_UID_WRITER' j24p03-evidence/observations.txt
+          python research/j24p03_evidence_audit.py j24p03-evidence/result.json \
+            2>&1 | tee j24p03-evidence/independent-audit.txt
           sha256sum j24p03-evidence/result.json > j24p03-evidence/result.sha256
       - name: Preserve original success and failure observations
         if: always()
