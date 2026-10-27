@@ -76,7 +76,9 @@ jobs:
           assert actual.read_bytes().replace(b"\r\n",b"\n")==committed.replace(b"\r\n",b"\n")
           print("J24R03_INSTALLED_SEMANTICS_SOURCE_SHA256="+hashlib.sha256(committed).hexdigest())
           PY
-          python -m pytest -q "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$GITHUB_WORKSPACE/tests/test_j24r01_sparse_selective_index.py" 2>&1 | tee "$GITHUB_WORKSPACE/j24r03-evidence/inherited-semantics.log"
+          cp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          cp "$GITHUB_WORKSPACE/tests/test_j24r01_sparse_selective_index.py" "$RUNNER_TEMP/test_j24r01_sparse_selective_index.py"
+          python -m pytest -q test_o212_sparse_admission.py test_j24r01_sparse_selective_index.py 2>&1 | tee "$GITHUB_WORKSPACE/j24r03-evidence/inherited-semantics.log"
       - name: Execute preregistered real Reader source-exact ABBA on five locality regimes
         shell: bash
         run: |
