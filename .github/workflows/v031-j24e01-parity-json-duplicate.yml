@@ -54,7 +54,7 @@ jobs:
           import json,sys
           data=json.load(open(sys.argv[1],encoding="utf-8"))
           assert data["decision"]=="DUPLICATE_JSON_FALSE_GREEN_REPRODUCED_AND_REJECTED"
-          assert len(data["cases"])==5
+          assert len(data["cases"])==7
           assert all(len(c["observations"])==2 for c in data["cases"])
           print(data["decision"], data["source_head"])
           PY
