@@ -100,6 +100,49 @@ class SemanticCustody(unittest.TestCase):
                 self.assertIn("Result: **FAIL**", comp.stdout)
                 self.assertIn("benchmark semantics changed for " + field, comp.stdout)
 
+    def test_type_preserving_json_identity_not_python_equality(self):
+        # Python equates False and 0 even inside dictionaries; authenticated
+        # comparison metadata must not silently interpret them as equivalent.
+        a = fixture()
+        scenarios = []
+        left = copy.deepcopy(a)
+        right = copy.deepcopy(a)
+        left["cache_semantics"] = False
+        right["cache_semantics"] = 0
+        scenarios.append((left, right, "cache_semantics"))
+        left = copy.deepcopy(a)
+        right = copy.deepcopy(a)
+        left["integrity_semantics"]["cmpct"] = False
+        right["integrity_semantics"]["cmpct"] = 0
+        scenarios.append((left, right, "integrity_semantics"))
+        left = copy.deepcopy(a)
+        right = copy.deepcopy(a)
+        left.pop("corpus_semantics")
+        right["corpus_semantics"] = None
+        scenarios.append((left, right, "corpus_semantics"))
+        for left, right, field in scenarios:
+            with self.subTest(field=field):
+                agg, result = script_run(AGGREGATOR, [left, right], True)
+                self.assertNotEqual(agg.returncode, 0, agg.stdout + agg.stderr)
+                self.assertIsNone(result)
+                self.assertIn("ABBA/" + field, agg.stderr)
+                checker, _ = script_run(CHECKER, [left, right], False)
+                self.assertEqual(checker.returncode, 1, checker.stdout + checker.stderr)
+                self.assertIn("benchmark semantics changed for " + field, checker.stdout)
+
+    def test_equivalent_nested_mapping_key_order_is_preserved(self):
+        a = fixture()
+        b = copy.deepcopy(a)
+        b["integrity_semantics"] = {
+            "zip": a["integrity_semantics"]["zip"],
+            "cmpct": a["integrity_semantics"]["cmpct"],
+        }
+        agg, result = script_run(AGGREGATOR, [a, b], True)
+        self.assertEqual(agg.returncode, 0, agg.stderr)
+        self.assertEqual(result["integrity_semantics"], a["integrity_semantics"])
+        checker, _ = script_run(CHECKER, [a, b], False)
+        self.assertEqual(checker.returncode, 0, checker.stdout + checker.stderr)
+
     @unittest.skipUnless(HISTORICAL_AGG and HISTORICAL_CHECKER, "source-bound historical scripts needed")
     def test_exact_parent_false_acceptance_exposed(self):
         self.assertTrue(Path(HISTORICAL_AGG).is_file(), "configured original aggregator absent")
