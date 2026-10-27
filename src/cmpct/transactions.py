@@ -132,8 +132,13 @@ def append_rename(archive:Path,old:str,new:str):
     _append_generation(archive,{'blobs':[],'ops':[op]},prev,checkpoint)
 
 def recover_blob_records(archive:Path):
-    # Last-resort content salvage independent of either index. It returns valid self-hashed blobs;
-    # names require an index, but content remains recoverable even after severe metadata damage.
+    """Enumerate plausible physical blob frames, NOT authenticated recovered content.
+
+    Footnote: a matching physical header and in-bounds body do not establish CRC/SHA
+    integrity, successful decompression, or membership in any committed generation.
+    The returned sha256 is the header's *untrusted claim*, never a measured digest.
+    """
+
     data=Path(archive).read_bytes();out=[];p=0
     while True:
         i=data.find(BMAGIC,p)
@@ -141,7 +146,7 @@ def recover_blob_records(archive:Path):
         if i+BHDR.size<=len(data):
             try:
                 m,c,fl,res,us,cs,ml,rcrc,rh=BHDR.unpack_from(data,i);end=i+BHDR.size+ml+cs
-                if end<=len(data):out.append({'offset':i,'codec':c,'usize':us,'csize':cs,'crc32':rcrc,'sha256':bytes(rh).hex()})
+                if end<=len(data):out.append({'offset':i,'codec':c,'usize':us,'csize':cs,'crc32':rcrc,'sha256':bytes(rh).hex(),'verified':False})
             except Exception:pass
         p=i+1
     return out
