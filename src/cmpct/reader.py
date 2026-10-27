@@ -33,8 +33,8 @@ class CMPCT:
             self.by={x[0]:x for x in self.files}
             if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
             # The authenticated effective index must have one host-visible spelling for each member.
-            # Sparse extent geometry must also agree with the physical blob lengths: otherwise
-            # full read() and selective read_range() can silently reconstruct different bytes (#533).
+            # Sparse extents and CDC chunk descriptors must agree with their referenced blob sizes:
+            # otherwise full read() and selective read_range() can silently disagree (#533, O201).
             # Validate this SAME in-memory index, never a separately reopened pathname (#546).
             canonical_seen=set()
             sparse_validator=None
@@ -46,7 +46,7 @@ class CMPCT:
                 if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
                 canonical_seen.add(key)
                 storage=row[6]
-                if row[1]==K_FILE and isinstance(storage,list) and storage and storage[0]==S_SPARSE:
+                if row[1]==K_FILE and isinstance(storage,list) and storage and storage[0] in (S_SPARSE, S_CDC):
                     if sparse_validator is None:
                         from .validation import _validate_storage
                         sparse_validator=_validate_storage
