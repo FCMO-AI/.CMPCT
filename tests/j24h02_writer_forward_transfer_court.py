@@ -130,7 +130,7 @@ def check(root: Path, expected_blob: str, mode: str) -> dict:
     with CMPCT(original) as reader:
         assert reader.verify() == 2
         assert reader.read("z-alias") == CONTENT
-        reader.extractall(root / f"{mode}-original")
+        reader.extractall(root / f"{mode}-original", metadata=(os.name != 'nt'))
     assert_same_inode(root / f"{mode}-original" / "b-owner",
                       root / f"{mode}-original" / "z-alias")
 
@@ -143,7 +143,7 @@ def check(root: Path, expected_blob: str, mode: str) -> dict:
         output = root / f"{mode}-renamed"
         if mode == "parent-negative":
             try:
-                reader.extractall(output)
+                reader.extractall(output, metadata=(os.name != 'nt'))
             except IOError as exc:
                 assert "hardlink target not yet extracted" in str(exc), (
                     f"unexpected historical error: {exc!r}"
@@ -154,7 +154,7 @@ def check(root: Path, expected_blob: str, mode: str) -> dict:
             assert not (output / "a-alias").exists()
             outcome = "EXPECTED_BUG_REPRODUCED"
         else:
-            reader.extractall(output)
+            reader.extractall(output, metadata=(os.name != 'nt'))
             assert_same_inode(output / "a-alias", output / "b-owner")
             error_text = None
             outcome = "EXACT_SHARED_INODE_RESTORED"
