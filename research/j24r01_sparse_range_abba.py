@@ -84,10 +84,15 @@ def worker(archive: Path, expected: Path, source: str, count: int, iteration: in
         read_wall = (time.perf_counter_ns()-t1)/1e6
         read_cpu = (time.process_time_ns()-c1)/1e6
         # Different sparse positions; scan-independent correctness, not selectively cherry-picked.
-        for pos in (0, 1, 3, 4, 8, len(truth)//2, len(truth)-1):
+        # J24R02b: one-extent files are four bytes long. Probe 8 must not
+        # become an invalid request against a correct Reader. Keep boundary
+        # zero-length queries; count only checks actually sent to the Reader.
+        post_checks = 0
+        for pos in (0, 1, 3, 4, min(8, len(truth)), len(truth)//2, len(truth)-1):
             for n in (0, 1, min(11, len(truth)-pos)):
                 if pos+n <= len(truth):
                     assert reader.read_range("sparse.bin",pos,n) == truth[pos:pos+n]
+                    post_checks += 1
         rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss if resource else None
     finally:
         reader.close()
@@ -98,7 +103,7 @@ def worker(archive: Path, expected: Path, source: str, count: int, iteration: in
         "range_batch_wall_ms": read_wall, "range_batch_cpu_ms": read_cpu,
         "peak_rss_host_units": rss,
         "archive_bytes": archive.stat().st_size, "logical_bytes": len(truth),
-        "range_checks": 256 + 256 + 21,
+        "range_checks": 256 + 256 + post_checks,
     }
 
 

@@ -1,0 +1,210 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24R02 installed sparse range ABBA and semantic custody
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24r02-sparse-range-hosted-abba-20261027
+  pull_request:
+    paths:
+      - 'research/j24r02_independent_sparse_receipt.py'
+      - '.github/workflows/v031-j24r02-sparse-range-installed-abba.yml'
+      - 'docs/v031-research/2026-10-27-j24r02-*'
+      - 'research/j24r01_sparse_range_abba.py'
+      - 'src/cmpct/reader.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24r02-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  three-host-semantics:
+    name: Genuine sparse fixture semantics (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Source and honest inherited oracle binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor 70336307312b5b277f0885c0057d2cddab0aefc1 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = ca1763b9d69b385eab80d0ed67a914672dbe93fc
+          test "$(git rev-parse HEAD:tests/test_o212_sparse_admission.py)" = 10605b0a255c90c9ebe2473bf7aefdb14e9b4ea3
+          test "$(git rev-parse HEAD:research/j24r01_sparse_range_abba.py)" = dea2ec48af7d7c5fad0dcec92e84c12124300967
+          python -m py_compile src/cmpct/reader.py research/j24r01_sparse_range_abba.py research/j24r02_independent_sparse_receipt.py
+          mkdir -p j24r02-evidence
+          git rev-parse HEAD > j24r02-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > j24r02-evidence/reader.blob
+          git rev-parse HEAD:research/j24r01_sparse_range_abba.py > j24r02-evidence/instrument.blob
+      - name: Install independent source wheel and adversarial tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+          cp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          cp "$GITHUB_WORKSPACE/tests/test_j24r01_sparse_selective_index.py" "$RUNNER_TEMP/test_j24r01_sparse_selective_index.py"
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,inspect,os,subprocess
+          from pathlib import Path
+          import cmpct.reader as reader
+          workspace=Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          actual=Path(inspect.getfile(reader)).resolve()
+          assert not actual.is_relative_to(workspace), actual
+          committed=subprocess.check_output(
+              ["git","show","HEAD:src/cmpct/reader.py"],cwd=workspace)
+          norm=lambda x:x.replace(b"\r\n",b"\n")
+          assert norm(actual.read_bytes())==norm(committed)
+          print("J24R02_INSTALLED_READER_SHA256="+hashlib.sha256(norm(committed)).hexdigest())
+          PY
+          python -m pytest -q test_o212_sparse_admission.py test_j24r01_sparse_selective_index.py \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24r02-evidence/three-host-semantics.log"
+      - name: Persist semantics logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24r02-semantics-${{ matrix.os }}-${{ github.sha }}
+          path: j24r02-evidence/
+          retention-days: 30
+          if-no-files-found: warn
+
+  paired-installed-abba:
+    name: Source-exact installed old/new Reader ABBA (Ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Lock genuine baseline, candidate, and unmodified experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor 70336307312b5b277f0885c0057d2cddab0aefc1 HEAD
+          git merge-base --is-ancestor c5e13bb3fbb4cdade8b64246658ce7c7818de41f HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = ca1763b9d69b385eab80d0ed67a914672dbe93fc
+          test "$(git rev-parse HEAD:tests/test_o212_sparse_admission.py)" = 10605b0a255c90c9ebe2473bf7aefdb14e9b4ea3
+          test "$(git rev-parse HEAD:research/j24r01_sparse_range_abba.py)" = dea2ec48af7d7c5fad0dcec92e84c12124300967
+          python -m py_compile research/j24r01_sparse_range_abba.py research/j24r02_independent_sparse_receipt.py
+          mkdir -p j24r02-evidence
+          git rev-parse HEAD > j24r02-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > j24r02-evidence/candidate-reader.blob
+          git rev-parse c5e13bb3fbb4cdade8b64246658ce7c7818de41f:src/cmpct/reader.py > j24r02-evidence/base-reader.blob
+          git rev-parse HEAD:research/j24r01_sparse_range_abba.py > j24r02-evidence/instrument.blob
+          git rev-parse HEAD:research/j24r02_independent_sparse_receipt.py > j24r02-evidence/referee.blob
+      - name: Build source-exact isolated installs with shared runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/j24r02-base-src" c5e13bb3fbb4cdade8b64246658ce7c7818de41f
+          python -m pip install . pytest
+          python -m pip install --no-deps --no-compile --target "$RUNNER_TEMP/j24r02-base-site" "$RUNNER_TEMP/j24r02-base-src"
+          python -m pip install --no-deps --no-compile --target "$RUNNER_TEMP/j24r02-candidate-site" "$GITHUB_WORKSPACE"
+          test -s "$RUNNER_TEMP/j24r02-base-site/cmpct/reader.py"
+          test -s "$RUNNER_TEMP/j24r02-candidate-site/cmpct/reader.py"
+      - name: Diagnose source-bound single-worker import and correctness before ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import importlib.util, os, subprocess, sys, tempfile
+          from pathlib import Path
+          ws=Path(os.environ["GITHUB_WORKSPACE"])
+          source=ws/"tests/test_o212_sparse_admission.py"
+          spec=importlib.util.spec_from_file_location("j24r02_fixture_original",source)
+          module=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          with tempfile.TemporaryDirectory(prefix="j24r02-preflight-") as td:
+              root=Path(td)
+              archive=root/"single.cmpct"; archive.write_bytes(module._archive_bytes([[0,4,[0]]],b"ABCD"))
+              truth=root/"single.truth"; truth.write_bytes(b"ABCD")
+              for mode in ("baseline","candidate"):
+                  env=dict(os.environ)
+                  env["PYTHONPATH"]=os.environ["RUNNER_TEMP"]+"/j24r02-"+(
+                      "base" if mode=="baseline" else "candidate")+"-site"
+                  result=subprocess.run(
+                      [sys.executable,str(ws/"research/j24r01_sparse_range_abba.py"),
+                       "--worker","--archive",str(archive),"--truth",str(truth),
+                       "--source",mode,"--count","1","--iteration","0"],
+                      cwd=root,env=env,capture_output=True,text=True,timeout=120)
+                  if result.returncode:
+                      print(f"J24R02_{mode}_PREFLIGHT_STDERR:\\n"+result.stderr,flush=True)
+                      raise SystemExit(f"{mode} worker exit {result.returncode}")
+                  print("J24R02_"+mode.upper()+"_SINGLE_WORKER=PASS",flush=True)
+          PY
+      - name: Run precommitted source-exact Reader ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24r01_sparse_range_abba.py" \
+            --repo "$GITHUB_WORKSPACE" \
+            --base-site "$RUNNER_TEMP/j24r02-base-site" \
+            --candidate-site "$RUNNER_TEMP/j24r02-candidate-site" \
+            --out "$GITHUB_WORKSPACE/j24r02-evidence/abba-raw.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24r02-evidence/abba.log"
+          test -s "$GITHUB_WORKSPACE/j24r02-evidence/abba-raw.json"
+          grep -q 'J24R01_DECISION=' "$GITHUB_WORKSPACE/j24r02-evidence/abba.log"
+      - name: Independently recompute all raw evidence and identify both wins and losses
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24r02_independent_sparse_receipt.py" \
+            "$GITHUB_WORKSPACE/j24r02-evidence/abba-raw.json" \
+            "$GITHUB_WORKSPACE" \
+            "$RUNNER_TEMP/j24r02-base-site" \
+            "$RUNNER_TEMP/j24r02-candidate-site" \
+            "$GITHUB_WORKSPACE/j24r02-evidence/independent-audit.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24r02-evidence/independent-audit.log"
+          grep -q 'J24R02_INDEPENDENT_AUDIT=PASS' "$GITHUB_WORKSPACE/j24r02-evidence/independent-audit.log"
+      - name: Record evidence file digests
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          root=Path("j24r02-evidence")
+          (root/"sha256.json").write_text(json.dumps({
+              p.name:hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in root.iterdir() if p.is_file() and p.name!="sha256.json"
+          },indent=2,sort_keys=True)+"\n")
+          PY
+      - name: Preserve failed and successful scientific evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24r02-abba-${{ github.sha }}
+          path: j24r02-evidence/
+          retention-days: 30
+          if-no-files-found: warn
