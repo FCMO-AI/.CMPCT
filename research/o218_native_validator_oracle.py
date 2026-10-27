@@ -94,14 +94,13 @@ def attack(native):
     pool=[0,1,2,3,-1,True,False,1.0,None,"0",2**120,[],(1,),{"a":1}]
     for i in range(5000):
         refs=[rng.choice(pool) for _ in range(rng.randrange(0,7))]
+        size=rng.choice([0,3,5,8,11,2**120])
         try:
-            expected=strong_python(refs,blob,rng.choice([0,3,5,8,11,2**120]))
-            proposed=bool(native.scan_refs(refs,blob,rng.choice([0,3,5,8,11,2**120])))
+            expected=strong_python(refs,blob,size)
+            proposed=bool(native.scan_refs(refs,blob,size))
         except Exception as exc:
             raise AssertionError("native unexpected exception at "+str(i)) from exc
-        # Different declared sizes above mean no value comparison; test safety on SAME input below.
-        size=rng.choice([0,3,5,8,11,2**120])
-        if bool(native.scan_refs(refs,blob,size)) and not strong_python(refs,blob,size):
+        if proposed and not expected:
             raise AssertionError("fuzz false accept "+str(i))
     return outcome
 
