@@ -1,0 +1,63 @@
+# ci-lane: fast
+name: CMPCT J24H02 first-party Writer hardlink transfer
+on:
+  pull_request:
+    paths:
+      - 'tests/j24h02_writer_forward_transfer_court.py'
+      - 'docs/v031-research/2026-10-27-j24h02-writer-hardlink-transfer-prereg.md'
+      - '.github/workflows/v031-j24h02-writer-hardlink-transfer.yml'
+      - 'src/cmpct/reader.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  authentic-writer-transfer:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          ref: 3b852473cda137b8333fd0f214e1d4bcaf0788a3
+          path: historical
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install actual candidate CMPCT package
+        shell: bash
+        run: python -m pip install -e './candidate[test]'
+      - name: Compare genuine unchanged historical source with existing candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          test "$(git -C candidate rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git -C historical rev-parse HEAD)" = "3b852473cda137b8333fd0f214e1d4bcaf0788a3"
+          test "$(git -C candidate hash-object src/cmpct/reader.py)" = "243b46d68211a2b125e07f7c92966535f5f0bdc9"
+          test "$(git -C historical hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          git -C candidate rev-parse HEAD > benchmark-artifacts/candidate-head.txt
+          git -C historical rev-parse HEAD > benchmark-artifacts/parent-head.txt
+          python candidate/tools/check_ci_topology.py candidate/.github/workflows/v031-j24h02-writer-hardlink-transfer.yml
+          PYTHONPATH="$GITHUB_WORKSPACE/candidate/src" python candidate/tests/j24h02_writer_forward_transfer_court.py --root "$GITHUB_WORKSPACE/j24h02-fixture" --mode prepare --reader-blob 243b46d68211a2b125e07f7c92966535f5f0bdc9 --receipt-dir benchmark-artifacts | tee benchmark-artifacts/prepare.log
+          PYTHONPATH="$GITHUB_WORKSPACE/historical/src" python candidate/tests/j24h02_writer_forward_transfer_court.py --root "$GITHUB_WORKSPACE/j24h02-fixture" --mode parent-negative --reader-blob e716233403dabd0966863c45635e18fa5ac6afb8 --receipt-dir benchmark-artifacts | tee benchmark-artifacts/parent-negative.log
+          PYTHONPATH="$GITHUB_WORKSPACE/candidate/src" python candidate/tests/j24h02_writer_forward_transfer_court.py --root "$GITHUB_WORKSPACE/j24h02-fixture" --mode candidate-positive --reader-blob 243b46d68211a2b125e07f7c92966535f5f0bdc9 --receipt-dir benchmark-artifacts | tee benchmark-artifacts/candidate-positive.log
+          python -c "import json,pathlib; d=pathlib.Path('benchmark-artifacts'); a=json.loads((d/'prepare.json').read_text()); b=json.loads((d/'parent-negative.json').read_text()); c=json.loads((d/'candidate-positive.json').read_text()); assert a['renamed_sha256']==b['renamed_sha256']==c['renamed_sha256']; assert b['result']=='EXPECTED_BUG_REPRODUCED'; assert c['result']=='EXACT_SHARED_INODE_RESTORED'; print('J24H02_THREE_PROCESS_CUSTODY=PASS')"
+      - name: Preserve raw exact-head evidence even after failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24h02-writer-hardlink-${{ matrix.os }}-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
