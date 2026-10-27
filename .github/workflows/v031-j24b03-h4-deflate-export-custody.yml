@@ -8,6 +8,8 @@ on:
       - 'tests/test_reader_deflate_export_custody.py'
       - 'src/cmpct/reader.py'
       - 'docs/v031-research/2026-10-27-j24b03-h4-deflate-export-custody-prereg.md'
+      - 'docs/v031-research/2026-10-27-j24b03-h4-deflate-export-custody-result.md'
+      - 'docs/HARDENING.md'
       - '.github/workflows/v031-j24b03-h4-deflate-export-custody.yml'
   workflow_dispatch:
 permissions:
