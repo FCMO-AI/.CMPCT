@@ -19,6 +19,8 @@ def mutate(d, label):
     elif label == "bad_wire_digest": d["cases"][0]["wire_sha256"] = "not-a-digest"
     elif label == "fake_product": d["product_credit"] = True
     elif label == "false_prereg": d["prereg_commit"] = "0"*40
+    elif label == "valid_shape_wrong_wire": d["cases"][0]["wire_sha256"] = "0"*64
+    elif label == "wrong_logical_size": d["cases"][0]["declared"] += 1
     else: raise ValueError(label)
 
 def run(source):
@@ -26,7 +28,7 @@ def run(source):
     original=json.loads(Path(source).read_text())
     labels=["drop_sample","duplicate_repeat","forge_clock","forge_cpu",
             "forge_median","flip_decision","unknown_arm","bad_wire_digest",
-            "fake_product","false_prereg"]
+            "fake_product","false_prereg","valid_shape_wrong_wire","wrong_logical_size"]
     with tempfile.TemporaryDirectory(prefix="o219-audit-negative-") as td:
         for label in labels:
             candidate=copy.deepcopy(original)
