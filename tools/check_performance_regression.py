@@ -146,8 +146,14 @@ def main() -> int:
         "integrity_semantics", "filesystem_semantic_mismatch",
         "corpus_semantics",
     )
+    def semantic_token(record: dict[str, Any], field: str) -> tuple[bool, str | None]:
+        # Nested JSON values need type-sensitive identity: False == 0 in Python.
+        return (field in record, json.dumps(
+            record[field], sort_keys=True, separators=(",", ":"), allow_nan=False
+        ) if field in record else None)
+
     for field in semantic_fields:
-        if base.get(field) != cand.get(field):
+        if semantic_token(base, field) != semantic_token(cand, field):
             failures.append(f"benchmark semantics changed for {field}; base/candidate comparability not established")
 
     base_names = set(base["corpora"])
