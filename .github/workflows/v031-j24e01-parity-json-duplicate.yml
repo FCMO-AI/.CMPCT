@@ -1,0 +1,74 @@
+# ci-lane: fast
+name: CMPCT J24E01 duplicate JSON parity evidence
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24e01-parity-duplicate-json-20261027
+  pull_request:
+    paths:
+      - 'tools/check_performance_regression.py'
+      - 'tests/test_v031_parity_duplicate_key_truth_j24e01.py'
+      - 'research/j24e01_json_duplicate_evidence_court.py'
+      - '.github/workflows/v031-j24e01-parity-json-duplicate.yml'
+      - 'docs/v031-research/2026-10-27-j24e01-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24e01-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-head-duplicate-evidence:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    steps:
+      - name: Source exact checkout, with original owner parent
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact source and prospective ordering
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 923bfaba3f61fcdb38b652201d61f012ff607d30 HEAD
+          git merge-base --is-ancestor 84bcd4144e3cf95bbc66a9cb3df8c7c101b89bb9 HEAD
+      - name: Execute independent original-versus-current false-green court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24e01_json_duplicate_evidence_court.py > "${{ runner.temp }}/j24e01-evidence.json"
+          python - "${{ runner.temp }}/j24e01-evidence.json" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1],encoding="utf-8"))
+          assert data["decision"]=="DUPLICATE_JSON_FALSE_GREEN_REPRODUCED_AND_REJECTED"
+          assert len(data["cases"])==5
+          assert all(len(c["observations"])==2 for c in data["cases"])
+          print(data["decision"], data["source_head"])
+          PY
+      - name: Execute current real comparator CLI regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q tests/test_v031_parity_duplicate_key_truth_j24e01.py tests/test_v031_parity_metric_truth.py
+      - name: Preserve exact source and both original/candidate observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24e01-duplicate-json-${{ matrix.os }}
+          path: ${{ runner.temp }}/j24e01-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
