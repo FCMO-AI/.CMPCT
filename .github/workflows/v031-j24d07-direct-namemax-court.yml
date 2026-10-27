@@ -70,10 +70,10 @@ jobs:
           assert hashlib.sha256(canonical(installed.read_bytes())).digest()==hashlib.sha256(src).digest()
           print("INSTALLED_READER_SOURCE_MATCH",installed)
           PY
-          # Test conftest imports the repository's independent experiments module.
-          # Add the root (not src/) so cmpct still resolves to the verified installation.
-          export PYTHONPATH="$GITHUB_WORKSPACE${PYTHONPATH:+:$PYTHONPATH}"
-          python -m pytest -q "$GITHUB_WORKSPACE/tests/test_v031_j24d07_direct_namemax.py" | tee "$GITHUB_WORKSPACE/artifacts/j24d07-pytest.txt"
+          # The full-suite conftest loads historical v0.29 Linux-only libzstd.so
+          # research at import time. This narrowly scoped installed-product court
+          # uses only its own assertions; the unchanged general suite runs separately.
+          python -m pytest -q --noconftest "$GITHUB_WORKSPACE/tests/test_v031_j24d07_direct_namemax.py" | tee "$GITHUB_WORKSPACE/artifacts/j24d07-pytest.txt"
           python "$GITHUB_WORKSPACE/research/j24d02_direct_stage_court.py" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/j24d02-inherited.json"
           python - <<'PY'
           import hashlib,json,os
