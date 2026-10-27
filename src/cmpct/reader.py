@@ -3,7 +3,7 @@ from __future__ import annotations
 # Footnote: this module contains the compatibility contract that matters most. Refactors must not
 # silently drop recovery, range-read, path-safety, transactional-generation, or metadata semantics.
 
-import base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, mmap, os, shutil, stat, struct, sys, tempfile, threading, time, zipfile, zlib
+import base64, binascii, concurrent.futures, ctypes, ctypes.util, errno, hashlib, io, json, mmap, os, shutil, stat, struct, sys, tempfile, threading, time, zipfile, zlib
 from pathlib import Path
 import msgpack
 
@@ -39,6 +39,30 @@ class _FdRawExtractWindows:
         out=os.pread(self.fd,size,self.start+a)
         if len(out)!=size:raise IOError('RAW archive source shortened during verified extraction')
         return out
+
+# Linux's O_TMPFILE + linkat publishes an *already verified inode* directly.
+# This is deliberately create-only: AT_EMPTY_PATH refuses an occupied leaf with
+# EEXIST. It cannot solve atomic replacement of an existing output (issue #528).
+# See the independently established Linux kernel primitive at J24P02 PR #523.
+def _publish_unnamed_chunk_fd(fd:int,parentfd:int,leaf:str)->str:
+    libc=ctypes.CDLL(None,use_errno=True)
+    link=libc.linkat
+    link.argtypes=[ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_int]
+    link.restype=ctypes.c_int
+    name=os.fsencode(leaf)
+    def checked(srcfd,srcname,flags):
+        ctypes.set_errno(0)
+        if link(srcfd,srcname,parentfd,name,flags)!=0:
+            code=ctypes.get_errno()
+            raise OSError(code,os.strerror(code),leaf)
+    try:
+        checked(fd,b'',0x1000)  # Linux AT_EMPTY_PATH; no staged pathname exists.
+        return 'AT_EMPTY_PATH'
+    except OSError as exc:
+        if exc.errno not in (errno.EPERM,errno.ENOENT,errno.EINVAL):
+            raise  # Especially EEXIST: never fall back to replace over another inode.
+        checked(-100,os.fsencode('/proc/self/fd/%d'%fd),0x400)  # AT_SYMLINK_FOLLOW.
+        return 'PROC_SELF_FD_FOLLOW'
 
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
@@ -360,7 +384,22 @@ class CMPCT:
             decoded=(self._blob(idx) for idx in ids)
 
         parent=os.path.dirname(full) or '.';prefix=f'.{os.path.basename(full)}.cmpct-part-'
-        fd,tmp=tempfile.mkstemp(prefix=prefix,dir=parent);committed=False
+        # A fresh Linux leaf can use a descriptor-only stage: the directory writer
+        # cannot replace a stage *name* between SHA and publication because none exists.
+        # Existing leaves retain inherited overwrite semantics (and issue #528 debt).
+        fd=-1;parentfd=-1;tmp=None;unnamed=False;committed=False
+        if sys.platform.startswith('linux') and hasattr(os,'O_TMPFILE') and not os.path.lexists(full):
+            try:
+                parentfd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY)
+                fd=os.open('.',os.O_TMPFILE|os.O_RDWR,0o600,dir_fd=parentfd)
+                unnamed=True
+            except OSError as exc:
+                if parentfd>=0:os.close(parentfd);parentfd=-1
+                if exc.errno not in (errno.EOPNOTSUPP,errno.ENOTSUP,errno.ENOSYS,errno.EINVAL,errno.EISDIR):
+                    raise
+                # On unsupported filesystems fall back to inherited, explicitly
+                # not inode-authentic publication semantics; no security claim.
+        if fd<0:fd,tmp=tempfile.mkstemp(prefix=prefix,dir=parent)
         digest=hashlib.sha256();written=0
         try:
             # Match the ordinary extraction path's requested basic mode even though mkstemp starts at
@@ -389,13 +428,23 @@ class CMPCT:
                     if isinstance(b,memoryview):b.release()
             if written!=size or h is None or digest.digest()!=bytes(h):
                 raise IOError(f'file integrity failure: {rel}')
-            os.close(fd);fd=-1
-            os.replace(tmp,full);committed=True
+            if unnamed:
+                # The verified descriptor is still live. One kernel create links
+                # exactly that inode; an occupied/raced destination raises EEXIST
+                # rather than clobbering it or publishing an attacker-supplied stage.
+                _publish_unnamed_chunk_fd(fd,parentfd,os.path.basename(full))
+                committed=True
+            else:
+                os.close(fd);fd=-1
+                os.replace(tmp,full);committed=True
         finally:
             if fd>=0:
                 try:os.close(fd)
                 except OSError:pass
-            if not committed:
+            if parentfd>=0:
+                try:os.close(parentfd)
+                except OSError:pass
+            if not committed and tmp is not None:
                 try:os.unlink(tmp)
                 except FileNotFoundError:pass
 
