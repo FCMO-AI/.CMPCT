@@ -1,0 +1,89 @@
+# ci-lane: fast
+name: CMPCT J24R01 honest salvage candidate classification
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24r01-recovery-trust-tier-20261027
+  pull_request:
+    paths:
+      - 'src/cmpct/transactions.py'
+      - 'research/j24r01_salvage_candidate_truth_court.py'
+      - '.github/workflows/v031-j24r01-salvage-trust.yml'
+      - 'docs/v031-research/2026-10-27-j24r01-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24r01-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-salvage:
+    name: Genuine Reader, CLI and salvage trust label (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - name: Checkout real branch head and prospective prediction
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check real Git and source ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor 00d5a9feced0e198bd0b3dfef3ebfb7c55def1c4 HEAD
+          git merge-base --is-ancestor 61d585ecf8cbe00f628c6f1f8b2d3ad9868415c4 HEAD
+      - name: Install exact genuine CMPCT runtime and execute independent controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv .j24r01-venv
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            PY=.j24r01-venv/Scripts/python.exe
+          else
+            PY=.j24r01-venv/bin/python
+          fi
+          "$PY" -m pip install --disable-pip-version-check --no-input -e .
+          "$PY" - <<'PY'
+          import hashlib, pathlib, subprocess
+          from cmpct import transactions
+          source = subprocess.check_output(['git','show','HEAD:src/cmpct/transactions.py'])
+          installed = pathlib.Path(transactions.__file__).read_bytes().replace(b'\r\n',b'\n')
+          assert source == installed, "installed Writer differs from exact Git source"
+          assert b"'verified':False" in source, "missing unverified candidate source"
+          print('SOURCE_EXACT',hashlib.sha256(source).hexdigest())
+          PY
+          "$PY" research/j24r01_salvage_candidate_truth_court.py > "$RUNNER_TEMP/j24r01-result.json"
+          "$PY" benchmarks/v031_recover_blob_selfhash_court.py > "$RUNNER_TEMP/j24r01-inherited-o0.json"
+          "$PY" - "$RUNNER_TEMP/j24r01-result.json" "$RUNNER_TEMP/j24r01-inherited-o0.json" <<'PY'
+          import json,sys
+          a,b=[json.load(open(p,encoding='utf-8')) for p in sys.argv[1:]]
+          assert a['classification']=='HEADER_CANDIDATE_LABEL_PASS',a
+          assert a['reader_rejected_corruption'] and a['cli_exact_match']
+          assert a['original_flag'] is a['corrupted_flag'] is a['forged_flag'] is a['self_consistent_uncommitted_flag'] is False
+          assert b['decision']=='SALVAGE_RETURNS_UNVERIFIED_FRAMED_BLOBS',b
+          print('J24R01 TRUST LABEL PASS; INHERITED O0 NEGATIVE PRESERVED')
+          PY
+      - name: Preserve both original observations, also on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24r01-salvage-trust-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/j24r01-result.json
+            ${{ runner.temp }}/j24r01-inherited-o0.json
+          if-no-files-found: warn
+          retention-days: 30
