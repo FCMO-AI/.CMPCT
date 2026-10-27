@@ -1,0 +1,58 @@
+# ci-lane: fast
+name: v031 J24S03 exact native zero-run CRC operator cache research oracle
+on:
+  push:
+    branches:
+      - 'agent/phased2-v031-j24s03-native-crc-operator-court-20261026'
+  pull_request:
+    paths:
+      - 'research/j24s03_native_crc_operator_oracle.py'
+      - '.github/workflows/v031-j24s03-native-crc.yml'
+      - 'docs/v031-research/2026-10-27-j24s03-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24s03-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-zero-crc-court:
+    name: Exact-HEAD native CRC operator vs literal controls, independent raw inflate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Exact source and preregistration, charged oracle
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git hash-object research/j24s03_native_crc_operator_oracle.py | tee "$RUNNER_TEMP/j24s03-source-blob.txt"
+          git hash-object docs/v031-research/2026-10-27-j24s03-native-crc-prereg.md | tee "$RUNNER_TEMP/j24s03-prereg-blob.txt"
+          python -m py_compile research/j24s03_native_crc_operator_oracle.py
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24s03_native_crc_operator_oracle.py" \
+            --sparse-mib 256 --nonhole-mib 64 --repeats 3 --levels 1,6 \
+            --families zero,mixed,irregular,nonhole \
+            --output "$RUNNER_TEMP/j24s03-result.json"
+      - name: Preserve original observations even on failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24s03-native-crc-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/j24s03-result.json
+            ${{ runner.temp }}/j24s03-source-blob.txt
+            ${{ runner.temp }}/j24s03-prereg-blob.txt
+          if-no-files-found: warn
