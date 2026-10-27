@@ -104,6 +104,27 @@ jobs:
           cmp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
           python -m pytest -q "$RUNNER_TEMP/test_o212_sparse_admission.py" \
             2>&1 | tee "$GITHUB_WORKSPACE/o214-evidence/inherited-o212.log"
+      - name: Root-v24 differential on exact installed historical parent and candidate (Ubuntu)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/o214-parent-worktree" 3249a7d6d09a9890cfa65b03e239a7973bf92614
+          python -m pip install --no-deps "$RUNNER_TEMP/o214-parent-worktree" --target "$RUNNER_TEMP/o214-parent-site"
+          python "$GITHUB_WORKSPACE/research/o214_cdc_parent_differential.py" create \
+            --root "$RUNNER_TEMP/o214-differential"
+          PYTHONPATH="$RUNNER_TEMP/o214-parent-site" python "$GITHUB_WORKSPACE/research/o214_cdc_parent_differential.py" probe \
+            --root "$RUNNER_TEMP/o214-differential" --tag parent \
+            --source-reader "$RUNNER_TEMP/o214-parent-worktree/src/cmpct/reader.py" \
+            --out "$GITHUB_WORKSPACE/o214-evidence/parent.json"
+          python "$GITHUB_WORKSPACE/research/o214_cdc_parent_differential.py" probe \
+            --root "$RUNNER_TEMP/o214-differential" --tag candidate \
+            --source-reader "$GITHUB_WORKSPACE/src/cmpct/reader.py" \
+            --out "$GITHUB_WORKSPACE/o214-evidence/candidate.json"
+          python "$GITHUB_WORKSPACE/research/o214_cdc_parent_differential.py" compare \
+            --root "$RUNNER_TEMP/o214-differential" \
+            --parent "$GITHUB_WORKSPACE/o214-evidence/parent.json" \
+            --candidate "$GITHUB_WORKSPACE/o214-evidence/candidate.json"
       - name: Preserve all outcomes including failed evidence
         if: always()
         uses: actions/upload-artifact@v4
