@@ -72,7 +72,8 @@ def run() -> dict:
             archive.write_bytes(image)
             # The physical frame and all its CRC/SHA fields remain identical
             # across controls; only both authenticated index copies change.
-            case = {"archive_sha256": hashlib.sha256(image).hexdigest(),
+            case = {"archive_hex": image.hex(),
+                    "archive_sha256": hashlib.sha256(image).hexdigest(),
                     "physical_sha256": hashlib.sha256(physical).hexdigest(),
                     "tail_index_sha256": hashlib.sha256(tail).hexdigest(),
                     "tail_prefix_hex": tail[:8].hex(),
