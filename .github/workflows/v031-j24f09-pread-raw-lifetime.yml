@@ -1,0 +1,72 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24F09 POSIX RAW descriptor source-lifetime court
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24f09_pread_raw_source_lifetime_court.py'
+      - '.github/workflows/v031-j24f09-pread-raw-lifetime.yml'
+      - 'docs/v031-research/2026-10-26-j24f09-pread-raw-prereg.md'
+      - 'docs/v031-research/2026-10-26-j24f09-posix-raw-truncation-hosted-result.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24f09-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authentic-raw-truncation:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate candidate and original parent sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 76b617ba88e711342efeb710c81856181ddea44d HEAD
+          git merge-base --is-ancestor 1885cb0658cacd34a50d05e45b541ecb76fc8497 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "a6a74068b34d726fc38bc151e5f191ce2dd45993"
+          test "$(git rev-parse 1885cb0658cacd34a50d05e45b541ecb76fc8497:src/cmpct/reader.py)" = "41efeb9d3301fc06b1df56ab6bd42d9ee91f6d5e"
+          git show 1885cb0658cacd34a50d05e45b541ecb76fc8497:src/cmpct/reader.py > "${{ runner.temp }}/j24f09_historical_reader.py"
+          test "$(git hash-object "${{ runner.temp }}/j24f09_historical_reader.py")" = "41efeb9d3301fc06b1df56ab6bd42d9ee91f6d5e"
+          git show -s --format='%H %s' HEAD
+      - name: Install exact candidate package in independent environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Run historical fatal control and candidate fail-closed hostile court
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence-artifacts
+          python research/j24f09_pread_raw_source_lifetime_court.py \
+            --parent "${{ runner.temp }}/j24f09_historical_reader.py" \
+            --output "${{ github.workspace }}/evidence-artifacts/j24f09.json" \
+            | tee evidence-artifacts/stdout.txt
+          test -s evidence-artifacts/j24f09.json
+      - name: Preserve evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24f09-${{ runner.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: evidence-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
