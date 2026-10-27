@@ -22,17 +22,20 @@ PAYLOAD = b"ABCD"
 PATH = "sparse.bin"
 
 
-def _archive_bytes(extents, logical_bytes, *, storage_kind=S_SPARSE, latest_index=None):
+def _archive_bytes(extents, logical_bytes, *, storage_kind=S_SPARSE, latest_index=None,
+                   logical_size=None, logical_hash=None):
     """Produce authenticated primary/physical/last-generation revision-24 bytes."""
     record = BHDR.pack(
         BMAGIC, CODEC_RAW, 0, 0, len(PAYLOAD), len(PAYLOAD), 0,
         binascii.crc32(PAYLOAD) & 0xffffffff, sha(PAYLOAD),
     ) + PAYLOAD
     storage = [storage_kind, extents] if storage_kind == S_SPARSE else [S_BLOB, 0]
+    logical_size = len(logical_bytes) if logical_size is None else logical_size
+    logical_hash = sha(logical_bytes) if logical_hash is None else logical_hash
     idx = {
         "v": VERSION,
         "files": [[PATH, K_FILE, 0o644, 946684800000000000,
-                   len(logical_bytes), sha(logical_bytes), storage]],
+                   logical_size, logical_hash, storage]],
         "blobs": [[0, len(PAYLOAD), len(PAYLOAD), CODEC_RAW, 0]],
         "recipes": [], "dict_blob": None, "fsmeta": {},
     }
@@ -148,3 +151,35 @@ def test_adversarial_sparse_geometry_always_fails_closed(tmp_path, extents):
     with pytest.raises(ValidationError):
         CMPCT(path)
     assert path.read_bytes() == before
+
+
+def test_four_gib_4096_sparse_extents_selective_read_with_bounded_memory(tmp_path):
+    """Real revision-24 wire/index and exact logical SHA, without allocating 4 GiB.
+
+    This tests Reader admission and selective reconstruction only; unlike the
+    historic O196 full-product court it does NOT fully reconstruct the member.
+    """
+    extent_count = 4096
+    stride = 1 << 20
+    logical_size = extent_count * stride  # exactly four GiB
+    holes = b"\0" * (stride - len(PAYLOAD))
+    logical_digest = hashlib.sha256()
+    for _ in range(extent_count):
+        logical_digest.update(PAYLOAD)
+        logical_digest.update(holes)
+    extents = [[i * stride, len(PAYLOAD), [0]] for i in range(extent_count)]
+    # The index refers to the same authenticated four-byte physical blob 4096
+    # times. This is a valid dedup representation, not a synthetic Reader object.
+    raw = _archive_bytes(extents, b"", logical_size=logical_size,
+                         logical_hash=logical_digest.digest())
+    path = _write(tmp_path, raw, "4gib-4096-extents")
+    before = hashlib.sha256(raw).digest()
+    assert preflight_archive(path, verify_blob_headers=True)["files"] == 1
+    with CMPCT(path) as reader:
+        assert reader.by[PATH][4] == logical_size
+        assert len(reader.by[PATH][6][1]) == extent_count
+        for position in (0, 2 * stride, 2047 * stride, 4095 * stride):
+            assert reader.read_range(PATH, position, 4) == PAYLOAD
+            assert reader.read_range(PATH, position + 4, 32) == b"\0" * 32
+        assert reader.read_range(PATH, logical_size - 1, 1) == b"\0"
+    assert hashlib.sha256(path.read_bytes()).digest() == before
