@@ -38,10 +38,14 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      - name: Install exact candidate with original product deps and test dependencies
+      - name: Build both exact source trees with package-owned native libraries
         shell: bash
         run: |
           set -euo pipefail
+          # PYTHONPATH alone switches Python sources but cannot manufacture
+          # the package-owned Rust cdylib required by native_codec.py.
+          # Build each tree separately, then select sources explicitly.
+          python -m pip install -e './frozen-baseline[test]'
           python -m pip install -e '.[test]'
       - name: Same exact signed-wire images on frozen baseline and candidate
         shell: bash
