@@ -1,0 +1,88 @@
+# ci-lane: fast
+# J24D07 source-exact POSIX NAME_MAX product-candidate test; NOT a release gate.
+name: CMPCT J24D07 direct NAME_MAX and recovery
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24d07-direct-namemax-stage-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24d07-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-direct-court:
+    name: Direct stage NAME_MAX / inherited recovery (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout exact scientific source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Source, frozen controls and ancestry check
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor 931caff9a03c80bafaddec21864ae55e7e2314c0 HEAD
+          git diff --quiet 931caff9a03c80bafaddec21864ae55e7e2314c0 HEAD -- tests/conformance/ research/j24d02_direct_stage_court.py research/j24d05_direct_fd_mode_court.py
+          git diff --check 931caff9a03c80bafaddec21864ae55e7e2314c0 HEAD
+          python -m py_compile src/cmpct/reader.py tests/test_v031_j24d07_direct_namemax.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install candidate CMPCT outside source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install '.[test]'
+      - name: Execute source-exact Reader and unchanged ENOSPC court
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          export J24D02_HEAD_SHA="$SOURCE_SHA"
+          export J24D02_READER_BLOB="$(git rev-parse HEAD:src/cmpct/reader.py)"
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib, os, pathlib, subprocess
+          import cmpct.reader
+          repo=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          installed=pathlib.Path(cmpct.reader.__file__).resolve()
+          assert repo not in installed.parents, (repo,installed)
+          src=subprocess.check_output(["git","-C",str(repo),"show","HEAD:src/cmpct/reader.py"])
+          canonical=lambda b:b.replace(b"\r\n",b"\n")
+          assert hashlib.sha256(canonical(installed.read_bytes())).digest()==hashlib.sha256(src).digest()
+          print("INSTALLED_READER_SOURCE_MATCH",installed)
+          PY
+          python -m pytest -q "$GITHUB_WORKSPACE/tests/test_v031_j24d07_direct_namemax.py" | tee "$GITHUB_WORKSPACE/artifacts/j24d07-pytest.txt"
+          python "$GITHUB_WORKSPACE/research/j24d02_direct_stage_court.py" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/j24d02-inherited.json"
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ["GITHUB_WORKSPACE"])/"artifacts"
+          h={f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in root.iterdir() if f.is_file()}
+          (root/"manifest.json").write_text(json.dumps({"head_sha":os.environ["SOURCE_SHA"],"sha256":h},indent=2,sort_keys=True)+"\n")
+          PY
+      - name: Preserve exact-head data even on failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24d07-${{ matrix.os }}-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
