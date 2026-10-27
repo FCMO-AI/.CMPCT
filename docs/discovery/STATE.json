@@ -18,7 +18,7 @@
     "id": "v031-reader-integrity-convergence",
     "family": "reader-exactness-and-physical-execution",
     "hypothesis": "Existing independently proven same-index geometry and source-custody safeguards can be composed without forfeiting legitimate large-archive open-time and recovery contracts; a different execution/representation frame is needed, not another Python per-reference micro-fastpath.",
-    "kill": "Do not promote a composition that regresses inherited exact reconstruction, hostile admission, source/destination custody, portabilty or confirmed full Reader performance outside allowed gates; discard bounded implementation attempts that cannot preserve these simultaneously.",
+    "kill": "Do not promote a composition that regresses inherited exact reconstruction, hostile admission, source/destination custody, portability or confirmed full Reader performance outside allowed gates; discard bounded implementation attempts that cannot preserve these simultaneously.",
     "status": "BLOCKED",
     "evidence": [
       "Owner #569 head c5e13bb3fbb4cdade8b64246658ce7c7818de41f reports full Reader open-cost debt; #570 head 6989b25640be2c82436bb77ec545dd15816f698b confirms a 4x isolated fastpath is still insufficient. Both are unmerged drafts as of 2026-10-27.",
