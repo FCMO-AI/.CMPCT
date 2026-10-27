@@ -2,56 +2,54 @@
   "schema": "cmpct-discovery-state-v1",
   "status": "ACTIVE",
   "authority": {
-    "canonical_release": "v0.30.0 rolling pre-1.0 checkpoint",
-    "active_frontier": "agent/v030-authoritative-integration@16b89044eeabb29f361d793ce960de875b1281de",
-    "product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
-    "candidate_fingerprint": "6f298e1636ba42176b250f607be82159dd58b37626c1c8624d7d6ce4c75a6f8f",
-    "note": "Repository and exact result-bearing evidence outrank this staleable cache. v0.30 no longer requires 15/15; strict external domination is a v1.0 target."
+    "canonical_release": "v0.30.0 / revision-24 (published, unchanged)",
+    "canonical_main": "main@80c358f8824ec1b20d349c92ed94c898090969b0",
+    "experimental_frontier": "agent/v031-development@4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b; product candidates live on separate stacked unmerged PR branches",
+    "released_product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
+    "observed_at_utc": "2026-10-27T05:42:00Z",
+    "note": "Snapshot pointers only: re-read current commits, PRs, and exact-head checks. Old v0.30 admission/fingerprint receipts are historical, not v0.31 authority. v0.30 release does not require 15/15; the 15/15 goal is for v1.0."
   },
   "active_product_bottleneck": {
-    "id": "v031-frontier-opportunity",
-    "observation": "Former v0.30 blockers are no longer publication blockers; they remain evidence-backed v0.31 opportunities.",
-    "next_discriminator": "Choose the cheapest result-bearing experiment that materially improves complete product size, create/extract cost or execution ownership."
+    "id": "v031-reader-source-integrity-and-admission-economics",
+    "observation": "Source-exact O212/#560, O214/#564, O215/#568 reject inconsistent sparse, CDC, fixed-chunk geometry on one Reader index; the composed J24C02/#569 correctness court is green but fixed-chunk admission creates a measured +25.56ms/27.253x at 65,536 refs and +102.05ms/28.505x at 262,144. No product promotion. O216/#570 improves isolated validation ~4x but fails remaining material overhead gate.",
+    "next_discriminator": "Within #569 owner lane, compare genuinely different batch/native/representation-bound admission mechanisms against the strongest *composed Reader*, using authentic r24 positive and hostile controls and full cold-open/RSS evidence; do not merge a cheaper but weaker gate. In parallel, #572 demonstrates released sparse extraction integrity/data-loss risk and has existing owners #255/#270/#573."
   },
   "primary_question": {
-    "id": "compact-r24-corrected-full-matrix",
-    "family": "product-compression",
-    "hypothesis": "The correctly bound compact-r24 candidate preserves the unchanged full 15-row product/parity matrix after the focused Incremental Backups blocker was corrected.",
-    "kill": "Any deterministic canonical-product byte regression retires compact-r24 without threshold, workload, comparator, evaluator or custody gardening.",
+    "id": "v031-reader-integrity-convergence",
+    "family": "reader-exactness-and-physical-execution",
+    "hypothesis": "Existing independently proven same-index geometry and source-custody safeguards can be composed without forfeiting legitimate large-archive open-time and recovery contracts; a different execution/representation frame is needed, not another Python per-reference micro-fastpath.",
+    "kill": "Do not promote a composition that regresses inherited exact reconstruction, hostile admission, source/destination custody, portabilty or confirmed full Reader performance outside allowed gates; discard bounded implementation attempts that cannot preserve these simultaneously.",
     "status": "BLOCKED",
     "evidence": [
-      "PR #217 e235686d2a9fd4757c5478526600f410e59c6eb8 remains the corrected evidence route; visible generic CI does not include the authorized matrix.",
-      "Existing executor agent/phased3-pr217-corrected-matrix-exec@6af2fcc18c02566b35923473672a753574bdd7b0 is exact-head aligned to PR #217, carries the exact historical policy-boundary control and current runtime/selective wrappers, and has zero result-bearing workflow runs."
+      "Owner #569 head c5e13bb3fbb4cdade8b64246658ce7c7818de41f reports full Reader open-cost debt; #570 head 6989b25640be2c82436bb77ec545dd15816f698b confirms a 4x isolated fastpath is still insufficient. Both are unmerged drafts as of 2026-10-27.",
+      "Independent S_SPARSE/S_CDC/S_CHUNKS source-admission candidates #560/#564/#568 and fd-owned publication #567 are separate unmerged branches; preserve exact original controls and source owners.",
+      "Broader sparse output integrity negative #572 (J24X01 #571, 3-host shipping Reader) has already discovered a preexisting solution direction in #255/#270, now portable Windows derivative #573; avoid a duplicate fix."
     ]
   },
   "frontier_candidates": [
     {
-      "id": "ml-wrapper-custody",
-      "family": "runtime-evidence-ownership",
-      "question": "On one deterministic current ML tree, does the unchanged canonical worker produce a materially worse v0.30/v0.29 create ratio than the unchanged v2 worker?",
-      "status": "READY",
-      "evidence": "Exact current source/fingerprint is v2-green at 1.244515635x and canonical-red at 1.286112912x / 1.290749683x / 1.271885107x. PR #218 / agent/phased1-ml-wrapper-custody-court@5bb1c71a20c10cda55e836935900a1a10b080012 owns the frozen same-source court; no result-bearing court has executed. Static source audit narrows a positive mechanism to broader process/import/cache/global-state custody rather than simple late loading of the v0.29 algorithm."
+      "id": "sparse-extraction-integrity-productization",
+      "family": "integrity-publication",
+      "question": "Can #255/#270/#573 preserve an existing destination on physical corruption and enforce whole-file sparse SHA without an unacceptable hole-hashing extraction penalty, under the actually stated namespace threat model?",
+      "status": "BLOCKED",
+      "evidence": "#572 / #571 records 3-host released r24 corruption and destination-loss negatives; #573 owns Windows fchmod portability; #270 reports +101.6ms sparse 128MiB runtime debt. Current PR heads must be rechecked before composition."
     },
     {
-      "id": "bounded-drift-selected-row",
-      "family": "representation-execution",
-      "question": "Can bounded drift replace current PrefixGraph winners on Shifted and Boundary under exact filesystem, integrity and locality law; and if the byte result survives, can prospective generic admission avoid paying the expensive existing G04/PrefixGraph search?",
-      "status": "READY",
-      "evidence": "PR #213 and PR #215 own bounded-drift semantics and primitive acceleration. Repaired selected-row branch agent/phased3-bd-pg-selected-row-hosted@8097b34ec738af81039d2cde0fc5f3aa24e80820 remains unexecuted. Lower-rung projection puts Shifted 6,024 B below strongest-current upstream Zstd-19 and Boundary 179 B above it; post-search substitution alone cannot satisfy the strict joint size+create contract."
-    },
-    {
-      "id": "g04-authenticated-direct-baseline-reuse",
-      "family": "duplicate-semantic-work",
-      "question": "If wrapper custody is falsified, can G04 reuse provenance-proven level-19 Zstd physical-group payloads as Hierarchical Geometry direct baselines while preserving exact outputs and saving enough complete-G04 wall time to matter?",
+      "id": "bounded-zstd-physical-decode",
+      "family": "decode-unit-memory",
+      "question": "Can native bounded Zstd streaming retain the ~111MiB RSS saving seen in J24Z01 while repairing the 1.4-2.4x CPU/wall debt of the exact product path, or should that family be retired?",
       "status": "QUEUED",
-      "evidence": "Existing claim branch agent/phased1-g04-authenticated-reuse is aligned to authority. Current ML has 13 actual-HG-entering exact reuse records covering 12,408,137 B (81.14% of HG direct input). Advance only on exact output identity and >=0.34 s conventional-median complete-G04 wall saving."
+      "evidence": "O209 #548 physical-frame RSS amplification; native streaming J24Z01 #550 and pooled buffer J24Z02 #553 are existing owner/negative evidence. Reopen only for materially different mechanism with complete product accounting."
+    },
+    {
+      "id": "v031-create-search-execution-owner",
+      "family": "compression-search-execution",
+      "question": "Can speculative r25/G04 search work be eliminated or reused on the authorized full matrix while retaining exact archive bytes and no extra RAM/temp I/O, rather than reopening local threshold variants?",
+      "status": "QUEUED",
+      "evidence": "Preserve historical PR #189 external 4/15 strict joint scoreboard, compact-r24 execution owner PR #217 and wrapper custody PR #218; these are research/evidence routes, not active release gates or result-bearing current-fingerprint promotion."
     }
   ],
   "saturated_families": [
-    {
-      "family": "compact-r24-executor-refinement",
-      "reason": "The existing executor is decision-complete; only execution can change the primary science."
-    },
     {
       "family": "pack-plan-compression-reuse",
       "reason": "PR #154 measured the duplicate-compression owner and merged PR #155 already productized bounded exact-length reuse in current v0.30."
@@ -67,12 +65,24 @@
     {
       "family": "hidden-ZIP-current-productization-family",
       "reason": "PR #205 retained major Office byte savings but final create remained 1.330773x > 1.25 after multiple materially different rehabilitation attempts; the current family is retired pending a new mechanism."
+    },
+    {
+      "family": "global-ZIP64-Deflate-recompression-at-measured-mix",
+      "reason": "O210 microbench looked 2.26-11.95x compelling, but authentic O211 #555 measured only 4.4482% full-export CPU at 32 reusable members, below preregistered 5% decision threshold; reopen only if realistic mix changes materiality."
+    },
+    {
+      "family": "python-loop-only-fixed-chunk-admission-fastpath",
+      "reason": "O216 #570 authentic controlled alternative ~4x faster still left +5.34ms/+21.36ms at 65,536/262,144 references versus intentionally unsafe timing floor; do not repeat nearby Python per-ref variants without new architecture."
     }
   ],
   "decision_evidence": {
-    "external_competitors": "PR #189 run 35681729751 / artifact 10676455534: strongest-current historical research evidence records strict joint size+create wins on 4/15, ZIP size wins 15/15, Zstd-19 size wins 7/15, ZIP create wins 4/15, Zstd-19 create wins 5/15. Historical fingerprint only; no current release credit.",
-    "external_execution_partition": "On all 14 PR #189 rows exposing r24 timing, gifted r24 create beats Zstd-19 create; it beats ZIP create on 10/14. This localizes broad Zstd-create debt to speculative r25/search work while four rows retain a base-r24 ZIP-create floor.",
-    "release_custody": "docs/V030_RELEASE_LOCK.json requires 13 exact-fingerprint receipts. Three receipt files exist but none binds current fingerprint 6f298e1636ba42176b250f607be82159dd58b37626c1c8624d7d6ce4c75a6f8f; native-r25 is also stale against current assertion schema."
+    "historical_external_competitors": "Historical PR #189 run 35681729751: 15/15 ZIP size, 7/15 Zstd-19 size, 4/15 strict joint size+create. Historical fingerprint only, not a current release claim.",
+    "canonical_release_status": "main@80c358f8824ec1b20d349c92ed94c898090969b0, v0.30.0/revision-24; docs/V030_EFFICIENCY_RECOVERY.md declares its v0.30 release gate CLOSED. Do not apply old v0.30 lock state to v0.31.",
+    "reader_correctness": "#533 early sparse range inconsistency; O212 #560, O214 #564, O215 #568 and J24C02 #569 admission candidates. No canonical merge.",
+    "sparse_extraction": "Issue #572 new 3-host authenticated sparse extraction data-loss finding, candidate #255/#270 and portability derivative #573; full performance/gate not yet settled.",
+    "reader_open_cost": "J24C02 #569 +25.56ms at 65536 and +102.05ms at 262144 references; O216 #570 narrow micro improvement not promotable.",
+    "deflate_scope": "O211 #555 complete authentic mixed ZIP64 attribution 4.4482% median CPU, below 5% gate, no product changes.",
+    "pending_work_note": "No CI/compute was dispatched by this reconciliation PR. Independently running owner checks and branch heads are volatile; inspect live GitHub before declaring results."
   },
   "process_lessons": [
     {
@@ -84,16 +94,20 @@
       "evidence": "Bounded drift can flip Shifted bytes versus Zstd-19 while unchanged existing r25 search costs tens of seconds versus sub-second external controls."
     },
     {
-      "lesson": "Release receipt presence is not release authority; verify exact current fingerprint and current assertion schema.",
-      "evidence": "Three receipt files exist, zero bind current fingerprint, and native-r25 predates current required assertions."
-    },
-    {
       "lesson": "Intersect semantic eligibility with actual shipping control flow before summing optimization headroom.",
       "evidence": "Only 13 of 19 current ML records both enter HG and carry reusable level-19 Zstd provenance."
+    },
+    {
+      "lesson": "Mechanism-level speedup is not product materiality; acquire a charged complete-product discriminator before allocating major implementation.",
+      "evidence": "O210 local recompression CPU penalty 2.26-11.95x reduced to 4.4482% attributed CPU on authentic O211 4GiB ZIP64; #551/#555."
+    },
+    {
+      "lesson": "Do not infer cheap large-index admission from local validator microbench; whole Reader cold-open and structural-case generality control promotion.",
+      "evidence": "J24C02 #569 exact Reader open-cost debt and O216 #570 4x isolated fastpath failing materiality."
     }
   ],
   "pending_jobs": [],
-  "next_action": "Begin v0.31. Preserve v0.30 losses; 15/15 is a 1.0 target, not a 0.x gate.",
+  "next_action": "First re-read #569/#570 and #255/#270/#573 live ownership/CI. Keep the existing source-integrity fixes under their owners. The cheapest decision-changing unclaimed action is a new architecture-class bound/charged test for fixed-chunk validation on the exact #569 Reader (or independent replication), not another copy of the Python fastpath; if unavailable, advance the separate sparse integrity/performance custody gate without duplicate patches. Do not merge or release from this cache.",
   "release_policy": {
     "effective_date": "2026-10-04",
     "pre1_mode": "rolling material checkpoints",
