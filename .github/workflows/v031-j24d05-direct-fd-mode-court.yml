@@ -1,0 +1,92 @@
+# ci-lane: fast
+# J24D05 prospective targeted installed Reader scientific court, not release authority.
+name: CMPCT J24D05 direct fd-mode source ownership
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24d05-direct-fd-mode-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24d05-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-installed-court:
+    name: Direct fd-mode and ENOSPC (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout this exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify code and inherited fixture ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor 1778085a1ff5278fadf5f3a12b5f950008a8d939 HEAD
+          git merge-base --is-ancestor f3bdb9cd7b8d568891ea632956efb4e6b045b17a HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "18fe5721cbe2ae32a907288008a537c731413be5"
+          git diff --quiet 1778085a1ff5278fadf5f3a12b5f950008a8d939 HEAD -- tests/conformance/ research/j24d02_direct_stage_court.py research/j24d03_mode_composition_court.py
+          git diff --check 1778085a1ff5278fadf5f3a12b5f950008a8d939 HEAD
+          python -m py_compile src/cmpct/reader.py research/j24d05_direct_fd_mode_court.py research/j24d05_independent_referee.py
+      - name: Independently install CMPCT package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Execute original and new source-bound courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          export J24D05_HEAD_SHA="$SOURCE_SHA"
+          export J24D05_READER_BLOB="$(git rev-parse HEAD:src/cmpct/reader.py)"
+          export J24D02_HEAD_SHA="$SOURCE_SHA"
+          export J24D02_READER_BLOB="$J24D05_READER_BLOB"
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          import cmpct.reader
+          repo=Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          installed=Path(cmpct.reader.__file__).resolve()
+          assert repo not in installed.parents, (installed,repo)
+          assert hashlib.sha256(installed.read_bytes()).digest()==hashlib.sha256((repo/'src/cmpct/reader.py').read_bytes()).digest()
+          print("INSTALLED_J24D05_SOURCE_OK", installed)
+          PY
+          python "$GITHUB_WORKSPACE/research/j24d02_direct_stage_court.py" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/j24d02-inherited.json"
+          python "$GITHUB_WORKSPACE/research/j24d05_direct_fd_mode_court.py" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/j24d05-raw.json"
+          python "$GITHUB_WORKSPACE/research/j24d05_independent_referee.py" "$GITHUB_WORKSPACE/artifacts/j24d05-raw.json" "$GITHUB_WORKSPACE" "$SOURCE_SHA" | tee "$GITHUB_WORKSPACE/artifacts/j24d05-independent-audit.json"
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          directory=Path(os.environ['GITHUB_WORKSPACE'])/'artifacts'
+          checksums={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in directory.glob('*.json')}
+          (directory/'manifest.sha256.json').write_text(json.dumps(checksums,indent=2,sort_keys=True)+'\n')
+          PY
+      - name: Preserve raw reports even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24d05-${{ matrix.os }}-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn

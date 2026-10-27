@@ -306,12 +306,14 @@ class CMPCT:
         parent=os.path.dirname(full) or '.';prefix=f'.{os.path.basename(full)}.cmpct-part-'
         fd,tmp=tempfile.mkstemp(prefix=prefix,dir=parent);committed=False
         try:
-            # mkstemp starts at 0600; retain the prior direct path's requested basic file mode.
-            # os.fchmod is absent on some Windows builds; only this fallback is used there.
-            try:
-                if hasattr(os,'fchmod'):os.fchmod(fd,mode or 0o666)
-                else:os.chmod(tmp,mode or 0o666)
-            except OSError:pass
+            # Apply an optional mode only through the descriptor we already own.
+            # A pathname chmod could act on a substituted stage inode (#528).
+            # If fd chmod is unavailable (notably Windows), keep mkstemp's
+            # restrictive mode until optional post-publication metadata handling.
+            fd_chmod=getattr(os,'fchmod',None)
+            if fd_chmod is not None:
+                try:fd_chmod(fd,mode or 0o666)
+                except OSError:pass
             view=memoryview(raw)
             try:
                 while view:
