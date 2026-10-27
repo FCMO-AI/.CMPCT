@@ -91,9 +91,18 @@ def _child_actor(args):
     return 0
 
 
-def run_trial(root, method, hostile):
+def run_trial(root, method, hostile, wx_only=False):
     root.mkdir()
-    dfd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    if wx_only:
+        root.chmod(0o300)
+        try:
+            bad_dirfd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        except PermissionError as exc:
+            assert exc.errno == errno.EACCES
+        else:
+            os.close(bad_dirfd)
+            raise AssertionError('write/search-only fixture still allows directory read')
+    dfd = os.open(root, (os.O_PATH if wx_only else os.O_RDONLY) | os.O_DIRECTORY)
     fd = -1
     try:
         fd = _anonymous(dfd)
@@ -134,7 +143,7 @@ def run_trial(root, method, hostile):
             assert (root / 'stage').read_bytes() == OLD
             assert identity(root / 'stage') == old_id
         return {
-            'method': method, 'hostile': hostile, 'original_target_sha256': digest(OLD),
+            'method': method, 'hostile': hostile, 'parent_mode': '0300' if wx_only else '0700', 'original_target_sha256': digest(OLD),
             'original_fd_sha256': digest(os.pread(fd, len(GOOD), 0)),
             'published_sha256': digest(observed),
             'published_is_authenticated_inode': observed_id == source_id,
@@ -145,6 +154,7 @@ def run_trial(root, method, hostile):
     finally:
         if fd >= 0: os.close(fd)
         os.close(dfd)
+        if wx_only: root.chmod(0o700)
 
 
 def run_noclobber(root, occupied):
@@ -202,17 +212,18 @@ def main():
     if args.output is None: p.error('required --output')
     assert sys.platform.startswith('linux') and hasattr(os,'O_TMPFILE')
     assert os.geteuid() != 0, 'hosted court must use nonroot permissions'
-    record={'schema': 'j24p03-linux-existing-replace-v1', 'source': {
+    record={'schema': 'j24p03-linux-existing-replace-v2', 'source': {
         'euid': os.geteuid(), 'platform': platform.platform(), 'python': platform.python_version(),
         'git_head': os.environ.get('EVIDENCE_HEAD'),
     }, 'payload_sha256': {'good':digest(GOOD),'bad':digest(BAD),'old':digest(OLD)}, 'trials': []}
     with tempfile.TemporaryDirectory(prefix='cmpct-j24p03-') as td:
         root=Path(td)
-        for method in ('os.replace', 'renameat2_exchange'):
-            for attack in (False, True):
-                item=run_trial(root / (method.replace('.','_')+'-'+str(int(attack))),method,attack)
-                record['trials'].append(item)
-                print('J24P03_TRIAL='+json.dumps(item,sort_keys=True),flush=True)
+        for mode in ('0700', '0300'):
+            for method in ('os.replace', 'renameat2_exchange'):
+                for attack in (False, True):
+                    item=run_trial(root / (mode+'-'+method.replace('.','_')+'-'+str(int(attack))),method,attack,wx_only=(mode=='0300'))
+                    record['trials'].append(item)
+                    print('J24P03_TRIAL='+json.dumps(item,sort_keys=True),flush=True)
         for occupied in (False,True):
             item=run_noclobber(root / ('link-'+str(int(occupied))),occupied)
             record['trials'].append(item)
@@ -222,10 +233,10 @@ def main():
         print('J24P03_DIRECT='+json.dumps(item,sort_keys=True),flush=True)
     observations=[x for x in record['trials'] if x.get('hostile') is True]
     controls=[x for x in record['trials'] if x.get('hostile') is False]
-    assert len(observations)==2 and len(controls)==2
+    assert len(observations)==4 and len(controls)==4
     assert all(x['decision']=='FOREIGN_INODE_PUBLISHED' for x in observations)
     assert all(x['decision']=='AUTHENTIC_INODE_PUBLISHED' for x in controls)
-    assert [x['decision'] for x in record['trials'][4:6]]==['AUTHENTIC_NO_CLOBBER','EEXIST_PRESERVED']
+    assert [x['decision'] for x in record['trials'][8:10]]==['AUTHENTIC_NO_CLOBBER','EEXIST_PRESERVED']
     record['decision']='RETIRE_VISIBLE_STAGE_PLUS_RENAME_EXISTING_TARGET_UNDER_HOSTILE_SAME_UID_WRITER'
     record['nonclaims']=['no global impossibility theorem', 'not installed CMPCT Reader product',
                           'no cross-platform result', 'no proof against unobserved pathname mutations',
