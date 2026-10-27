@@ -1,0 +1,87 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 O218b source-exact installed Reader native admission ABBA
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-o218b-native-full-reader-20261027
+  pull_request:
+    paths:
+      - 'research/o218b_*'
+      - '.github/workflows/v031-o218b-native-fullreader.yml'
+      - 'docs/v031-research/2026-10-27-o218b-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o218b-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scientific:
+    name: Exact installed Reader native admission cold-open vs strict Python
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Preserve product source / prereg identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor 6372e780be99a31f5ea21b7a3c74fde92cf0bc45 HEAD
+          git merge-base --is-ancestor 4ad8b7770693832940e766300bcac4a1ea4f0a84 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = dbd4ac576a05a47eae97e1e40de89cf1de440516
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          test "$(git rev-parse HEAD:research/o218_fastscan.c)" = a54f15181d9dbe667b9e8c9d52e927b09c80152f
+          python -m py_compile research/o218b_native_full_reader_court.py research/o218b_independent_receipt_audit.py
+          mkdir -p o218b-evidence
+          git rev-parse HEAD > o218b-evidence/source-head.txt
+          git rev-parse HEAD:src/cmpct/reader.py > o218b-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/validation.py > o218b-evidence/validation.blob
+          git rev-parse HEAD:research/o218_fastscan.c > o218b-evidence/native.blob
+      - name: Install independent actual CMPCT Reader
+        run: python -m pip install . pytest
+      - name: Preserve original O215 conformance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_o215_fixed_chunk_admission.py "$RUNNER_TEMP/test_o215_fixed_chunk_admission.py"
+          cd "$RUNNER_TEMP"
+          python -m pytest -q test_o215_fixed_chunk_admission.py > "$GITHUB_WORKSPACE/o218b-evidence/o215.txt" 2>&1
+          cat "$GITHUB_WORKSPACE/o218b-evidence/o215.txt"
+      - name: Execute ABBA original vs O216 vs O218 native vs no-validation oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o218b_native_full_reader_court.py \
+            --output o218b-evidence/raw.json 2>&1 | tee o218b-evidence/scientific.log
+          test -s o218b-evidence/raw.json
+          grep -q 'O218B_DECISION=' o218b-evidence/scientific.log
+      - name: Independently replay all raw subprocess timings and falsified receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o218b_independent_receipt_audit.py o218b-evidence/raw.json \
+            --out o218b-evidence/independent-referee.json | tee o218b-evidence/referee.log
+          grep -q 'O218B_INDEPENDENT_AUDIT=PASS' o218b-evidence/referee.log
+      - name: Always preserve positive and negative original receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o218b-${{ github.event.pull_request.head.sha || github.sha }}
+          path: o218b-evidence/
+          retention-days: 30
+          if-no-files-found: warn
