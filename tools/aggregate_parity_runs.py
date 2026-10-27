@@ -109,8 +109,15 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         "integrity_semantics", "filesystem_semantic_mismatch",
         "corpus_semantics",
     )
+    def semantic_token(record: dict[str, Any], field: str) -> tuple[bool, str | None]:
+        # Canonical JSON distinguishes bool from int, missing from explicit null,
+        # and nested integrity declarations while ignoring irrelevant key order.
+        return (field in record, json.dumps(
+            record[field], sort_keys=True, separators=(",", ":"), allow_nan=False
+        ) if field in record else None)
+
     for field in semantic_fields:
-        exact([record.get(field) for record in records], f"ABBA/{field}")
+        exact([semantic_token(record, field) for record in records], f"ABBA/{field}")
 
     out = copy.deepcopy(records[0])
     out["aggregate_runs"] = len(records)
