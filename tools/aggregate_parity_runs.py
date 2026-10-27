@@ -11,6 +11,7 @@ sizes are not statistical values, so they must agree exactly across all replicat
 import argparse
 import copy
 import json
+import math
 from pathlib import Path
 import statistics
 from typing import Any
@@ -21,9 +22,70 @@ FORMATS = ("cmpct", "zip")
 
 
 def load(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    # The final release comparator may reject ambiguous JSON, but by that
+    # point this ABBA reducer has already rewritten the raw run records.
+    # Reject duplicate names and nonfinite numbers here, before medians and
+    # deterministic-byte checks can launder contradictory source evidence.
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        obj: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in obj:
+                raise ValueError(f"{path}: duplicate JSON object key {key!r}")
+            obj[key] = value
+        return obj
+
+    def finite_float(token: str) -> float:
+        value = float(token)
+        if not math.isfinite(value):
+            raise ValueError(f"{path}: nonfinite JSON floating-point value {token!r}")
+        return value
+
+    def reject_constant(token: str) -> None:
+        raise ValueError(f"{path}: nonfinite JSON constant {token!r}")
+
+    data = json.loads(
+        path.read_text(encoding="utf-8"),
+        object_pairs_hook=unique_object,
+        parse_float=finite_float,
+        parse_constant=reject_constant,
+    )
     if data.get("schema") != "cmpct-zip-parity-v1" or not isinstance(data.get("corpora"), dict):
         raise ValueError(f"{path}: not a cmpct-zip-parity-v1 record")
+
+    # The final CMPCT comparator checks its own normalized CMPCT metrics,
+    # not the original ZIP controls, and float("nan") accepts a JSON *string*.
+    # Validate both physical formats at the raw-run boundary so the reducer
+    # cannot convert an invalid typed observation into apparently valid proof.
+    corpora = data["corpora"]
+    if not corpora:
+        raise ValueError(f"{path}: expected at least one release-parity corpus")
+    for name, row in corpora.items():
+        if not isinstance(name, str) or not name or not isinstance(row, dict):
+            raise ValueError(f"{path}: expected nonempty corpus name and mapping")
+        logical = row.get("logical_bytes")
+        if type(logical) is not int or logical < 0:
+            raise ValueError(f"{path}: {name}/logical_bytes: expected nonnegative integer")
+        for layer in LAYERS:
+            containers = row.get(layer)
+            if not isinstance(containers, dict):
+                raise ValueError(f"{path}: {name}/{layer}: expected format mapping")
+            for fmt in FORMATS:
+                metric = containers.get(fmt)
+                if not isinstance(metric, dict):
+                    raise ValueError(f"{path}: {name}/{layer}/{fmt}: expected metric mapping")
+                size = metric.get("bytes")
+                if type(size) is not int or size <= 0:
+                    raise ValueError(f"{path}: {name}/{layer}/{fmt}/bytes: expected positive integer")
+                for field in TIMING_FIELDS:
+                    value = metric.get(field)
+                    if type(value) not in (int, float):
+                        raise ValueError(f"{path}: {name}/{layer}/{fmt}/{field}: expected positive finite seconds")
+                    try:
+                        finite = math.isfinite(value)
+                    except OverflowError:
+                        finite = False
+                    if not finite or value <= 0:
+                        raise ValueError(f"{path}: {name}/{layer}/{fmt}/{field}: expected positive finite seconds")
     return data
 
 
