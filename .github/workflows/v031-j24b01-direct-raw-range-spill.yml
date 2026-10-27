@@ -37,6 +37,27 @@ jobs:
           python research/j24b01_direct_raw_range_spill_court.py > benchmark-artifacts/court.json
           cat benchmark-artifacts/court.json
           python research/j24b01_direct_raw_range_referee.py benchmark-artifacts/court.json --adversarial | tee benchmark-artifacts/referee.json
+      - name: Report raw observed discriminator without changing frozen court
+        if: always()
+        shell: bash
+        run: |
+          if [ -f benchmark-artifacts/raw-observations.json ]; then
+            python - <<'PY'
+          import json
+          with open("benchmark-artifacts/raw-observations.json") as f: r=json.load(f)
+          print(json.dumps({"experiment":r["experiment"],"cases":{n:{
+            "declared":v["declared_logical_size"],
+            "owner":v["physical_owner_length"],
+            "preflight":v["preflight"]["status"],
+            "read":v["read"]["status"],
+            "verify":v["verify"]["status"],
+            "in_frame":v["in_frame_range"]["status"],
+            "after_owner":v["after_owner_range"]["status"],
+            "after_owner_hex":v["after_owner_range"].get("hex"),
+            "tail_hex":v["tail_prefix_hex"]
+          } for n,v in r["cases"].items()}},indent=2))
+          PY
+          fi
       - name: Validate workflow topology
         run: python tools/check_ci_topology.py .github/workflows/v031-j24b01-direct-raw-range-spill.yml
       - name: Preserve artifacts on success or scientific failure
