@@ -21,6 +21,25 @@ def _safe_output_path(dest:Path,rel:str)->Path:
     if pp.is_absolute() or any(x in ('..','') for x in pp.parts):raise IOError(f'unsafe archive path: {rel!r}')
     return dest/pp
 
+# POSIX RAW extraction avoids touching a borrowed mmap after the Reader has opened.
+# A writer may shrink the same inode while a mapping is alive: dereferencing it can
+# SIGBUS the *process*. pread on the already-pinned descriptor instead fails with a
+# short read/ordinary I/O error, while preserving small immutable SHA/write windows.
+class _FdRawExtractWindows:
+    __slots__=('fd','start','length')
+    def __init__(self,fd:int,start:int,length:int):
+        self.fd=fd;self.start=start;self.length=length
+    def __len__(self):return self.length
+    def __getitem__(self,key):
+        if not isinstance(key,slice):raise TypeError('RAW extraction requires bounded window slices')
+        a,b,step=key.indices(self.length)
+        if step!=1:raise ValueError('noncontiguous RAW extraction slice')
+        size=b-a
+        if size<=0:return b''
+        out=os.pread(self.fd,size,self.start+a)
+        if len(out)!=size:raise IOError('RAW archive source shortened during verified extraction')
+        return out
+
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
     def __init__(self,path:Path):
@@ -271,25 +290,39 @@ class CMPCT:
         return self.read(name)[start:end]
 
     def _raw_blob_view_for_extract(self,idx:int):
-        """Return a zero-copy mmap view for a RAW chunk used by verified extraction.
+        """Return bounded RAW extraction source, descriptor-backed on POSIX.
 
-        Footnote: chunked extraction already authenticates the complete logical file with SHA-256 before
-        atomically replacing the destination. Routing RAW chunks through ``_blob`` first copied every
-        mmap slice into Python bytes, CRC32-checked it, and retained it in the read cache, only for the
-        extractor to hash and write the same bytes again. The whole-file SHA is stronger than that
-        redundant per-chunk CRC for this staging path, so RAW chunks can stay mmap-backed while framing
-        is still cross-checked against the authenticated index. Ordinary random reads keep `_blob`'s
-        CRC/cache behavior unchanged.
+        The trusted index and physical RAW header are cross-checked before transfer.
+        Unlike an mmap window, `pread` on the already-open descriptor cannot fault
+        SIGBUS merely because another actor truncated its inode. The returned source
+        materializes only the requested <=64-KiB immutable SHA/write window; it
+        never retains a full physical RAW chunk. The whole logical file is still
+        SHA-256 authenticated before staged publication. Ordinary `read()` and
+        compressed/mixed extraction remain separate and keep their existing law.
+        On hosts without pread, preserve the existing mmap-backed fallback.
         """
         off,us,cs,codec,ml=self.blobs[idx]
         if codec!=CODEC_RAW:raise ValueError('RAW extraction view requested for compressed blob')
         pos=self.record_base+off
-        if pos<0 or pos+BHDR.size>len(self.mm):raise IOError('blob header outside archive')
-        m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+        if pos<0:raise IOError('blob header outside archive')
+        if hasattr(os,'pread'):
+            # The file descriptor pins the original inode even if its pathname is replaced.
+            # A concurrent same-inode shrink yields short pread, not mapped-memory SIGBUS.
+            header=os.pread(self.f.fileno(),BHDR.size,pos)
+            if len(header)!=BHDR.size:raise IOError('RAW blob header shortened')
+            m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack(header)
+        else:
+            if pos+BHDR.size>len(self.mm):raise IOError('blob header outside archive')
+            m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
         if m!=BMAGIC or c!=CODEC_RAW or rus!=us or rcs!=cs or rml!=ml or rcs!=rus:
             raise IOError('RAW blob header mismatch')
         start=pos+BHDR.size+rml;end=start+rcs
-        if start<0 or end>len(self.mm):raise IOError('RAW blob payload outside archive')
+        if start<0:raise IOError('RAW blob payload outside archive')
+        if hasattr(os,'pread'):
+            if end>os.fstat(self.f.fileno()).st_size:
+                raise IOError('RAW blob payload shortened before extraction')
+            return _FdRawExtractWindows(self.f.fileno(),start,rcs)
+        if end>len(self.mm):raise IOError('RAW blob payload outside archive')
         return memoryview(self.mm)[start:end]
 
     def _extract_chunked_verified(self,row,full:str):
@@ -312,11 +345,10 @@ class CMPCT:
             lengths=[int(x[0]) for x in storage[1]];ids=[x[1] for x in storage[1]]
         else:raise ValueError('chunked extraction requires fixed or CDC storage')
 
-        # Borrowed mmap may change between hash and write. Keep the borrowed view only as a
-        # source cursor; copy at most one 64-KiB immutable window, and hash/write *that same*
-        # owned window before obtaining the next. This binds authenticated bytes to output
-        # without allocating an entire (potentially 1-GiB) RAW physical chunk.
-        # Compressed/mixed files retain the ordinary parallel decoder.
+        # POSIX RAW windows use a pinned-descriptor pread source; unsupported hosts
+        # preserve the earlier borrowed-mmap source. Every <=64-KiB owned window is
+        # both authenticated and written from the same immutable bytes. Short descriptor
+        # reads fail closed when a writer shrinks the source. Other codecs are unchanged.
         raw_direct=bool(ids) and all(self.blobs[idx][3]==CODEC_RAW for idx in ids)
         raw_window=64*1024
         if raw_direct:
@@ -338,10 +370,8 @@ class CMPCT:
             for expected,b in zip(lengths,decoded):
                 try:
                     if len(b)!=expected:raise IOError(f'chunk length failure while extracting {rel}')
-                    # RAW mmap is only borrowed for source access: each detached window is the
-                    # single immutable object consumed by both the logical digest and write(2).
-                    # A future source mutation is still caught by the indexed whole-file SHA,
-                    # so the unverified stage is never promoted to a successful destination.
+                    # Every detached window is the single immutable object consumed by the
+                    # digest and write(2); full indexed SHA still gates publication.
                     pieces=(bytes(b[start:start+raw_window])
                             for start in range(0,len(b),raw_window)) if raw_direct else (b,)
                     for piece in pieces:
@@ -355,7 +385,7 @@ class CMPCT:
                             try:view.release()
                             except ValueError:pass
                 finally:
-                    # Always release the borrowed RAW mmap view, including on short writes.
+                    # Release an mmap fallback view, including after a short write.
                     if isinstance(b,memoryview):b.release()
             if written!=size or h is None or digest.digest()!=bytes(h):
                 raise IOError(f'file integrity failure: {rel}')
