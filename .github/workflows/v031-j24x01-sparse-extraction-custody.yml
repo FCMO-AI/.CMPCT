@@ -1,0 +1,99 @@
+# ci-lane: fast
+name: CMPCT J24X01 sparse extraction integrity falsifier
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24s01-sparse-extract-integrity-20261027
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/j24x01_sparse_extraction_custody_court.py'
+      - '.github/workflows/v031-j24x01-sparse-extraction-custody.yml'
+      - 'docs/v031-research/2026-10-27-j24x01-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24x01-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sparse-custody-negative:
+    name: Actual installed r24 sparse Reader negative (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact historical Reader and prospective prerequisite
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Assert preregistration, base ancestry and frozen-product identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor 29d6a0b220d6ac4ff1b8b26d6dca71463fb749cd HEAD
+          git merge-base --is-ancestor 80c358f8824ec1b20d349c92ed94c898090969b0 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          mkdir -p j24x01-evidence
+          git rev-parse HEAD > j24x01-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > j24x01-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/validation.py > j24x01-evidence/validation.blob
+          git diff --name-only 80c358f8824ec1b20d349c92ed94c898090969b0 HEAD -- src/ native/ benchmarks/ tests/ > j24x01-evidence/product-diff.txt
+          test ! -s j24x01-evidence/product-diff.txt
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and independently install unchanged CMPCT distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Prove actual independent installation identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import inspect,os
+          from pathlib import Path
+          import cmpct.reader as r
+          import cmpct.validation as v
+          repo=Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          for module,filename in ((r,'reader.py'),(v,'validation.py')):
+              installed=Path(inspect.getfile(module)).resolve()
+              source=(repo/'src'/'cmpct'/filename).resolve()
+              assert installed != source, ('not separately installed',installed)
+              norm=lambda b:b.replace(b'\r\n',b'\n')
+              assert norm(installed.read_bytes())==norm(source.read_bytes())
+              print('INSTALLED_SOURCE',filename,installed)
+          PY
+      - name: Test legitimate and adversarial authenticated root-versioned sparse files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24x01_sparse_extraction_custody_court.py" \
+            --out "$GITHUB_WORKSPACE/j24x01-evidence/results.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24x01-evidence/stdout.log"
+          grep -q 'J24X01_NEGATIVE_REPRODUCED=YES' "$GITHUB_WORKSPACE/j24x01-evidence/stdout.log"
+      - name: Upload scientific evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24x01-sparse-extraction-${{ matrix.os }}-${{ github.sha }}
+          path: j24x01-evidence/
+          if-no-files-found: warn
