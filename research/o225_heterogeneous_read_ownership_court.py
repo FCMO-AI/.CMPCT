@@ -97,8 +97,12 @@ def archive(owners, codecs, refs, kind, corrupt_crc=False):
             raise AssertionError("unknown codec")
         rows.append([len(encoded_blobs),len(raw),len(compressed),codec,0])
         crc = binascii.crc32(raw)&0xffffffff
-        if corrupt_crc and i == 0:
-            crc ^= 1  # Authentic outer index, deliberately invalid physical CRC.
+        # A corrupt *unreferenced* blob is not a read() error. The first
+        # hosted trial accidentally targeted index zero, but this held-out
+        # quadratic reference permutation never uses zero. Preserve that
+        # negative and corrupt an actually requested physical owner instead.
+        if corrupt_crc and i == refs[0]:
+            crc ^= 1  # Authentic outer index, invalid used physical CRC.
         encoded_blobs.extend(BHDR.pack(
             BMAGIC,codec,0,0,len(raw),len(compressed),0,crc,sha(raw)
         ))
