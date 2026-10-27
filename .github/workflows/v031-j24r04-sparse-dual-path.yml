@@ -41,6 +41,7 @@ jobs:
           git merge-base --is-ancestor 70ab8f0246d3875b38922bcd1b76a5b834d1739d HEAD
           git merge-base --is-ancestor 70336307312b5b277f0885c0057d2cddab0aefc1 HEAD
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = cd85d54710205ce0ba3d5dcf401451643aed1814
+          test "$(git rev-parse HEAD:research/j24r04c_sparse_range_abba.py)" = dea2ec48af7d7c5fad0dcec92e84c12124300967
           test "$(git rev-parse HEAD:tests/test_o212_sparse_admission.py)" = 10605b0a255c90c9ebe2473bf7aefdb14e9b4ea3
           python -m py_compile src/cmpct/reader.py tests/test_j24r04_sparse_dual_dispatch.py research/j24r04_dual_referee.py
           mkdir -p j24r04-evidence
@@ -124,8 +125,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP"
-          python "$GITHUB_WORKSPACE/research/j24r04_child_stderr_wrapper.py" "$GITHUB_WORKSPACE/research/j24r01_sparse_range_abba.py" --repo "$GITHUB_WORKSPACE" --base-site "$RUNNER_TEMP/r04-original-site" --candidate-site "$RUNNER_TEMP/r04-dual-site" --out "$GITHUB_WORKSPACE/j24r04-evidence/original-vs-dual.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/original.log"
-          python "$GITHUB_WORKSPACE/research/j24r04_child_stderr_wrapper.py" "$GITHUB_WORKSPACE/research/j24r01_sparse_range_abba.py" --repo "$GITHUB_WORKSPACE" --base-site "$RUNNER_TEMP/r04-owner-site" --candidate-site "$RUNNER_TEMP/r04-dual-site" --out "$GITHUB_WORKSPACE/j24r04-evidence/owner-vs-dual.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/owner.log"
+          python "$GITHUB_WORKSPACE/research/j24r04_child_stderr_wrapper.py" "$GITHUB_WORKSPACE/research/j24r04c_sparse_range_abba.py" --repo "$GITHUB_WORKSPACE" --base-site "$RUNNER_TEMP/r04-original-site" --candidate-site "$RUNNER_TEMP/r04-dual-site" --out "$GITHUB_WORKSPACE/j24r04-evidence/original-vs-dual.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/original.log"
+          python "$GITHUB_WORKSPACE/research/j24r04_child_stderr_wrapper.py" "$GITHUB_WORKSPACE/research/j24r04c_sparse_range_abba.py" --repo "$GITHUB_WORKSPACE" --base-site "$RUNNER_TEMP/r04-owner-site" --candidate-site "$RUNNER_TEMP/r04-dual-site" --out "$GITHUB_WORKSPACE/j24r04-evidence/owner-vs-dual.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/owner.log"
       - name: Independent semantic SHA and median referee, including tampering test
         shell: bash
         run: |
