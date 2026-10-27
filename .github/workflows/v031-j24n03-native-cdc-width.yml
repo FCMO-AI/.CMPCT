@@ -1,0 +1,54 @@
+# ci-lane: fast
+name: CMPCT J24N03 original-source native CDC width court
+on:
+  pull_request:
+    paths:
+      - tests/native_cdc_width_court.c
+      - docs/v031-research/2026-10-27-j24n03-cdc-width-prereg.md
+      - .github/workflows/v031-j24n03-native-cdc-width.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24n03-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  original-cdc-width:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, x64]
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - name: Checkout and verify exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+      - name: Bind original native blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:native/cmpct_cdc.c)" = "216189c6a15f1579d596bc4df5128ae63f794168"
+      - name: Configure MSVC target architecture
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+      - name: Compile and run genuine ${{ matrix.arch }} CDC source
+        shell: pwsh
+        run: |
+          cl /nologo /W4 /WX /std:c11 native/cmpct_cdc.c tests/native_cdc_width_court.c /Fe:cdc_width_court.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\cdc_width_court.exe | Tee-Object -FilePath "j24n03-${{ matrix.arch }}.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Path "j24n03-${{ matrix.arch }}.txt" -SimpleMatch "HOSTED_ORIGINAL_SOURCE_WIDTH_ORACLE PASS")) { exit 1 }
+      - name: Preserve both width observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24n03-source-width-${{ matrix.arch }}-${{ github.run_id }}
+          path: j24n03-${{ matrix.arch }}.txt
+          if-no-files-found: warn
+
+# An observational source-width court is not a product promotion gate.
