@@ -13,6 +13,7 @@ on:
       - 'tests/test_o214_cdc_admission.py'
       - 'tests/test_o215_fixed_chunk_admission.py'
       - 'research/o215_fixed_chunk_baseline_probe.py'
+      - 'research/j24c02_fixed_open_cost.py'
       - 'tests/test_chunked_extract_platform_fchmod.py'
       - 'research/j24f11_fd_fresh_chunk_publication_court.py'
       - 'research/j24f12_opath_wx_parent_court.py'
@@ -83,7 +84,7 @@ jobs:
           print("J24C02_INHERITED_METHODS_EXACT=PASS")
           print("J24C02_O215_CONSTRUCTOR_EXACT=PASS")
           PY
-          python -m py_compile src/cmpct/reader.py tests/test_o212_sparse_admission.py tests/test_o214_cdc_admission.py tests/test_o215_fixed_chunk_admission.py
+          python -m py_compile src/cmpct/reader.py tests/test_o212_sparse_admission.py tests/test_o214_cdc_admission.py tests/test_o215_fixed_chunk_admission.py research/j24c02_fixed_open_cost.py
           mkdir -p j24c02-evidence
           git rev-parse HEAD > j24c02-evidence/head.sha
           git rev-parse HEAD:src/cmpct/reader.py > j24c02-evidence/reader.blob
@@ -165,6 +166,19 @@ jobs:
             --output "$PWD/j24c02-evidence/integrated-cdc-publication.json" \
             | tee j24c02-evidence/integrated-cdc-publication.log
           grep -q 'J24C01_DECISION=COMPOSED_CDC_ADMISSION_AND_FD_PUBLICATION_PASS' j24c02-evidence/integrated-cdc-publication.log
+      - name: J24C02b source-exact original-vs-composed cold-open ABBA (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "$RUNNER_TEMP/j24c02-parent-site"
+          cd "$RUNNER_TEMP"
+          SOURCE_SHA="$SOURCE_SHA" python "$GITHUB_WORKSPACE/research/j24c02_fixed_open_cost.py" \
+            --parent-site "$RUNNER_TEMP/j24c02-parent-site" \
+            --output "$GITHUB_WORKSPACE/j24c02-evidence/cold-open-abba.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24c02-evidence/cold-open-abba.log"
+          test -s "$GITHUB_WORKSPACE/j24c02-evidence/cold-open-abba.json"
+          grep -q 'J24C02B_DECISION=' "$GITHUB_WORKSPACE/j24c02-evidence/cold-open-abba.log"
       - name: Preserve raw results including failure
         if: always()
         uses: actions/upload-artifact@v4
