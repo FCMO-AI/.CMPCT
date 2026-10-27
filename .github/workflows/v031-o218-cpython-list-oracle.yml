@@ -1,0 +1,82 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 O218 CPython list-native strict admission micro court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o218-cpython-list-validation-oracle-20261027
+  pull_request:
+    paths:
+      - 'research/o218_fastscan.c'
+      - 'research/o218_native_validator_oracle.py'
+      - '.github/workflows/v031-o218-cpython-list-oracle.yml'
+      - 'docs/v031-research/2026-10-27-o218-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o218-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scientific:
+    name: CPython native-oracle ${{ matrix.python-version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.13']
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Bind original validation and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          git merge-base --is-ancestor 6989b25640be2c82436bb77ec545dd15816f698b HEAD
+          python -m py_compile research/o218_native_validator_oracle.py
+          mkdir -p o218-evidence
+          git rev-parse HEAD > o218-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o218-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/validation.py > o218-evidence/validator.blob
+      - name: Install codec dependency, preserve actual parser metadata semantics
+        run: python -m pip install msgpack
+      - name: Execute exact-source prospective micro / hostile court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o218_native_validator_oracle.py --rounds 13 --output o218-evidence/raw.json 2>&1 | tee o218-evidence/run.log
+          test -s o218-evidence/raw.json
+          python - <<'PY'
+          import json
+          x=json.load(open('o218-evidence/raw.json'))
+          assert x['evidence_tier']=='detached_micro_not_product'
+          assert len(x['hostile'])==16
+          assert x['fuzz_cases']==5000
+          assert len(x['samples'])==8*3*13
+          assert all(not v['native'] or v['reference'] for v in x['hostile'])
+          assert x['decision'] in ('MICRO_NATIVE_HEADROOM','MICRO_NATIVE_INSUFFICIENT')
+          print('O218_RAW_INDEPENDENT_SCHEMA=PASS',x['decision'])
+          PY
+      - name: Preserve negative or positive original receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o218-${{ matrix.python-version }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: o218-evidence/
+          retention-days: 30
+          if-no-files-found: warn
