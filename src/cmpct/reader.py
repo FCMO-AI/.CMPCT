@@ -127,7 +127,7 @@ class CMPCT:
                 self._zdict_decoder=DictDecoder(self._blob(self.dict_idx))
             return self._zdict_decoder.decompress(comp,usize)
 
-    def _blob(self,idx:int)->bytes:
+    def _blob(self,idx:int,*,retain:bool=True)->bytes:
         with self._cache_lock:
             cached=self.cache.get(idx)
         if cached is not None:return cached
@@ -147,7 +147,7 @@ class CMPCT:
         else:raise IOError(f'unknown codec {c}')
         if len(raw)!=rus or (binascii.crc32(raw)&0xffffffff)!=rcrc:raise IOError('blob integrity failure')
         # Cache only modest blobs; huge archives should not become accidental RAM copies.
-        if len(raw)<=2*1024*1024:
+        if retain and len(raw)<=2*1024*1024:
             with self._cache_lock:self.cache[idx]=raw
         return raw
     def _stream(self,mode:int,idx:int,level:int=-1)->bytes:
