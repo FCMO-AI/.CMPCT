@@ -325,7 +325,8 @@ class CMPCT:
             # Search those existing ends directly: no retained O(E) offset index or second parse.
             # A hole begins at the next extent; only overlapping physical owners are decoded.
             first=bisect.bisect_right(extents,start,key=lambda extent:extent[0]+extent[1])
-            for off,ln,ids in extents[first:]:
+            for extent_index in range(first,len(extents)):
+                off,ln,ids=extents[extent_index]
                 if off>=end:break
                 extent_end=off+ln
                 if extent_end<=start:continue
