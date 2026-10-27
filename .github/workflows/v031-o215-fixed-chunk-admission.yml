@@ -1,0 +1,117 @@
+# ci-lane: fast
+# O215 fixed-chunk same-index geometry; fails for original O214 Reader, green only if corrected.
+name: CMPCT O215 fixed-chunk admission
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o215-fixed-chunk-same-index-admission-20261027
+  pull_request:
+    branches:
+      - agent/phased3-v031-o214-cdc-same-index-admission-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o215-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixed-chunk-admission:
+    name: Installed fixed chunks and inherited sparse/CDC (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source and immutable preregistration
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Authenticate parent, source identity and narrow product diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor c5a1acd71db3f37972caa46f83563ceee916f0c7 HEAD
+          git merge-base --is-ancestor a84fde9aa8f456eb4c4d5ee834be79098dc85804 HEAD
+          git merge-base --is-ancestor d90dab60d2fe646dbda9e61de3b5080ca83c7b7e HEAD
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          mkdir -p o215-evidence
+          git rev-parse HEAD > o215-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o215-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/validation.py > o215-evidence/validation.blob
+          git rev-parse HEAD:tests/test_o215_fixed_chunk_admission.py > o215-evidence/test.blob
+          git diff --stat d90dab60d2fe646dbda9e61de3b5080ca83c7b7e HEAD > o215-evidence/diff-stat.txt
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install CMPCT and pytest into site-packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+      - name: Independently verify installed source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,inspect,os
+          from pathlib import Path
+          import cmpct.reader as r
+          import cmpct.validation as v
+          root=Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          norm=lambda b:b.replace(b'\r\n',b'\n')
+          for mod,name in ((r,'reader'),(v,'validation')):
+              installed=Path(inspect.getfile(mod)).resolve()
+              original=(root/'src'/'cmpct'/(name+'.py')).resolve()
+              assert installed!=original,('not installed separately',name)
+              assert norm(installed.read_bytes())==norm(original.read_bytes()),name
+              print('O215_INSTALLED_'+name.upper()+'='+hashlib.sha256(norm(installed.read_bytes())).hexdigest())
+          PY
+      - name: Authentic root-v24 fixed chunk admission cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          cp "$GITHUB_WORKSPACE/tests/test_o215_fixed_chunk_admission.py" "$RUNNER_TEMP/test_o215_fixed_chunk_admission.py"
+          cmp "$GITHUB_WORKSPACE/tests/test_o215_fixed_chunk_admission.py" "$RUNNER_TEMP/test_o215_fixed_chunk_admission.py"
+          python -m pytest -q "$RUNNER_TEMP/test_o215_fixed_chunk_admission.py" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o215-evidence/fixed-chunks.log"
+      - name: Unmodified O212 and O214 inherited source tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          cp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          cp "$GITHUB_WORKSPACE/tests/test_o214_cdc_admission.py" "$RUNNER_TEMP/test_o214_cdc_admission.py"
+          python -m pytest -q "$RUNNER_TEMP/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o214_cdc_admission.py" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o215-evidence/inherited-geometry.log"
+      - name: Negative parent-causal controls (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/o215-parent" d90dab60d2fe646dbda9e61de3b5080ca83c7b7e
+          python -m pip install --no-deps "$RUNNER_TEMP/o215-parent" --target "$RUNNER_TEMP/o215-parent-site"
+          cd "$RUNNER_TEMP"
+          PYTHONPATH="$RUNNER_TEMP/o215-parent-site:$GITHUB_WORKSPACE/tests" \
+            python "$GITHUB_WORKSPACE/research/o215_fixed_chunk_baseline_probe.py" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o215-evidence/parent-negative.json"
+      - name: Preserve negative and positive receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o215-fixed-chunks-${{ matrix.os }}-${{ github.sha }}
+          path: o215-evidence/
+          if-no-files-found: warn
