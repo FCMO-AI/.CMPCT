@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 28
     env:
-      EVIDENCE_HEAD: ${{ github.sha }}
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout exact scientific source
         uses: actions/checkout@v4
@@ -87,6 +87,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: o225-authenticated-reader-heterogeneous-${{ github.sha }}
+          name: o225-authenticated-reader-heterogeneous-${{ env.EVIDENCE_HEAD }}
           path: o225-evidence/
           if-no-files-found: warn
