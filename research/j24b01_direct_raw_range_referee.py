@@ -32,7 +32,7 @@ def audit(report):
         image = bytes.fromhex(c["archive_hex"])
         require(hashlib.sha256(image).hexdigest() == c["archive_sha256"], "archive digest")
         magic, version, flags, cs, us, ds, ih = HDR.unpack_from(image)
-        require(magic == b"CMPCT24\\0" and version == 24, "header identity")
+        require(magic == (b"CMPCT24" + bytes([0])) and version == 24, "header identity")
         require(cs > 0 and us > 0, "encoded index")
         rstart = HDR.size + cs
         bmagic, codec, bflags, reserved, bu, bc, bm, bcrc, bhash = BHDR.unpack_from(image, rstart)
@@ -50,7 +50,7 @@ def audit(report):
         fpos = tail_start + cs
         fm, kind, fc, ff, fr, fcs, fus, fp, fh = FTR.unpack_from(image, fpos)
         require((fm, kind, fc, fcs, fus, fp, fh) == (
-                b"CMPTF24\\0", 0, 1, cs, us, 0, ih), "footer identity")
+                (b"CMPTF24" + bytes([0])), 0, 1, cs, us, 0, ih), "footer identity")
         require(fpos + FTR.size == len(image), "archive complete")
         require(c["physical_owner_length"] == len(data), "owner receipt")
         require(c["declared_logical_size"] == declared, "logical receipt")
