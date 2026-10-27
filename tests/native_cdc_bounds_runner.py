@@ -41,15 +41,17 @@ def compile_native(c_source: Path, court: Path, output: Path) -> str:
         cc = shutil.which("cl")
         if not cc:
             raise RuntimeError("MSVC cl missing: do not report Windows green without native compilation")
+        # cl emits one .obj per C translation unit; a single-file /Fo is
+        # rejected (D8036). The temporary cwd keeps both objects isolated.
         cmd = [cc, "/nologo", "/W4", "/WX", "/std:c11", str(court), str(c_source),
-               "/Fe:" + str(output), "/Fo:" + str(output.with_suffix(".obj"))]
+               "/Fe:" + str(output)]
     else:
         cc = shutil.which(os.getenv("CC", "cc"))
         if not cc:
             raise RuntimeError("No C compiler; cannot claim source-exact verification")
         cmd = [cc, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                str(court), str(c_source), "-o", str(output)]
-    run(*cmd)
+    run(*cmd, cwd=output.parent)
     return run(cc, "--version", check=False).stdout.splitlines()[0] if os.name != "nt" else "MSVC cl"
 
 
