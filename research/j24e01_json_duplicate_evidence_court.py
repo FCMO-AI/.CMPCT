@@ -50,11 +50,17 @@ def main() -> int:
     dup_corpora = red[:-1] + ',"corpora":' + clean.split('"corpora":', 1)[1]
     dup_schema = clean.replace('"schema":"cmpct-zip-parity-v1"',
                              '"schema":"untrusted","schema":"cmpct-zip-parity-v1"')
+    dup_archive_bytes = clean.replace('"bytes":1000', '"bytes":1100,"bytes":1000')
+    dup_logical_length = clean.replace('"logical_bytes":1000', '"logical_bytes":1001,"logical_bytes":1000')
     cases = {"dup_timing": dup_timing, "dup_corpora": dup_corpora,
-             "dup_schema": dup_schema, "unique_aa": clean, "unique_red": red}
+             "dup_schema": dup_schema, "dup_archive_bytes": dup_archive_bytes,
+             "dup_logical_length": dup_logical_length,
+             "unique_aa": clean, "unique_red": red}
     expected_old = {"dup_timing": 0, "dup_corpora": 0, "dup_schema": 0,
+                    "dup_archive_bytes": 0, "dup_logical_length": 0,
                     "unique_aa": 0, "unique_red": 1}
     expected_new = {"dup_timing": 1, "dup_corpora": 1, "dup_schema": 1,
+                    "dup_archive_bytes": 1, "dup_logical_length": 1,
                     "unique_aa": 0, "unique_red": 1}
 
     with TemporaryDirectory(prefix="j24e01-") as tmp:
