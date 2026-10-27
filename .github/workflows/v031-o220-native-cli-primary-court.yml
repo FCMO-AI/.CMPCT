@@ -1,0 +1,102 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 O220 native r24 CLI primary-only economic and journal divergence court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o220-native-cli-primary-court-20261027
+  pull_request:
+    paths:
+      - 'research/o220_native_cli_primary_court.py'
+      - 'research/o220_independent_receipt_audit.py'
+      - '.github/workflows/v031-o220-native-cli-primary-court.yml'
+      - 'docs/v031-research/2026-10-27-o220-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o220-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  existing-r24-cli:
+    name: Existing Rust/Python CLI authentic r24 cost and journal semantics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Authenticate exact inherited source and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor c5e13bb3fbb4cdade8b64246658ce7c7818de41f HEAD
+          git merge-base --is-ancestor eee2d03265c2a240c80b7dcedd8cdf3494f31c5e HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = dbd4ac576a05a47eae97e1e40de89cf1de440516
+          python -m py_compile research/o220_native_cli_primary_court.py tests/test_o215_fixed_chunk_admission.py
+          mkdir -p o220-evidence
+          git rev-parse HEAD > o220-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o220-evidence/reader.blob
+          git rev-parse HEAD:native/cmpct-core/src/lib.rs > o220-evidence/native.blob
+          git rev-parse HEAD:research/o220_native_cli_primary_court.py > o220-evidence/instrument.blob
+      - name: Build existing Rust r24 native CLI (outside timed samples)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+          (time cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin cmpct-native)             > o220-evidence/build.log 2>&1 || { cat o220-evidence/build.log; exit 1; }
+          test -x native/cmpct-core/target/release/cmpct-native
+          sha256sum native/cmpct-core/target/release/cmpct-native | tee o220-evidence/native-binary.sha256
+      - name: Run independent same-wire source-bound court
+        shell: bash
+        run: |
+          set -euo pipefail
+          O220_OUTPUT=o220-evidence/o220-results.json python research/o220_native_cli_primary_court.py             2>&1 | tee o220-evidence/o220-run.log
+          test -s o220-evidence/o220-results.json
+          grep -q 'O220_DECISION=' o220-evidence/o220-run.log
+      - name: Audit receipt counts, source and journal negative
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('o220-evidence/o220-results.json').read_text())
+          assert x['source']['head'] == Path('o220-evidence/head.sha').read_text().strip()
+          assert x['source']['reader_blob'] == Path('o220-evidence/reader.blob').read_text().strip()
+          assert x['source']['native_core_blob'] == Path('o220-evidence/native.blob').read_text().strip()
+          assert len(x['profiles'])==3
+          assert [p['reference_count'] for p in x['profiles']]==[4096,65536,262144]
+          for p in x['profiles']:
+              raw=p['samples']
+              assert len(raw)==18 and len({(v['pair'],v['mode']) for v in raw})==18
+              assert all(v['wall_ns']>0 and v['cpu_ns']>=0 and v['maxrss_kib']>0 for v in raw)
+              assert p['archive_bytes']>0 and len(p['archive_sha256'])==64
+          assert len(x['semantic_controls'])==5
+          assert x['journal_counterexample']['python_accepts_later_valid_checkpoint']
+          assert x['journal_counterexample']['native_rejects_invalid_primary']
+          assert not x['journal_counterexample']['semantic_equivalence']
+          assert x['decision'].endswith('WITH_RECOVERY_DEBT')
+          print('O220_INDEPENDENT_RECEIPT_CHECK=PASS')
+          PY
+      - name: Preserve raw evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o220-${{ github.event.pull_request.head.sha || github.sha }}
+          path: o220-evidence/
+          retention-days: 30
+          if-no-files-found: warn
