@@ -69,7 +69,11 @@ def audit(x):
 def tamper_court(x):
     attacks=[]
     a=copy.deepcopy(x);a["raw_workers"].pop();attacks.append(("missing_worker",a))
-    a=copy.deepcopy(x);a["raw_workers"][0]["samples"][0]["wall_ns"]+=100000;attacks.append(("altered_timing",a))
+    a=copy.deepcopy(x)
+    for r in a["raw_workers"]:
+        if r["count"]==65536 and r["owners"]==1 and r["mode"]=="native":
+            for s in r["samples"]:s["wall_ns"]*=3
+    attacks.append(("altered_timing",a))
     a=copy.deepcopy(x);a["source"]["native_c"]="0"*40;attacks.append(("false_source",a))
     a=copy.deepcopy(x);a["summary"][0]["median_wall_ms"]["native"]*=2;attacks.append(("false_median",a))
     a=copy.deepcopy(x);a["decision"]="NATIVE_READER_ROUTE_WORTH_PRODUCTIZATION" if x["decision"]!="NATIVE_READER_ROUTE_WORTH_PRODUCTIZATION" else "NATIVE_READER_ROUTE_INSUFFICIENT";attacks.append(("false_decision",a))
