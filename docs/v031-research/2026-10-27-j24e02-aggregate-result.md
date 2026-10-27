@@ -38,3 +38,23 @@ The reusable prospective question for future evidence pipelines is: **At which e
 
 ## Product boundary / remaining debt
 No Builder, Reader, Writer, format, real compression or recovery was changed. No full 4GiB export, official ABBA product benchmark, source tree identity proof, or release promotion occurs here. Correctness protects the provenance of numerical *evidence*, not the behavior of physical CMPCT archive semantics. Keep #561 comparator and #328 full-PR admission owners unchanged. No Discovery state mutation.
+
+
+## J24E02b — completed typed-value attack (result after frozen prospective prediction)
+
+**Exact scientific source:** `320c7e799135a6257bf1f1fede542509be4ac12b`, patched raw-aggregator Git blob `c55780c9f2d9b1784567daa8f5b40ae9421adceb`, unchanged strict comparator Git blob `22172ba4465b297bba54b0120f3419abe632cbd1`. Prospective typed-metric test commit `19e9b8d7e631ece0b27ff69144b0aeda628c14ce` preceded implementation `320c7e...`.
+
+**[Three-host hosted run 40438290105](https://github.com/FCMO-AI/.CMPCT/actions/runs/40438290105): SUCCESS on Ubuntu, macOS, Windows, 3/3.** Independent [PR-triggered run 40438297908](https://github.com/FCMO-AI/.CMPCT/actions/runs/40438297908): 3/3 SUCCESS at the identical actual source HEAD. Each host ran all **three focused test methods** with 7 repeated-key/nonfinite-token adversarial subcases, 7 additional legal-JSON-but-invalid-type cases, and valid A/A + authentic red controls. All original raw ingestion cases **passed through the original aggregator** and returned downstream comparator PASS. The candidate rejected all fourteen raw adversarial cases before aggregate publication; candidate valid A/A output was byte-identical to original and passed; candidate +7%/+7ms valid input remained a downstream FAIL as intended. **14 distinct hostile classes**, each challenged on all 3 hosts; not 14 independent full benchmark workloads.
+
+New typed cases: ZIP numeric string `"nan"`, ZIP `"inf"`, ZIP zero-time, ZIP `"0.1"` string-time, ZIP boolean bytes, ZIP negative bytes, CMPCT numeric string. This exposes both ZIP-only evidence poisoning and CMPCT typed-number normalization. The candidate now validates raw corpus shape, logical input byte type, both layers, both formats, archive byte type and positive finite timing **before** the original aggregate calculation. It retains original median and deterministic equality code.
+
+**Primary scientific disposition: `ACCEPT_SCOPED_EVIDENCE_INGRESS_GUARD`; NO RELEASE PROMOTION.** The first J24E02a guard was necessary but not sufficient: syntactically legal JSON strings/bools could still launder via `float()` or Python `bool == int`. This is a prospective transferable discriminator: follow the raw evidence until its *last lossy type conversion*, rather than assuming a parser that rejects duplicate JSON keys protects every downstream provenance boundary.
+
+[Push-run artifacts](https://github.com/FCMO-AI/.CMPCT/actions/runs/40438290105):
+- Ubuntu `12705535347`, GitHub artifact sha256 `2b3628e2bc4a31c767f7c0f1c2fa5b80c1b0f2c48ad995297a6fd4010e5d107c`;
+- macOS `12705545300`, provider sha256 `8d69d8d812d97b77e67eed5be4c6635e72adffa4e8a59a51ab1793a4ea39e5d1`;
+- Windows `12705080848`, provider sha256 `8c21f7a4bcf5c6b1dbc2e7bb8f5534d1acda3aa0d81001c3203b3f6d94f0de78`.
+
+These are GitHub-computed artifact digests, **not independently downloaded and rehashed receipts**. Each source-bound runner verifies actual `git rev-parse HEAD`, frozen parent aggregator blob, unchanged comparator blob, and executes original/candidate source in subprocess. Original failure 40437971300 remains attributable to wrongly classified test expectation; correction retained without modifying the source guard or thresholds.
+
+**Remaining truth:** No full release-parity ABBA benchmark, no authentic corpus fingerprint verification, no Reader/Builder/Writer changes, no benchmark size/speed/RSS credit and no general-suite completion from this focused experiment. This cannot detect a malicious producer forging unique-key, finite, plausible-looking values. Owner integration and exact final documentation HEAD CI must be checked before any promotion.
