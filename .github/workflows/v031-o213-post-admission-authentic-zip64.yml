@@ -119,5 +119,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: o213-result-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ runner.temp }}/o213-result.json
-          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/o213-result.json
+            ${{ runner.temp }}/o213-received/result-*.zip
+          if-no-files-found: error
