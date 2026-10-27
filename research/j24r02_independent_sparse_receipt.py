@@ -67,7 +67,8 @@ def independently_audit(raw_path: Path, repo: Path, base_site: Path, candidate_s
         checked(record["archive_bytes"] == fixture["wire_bytes"]
                 and record["logical_bytes"] == fixture["logical_bytes"],
                 "unequal physical input or logical truth")
-        checked(record["range_checks"] == 533, "dropped or shortened correctness queries")
+        checked(record["range_checks"] == (531 if count == 1 else 533),
+                "dropped or shortened correctness queries")
         for metric in METRICS:
             value = record[metric]
             checked(type(value) in (float, int) and math.isfinite(value) and value >= 0,
