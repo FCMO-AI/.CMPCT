@@ -1,0 +1,56 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Independent supplementary Windows direct-only court. DOES NOT replace the unchanged
+# five-vector J24D02 court, whose Windows failure remains visible (#535).
+name: CMPCT J24D02 Windows direct-only supplement
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24d02-direct-staged-output-20261027
+
+permissions:
+  contents: read
+
+jobs:
+  windows-direct-supplement:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Assert fixed Reader and prereg identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor c0609d63f2858c8d9140bba7f5df100dc6e409af HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 8b74c3994b59af63528acff960cd7f59f535bf8f
+          git diff --quiet 80c358f8824ec1b20d349c92ed94c898090969b0 HEAD -- tests/conformance/
+          python -m py_compile research/j24d02_windows_direct_only.py research/j24d02_direct_stage_court.py src/cmpct/reader.py
+      - name: Install package independently
+        shell: bash
+        run: python -m pip install .
+      - name: Six authentic direct codec cases and independent receipt checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          export J24D02_HEAD_SHA="$SOURCE_SHA"
+          export J24D02_READER_BLOB="$(git rev-parse HEAD:src/cmpct/reader.py)"
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24d02_windows_direct_only.py" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/j24d02-windows-direct-raw.json" | tee "$GITHUB_WORKSPACE/artifacts/j24d02-windows-direct-console.txt"
+      - name: Preserve receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24d02-windows-direct-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn

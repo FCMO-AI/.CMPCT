@@ -292,6 +292,45 @@ class CMPCT:
         if start<0 or end>len(self.mm):raise IOError('RAW blob payload outside archive')
         return memoryview(self.mm)[start:end]
 
+    def _extract_direct_staged(self,row,full:str):
+        """Preserve the prior destination if output fails after source authentication.
+
+        Footnote: read() has already verified this direct member, but a disk-full or short write
+        can occur *after* that verification. Never O_TRUNC the destination before the output write
+        succeeds. The sibling stage matches the ordinary chunked extraction failure boundary;
+        pathname-based publication is NOT a same-UID directory-writer authenticity guarantee (#528).
+        """
+        rel,k,mode,mt,size,h,storage=row
+        raw=self.read(rel)
+        if len(raw)!=size:raise IOError(f'file size failure: {rel}')
+        parent=os.path.dirname(full) or '.';prefix=f'.{os.path.basename(full)}.cmpct-part-'
+        fd,tmp=tempfile.mkstemp(prefix=prefix,dir=parent);committed=False
+        try:
+            # mkstemp starts at 0600; retain the prior direct path's requested basic file mode.
+            # os.fchmod is absent on some Windows builds; only this fallback is used there.
+            try:
+                if hasattr(os,'fchmod'):os.fchmod(fd,mode or 0o666)
+                else:os.chmod(tmp,mode or 0o666)
+            except OSError:pass
+            view=memoryview(raw)
+            try:
+                while view:
+                    n=os.write(fd,view)
+                    if n<=0:raise IOError(f'short write while extracting {rel}')
+                    view=view[n:]
+            finally:
+                try:view.release()
+                except ValueError:pass
+            os.close(fd);fd=-1
+            os.replace(tmp,full);committed=True
+        finally:
+            if fd>=0:
+                try:os.close(fd)
+                except OSError:pass
+            if not committed:
+                try:os.unlink(tmp)
+                except FileNotFoundError:pass
+
     def _extract_chunked_verified(self,row,full:str):
         """Stream a chunked logical file to disk and commit it only after whole-file verification.
 
@@ -459,13 +498,9 @@ class CMPCT:
                                 view=view[n:];q+=n
                 finally:os.close(fd)
             else:
-                raw=self.read(rel)
-                fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_BINARY',0),mode or 0o666)
-                try:
-                    view=memoryview(raw)
-                    while view:
-                        n=os.write(fd,view);view=view[n:]
-                finally:os.close(fd)
+                # Authentication alone cannot roll back a destination truncated before a later write
+                # fails. Stage the already authenticated member, then publish only on full success.
+                self._extract_direct_staged(row,full)
             if metadata:
                 try:
                     # os.open created the requested mode on new files; chmod is needed only when an

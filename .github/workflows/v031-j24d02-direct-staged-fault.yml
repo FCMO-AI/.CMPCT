@@ -1,0 +1,79 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24D02 direct-output staged fault court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24d02-direct-staged-output-20261027
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24d02_*.py'
+      - '.github/workflows/v031-j24d02-direct-staged-fault.yml'
+      - 'docs/v031-research/2026-10-27-j24d02-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24d02-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  staged-fault-court:
+    name: Installed direct staged ENOSPC and inherited chunk control (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout actual exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Freeze source, prereg, fixture and instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor c0609d63f2858c8d9140bba7f5df100dc6e409af HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 8b74c3994b59af63528acff960cd7f59f535bf8f
+          git diff --quiet 80c358f8824ec1b20d349c92ed94c898090969b0 HEAD -- tests/conformance/
+          python -m py_compile research/j24d02_direct_stage_court.py research/j24d02_receipt_referee.py src/cmpct/reader.py
+      - name: Independently install real candidate package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Execute genuine output fault and independent receipt referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          export J24D02_HEAD_SHA="$SOURCE_SHA"
+          export J24D02_READER_BLOB="$(git rev-parse HEAD:src/cmpct/reader.py)"
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24d02_direct_stage_court.py" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/j24d02-raw.json"
+          python "$GITHUB_WORKSPACE/research/j24d02_receipt_referee.py" "$GITHUB_WORKSPACE/artifacts/j24d02-raw.json" "$GITHUB_WORKSPACE" "$SOURCE_SHA" | tee "$GITHUB_WORKSPACE/artifacts/j24d02-independent-referee.json"
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root=Path(os.environ['GITHUB_WORKSPACE'])/'artifacts'
+          (root/'sha256.json').write_text(json.dumps({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob('*.json') if p.name!='sha256.json'},indent=2,sort_keys=True)+'\n')
+          PY
+      - name: Persist original artifacts even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24d02-${{ matrix.os }}-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
