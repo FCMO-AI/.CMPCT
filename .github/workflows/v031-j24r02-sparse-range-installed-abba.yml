@@ -130,6 +130,37 @@ jobs:
           python -m pip install --no-deps --no-compile --target "$RUNNER_TEMP/j24r02-candidate-site" "$GITHUB_WORKSPACE"
           test -s "$RUNNER_TEMP/j24r02-base-site/cmpct/reader.py"
           test -s "$RUNNER_TEMP/j24r02-candidate-site/cmpct/reader.py"
+      - name: Diagnose source-bound single-worker import and correctness before ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import importlib.util, os, subprocess, sys, tempfile
+          from pathlib import Path
+          ws=Path(os.environ["GITHUB_WORKSPACE"])
+          source=ws/"tests/test_o212_sparse_admission.py"
+          spec=importlib.util.spec_from_file_location("j24r02_fixture_original",source)
+          module=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          with tempfile.TemporaryDirectory(prefix="j24r02-preflight-") as td:
+              root=Path(td)
+              archive=root/"single.cmpct"; archive.write_bytes(module._archive_bytes([[0,4,[0]]],b"ABCD"))
+              truth=root/"single.truth"; truth.write_bytes(b"ABCD")
+              for mode in ("baseline","candidate"):
+                  env=dict(os.environ)
+                  env["PYTHONPATH"]=os.environ["RUNNER_TEMP"]+"/j24r02-"+(
+                      "base" if mode=="baseline" else "candidate")+"-site"
+                  result=subprocess.run(
+                      [sys.executable,str(ws/"research/j24r01_sparse_range_abba.py"),
+                       "--worker","--archive",str(archive),"--truth",str(truth),
+                       "--source",mode,"--count","1","--iteration","0"],
+                      cwd=root,env=env,capture_output=True,text=True,timeout=120)
+                  if result.returncode:
+                      print(f"J24R02_{mode}_PREFLIGHT_STDERR:\\n"+result.stderr,flush=True)
+                      raise SystemExit(f"{mode} worker exit {result.returncode}")
+                  print("J24R02_"+mode.upper()+"_SINGLE_WORKER=PASS",flush=True)
+          PY
       - name: Run precommitted source-exact Reader ABBA
         shell: bash
         run: |
