@@ -1,0 +1,62 @@
+name: v0.31 O228c native CDC source-mode transfer court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o228-virtual-reference-runs-20261027
+    paths:
+      - research/o228c_native_cdc_mode_court.py
+      - research/o228c_native_cdc_mode_audit.py
+      - docs/v031-research/*o228c*
+      - .github/workflows/v031-o228c-native-cdc-transfer.yml
+  pull_request:
+    paths:
+      - research/o228c_native_cdc_mode_court.py
+      - research/o228c_native_cdc_mode_audit.py
+      - docs/v031-research/*o228c*
+      - .github/workflows/v031-o228c-native-cdc-transfer.yml
+  workflow_dispatch:
+
+jobs:
+  authentic-native-vs-fallback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exact source identity, compiler and runtime
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee o228c_head.txt
+          git hash-object native/cmpct_cdc.c src/cmpct/builder.py src/cmpct/codec.py research/o228b_builder_transfer_court.py research/o228c_native_cdc_mode_court.py | tee o228c_blobs.txt
+          cc --version | head -1
+          python --version
+          date -u +'%Y-%m-%dT%H:%M:%SZ'
+      - name: Build unchanged canonical optional native CDC source
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          cc -O2 -fPIC -shared native/cmpct_cdc.c -o src/cmpct/libcmpct_cdc.so
+          sha256sum native/cmpct_cdc.c src/cmpct/libcmpct_cdc.so | tee o228c_native_identity.txt
+          python -c "import cmpct.codec as c; assert c._cdc is not None, 'native CDC unavailable'; print('native CDC helper loaded:', c._cdc._name)"
+      - name: Same-input genuine Builder court and independent receipt audit
+        run: |
+          set -euo pipefail
+          python research/o228c_native_cdc_mode_court.py --output o228c_raw.json 2>&1 | tee o228c_run.log
+          python research/o228c_native_cdc_mode_audit.py o228c_raw.json | tee o228c_audit.json
+          sha256sum o228c_raw.json o228c_run.log o228c_audit.json research/o228c_native_cdc_mode_court.py research/o228c_native_cdc_mode_audit.py | tee o228c_checksums.txt
+      - name: Preserve exact evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o228c-native-mode-${{ github.sha }}
+          path: |
+            o228c_head.txt
+            o228c_blobs.txt
+            o228c_native_identity.txt
+            o228c_raw.json
+            o228c_run.log
+            o228c_audit.json
+            o228c_checksums.txt
+          if-no-files-found: warn
