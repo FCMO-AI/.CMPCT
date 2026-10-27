@@ -1,0 +1,125 @@
+# ci-lane: fast
+name: CMPCT O213 genuine post-admission 4GiB ZIP64
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o213-o212-authentic-4gib-zip64-court-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o213-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-once:
+    name: One authenticated Linux 4GiB sparse Builder source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify parent O212, exact source and research-only changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 3249a7d6d09a9890cfa65b03e239a7973bf92614 HEAD
+          git merge-base --is-ancestor b75c10889934d669fc258a7a0ebd4885dcd01554 HEAD
+          test -z "$(git diff --name-only 3249a7d6d09a9890cfa65b03e239a7973bf92614 HEAD -- src/ native/ benchmarks/)"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = ee598eec46531c4da44d90d37b67f783b0ab3299
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact CMPCT source outside checkout
+        run: python -m pip install .
+      - name: Build one genuine 4GiB S_SPARSE r24 source
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/o213-input"
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o213_o212_authentic_4gib_zip64.py" --mode produce --artifact-dir "$RUNNER_TEMP/o213-input" --out "$RUNNER_TEMP/o213-producer-result.json"
+      - name: Preserve exact archive and manifest
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o213-one-original-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/o213-input/authentic-r24.cmpct
+            ${{ runner.temp }}/o213-input/manifest.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve producer success/failure receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o213-producer-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/o213-producer-result.json
+          if-no-files-found: warn
+
+  cross-host-consumers:
+    name: Exact installed O212 Reader genuine ZIP64 (${{ matrix.os }})
+    needs: source-once
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify parent O212, exact source and research-only changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 3249a7d6d09a9890cfa65b03e239a7973bf92614 HEAD
+          git merge-base --is-ancestor b75c10889934d669fc258a7a0ebd4885dcd01554 HEAD
+          test -z "$(git diff --name-only 3249a7d6d09a9890cfa65b03e239a7973bf92614 HEAD -- src/ native/ benchmarks/)"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = ee598eec46531c4da44d90d37b67f783b0ab3299
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact CMPCT source outside checkout
+        run: python -m pip install .
+      - name: Install original O193 Reader separately for Linux same-runner open cost
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/o193-parent" 392112ce859db5a7f85be593c82d1cabc1f5131f
+          python -m pip install --no-deps --target "$RUNNER_TEMP/o193-site" "$RUNNER_TEMP/o193-parent"
+          test -f "$RUNNER_TEMP/o193-site/cmpct/reader.py"
+          test "$(git hash-object "$RUNNER_TEMP/o193-site/cmpct/reader.py")" = d2e7ed7863d9a9c598d225ca1f77e53d94c6bf44
+      - name: Download identical Linux-built archive
+        uses: actions/download-artifact@v4
+        with:
+          name: o213-one-original-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/o213-received
+      - name: Full genuine 4GiB ZIP64 export and independent CRC/SHA readback
+        shell: bash
+        env:
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          TZ: UTC
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          if [[ "$RUNNER_OS" == "Linux" ]]; then export O213_BASE_SITE="$RUNNER_TEMP/o193-site"; fi
+          python "$GITHUB_WORKSPACE/research/o213_o212_authentic_4gib_zip64.py" --mode consume --artifact-dir "$RUNNER_TEMP/o213-received" --out "$RUNNER_TEMP/o213-result.json"
+      - name: Persist full per-host scientific evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o213-result-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/o213-result.json
+            ${{ runner.temp }}/o213-received/result-*.zip
+          if-no-files-found: error
