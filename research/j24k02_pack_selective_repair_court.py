@@ -96,6 +96,7 @@ def court():
                 attacks.append({
                     "vector": vector["name"], "physical_codec": vector["physical_codec"],
                     "label": label, "archive_sha256": digest(invalid),
+                    "archive_base64": base64.b64encode(invalid).decode(),
                     "original_archive_sha256": digest(wire), "storage": target[6],
                     "logical_bytes": len(expected), "preflight_rejected": bool(strict_error),
                     "rejected_queries": rejected, "decode_calls": 0
