@@ -1,0 +1,83 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-stale
+# ci-pr-scope: source-exact-evidence
+name: CMPCT v0.31 J24E03 full-parity evidence composition
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24e03-parity-full-pipeline-truth-20261027
+  pull_request:
+    paths:
+      - "tools/check_performance_regression.py"
+      - "tools/aggregate_parity_runs.py"
+      - "tests/test_j24e02_aggregate_evidence.py"
+      - "tests/test_j24e03_parity_pipeline_union.py"
+      - ".github/workflows/v031-j24e03-full-parity-truth.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v031-j24e03-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  real-historical-raw-and-normalized-courts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Pin final source and materialize authentic historical scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git show 36c5c737c2896b9ad9ee68c491ff921fbd36aaa4:tools/aggregate_parity_runs.py > "$RUNNER_TEMP/j24e03-original-aggregator.py"
+          git show 36c5c737c2896b9ad9ee68c491ff921fbd36aaa4:tools/check_performance_regression.py > "$RUNNER_TEMP/j24e03-original-checker.py"
+          test "$(git hash-object "$RUNNER_TEMP/j24e03-original-aggregator.py")" = "6e036f75528bd892d6552b8b04f5586770ff1744"
+          test "$(git hash-object "$RUNNER_TEMP/j24e03-original-checker.py")" = "2cea1b4d0cfe52259e5bc6b870c8207b4c889610"
+          test "$(git hash-object tools/aggregate_parity_runs.py)" = "c55780c9f2d9b1784567daa8f5b40ae9421adceb"
+          test "$(git hash-object tests/test_j24e02_aggregate_evidence.py)" = "0bd4f56376332be14121aab08957692e18a628fa"
+          test "$(git hash-object tools/check_performance_regression.py)" = "691576229684df73da68ed39f77583ad870acd32"
+          test "$(git hash-object .github/workflows/zip-parity.yml)" = "f77ba07cb6ee8dfa0c8cef0be7135a536a872efb"
+          echo "evidence_head=$EVIDENCE_HEAD"
+          echo "raw_original=$(git hash-object "$RUNNER_TEMP/j24e03-original-aggregator.py")"
+          echo "raw_candidate=$(git hash-object tools/aggregate_parity_runs.py)"
+          echo "numeric_original=$(git hash-object "$RUNNER_TEMP/j24e03-original-checker.py")"
+          echo "numeric_candidate=$(git hash-object tools/check_performance_regression.py)"
+          echo "release_parity_workflow=$(git hash-object .github/workflows/zip-parity.yml)"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Run authentic source-paired raw and normalized admission courts
+        shell: bash
+        env:
+          J24E02_ORIGINAL_AGGREGATOR: ${{ runner.temp }}/j24e03-original-aggregator.py
+          J24E03_ORIGINAL_CHECKER: ${{ runner.temp }}/j24e03-original-checker.py
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_j24e02_aggregate_evidence.py' -v 2>&1 | tee j24e03-raw-court.log
+          python -m unittest discover -s tests -p 'test_j24e03_parity_pipeline_union.py' -v 2>&1 | tee j24e03-normalized-court.log
+          ! grep -E 'skipped|SKIP' j24e03-raw-court.log
+          ! grep -E 'skipped|SKIP' j24e03-normalized-court.log
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: j24e03-source-bound-${{ matrix.os }}
+          path: |
+            j24e03-raw-court.log
+            j24e03-normalized-court.log
+          if-no-files-found: warn
+          retention-days: 30

@@ -28,7 +28,21 @@ POLICY_TIMING_ABSOLUTE_MS = 3.0
 
 
 def load(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    # Reject repeated JSON members before checking numeric release policy.
+    # Last-wins decoding can erase a real regression or a conflicting corpus.
+    # Preserve the inherited #328 comparator and every policy control.
+    def reject_duplicate_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"{path}: duplicate JSON object key {key!r}")
+            result[key] = value
+        return result
+
+    data = json.loads(
+        path.read_text(encoding="utf-8"),
+        object_pairs_hook=reject_duplicate_members,
+    )
     if data.get("schema") != "cmpct-zip-parity-v1":
         raise ValueError(f"{path}: unsupported benchmark schema {data.get('schema')!r}")
     corpora = data.get("corpora")
