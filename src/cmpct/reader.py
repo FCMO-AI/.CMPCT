@@ -135,7 +135,7 @@ class CMPCT:
         # Immutable committed generations are memory-mapped. Slicing an mmap avoids seek/read
         # syscalls and is naturally safe for concurrent readers; the OS still faults pages lazily.
         m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos);p=pos+BHDR.size
-        if m!=BMAGIC or rus!=us:raise IOError('blob header mismatch')
+        # Strict preflight rejects unsupported physical bits; ordinary reads must not bypass that rule.\n        if m!=BMAGIC or rus!=us or flags or res:raise IOError('blob header mismatch')
         meta=self.mm[p:p+rml];comp=self.mm[p+rml:p+rml+rcs]
         if c==CODEC_RAW:raw=comp
         elif c==CODEC_ZSTD:raw=zd(comp,rus)
@@ -248,7 +248,7 @@ class CMPCT:
                 if pos<0 or pos+BHDR.size>len(self.mm):
                     raise IOError('RAW blob header outside archive')
                 m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
-                if m!=BMAGIC or c!=CODEC_RAW or rus!=us or rcs!=cs or rml!=ml or rcs!=rus:
+                if m!=BMAGIC or c!=CODEC_RAW or rus!=us or rcs!=cs or rml!=ml or rcs!=rus or flags or res:
                     raise IOError('RAW blob header mismatch')
                 base=pos+BHDR.size+rml
                 if base<0 or base+rcs>len(self.mm) or end>rcs:
@@ -306,7 +306,7 @@ class CMPCT:
         pos=self.record_base+off
         if pos<0 or pos+BHDR.size>len(self.mm):raise IOError('blob header outside archive')
         m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
-        if m!=BMAGIC or c!=CODEC_RAW or rus!=us or rcs!=cs or rml!=ml or rcs!=rus:
+        # Unsupported BHDR control bits are malformed even when the RAW payload is byte intact.\n        if m!=BMAGIC or c!=CODEC_RAW or rus!=us or rcs!=cs or rml!=ml or rcs!=rus or flags or res:
             raise IOError('RAW blob header mismatch')
         start=pos+BHDR.size+rml;end=start+rcs
         if start<0 or end>len(self.mm):raise IOError('RAW blob payload outside archive')
