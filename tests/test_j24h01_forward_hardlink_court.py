@@ -127,3 +127,52 @@ def test_signed_forward_hardlink_is_readable_but_not_extractable(tmp_path: Path,
     # retire/update the research court prospectively; never silently invert history.
     assert not (tmp_path / "forward-restored" / "a-alias").exists()
     print("J24H01_RECEIPT=" + json.dumps(receipt, sort_keys=True))
+
+
+def test_first_party_alias_rename_creates_unextractable_but_verified_generation(tmp_path: Path):
+    """J24H01b: the ordinary transactional writer can produce a forward reference."""
+    from cmpct.transactions import append_rename
+
+    src = tmp_path / "initial-src"
+    src.mkdir()
+    (src / "b-owner").write_bytes(CONTENT)
+    os.link(src / "b-owner", src / "z-alias")
+    archive = tmp_path / "transactional.cmpct"
+    Builder(src, workers=1, reproducible=True).build(archive)
+    assert preflight_archive(archive)["files"] == 2
+    with CMPCT(archive) as before:
+        assert before.by["b-owner"][1] == K_FILE
+        assert before.by["z-alias"][1] == K_HARDLINK
+        assert before.by["z-alias"][6] == ["b-owner"]
+        assert before.verify() == 2
+        baseline_out = tmp_path / "baseline-out"
+        before.extractall(baseline_out)
+    assert (baseline_out / "b-owner").read_bytes() == CONTENT
+    assert (baseline_out / "z-alias").read_bytes() == CONTENT
+    assert os.stat(baseline_out / "b-owner").st_ino == os.stat(baseline_out / "z-alias").st_ino
+
+    original_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+    append_rename(archive, "z-alias", "a-alias")
+    result = preflight_archive(archive)
+    assert result["files"] == 2
+    with CMPCT(archive) as after:
+        assert after.delta_depth >= 1
+        assert sorted(after.by) == ["a-alias", "b-owner"]
+        assert after.by["a-alias"][1] == K_HARDLINK
+        assert after.by["a-alias"][6] == ["b-owner"]
+        assert after.read("a-alias") == after.read("b-owner") == CONTENT
+        assert after.read_range("a-alias", 7, 15) == CONTENT[7:22]
+        assert after.verify() == 2
+        with pytest.raises(IOError, match="hardlink target not yet extracted") as err:
+            after.extractall(tmp_path / "renamed-out")
+        receipt = {
+            "case": "first-party-append-rename-forward-alias",
+            "original_builder_sha256": original_sha,
+            "after_writer_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+            "generation_depth": after.delta_depth,
+            "preflight_file_count": result["files"],
+            "reader_verify_count": 2,
+            "extract_error": str(err.value),
+        }
+    assert not (tmp_path / "renamed-out" / "a-alias").exists()
+    print("J24H01B_RECEIPT=" + json.dumps(receipt, sort_keys=True))
