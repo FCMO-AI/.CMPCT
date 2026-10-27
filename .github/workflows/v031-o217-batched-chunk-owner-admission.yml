@@ -1,0 +1,78 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 O217 fixed-chunk strict validation batched-owner court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o217-fixed-chunk-fast-validator-oracle-20261027
+  pull_request:
+    paths:
+      - 'research/o217_batched_chunk_owner_admission_court.py'
+      - '.github/workflows/v031-o217-batched-chunk-owner-admission.yml'
+      - 'docs/v031-research/2026-10-27-o217-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o217-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  oracle:
+    name: Source-exact r24 fixed-chunk validation A/B (Ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Preserve source and original validator identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          git merge-base --is-ancestor 6989b25640be2c82436bb77ec545dd15816f698b HEAD
+          test "$(git rev-parse HEAD:research/o216_fixed_chunk_validator_fastpath_oracle.py)" = 7002fe2db2bfc41fffbc94584cc1904922d1c1fb
+          python -m py_compile research/o217_batched_chunk_owner_admission_court.py
+          mkdir -p o217-evidence
+          git rev-parse HEAD > o217-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o217-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/validation.py > o217-evidence/validation.blob
+      - name: Independently install CMPCT reference reader
+        shell: bash
+        run: python -m pip install . pytest
+      - name: Preserve existing O215 exact-court acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/test_o215_fixed_chunk_admission.py "$RUNNER_TEMP/test_o215_fixed_chunk_admission.py"
+          cd "$RUNNER_TEMP"
+          python -m pytest -q test_o215_fixed_chunk_admission.py > "$GITHUB_WORKSPACE/o217-evidence/o215-inherited-tests.txt" 2>&1
+          cat "$GITHUB_WORKSPACE/o217-evidence/o215-inherited-tests.txt"
+      - name: Run four-arm source-bound multiplicity court
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="$SOURCE_SHA" python research/o217_batched_chunk_owner_admission_court.py \
+            --output o217-evidence/o217-raw.json 2>&1 | tee o217-evidence/o217-run.log
+          test -s o217-evidence/o217-raw.json
+          grep -q 'O217_DECISION=' o217-evidence/o217-run.log
+      - name: Preserve raw evidence, even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o217-${{ github.event.pull_request.head.sha || github.sha }}
+          path: o217-evidence/
+          retention-days: 30
+          if-no-files-found: warn
