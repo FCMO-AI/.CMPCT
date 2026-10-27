@@ -82,6 +82,58 @@ class TopologyTests(unittest.TestCase):
         self.assertNotIn("release_ready", evidence)
         self.assertIn("no merge", evidence["scope"])
 
+    def test_live_two_boundary_source_identity_rejects_concurrent_push(self):
+        from unittest.mock import patch
+        selected = {
+            "number": 608, "title": "candidate", "state": "open",
+            "draft": True, "html_url": "https://github.com/FCMO-AI/.CMPCT/pull/608",
+            "head": {"ref": "cdc", "sha": "a" * 40,
+                     "repo": {"full_name": "FCMO-AI/.CMPCT"}},
+            "base": {"ref": "main", "sha": "b" * 40,
+                     "repo": {"full_name": "FCMO-AI/.CMPCT"}},
+        }
+        files = [{"filename": "native/cmpct_cdc.c"}]
+        with patch.object(module, "_get_json", side_effect=[
+            dict(selected), {"head": {**selected["head"], "sha": "c" * 40},
+                             "base": selected["base"]}
+        ]), patch.object(module, "_pages", return_value=files):
+            with self.assertRaisesRegex(ValueError, "changed during source/file witness"):
+                module.live_snapshot("FCMO-AI/.CMPCT", [608], limit=1, workers=1)
+
+    def test_live_two_boundary_source_identity_rejects_base_retarget(self):
+        from unittest.mock import patch
+        original = {
+            "number": 608, "title": "candidate", "state": "open",
+            "draft": True, "html_url": "https://github.com/FCMO-AI/.CMPCT/pull/608",
+            "head": {"ref": "cdc", "sha": "a" * 40,
+                     "repo": {"full_name": "FCMO-AI/.CMPCT"}},
+            "base": {"ref": "main", "sha": "b" * 40,
+                     "repo": {"full_name": "FCMO-AI/.CMPCT"}},
+        }
+        changed = {**original, "base": {**original["base"], "ref": "other"}}
+        with patch.object(module, "_get_json", side_effect=[original, changed]), patch.object(
+            module, "_pages", return_value=[{"filename": "native/cmpct_cdc.c"}]
+        ):
+            with self.assertRaisesRegex(ValueError, "changed during source/file witness"):
+                module.live_snapshot("FCMO-AI/.CMPCT", [608], limit=1, workers=1)
+
+    def test_live_two_boundary_stable_snapshot_passes(self):
+        from unittest.mock import patch
+        original = {
+            "number": 608, "title": "candidate", "state": "open",
+            "draft": True, "html_url": "https://github.com/FCMO-AI/.CMPCT/pull/608",
+            "head": {"ref": "cdc", "sha": "a" * 40,
+                     "repo": {"full_name": "FCMO-AI/.CMPCT"}},
+            "base": {"ref": "main", "sha": "b" * 40,
+                     "repo": {"full_name": "FCMO-AI/.CMPCT"}},
+        }
+        with patch.object(module, "_get_json", side_effect=[original, original]), patch.object(
+            module, "_pages", return_value=[{"filename": "native/cmpct_cdc.c"}]
+        ):
+            result = module.live_snapshot("FCMO-AI/.CMPCT", [608], limit=1, workers=1)
+        self.assertEqual(result[0]["head_sha"], "a" * 40)
+        self.assertEqual(result[0]["files"], ["native/cmpct_cdc.c"])
+
     def test_offline_cli_fixture_does_not_require_network(self):
         import json
         with tempfile.TemporaryDirectory() as td:
