@@ -390,7 +390,11 @@ class CMPCT:
         fd=-1;parentfd=-1;tmp=None;unnamed=False;committed=False
         if sys.platform.startswith('linux') and hasattr(os,'O_TMPFILE') and not os.path.lexists(full):
             try:
-                # The parent is a directory *capability*, not a source to enumerate.\n                # O_RDONLY incorrectly rejects write+search-only (0300) output directories\n                # even though O_TMPFILE and linkat can publish there. O_PATH preserves\n                # the fd-bound fresh-leaf guarantee without requiring directory read rights.\n                parentfd=os.open(parent,os.O_PATH|os.O_DIRECTORY)
+                # The parent is a directory *capability*, not a source to enumerate.
+                # O_RDONLY incorrectly rejects write+search-only (0300) output directories
+                # even though O_TMPFILE and linkat can publish there. O_PATH preserves
+                # the fd-bound fresh-leaf guarantee without requiring directory read rights.
+                parentfd=os.open(parent,os.O_PATH|os.O_DIRECTORY)
                 # Some Linux hosts reject O_TMPFILE/openat against an O_PATH
                 # dirfd with EBADF. /proc/self/fd anchors the same already-open
                 # directory inode without a second lookup of its mutable pathname.
