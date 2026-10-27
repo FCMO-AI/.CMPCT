@@ -1,0 +1,92 @@
+# ci-lane: fast
+# O221 source-exact, authenticated Reader-range economics (science only).
+name: CMPCT O221 charged random range court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o221-chunk-range-stride-court-20261027
+  pull_request:
+    branches:
+      - agent/phased2-v031-j24c02-fixed-geometry-fd-composition-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o221-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reader-range-court:
+    name: Installed authentic S_CHUNKS and S_CDC A/B
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Exact source checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Preregistration, parent, and identity before running
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 9114674cf217dd8b8b463f4f602fa8b91b825fee HEAD
+          git merge-base --is-ancestor c5e13bb3fbb4cdade8b64246658ce7c7818de41f HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = dbd4ac576a05a47eae97e1e40de89cf1de440516
+          test "$(git rev-parse HEAD:tests/test_o215_fixed_chunk_admission.py)" = a8efaebd9fff8b3203cfd55304d365c309ff394b
+          test "$(git rev-parse HEAD:tests/test_o214_cdc_admission.py)" = ce5bb0c6da2f6d38dcf2b32956b6dfc08e05eaec
+          mkdir -p o221-evidence
+          git rev-parse HEAD > o221-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o221-evidence/reader.blob
+          git rev-parse HEAD:research/o221_chunk_range_strided_oracle.py > o221-evidence/instrument.blob
+          git diff --stat c5e13bb3fbb4cdade8b64246658ce7c7818de41f HEAD > o221-evidence/product-diff-stat.txt
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install source independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader as mod
+          import inspect,hashlib,os
+          root=Path(os.environ["GITHUB_WORKSPACE"])/"src/cmpct/reader.py"
+          installed=Path(inspect.getfile(mod)).resolve()
+          assert installed!=root.resolve()
+          norm=lambda b:b.replace(b"\r\n",b"\n")
+          assert norm(installed.read_bytes())==norm(root.read_bytes())
+          print("INSTALLED_READER_SHA256="+hashlib.sha256(norm(installed.read_bytes())).hexdigest())
+          PY
+      - name: Authentic signed r24 range ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o221_chunk_range_strided_oracle.py" \
+            --workspace "$GITHUB_WORKSPACE" \
+            --output "$GITHUB_WORKSPACE/o221-evidence/results.json" --repeats 3 \
+            2>&1 | tee "$GITHUB_WORKSPACE/o221-evidence/run.log"
+      - name: Independently audit full raw result matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o221_independent_receipt_audit.py o221-evidence/results.json \
+            2>&1 | tee o221-evidence/independent-audit.log
+      - name: Preserve all outcomes including failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o221-authenticated-chunk-range-${{ github.sha }}
+          path: o221-evidence/
+          if-no-files-found: warn
