@@ -6,7 +6,9 @@ The CDC descriptor length is the controlled variable; no Reader monkeypatching.
 """
 from __future__ import annotations
 
+import base64
 import binascii
+import json
 import hashlib
 import os
 from pathlib import Path
@@ -135,6 +137,36 @@ class CDCAdmissionContract(unittest.TestCase):
         self._valid("two-distinct", [[4, 0], [4, 1]],
                     b"ABCDEFGH", blobs=(b"ABCD", b"EFGH"))
         self._valid("two-references", [[4, 0], [4, 0]], b"ABCDABCD")
+
+    def test_immutable_mixed_codec_cdc_conformance_vector(self):
+        """Independent archived r24 CDC wire bytes: raw Deflate, Zstd and RAW.
+
+        This file predates O214; do NOT rebuild its bytes from today's Builder.
+        It is a stronger control against overly strict candidate admission.
+        """
+        root = Path(os.environ.get("GITHUB_WORKSPACE", Path(__file__).resolve().parents[1]))
+        fixture = root / "tests" / "conformance" / "v24-chunk-maps.json"
+        self.assertTrue(fixture.is_file(), "missing frozen conformance vector")
+        suite = json.loads(fixture.read_text(encoding="utf-8"))
+        vec = next(v for v in suite["vectors"] if v["storage_kind"] == S_CDC)
+        wire = base64.b64decode(vec["archive_base64"], validate=True)
+        self.assertEqual(hashlib.sha256(wire).hexdigest(), vec["archive_sha256"])
+        self.assertEqual(len(wire), vec["archive_bytes"])
+        path = self._write("frozen-mixed-codec.cmpct", wire)
+        self.assertEqual(preflight_archive(path, verify_blob_headers=True)["files"], 1)
+        with CMPCT(path) as reader:
+            self.assertEqual(reader.verify(), 1)
+            logical = reader.read(vec["name"])
+            self.assertEqual(len(logical), vec["logical_size"])
+            self.assertEqual(hashlib.sha256(logical).hexdigest(), vec["logical_sha256"])
+            rng = vec["range"]
+            self.assertEqual(reader.read_range(vec["name"], rng["offset"], rng["length"]).hex(),
+                             rng["hex"])
+            for start, length in ((0, 1), (1, 3),
+                                  (vec["logical_size"] - 17, 17)):
+                self.assertEqual(reader.read_range(vec["name"], start, length),
+                                 logical[start:start + length])
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), vec["archive_sha256"])
 
     def test_later_authenticated_valid_generation_is_effective(self):
         # An earlier malformed checkpoint must not contaminate a later
