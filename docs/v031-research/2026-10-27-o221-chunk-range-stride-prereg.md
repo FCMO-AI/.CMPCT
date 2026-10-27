@@ -1,0 +1,27 @@
+# O221 — Authenticated S_CHUNKS / S_CDC random range metadata search (preregistered)
+
+Date: 2026-10-27 UTC. Evidence tier: independent, installed-Reader A/B scientific court only; no product, format, release, benchmark or comparator modification.
+
+## Source, existing owners and distinct question
+
+Released floor: v0.30.0 / revision-24. Exact experimental parent: J24C02 #569 `c5e13bb3fbb4cdade8b64246658ce7c7818de41f`, whose Reader owns same-index strict S_CHUNKS/S_CDC/S_SPARSE geometry checks and has unmerged cold-open performance debt. Source observation: `src/cmpct/reader.py:read_range()` sums every preceding physical chunk length for S_CHUNKS and every preceding descriptor length for S_CDC **on each independent selective read**, even after structurally admitting the same authenticated effective index. This is a *query* cost, not O216/O218/O219 one-time *admission* cost and not O194/O195 sparse-extent ZIP64 scan. Search of current open CMPCT PR titles and issue queries found no existing narrow chunk-prefix range-index claim at preregistration. #569 remains the sole product Reader owner; this court does not modify it.
+
+## Hypothesis and competing controls
+
+On Builder-independent genuine revision-24 files with 65,536 and 262,144 repeated references to a one-byte authenticated RAW blob, repeated small selective ranges in the last three quarters of a file cause baseline O(Q×N) reference-prefix work. An out-of-tree checkpoint index at every 256 descriptors should reduce lookup visits to O(Q×(log(N/256)+256)), preserving exact returned bytes. For both S_CHUNKS and S_CDC, a structurally validated input is required before using the index. The index build is **fully charged** in candidate CPU, wall and peak RSS. It must be derived from the same effective Reader index; no fixture-name shortcuts or new archived facts. Query positions must be deterministic but not monotonic, so a simple sequential cursor cannot claim random-access equivalence.
+
+Strongest simpler controls: original Reader with no index (especially Q=1), and independent Python logical slicing for byte equality. An optional monotonically ordered control may reveal when a cheap ephemeral cursor dominates persistent indexing. Alternative explanation: physical blob decode, Python imports, indexed archive opening or index creation dominates selective prefix scans; any micro loop advantage may disappear in end-to-end installed operation. Candidate-only extra memory or one-off slowdown may invalidate the whole-system win.
+
+## Frozen execution and decision
+
+Use the genuine authenticated r24 fixture constructors already tested by O215 and O214 (physical BLOB header, CRC32, SHA256, initial/tail compressed authenticated MessagePack index, logical file SHA). Generate identical archive bytes and deterministic random-tail query sequence per pair. Confirm Reader.verify() and independent logical bytes for positive controls; retain original malformed-map / frozen positive tests unchanged. Measure *fresh-process installed Reader* end-to-end open + candidate index construction + range queries versus original on identical archive bytes, same Python/runtime/host, alternating order. Record raw trials, median wall+CPU, kernel peak RSS and archive physical size, per arm. Include Q=1 and Q=64 to expose crossover (not just a favorable high-Q metric), N=65,536 and 262,144, both storage kinds; use at least three independent paired repetitions if hosted capacity permits. Preserve SHA-256 of actual bytes, installed Reader blob/SHA, and output queries. All bytes and intervals must agree. No weakened original Reader functions/tests.
+
+Preregistered research discriminator: candidate's **charged complete Reader+Q=64 session** must be >=1.5x faster in wall and CPU on both high-N storage kinds without >8MiB additional kernel HWM or incorrect ranges. Failure narrows/retires this indexing architecture for current product promotion; one-off Q=1 regressions remain explicit even if repeated-query headroom wins. A standalone Python-only oracle cannot pass this gate. If hosted compute cannot execute, mark pending, not passed. A positive O221 is scientific option evidence only, not product promotion: parallel readers, streaming ZIP export, updates/journals, portability, source inode mutation, release parity and sustained execution memory remain unproven. Exact-head CI failures are reported without override.
+
+## Falsification / adversarial threats
+
+Unexpected signed indexes, duplicate ids, sparse representation, hardlink indirection, zero/negative lengths, out-of-range refs or unsorted geometry must not be admitted by the out-of-tree shortcut. Never run candidate before successful unchanged Reader structural admission. Probe [0,size), chunk boundaries, zero-length and tail exactness, plus randomized positions. Other representations and archive mutation are not tested by this court; do not generalize. Indexed structure must not silently outlive effective index identity if a later generation or archive mutation occurs. Main product owner must decide if a scratch-index, short-lived cursor, native scan or no optimization is economical before product change.
+
+## Next decision
+
+If candidate wins materially, notify #569 with the measured cost and a reversible low-memory integration route; do not fork a Reader implementation. If not, preserve negative and prioritize actual existing O220/native and sparse publication owners. This episode is not permission to change Discovery Engine policy or state solely from a micro result.
