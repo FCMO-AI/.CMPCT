@@ -111,7 +111,11 @@ def orchestrate(args):
             for record in records:
                 fixture = tmp / f"golden-{record['codec']}.json"
                 fixture.write_text(json.dumps(record))
-                for case in ("new", "existing", "alias", "metadata_true"):
+                # The authentic released Windows Reader cannot run metadata=True:
+                # os.utime(follow_symlinks=False) raises NotImplementedError (J24D04b).
+                # Do not edit historical product code or weaken the POSIX controls.
+                cases = ("new", "existing", "alias") if os.name == "nt" else ("new", "existing", "alias", "metadata_true")
+                for case in cases:
                     env = dict(os.environ)
                     env["PYTHONPATH"] = str(site)
                     cmd = [sys.executable, str(instrument), "--worker",
@@ -125,7 +129,7 @@ def orchestrate(args):
     result = {
         "schema":"j24d04-direct-stage-mode-v1", "original_git":"80c358f8824ec1b20d349c92ed94c898090969b0",
         "candidate_parent_git":"1778085a1ff5278fadf5f3a12b5f950008a8d939",
-        "observations":results, "expected_observations":24,
+        "observations":results, "expected_observations":18 if os.name == "nt" else 24,
         "boundaries":["source-authenticated r24 only", "metadata and inode semantics only",
                       "external alias is a semantic difference, not a proven preferred behavior",
                       "not a whole-file transaction, same-UID race proof, release or performance gate"],
@@ -138,7 +142,7 @@ def orchestrate(args):
         print(f"J24D04_RESULT={r['source']} {r['member']} {r['case']}"
               f" archive_mode={oct(r['archive_mode'])} output_mode={oct(r['output_mode'])}"
               f" preserved_inode={r['inode_preserved']}")
-    assert len(results) == 24
+    assert len(results) == (18 if os.name == "nt" else 24)
 
 
 def main():
