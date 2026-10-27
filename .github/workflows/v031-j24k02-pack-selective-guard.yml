@@ -1,0 +1,72 @@
+# ci-lane: fast
+name: J24K02 authenticated PACK selective repair court
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/v031-j24k02-pack-selective-guard.yml"
+      - "research/j24k02_*.py"
+      - "docs/v031-research/2026-10-27-j24k02*"
+      - "src/cmpct/reader.py"
+      - "tests/conformance/v24-pack.json"
+      - "tests/native_pack_auth_index_abi.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24k02-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  signed-pack-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install authentic Reader and independent index dependencies
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pip install -e '.[test]'
+          python - <<'PY'
+          import ctypes.util
+          import pathlib
+          import cmpct.reader as reader
+          assert pathlib.Path(reader.__file__).resolve() == pathlib.Path("src/cmpct/reader.py").resolve()
+          assert ctypes.util.find_library("zstd"), "independent golden fixture requires system zstd"
+          print("installed Reader:", reader.__file__)
+          PY
+      - name: Execute signed RAW and Zstd PACK positive and hostile cases
+        run: |
+          set -euo pipefail
+          mkdir -p j24k02-artifact
+          git rev-parse HEAD | tee j24k02-artifact/head.txt
+          git hash-object src/cmpct/reader.py | tee j24k02-artifact/reader-blob.txt
+          git hash-object tests/conformance/v24-pack.json | tee j24k02-artifact/golden-blob.txt
+          python research/j24k02_pack_selective_repair_court.py > j24k02-artifact/court.json
+          python -m json.tool j24k02-artifact/court.json > /dev/null
+      - name: Second-root wire/referee verification and deliberate receipt falsification
+        run: |
+          set -euo pipefail
+          python research/j24k02_independent_referee.py j24k02-artifact/court.json --hostile-selftest | tee j24k02-artifact/referee.txt
+          sha256sum j24k02-artifact/* | tee j24k02-artifact-sha256.txt
+      - name: Preserve source-bound evidence including invalid cases
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24k02-signed-pack-repair-${{ github.sha }}
+          path: |
+            j24k02-artifact/
+            j24k02-artifact-sha256.txt
+          if-no-files-found: warn
+          retention-days: 30
