@@ -1,0 +1,64 @@
+name: CMPCT v0.31 O229 bounded CDC prefix admission scientific court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o229-chunker-prefix-admission-20261027
+    paths:
+      - research/o229_prefix_chunker_court.py
+      - research/o229_independent_audit.py
+      - docs/v031-research/*o229*
+      - .github/workflows/v031-o229-prefix-cdc-admission.yml
+  pull_request:
+    paths:
+      - research/o229_prefix_chunker_court.py
+      - research/o229_independent_audit.py
+      - docs/v031-research/*o229*
+      - .github/workflows/v031-o229-prefix-cdc-admission.yml
+  workflow_dispatch:
+
+jobs:
+  prefix-science:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record exact scientific source and host
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee o229_head.txt
+          git hash-object native/cmpct_cdc.c src/cmpct/builder.py src/cmpct/reader.py research/o229_prefix_chunker_court.py research/o229_independent_audit.py | tee o229_git_blobs.txt
+          python --version
+          cc --version | head -1
+          date -u +'%Y-%m-%dT%H:%M:%SZ'
+      - name: Install authentic source and optional native CDC
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          cc -O2 -fPIC -shared native/cmpct_cdc.c -o src/cmpct/libcmpct_cdc.so
+          sha256sum native/cmpct_cdc.c src/cmpct/libcmpct_cdc.so | tee o229_native_identity.txt
+          python -c 'import cmpct.codec as c; assert c._cdc is not None; print("native CDC loaded",c._cdc._name)'
+      - name: Run preregistered full source and sampled Builder court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o229_prefix_chunker_court.py --output o229_raw.json 2>&1 | tee o229_run.log
+          python research/o229_independent_audit.py o229_raw.json | tee o229_audit.json
+          sha256sum o229_raw.json o229_run.log o229_audit.json research/o229_prefix_chunker_court.py research/o229_independent_audit.py | tee o229_checksums.txt
+      - name: Preserve original evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o229-prefix-cdc-admission-${{ github.sha }}
+          path: |
+            o229_head.txt
+            o229_git_blobs.txt
+            o229_native_identity.txt
+            o229_raw.json
+            o229_run.log
+            o229_audit.json
+            o229_checksums.txt
+          if-no-files-found: warn
