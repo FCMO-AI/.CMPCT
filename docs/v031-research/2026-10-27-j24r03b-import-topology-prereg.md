@@ -1,0 +1,9 @@
+# J24R03b — superseding harness-only repair freeze (2026-10-27 UTC)
+
+**Original frozen experiment remains unchanged:** J24R03 prereg commit `ed5551f710a70ed0c2b3319f36321e44a60c907b`; Reader owners, source SHAs, physical archives, 128 request distribution, 3 ABBA rounds, 240 observations, predicted speed boundaries and independent referee remain frozen.
+
+**Observed original hosted negative:** [Actions #40497331747](https://github.com/FCMO-AI/.CMPCT/actions/runs/40497331747), HEAD `15a7f4134875a998fac1b73e4961add224a1c833`. Original workflow installed true package, verified exact Git Reader and created both isolated source sites, but the *inherited semantic smoke* invoked pytest on tests by their checkout absolute path. Pytest automatically imported checkout `tests/conftest.py` which expected a repository-only `experiments` import unavailable from external cwd. It failed on **ModuleNotFoundError: No module named 'experiments'**, before running the actual sparse tests or the 240-measurement ABBA. This is **instrument/import topology failure**, not a CMPCT regression or performance result.
+
+**Prospective smallest fix before changing the harness:** Copy the unmodified, blob-SHA-pinned O212 and J24R01 tests to the external `$RUNNER_TEMP` directory, as the already successful original J24R02 workflow #586 did. Run pytest from that directory against the copies, keeping the installed actual CMPCT library and its SHA verification. Do not edit conftest, tests, product Reader, source refs, experimental workload, timing, referee or success thresholds. Retain the failed workflow and logs; rerun on a new head. Confirm actual pytest tests run and original ABBA result is now complete, else preserve the next failure as observed.
+
+**Counterfactual discriminator:** Check pytest's root/conftest collection path before dispatch. This is a local CI topology learning; no Discovery Engine or governance policy update is earned from a single activation.
