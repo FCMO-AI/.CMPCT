@@ -1,0 +1,153 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24R04 exact-source independent acceptance; research-only, never release promotion
+name: CMPCT J24R04 sparse dual-path exact Reader ABBA
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24r04-sparse-short-vector-dual-path-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24r04-dual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hostile-and-heldout-semantics:
+    name: Genuine r24 holdout and corruption on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Enforce source and frozen prereg boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 70ab8f0246d3875b38922bcd1b76a5b834d1739d HEAD
+          git merge-base --is-ancestor 70336307312b5b277f0885c0057d2cddab0aefc1 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = cd85d54710205ce0ba3d5dcf401451643aed1814
+          test "$(git rev-parse HEAD:research/j24r04c_sparse_range_abba.py)" = dea2ec48af7d7c5fad0dcec92e84c12124300967
+          test "$(git rev-parse HEAD:tests/test_o212_sparse_admission.py)" = 10605b0a255c90c9ebe2473bf7aefdb14e9b4ea3
+          python -m py_compile src/cmpct/reader.py tests/test_j24r04_sparse_dual_dispatch.py research/j24r04_dual_referee.py
+          mkdir -p j24r04-evidence
+          git rev-parse HEAD > j24r04-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > j24r04-evidence/reader.blob
+      - name: Install genuine product and run original plus new independent courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+          cp tests/test_o212_sparse_admission.py "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          cp tests/test_j24r01_sparse_selective_index.py "$RUNNER_TEMP/test_j24r01_sparse_selective_index.py"
+          cp tests/test_j24r04_sparse_dual_dispatch.py "$RUNNER_TEMP/test_j24r04_sparse_dual_dispatch.py"
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader, os, subprocess, hashlib
+          root=Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          installed=Path(cmpct.reader.__file__).resolve()
+          assert not installed.is_relative_to(root),installed
+          committed=subprocess.check_output(["git","show","HEAD:src/cmpct/reader.py"],cwd=root)
+          assert installed.read_bytes().replace(b"\r\n",b"\n")==committed.replace(b"\r\n",b"\n")
+          print("J24R04_EXACT_INSTALLED_READER_SHA256="+hashlib.sha256(committed).hexdigest())
+          PY
+          python -m pytest -q test_o212_sparse_admission.py test_j24r01_sparse_selective_index.py test_j24r04_sparse_dual_dispatch.py 2>&1 | tee "$GITHUB_WORKSPACE/j24r04-evidence/semantics.log"
+      - name: SHA256 manifest of diagnostic evidence
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          root=Path("j24r04-evidence");root.mkdir(exist_ok=True)
+          (root/"sha256.json").write_text(json.dumps({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.iterdir() if p.is_file() and p.name!="sha256.json"},sort_keys=True,indent=2)+"\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24r04-semantics-${{ matrix.os }}-${{ github.sha }}
+          path: j24r04-evidence/
+          retention-days: 30
+          if-no-files-found: warn
+
+  exact-source-triple-abba:
+    name: Installed original vs owner vs dual path (Ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Reconcile all three genuine source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 70ab8f0246d3875b38922bcd1b76a5b834d1739d HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = cd85d54710205ce0ba3d5dcf401451643aed1814
+          test "$(git rev-parse 70336307312b5b277f0885c0057d2cddab0aefc1:src/cmpct/reader.py)" = ca1763b9d69b385eab80d0ed67a914672dbe93fc
+          test "$(git rev-parse c5e13bb3fbb4cdade8b64246658ce7c7818de41f:src/cmpct/reader.py)" = dbd4ac576a05a47eae97e1e40de89cf1de440516
+          mkdir -p j24r04-evidence
+          git rev-parse HEAD > j24r04-evidence/head.sha
+          git diff --stat 70336307312b5b277f0885c0057d2cddab0aefc1 HEAD > j24r04-evidence/source-delta.txt
+      - name: Install exact distinct historical and candidate sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/r04-original" c5e13bb3fbb4cdade8b64246658ce7c7818de41f
+          git worktree add --detach "$RUNNER_TEMP/r04-owner" 70336307312b5b277f0885c0057d2cddab0aefc1
+          python -m pip install . pytest
+          python -m pip install --no-deps --no-compile --target "$RUNNER_TEMP/r04-original-site" "$RUNNER_TEMP/r04-original"
+          python -m pip install --no-deps --no-compile --target "$RUNNER_TEMP/r04-owner-site" "$RUNNER_TEMP/r04-owner"
+          python -m pip install --no-deps --no-compile --target "$RUNNER_TEMP/r04-dual-site" "$GITHUB_WORKSPACE"
+      - name: Execute two complete original untouched ABBA instruments
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24r04_child_stderr_wrapper.py" "$GITHUB_WORKSPACE/research/j24r04c_sparse_range_abba.py" --repo "$GITHUB_WORKSPACE" --base-site "$RUNNER_TEMP/r04-original-site" --candidate-site "$RUNNER_TEMP/r04-dual-site" --out "$GITHUB_WORKSPACE/j24r04-evidence/original-vs-dual.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/original.log"
+          python "$GITHUB_WORKSPACE/research/j24r04_child_stderr_wrapper.py" "$GITHUB_WORKSPACE/research/j24r04c_sparse_range_abba.py" --repo "$GITHUB_WORKSPACE" --base-site "$RUNNER_TEMP/r04-owner-site" --candidate-site "$RUNNER_TEMP/r04-dual-site" --out "$GITHUB_WORKSPACE/j24r04-evidence/owner-vs-dual.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/owner.log"
+      - name: Independent semantic SHA and median referee, including tampering test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24r04_dual_referee.py" "$GITHUB_WORKSPACE/j24r04-evidence/original-vs-dual.json" "$GITHUB_WORKSPACE/j24r04-evidence/owner-vs-dual.json" "$GITHUB_WORKSPACE" "$RUNNER_TEMP/r04-original-site" "$RUNNER_TEMP/r04-owner-site" "$RUNNER_TEMP/r04-dual-site" "$GITHUB_WORKSPACE/j24r04-evidence/independent-audit.json" | tee "$GITHUB_WORKSPACE/j24r04-evidence/referee.log"
+          grep -q "J24R04_INDEPENDENT_AUDIT=PASS" "$GITHUB_WORKSPACE/j24r04-evidence/referee.log"
+      - name: Preserve complete raw and negative measurements
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          root=Path("j24r04-evidence");root.mkdir(exist_ok=True)
+          (root/"sha256.json").write_text(json.dumps({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.iterdir() if p.is_file() and p.name!="sha256.json"},sort_keys=True,indent=2)+"\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24r04-triple-abba-${{ github.sha }}
+          path: j24r04-evidence/
+          retention-days: 30
+          if-no-files-found: warn
