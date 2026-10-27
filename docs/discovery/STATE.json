@@ -52,7 +52,7 @@
   "saturated_families": [
     {
       "family": "compact-r24-executor-refinement",
-      "reason": "Historical family result: existing executor was decision-complete; only executing its frozen full matrix could change its scope. Not the current v0.31 primary; preserve historical negative without new product credit."
+      "reason": "The existing executor is decision-complete; only execution can change the primary science."
     },
     {
       "family": "pack-plan-compression-reuse",
@@ -99,7 +99,7 @@
     },
     {
       "lesson": "Release receipt presence is not release authority; verify exact current fingerprint and current assertion schema.",
-      "evidence": "Historical v0.30 investigation: three receipts existed, zero bound then-current fingerprint, and native-r25 predated required assertions. Retain as historical lesson; published v0.30 superseded that gate."
+      "evidence": "Three receipt files exist, zero bind current fingerprint, and native-r25 predates current required assertions."
     },
     {
       "lesson": "Intersect semantic eligibility with actual shipping control flow before summing optimization headroom.",
