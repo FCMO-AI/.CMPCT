@@ -2,7 +2,7 @@
 
 Status: **no active primary Foundry thesis**.
 
-Constitutional authority: `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`. Current release authority remains independent under `docs/V030_RELEASE_LOCK.json` and the v0.30 coordination task ledger.
+Constitutional authority: `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`. Published v0.30.0 / revision-24 is the current release; `docs/V030_RELEASE_LOCK.json` and the v0.30 task ledger are historical release-custody evidence, not an active veto over unmerged v0.31 work. Any next release follows current repository release law and exact-head gates.
 
 ## Former v0.30 efficiency-recovery priority — closed as a release gate
 
