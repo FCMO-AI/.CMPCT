@@ -22,7 +22,7 @@ def inode(val):
 
 
 def audit(doc):
-    assert doc['schema']=='j24p03-linux-existing-replace-v1'
+    assert doc['schema']=='j24p03-linux-existing-replace-v2'
     source=doc['source']
     assert source['euid']>0 and source['platform'].startswith('Linux-')
     assert source['git_head'] is None or re.fullmatch(r'[0-9a-f]{40}',source['git_head'])
@@ -32,12 +32,13 @@ def audit(doc):
       'old': digest(b'J24P03-existing-old-target-'*101),
     }
     assert len(set(expected.values()))==3 and doc['payload_sha256']==expected
-    trials=doc['trials'];assert len(trials)==7
+    trials=doc['trials'];assert len(trials)==11
     seen=set()
-    for x in trials[:4]:
+    for x in trials[:8]:
         method=x['method'];hostile=x['hostile']
         assert type(hostile) is bool and method in ('os.replace','renameat2_exchange')
-        assert (method,hostile) not in seen;seen.add((method,hostile))
+        assert x['parent_mode'] in ('0300','0700')
+        assert (method,hostile,x['parent_mode']) not in seen;seen.add((method,hostile,x['parent_mode']))
         src=inode(x['source_inode']);pub=inode(x['published_inode'])
         assert x['original_fd_sha256']==expected['good']
         assert x['original_target_sha256']==expected['old']
@@ -52,8 +53,8 @@ def audit(doc):
         else:
             assert x['actor'] is None and x['attacker_inode'] is None
             assert x['published_sha256']==expected['good'] and pub==src
-    assert len(seen)==4
-    positive,occupied=trials[4:6]
+    assert len(seen)==8
+    positive,occupied=trials[8:10]
     assert positive['occupied'] is False
     assert positive['target_sha256']==expected['good']
     inode(positive['target_inode'])
@@ -62,17 +63,17 @@ def audit(doc):
     assert occupied['target_sha256']==expected['old']
     inode(occupied['target_inode'])
     assert occupied['decision']=='EEXIST_PRESERVED'
-    direct=trials[6]
+    direct=trials[10]
     assert direct['decision'] in ('DIRECT_PROC_RENAME_REJECTED','DIRECT_PROC_RENAME_SUCCEEDED')
     if direct['decision']=='DIRECT_PROC_RENAME_REJECTED':
         assert type(direct['errno']) is int and direct['errno']>0
     else:
         assert type(direct['published_is_authenticated_inode']) is bool
-    assert all(not x['published_is_authenticated_inode'] for x in trials[:4] if x['hostile'])
-    assert all(x['published_is_authenticated_inode'] for x in trials[:4] if not x['hostile'])
+    assert all(not x['published_is_authenticated_inode'] for x in trials[:8] if x['hostile'])
+    assert all(x['published_is_authenticated_inode'] for x in trials[:8] if not x['hostile'])
     assert doc['decision']=='RETIRE_VISIBLE_STAGE_PLUS_RENAME_EXISTING_TARGET_UNDER_HOSTILE_SAME_UID_WRITER'
-    return {'decision':'INDEPENDENT_RECEIPT_CONSISTENCY_PASS','cases':7,
-            'hostile_foreign_published':2,'uncontended_authenticated':2,
+    return {'decision':'INDEPENDENT_RECEIPT_CONSISTENCY_PASS','cases':11,
+            'hostile_foreign_published':4,'uncontended_authenticated':4,
             'direct_procfd_result':direct['decision'],
             'boundary':'Linux same-UID actor, visible stage plus pathname replacement only'}
 
