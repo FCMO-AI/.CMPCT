@@ -58,7 +58,9 @@ jobs:
           PYTHONPATH=frozen-h3/src python research/j24b03_h4_deflate_export_court.py --arm baseline --corpus benchmark-artifacts/corpus --receipt benchmark-artifacts/h3.json
           PYTHONPATH=src python research/j24b03_h4_deflate_export_court.py --arm candidate --corpus benchmark-artifacts/corpus --receipt benchmark-artifacts/candidate.json
           python research/j24b03_h4_deflate_export_referee.py --corpus benchmark-artifacts/corpus --baseline benchmark-artifacts/h3.json --candidate benchmark-artifacts/candidate.json --out benchmark-artifacts/audit.json
-          PYTHONPATH=src python -m pytest -q tests/test_reader_deflate_export_custody.py
+          # These standalone H4 tests use only tmp_path; loading unrelated legacy tests/conftest.py
+          # requires ambient libzstd.so on non-Linux hosts and is not a prerequisite.
+          PYTHONPATH=src python -m pytest --noconftest -q tests/test_reader_deflate_export_custody.py
       - name: Validate hosted workflow topology
         if: runner.os == 'Linux'
         run: python tools/check_ci_topology.py .github/workflows/v031-j24b03-h4-deflate-export-custody.yml
