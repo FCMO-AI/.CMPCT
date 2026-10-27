@@ -7,12 +7,12 @@ on:
     paths:
       - research/o228_virtual_reference_run_oracle.py
       - research/o228_independent_audit.py
-      - research/o228_independent_audit.py
       - docs/v031-research/*o228*
       - .github/workflows/v031-o228-virtual-reference-run.yml
   pull_request:
     paths:
       - research/o228_virtual_reference_run_oracle.py
+      - research/o228_independent_audit.py
       - docs/v031-research/*o228*
       - .github/workflows/v031-o228-virtual-reference-run.yml
   workflow_dispatch:
