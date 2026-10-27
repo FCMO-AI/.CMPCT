@@ -1,0 +1,87 @@
+# ci-lane: fast
+# O224 source-exact science only; never deploy unsafe no-validation control.
+name: CMPCT O224 authenticated Reader open phase RSS
+on:
+  push:
+    branches:
+      - agent/phased3-v031-o224-reader-open-rss-attribution-20261027
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: o224-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scientific-phase-memory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact science HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Check inherited Reader source and prereg custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 9a92c2846dbe1a8dddf6c7224b8f84cb7cfda5cf HEAD
+          git merge-base --is-ancestor c630c7e15637c51895d70ad7ef3f8fd96f1a3214 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = dbd4ac576a05a47eae97e1e40de89cf1de440516
+          test "$(git rev-parse HEAD:research/o223_read_futures_rss_court.py)" = "$(git rev-parse 9a92c2846dbe1a8dddf6c7224b8f84cb7cfda5cf:research/o223_read_futures_rss_court.py)"
+          python -m py_compile research/o224_reader_open_phase_rss_court.py research/o224_independent_rss_audit.py
+          mkdir -p o224-evidence
+          git rev-parse HEAD > o224-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > o224-evidence/reader.blob
+          git rev-parse HEAD:research/o224_reader_open_phase_rss_court.py > o224-evidence/instrument.blob
+          git rev-parse HEAD:research/o224_independent_rss_audit.py > o224-evidence/auditor.blob
+          git diff --stat 9a92c2846dbe1a8dddf6c7224b8f84cb7cfda5cf HEAD > o224-evidence/diff-stat.txt
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install source Reader independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,inspect,os
+          from pathlib import Path
+          import cmpct.reader as rd
+          original=Path(os.environ["GITHUB_WORKSPACE"])/"src/cmpct/reader.py"
+          installed=Path(inspect.getfile(rd)).resolve()
+          assert installed!=original.resolve()
+          norm=lambda p:p.read_bytes().replace(b'\r\n',b'\n')
+          assert norm(installed)==norm(original)
+          print("INSTALLED_READER_SHA256="+hashlib.sha256(norm(installed)).hexdigest())
+          PY
+      - name: Genuine signed-r24 fresh-process phase RSS court
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/o224_reader_open_phase_rss_court.py" \
+            --workspace "$GITHUB_WORKSPACE" \
+            --output "$GITHUB_WORKSPACE/o224-evidence/results.json" --repeats 3 \
+            2>&1 | tee "$GITHUB_WORKSPACE/o224-evidence/run.log"
+      - name: Independent audit original raw observations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o224_independent_rss_audit.py o224-evidence/results.json \
+            | tee o224-evidence/audit.json
+      - name: Preserve raw evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o224-phase-rss-${{ github.sha }}
+          path: o224-evidence/
+          if-no-files-found: warn
