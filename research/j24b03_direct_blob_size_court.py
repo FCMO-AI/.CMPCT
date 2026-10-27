@@ -8,6 +8,7 @@ the original J24B01/J24B02 scientific tests or their preregistered expectations.
 from __future__ import annotations
 
 import argparse
+import base64
 import binascii
 import hashlib
 import json
@@ -138,14 +139,67 @@ def run(mode: str):
                 assert reader.read_range(name, 0, 0) == b""
                 reader.verify()
 
+    # Independently frozen, Builder-free revision-24 direct-codec corpus predates
+    # this branch. Do not regenerate it with our constructor or weaken its SHA.
+    golden_path = Path(__file__).resolve().parents[1] / "tests/conformance/v24-direct-codecs.json"
+    golden = json.loads(golden_path.read_text())["vectors"]
+    fixed_vectors = []
+    with tempfile.TemporaryDirectory(prefix="cmpct-j24b03-fixed-") as td:
+        for number, vector in enumerate(golden):
+            path = Path(td) / f"frozen-{number}.cmpct"
+            physical = base64.b64decode(vector["archive_base64"])
+            assert hashlib.sha256(physical).hexdigest() == vector["archive_sha256"]
+            path.write_bytes(physical)
+            assert observe(lambda: preflight_archive(path))["status"] == "ACCEPT"
+            with CMPCT(path) as ar:
+                raw = ar.read(vector["name"])
+                assert hashlib.sha256(raw).hexdigest() == vector["logical_sha256"]
+                assert ar.read_range(vector["name"], vector["range"]["offset"],
+                                     vector["range"]["length"]).hex() == vector["range"]["hex"]
+                assert ar.verify() == 1
+            fixed_vectors.append({"name": vector["name"],
+                                  "archive_sha256": vector["archive_sha256"],
+                                  "logical_sha256": vector["logical_sha256"],
+                                  "result": "PASS"})
+
+    # Secondary-root physical-header contradiction: unchanged index declares a
+    # 128-byte owner, but the physical BHDR claims 136 bytes. Historical RAW
+    # fast range skips the header check; the candidate must reject before mmap
+    # slicing while keeping the original preflight's rejection unchanged.
+    raw_header_controls = []
+    with tempfile.TemporaryDirectory(prefix="cmpct-j24b03-bhdr-") as td:
+        for kind in (K_FILE, K_SYMLINK):
+            physical, _, good_frame = wire(kind, CODEC_RAW, 128)
+            bad_frame = BHDR.pack(BMAGIC, CODEC_RAW, 0, 0, 136, len(PAYLOAD), 0,
+                                  binascii.crc32(PAYLOAD) & 0xFFFFFFFF,
+                                  sha(PAYLOAD)) + PAYLOAD
+            assert len(good_frame) == len(bad_frame)
+            altered = physical.replace(good_frame, bad_frame, 1)
+            assert altered != physical
+            path = Path(td) / f"mismatch-{kind}.cmpct"
+            path.write_bytes(altered)
+            name = "direct.bin" if kind == K_FILE else "link"
+            p = observe(lambda: preflight_archive(path))
+            with CMPCT(path) as ar:
+                selected = observe(lambda: ar.read_range(name, 7, 8))
+            assert p["status"] == "REJECT"
+            assert selected["status"] == ("REJECT" if mode == "repaired" else "ACCEPT")
+            raw_header_controls.append({
+                "kind": kind, "archive_sha256": hashlib.sha256(altered).hexdigest(),
+                "preflight": p["status"], "selected": selected["status"]
+            })
+
     receipt = {"experiment": "J24B03", "mode": mode, "format_revision": VERSION,
                "case_count": len(cases), "cases": cases,
                "empty_owners_verified": 2,
+               "frozen_vectors": fixed_vectors,
+               "raw_header_controls": raw_header_controls,
                "source_module": str(Path(__import__("cmpct.reader").reader.__file__).resolve())}
     target = os.environ.get("J24B03_RECEIPT")
     if target:
         Path(target).write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
-    print(json.dumps({"mode": mode, "cases": len(cases), "empty_controls": 2,
+    print(json.dumps({"mode": mode, "cases": len(cases), "empty_controls": 2, "frozen_vectors": len(fixed_vectors),
+                      "raw_header_controls": len(raw_header_controls),
                       "result": "PASS", "source_module": receipt["source_module"]}))
     return receipt
 
