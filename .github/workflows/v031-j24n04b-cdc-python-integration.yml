@@ -1,0 +1,61 @@
+# ci-lane: fast
+name: CMPCT J24N04b installed optional native CDC Python parity court
+on:
+  pull_request:
+    paths:
+      - native/cmpct_cdc.c
+      - tests/native_cdc_python_product_court.py
+      - .github/workflows/v031-j24n04b-cdc-python-integration.yml
+      - docs/v031-research/2026-10-27-j24n04b-forced-native-python-prereg.md
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24n04b-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  installed-optional-cdc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_HEAD }}
+          fetch-depth: 0
+      - name: Bind exact source and historical parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_HEAD"
+          test "$(git rev-parse HEAD:native/cmpct_cdc.c)" = "05c840bb27a07c148be7a1ad8f2387397f4b70bc"
+          test "$(git rev-parse b0be37721a7defbb570b2b3920a7924abb37379b:native/cmpct_cdc.c)" = "216189c6a15f1579d596bc4df5128ae63f794168"
+          mkdir -p evidence
+          printf 'source_head=%s\nsource_blob=05c840bb27a07c148be7a1ad8f2387397f4b70bc\nparent=b0be37721a7defbb570b2b3920a7924abb37379b\n' "$SOURCE_HEAD" > evidence/j24n04b-provenance.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic CMPCT package and native Rust extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Execute genuine Python optional/native/fallback in fresh interpreters
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/native_cdc_python_product_court.py 2>&1 | tee evidence/j24n04b-worker.txt
+          grep -q '^J24N04B_PRODUCT_INTEGRATION_PASS' evidence/j24n04b-worker.txt
+          test ! -e src/cmpct/libcmpct_cdc.so
+      - name: Preserve full source-and-product receipt, even after fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24n04b-source-python-${{ env.SOURCE_HEAD }}
+          path: evidence/j24n04b-*
+          if-no-files-found: warn
+
+# Forced optional native packaging test is not normal installation behavior,
+# not proof of full release parity and not a modification to release thresholds.

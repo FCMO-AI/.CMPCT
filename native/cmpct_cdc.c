@@ -91,7 +91,9 @@ size_t cmpct_cdc_cut(const uint8_t *data, size_t n, size_t min_size, size_t avg_
     if ((avg_size & (avg_size - 1)) != 0) return 0;
 
     const uint64_t mask_early = (uint64_t)(avg_size * 2 - 1);
-    const uint64_t mask_late  = (uint64_t)(avg_size / 2 - 1);
+    /* Keep the late-mask underflow in the 64-bit hash domain even when
+     * size_t is 32-bit: avg=1 must not change chunk geometry by ABI width. */
+    const uint64_t mask_late  = (uint64_t)(avg_size / 2) - UINT64_C(1);
     size_t count = 0, start = 0;
     while (start < n) {
         /* The offsets are cumulative: never add an unbounded caller-supplied

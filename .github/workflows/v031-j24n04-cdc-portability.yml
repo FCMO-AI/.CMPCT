@@ -1,0 +1,118 @@
+# ci-lane: fast
+name: CMPCT J24N04 native CDC portable late-mask exact-source court
+on:
+  pull_request:
+    paths:
+      - native/cmpct_cdc.c
+      - tests/native_cdc_portability_court.c
+      - .github/workflows/v031-j24n04-cdc-portability.yml
+      - docs/v031-research/2026-10-27-j24n04-cdc-portable-mask-prereg.md
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24n04-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-width:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+      - name: Pin the actually compiled native source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:native/cmpct_cdc.c)" = "05c840bb27a07c148be7a1ad8f2387397f4b70bc"
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+      - name: Compile and run portable CDC court in real ${{ matrix.arch }} process
+        shell: pwsh
+        run: |
+          cl /nologo /W4 /WX /std:c11 native/cmpct_cdc.c tests/native_cdc_portability_court.c /Fe:cdc_portable.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\cdc_portable.exe | Tee-Object -FilePath "j24n04-${{ matrix.arch }}.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Path "j24n04-${{ matrix.arch }}.txt" -SimpleMatch "PORTABLE_NATIVE_CDC_COURT PASS")) { exit 1 }
+      - name: Re-run inherited #608 native boundary court against new source
+        shell: pwsh
+        run: |
+          cl /nologo /W4 /WX /std:c11 native/cmpct_cdc.c tests/native_cdc_bounds_court.c /Fe:cdc_bounds.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\cdc_bounds.exe ordinary | Tee-Object -FilePath "j24n04-bounds-${{ matrix.arch }}.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\cdc_bounds.exe candidate | Tee-Object -Append -FilePath "j24n04-bounds-${{ matrix.arch }}.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Path "j24n04-bounds-${{ matrix.arch }}.txt" -SimpleMatch "EXTREME_BOUNDARY_COURT PASS")) { exit 1 }
+      - name: Preserve raw x86/x64 source-linked transcripts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24n04-native-${{ matrix.arch }}-${{ github.run_id }}
+          path: |
+            j24n04-${{ matrix.arch }}.txt
+            j24n04-bounds-${{ matrix.arch }}.txt
+          if-no-files-found: warn
+
+  same-output:
+    runs-on: ubuntu-24.04
+    needs: [native-width]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: j24n04-native-*
+          path: receipts
+      - name: Independently compare both recorded 32/64-bit geometry hashes
+        shell: bash
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          values = {}
+          for arch in ("x86", "x64"):
+              matches = list(Path("receipts").rglob(f"j24n04-{arch}.txt"))
+              bounds = list(Path("receipts").rglob(f"j24n04-bounds-{arch}.txt"))
+              assert len(matches) == 1 and len(bounds) == 1, (arch, matches, bounds)
+              body = matches[0].read_text()
+              previous = bounds[0].read_text()
+              assert "witness=[7] avg2=[2,5,7]" in body, arch
+              assert "PORTABLE_NATIVE_CDC_COURT PASS" in body, arch
+              assert "EXTREME_BOUNDARY_COURT PASS" in previous, arch
+              m = re.search(r"PORTABLE_DIGEST ([0-9a-f]{16}) cases=(\d+)", body)
+              b = re.search(r"ORDINARY_SOURCE_EXACT fingerprint=([0-9a-f]{16})", previous)
+              assert m and b, (arch, body, previous)
+              values[arch] = (m.group(1), int(m.group(2)), b.group(1))
+          assert values["x86"] == values["x64"], values
+          assert values["x86"][1] == 23 * 7 * 9 * 3, values
+          print("J24N04 BOTH_ARCHITECTURES_IDENTICAL", values)
+          PY
+
+  linux-sanitized:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify original-source provenance and run ASan/UBSan
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:native/cmpct_cdc.c)" = "05c840bb27a07c148be7a1ad8f2387397f4b70bc"
+          cc -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer native/cmpct_cdc.c tests/native_cdc_portability_court.c -o cdc_portable_sanitized
+          ASAN_OPTIONS=detect_leaks=1 ./cdc_portable_sanitized
+          cc -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer native/cmpct_cdc.c tests/native_cdc_bounds_court.c -o cdc_bounds_sanitized
+          ASAN_OPTIONS=detect_leaks=1 ./cdc_bounds_sanitized ordinary
+          ASAN_OPTIONS=detect_leaks=1 ./cdc_bounds_sanitized candidate
+
+# Native component correctness is not equivalent to ordinary installed-product parity.
