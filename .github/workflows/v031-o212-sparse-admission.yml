@@ -84,7 +84,13 @@ jobs:
               assert norm(actual.read_bytes())==norm(original.read_bytes()),('module bytes drift',name)
               print('O212_INSTALLED_SOURCE='+name+' SHA256='+hashlib.sha256(norm(actual.read_bytes())).hexdigest())
           PY
-          python -m pytest -q "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py"             2>&1 | tee "$GITHUB_WORKSPACE/o212-evidence/pytest.log"
+          # Preserve the exact committed test bytes while avoiding unrelated historical
+          # tests/conftest.py's v0.30 research-profile imports in this focused court.
+          # The inherited general test workflow still executes its normal conftest.
+          cp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          cmp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          python -m pytest -q "$RUNNER_TEMP/test_o212_sparse_admission.py" \
+            2>&1 | tee "$GITHUB_WORKSPACE/o212-evidence/pytest.log"
       - name: Preserve failures and source-bound evidence
         if: always()
         uses: actions/upload-artifact@v4
