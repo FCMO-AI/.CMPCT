@@ -1,6 +1,6 @@
 """J24K05: product-candidate VZIP strict geometry + complete selective-range contract.
 
-Consumes two independently frozen revision-24 archives. Does not alter historical
+Consumes three independently frozen revision-24 archives. Does not alter historical
 J24K04 observational test, which intentionally expects the vulnerable baseline.
 """
 from __future__ import annotations
@@ -22,6 +22,7 @@ from cmpct.validation import preflight_archive, ValidationError
 
 GOLDENS = (
     "v24-virtual-zip.json",
+    "v24-virtual-zip-deflate-mode0.json",
     "v24-virtual-zip-deflate-mode1.json",
 )
 ROOT = Path(__file__).resolve().parent / "conformance"
@@ -91,7 +92,7 @@ def reauthenticated(wire: bytes, mutation: str) -> tuple[bytes, dict]:
     }
 
 
-@pytest.mark.parametrize("name", GOLDENS, ids=("stored", "retained-deflate"))
+@pytest.mark.parametrize("name", GOLDENS, ids=("stored", "canonical-deflate", "retained-deflate"))
 def test_golden_positive_and_exact_range(tmp_path, name):
     ref, wire = golden(name)
     path = tmp_path / "original.cmpct"
@@ -108,7 +109,7 @@ def test_golden_positive_and_exact_range(tmp_path, name):
                 assert reader.read_range(ref["name"], start, length) == raw[start:start+length]
 
 
-@pytest.mark.parametrize("name", GOLDENS, ids=("stored", "retained-deflate"))
+@pytest.mark.parametrize("name", GOLDENS, ids=("stored", "canonical-deflate", "retained-deflate"))
 @pytest.mark.parametrize("mutation", (
     "declared_plus", "declared_minus", "skeleton_plus", "payload_plus",
 ))
@@ -124,7 +125,7 @@ def test_fully_signed_invalid_geometry_rejected(tmp_path, name, mutation):
     }, sort_keys=True), flush=True)
 
 
-@pytest.mark.parametrize("name", GOLDENS, ids=("stored", "retained-deflate"))
+@pytest.mark.parametrize("name", GOLDENS, ids=("stored", "canonical-deflate", "retained-deflate"))
 def test_no_silent_selective_short_read_even_without_preflight(tmp_path, name):
     ref, wire = golden(name)
     hostile, receipt = reauthenticated(wire, "declared_plus")
