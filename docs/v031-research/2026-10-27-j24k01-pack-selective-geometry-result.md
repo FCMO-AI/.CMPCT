@@ -48,6 +48,10 @@ A full `read` is not a complete universal guard either: it checks the returned l
 - No CPU/wall/RSS/size/read-amplification benchmark or portability gate has been performed for a repair.
 - Separate inherited CI workflow red (topology unknown `scientific` lane; Engineering Evidence missing exact required section) were presentation/process failures and subsequently repaired **without modifying the scientific oracle or its predictions**. Their updated-head statuses are separate.
 
+## Durable tracking and ownership
+
+Reproduction defect: [Issue #599](https://github.com/FCMO-AI/.CMPCT/issues/599). Original parent native conformance owner #314 and composed Reader owner #569 were notified in their own PR conversations with no concurrent branch edits. CI-level presentation failures were independently corrected (recognized `fast` lane and a complete material-PR dossier) without altering this scientific evaluator. Later HEAD executions remain separate evidence and are not retrospectively substituted for the original experiment HEAD.
+
 ## Cheapest next owner action
 
 A small O(1) selected PACK geometry validator may enforce `len(storage)==4`, exact integral nonnegative owner ID/offset/length, `length==logical_size`, and `offset + length <= indexed owner usize` **before** ordinary selected decode; then demand exact return length, full and partial read equivalence, strong corrupted-mutant rejection, no new format bytes and bounded per-range CPU cost. Alternatively, enforce a single shared admission invariant at Reader open if whole-index overhead is measured favorable. Choose with Reader #569 and conformance #314 owners; do not duplicate their branches.
