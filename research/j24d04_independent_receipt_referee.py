@@ -12,7 +12,10 @@ def check(path: Path, report_path: Path):
     document = json.loads(path.read_text(encoding="utf-8"))
     assert document["schema"] == "j24d04-direct-stage-mode-v1"
     rows = document["observations"]
-    assert len(rows) == document["expected_observations"] == 24
+    os_names = {r["os_name"] for r in rows}
+    assert len(os_names) == 1, os_names
+    expected_count = 24 if next(iter(os_names)) == "posix" else 18
+    assert len(rows) == document["expected_observations"] == expected_count
     indexed = {}
     for row in rows:
         key = (row["source"], row["codec"], row["case"])
@@ -22,14 +25,14 @@ def check(path: Path, report_path: Path):
         assert not row["stage_leftovers"]
         assert row["source_sha256"] and row["archive_sha256"]
         assert row["umask"] == 0o077
-    assert len(indexed) == 2*3*4
+    assert len(indexed) == 2*3*(4 if os_name == "posix" else 3)
     assert {x["codec"] for x in rows} == {0, 1, 4}
     operating_systems = {x["os_name"] for x in rows}
     assert len(operating_systems) == 1
     os_name = operating_systems.pop()
     conditions = []
     for codec in (0,1,4):
-        for case in ("new", "existing", "alias", "metadata_true"):
+        for case in (("new", "existing", "alias", "metadata_true") if os_name == "posix" else ("new", "existing", "alias")):
             old = indexed["original",codec,case]
             new = indexed["candidate",codec,case]
             assert old["archive_sha256"] == new["archive_sha256"]
@@ -77,6 +80,7 @@ def check(path: Path, report_path: Path):
         "conditions":conditions,
         "scope":["POSITVE: complete exact read/output SHA, no staged leftovers",
                  "POSIX: historical vs staged real mode and alias/inode controls",
+                 "Windows released Reader metadata=True raises NotImplementedError (initial hosted result); not retested",
                  "NOT MEASURED: ACL, Windows mode equivalence, races, product performance"],
     }
     report_path.write_text(json.dumps(audit,sort_keys=True,indent=2)+"\n")
