@@ -50,3 +50,17 @@ All six deliberate hostile-frame cases rejected: **corruption / truncated frame 
 The earlier cheap discriminator was recognizable in source: J24Z01 materialized `out_raw.raw[:n]` once per 64KiB output and allocated ctypes buffers per call. A focused pooled-memoryview micro could have tested this before any package-native interface. It predicted a directionally useful improvement, but not enough to pass the prospective full-operation threshold; in this case it would not have justified shipping work. **No evidence-backed discovery-policy change earned from one episode.**
 
 **Next unclaimed high-leverage frame:** if the ~125MiB same-file memory headroom matters for genuine multi-gigabyte logical sparse/ZIP64 flows, build a *package-owned native fused Zstd streaming + integrity + selected-output* mechanism, not another Python buffer/window variant. First classify native decode/hash/ffi/IO work on held-out structures, then assess full product CPU/RSS/bytes/recovery and portability against exact current Reader and physically chunked alternative. This result should inform #550 and ZIP64 owner #521; do not duplicate their implementation. Pooled strategy is retained as research evidence only, not promoted.
+
+## Independent paired-cycle check (original artifact, no changed evaluator)
+
+A second examination of the original `court.json` uses the five recorded rotation cycles as **paired observations**, rather than relying only on ratios of arm medians. Original streaming versus pooled streaming improvements per cycle were:
+
+| Rotation cycle | CPU saved | Wall saved |
+|---:|---:|---:|
+| 0 | 14.2951% | 14.0747% |
+| 1 | 13.9534% | 13.7642% |
+| 2 | 13.9855% | 13.6676% |
+| 3 | 13.1620% | 12.9634% |
+| 4 | 14.9990% | 14.7811% |
+
+**All five paired CPU and all five paired wall observations remain below 15%.** No selection of favorable individual rounds within the captured result meets the prospective strict target in both metrics. This is an additional decision check derived from immutable hosted raw evidence, **not** a separate independent run, confidence interval, or proof of universal slowdown. The shared kernel and source can have correlated variability; no statistical significance claim is made from five cycles. This favors preserving the original negative decision and moving to a materially different execution architecture rather than more pooled Python tuning.
