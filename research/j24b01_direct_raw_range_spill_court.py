@@ -89,6 +89,11 @@ def run() -> dict:
             report["cases"][label] = case
 
     # Preserve all observations even if the prospectively frozen discriminator fails.
+    # Save the raw receipt in CI even if original prospective assertions disprove us.
+    evidence_dir = Path("benchmark-artifacts")
+    if evidence_dir.is_dir():
+        (evidence_dir / "raw-observations.json").write_text(
+            json.dumps(report, sort_keys=True, indent=2) + "\\n", encoding="utf-8")
     print("J24B01_RAW_OBSERVATIONS=" + json.dumps(report, sort_keys=True), flush=True)
     valid, bad = report["cases"]["valid"], report["cases"]["oversized"]
     assert valid["physical_sha256"] == bad["physical_sha256"]
