@@ -28,7 +28,7 @@ def check(report, root, head):
     canonical = subprocess.check_output(
         ["git", "show", f"{head}:src/cmpct/reader.py"], cwd=root)
     checkout = (root / "src/cmpct/reader.py").read_bytes()
-    assert checkout.replace(b"\\r\\n", b"\\n") == canonical
+    assert checkout.replace(b"\r\n", b"\n") == canonical
     assert report["reader_blob"] == gitblob(canonical)
     rows = report["cases"]
     assert len(rows) == 18
