@@ -141,7 +141,7 @@ def test_many_valid_sparse_extents_are_admitted_once(tmp_path):
     ],
 )
 def test_adversarial_sparse_geometry_always_fails_closed(tmp_path, extents):
-    path = _write(tmp_path, _archive_bytes(extents, PAYLOAD + b"\\0" * 12), "shape")
+    path = _write(tmp_path, _archive_bytes(extents, PAYLOAD + b"\0" * 12), "shape")
     before = path.read_bytes()
     with pytest.raises(ValidationError):
         preflight_archive(path)
