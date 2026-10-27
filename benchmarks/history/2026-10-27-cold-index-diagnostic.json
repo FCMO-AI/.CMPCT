@@ -1,0 +1,78 @@
+{
+  "schema": "cmpct-cold-index-diagnostic-v1",
+  "source_base": "80c358f8824ec1b20d349c92ed94c898090969b0",
+  "audio_fix_commit": "ebcdbca43b25d7b41ec7e90ba0fe7c3354ab81ed",
+  "runtime": {
+    "status": "DIAGNOSTIC_SUBSTITUTED_BACKEND_NOT_RELEASE_EVIDENCE",
+    "zstd": "1.5.7",
+    "msgpack": "(1, 1, 0)",
+    "python": "3.13.5",
+    "os": "Linux",
+    "machine": "x86_64",
+    "shipping_pin_not_tested": "Zstd 1.5.5 in package-owned Rust core",
+    "kernel": "6.12.107+deb13-amd64",
+    "msgpack_implementation": "pip._vendor.msgpack.fallback (pure Python); normal compiled C extension NOT TESTED"
+  },
+  "corpus": {
+    "generator": "benchmarks/cold_tree_corpus.py",
+    "seed": 20261027,
+    "stages": 4,
+    "files_per_stage": 256
+  },
+  "semantics": {
+    "layer": "in-process Builder and open+read; uncontrolled cache and background load",
+    "repetitions": 1,
+    "workers": 4,
+    "reproducible": true,
+    "metadata": "logical source-byte check, not full filesystem restoration",
+    "integrity": "every logical file byte-compared against generated source",
+    "durability": "no fsync",
+    "native_reader": "not tested",
+    "rss": "not measured"
+  },
+  "create_s": 0.5093761379830539,
+  "rewrite_s": 2.577537617064081,
+  "complete_checkpoint": {
+    "research_only": true,
+    "selected": true,
+    "base_bytes": 5503157,
+    "candidate_bytes": 5501909,
+    "index_raw_bytes": 53019,
+    "index_base_bytes": 5204,
+    "index_trial_bytes": 4580,
+    "payload_bytes_changed": 0
+  },
+  "index_codec_ablation": {
+    "12": {
+      "bytes": 5212,
+      "wall_s": 0.04799163597635925
+    },
+    "19": {
+      "bytes": 4587,
+      "wall_s": 0.2770594790345058
+    },
+    "19-long": {
+      "bytes": 4580,
+      "wall_s": 3.8277252370025963
+    }
+  },
+  "logical_reads": {
+    "base": {
+      "open_s": 0.39518555300310254,
+      "read_all_s": 0.8677863780176267,
+      "regular_files": 1080
+    },
+    "candidate": {
+      "open_s": 0.024253841023892164,
+      "read_all_s": 0.4093868589261547,
+      "regular_files": 1080
+    }
+  },
+  "every_file_exact": true,
+  "source_sha256": {
+    "benchmarks/cold_tree_corpus.py": "ec051fc6165b916d6c4c937e205e40ff60ed43978d01984f78f3d660da048387",
+    "benchmarks/cold_index_window_bench.py": "cc2c5ca71135affe480f670198853dec8c9d00e5fa07c83035d54da919b61c32",
+    "benchmarks/diagnostic_zstd_adapter.py": "51ca6b56f70283c87d9e7ce52be92dfe5685ab4165b23e90cd11efa7ac34188a",
+    "experiments/cold_index_window.py": "bd10f8a1afbcf48e762ca604ac58521b772a06ff7539ef82da0e009850208c62"
+  }
+}

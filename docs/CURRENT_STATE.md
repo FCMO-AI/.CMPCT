@@ -39,3 +39,15 @@ This is historical-fingerprint evidence, not relabeled current-fingerprint relea
 including expensive speculative search, base hot paths that still lose to ZIP, and representation wins
 that have not yet earned complete product economics. PR #217/#218 may continue if they answer useful
 v0.31 questions; they no longer gate the existence of v0.30.
+
+## Unreleased cold-tree work
+
+Optional WAV/FLAC encoder imports now decline the transform when the audio extras or libsndfile
+are absent (#538), preserving generic codec competition. Decoding an existing FLAC-backed member
+still requires its decoder. The package-owned native-runtime regression gate remains outstanding
+in the offline development environment; substituted-backend checks are diagnostic evidence only.
+
+`experiments/cold_index_window.py` auditions longer context for the two r24 checkpoint index copies,
+leaving physical payloads untouched and retaining the original artifact on a size tie/loss. This is
+research, not the canonical creation policy or a release checkpoint. See
+`research/cold_index_window_prereg.md` and `docs/fcmo/ARCHIVO-FRIO-20261026.md` for evidence boundaries.

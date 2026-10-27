@@ -121,8 +121,13 @@ def _wav_parts(raw:bytes):
     start,end=data;return raw[:start],raw[start:end],raw[end:],ch,rate,bits
 
 def wavflac_compress(raw:bytes):
-    np,sf=_audio_modules();parts=_wav_parts(raw)
+    parts=_wav_parts(raw)
     if not parts:return None
+    # Audio is an optional encoder candidate. Missing Python extras or libsndfile must not
+    # prevent the builder from trying its ordinary reversible codecs; decode still fails
+    # explicitly when an existing archive actually requires the unavailable audio codec.
+    try:np,sf=_audio_modules()
+    except (ImportError,OSError):return None
     prefix,pcm,suffix,ch,rate,bits=parts
     if bits==16:arr=np.frombuffer(pcm,dtype='<i2');sub='PCM_16'
     elif bits==32:arr=np.frombuffer(pcm,dtype='<i4');sub='PCM_32'

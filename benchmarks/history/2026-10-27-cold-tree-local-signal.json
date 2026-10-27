@@ -1,0 +1,166 @@
+{
+  "schema": "cmpct-cold-tree-local-diagnostic-v1",
+  "status": "INTERNAL_AGGREGATE_SIGNAL_NOT_PUBLIC_PRODUCT_BENCHMARK_OR_RELEASE_EVIDENCE",
+  "source_code": {
+    "engine_base": "80c358f8824ec1b20d349c92ed94c898090969b0",
+    "audio_fix": "ebcdbca43b25d7b41ec7e90ba0fe7c3354ab81ed",
+    "research_candidate": "3800eef4"
+  },
+  "environment": {
+    "python": "3.13.5",
+    "system": "Linux",
+    "kernel": "6.12.107+deb13-amd64",
+    "machine": "x86_64",
+    "tar": "GNU tar 1.35",
+    "cli_zstd": "1.5.7",
+    "cmpct_codec": "ambient libzstd 1.5.7 via explicit diagnostic adapter",
+    "msgpack": "pip-vendored 1.1.0, pure Python fallback; normal C extension NOT TESTED",
+    "shipping_zstd_1_5_5": "NOT TESTED",
+    "optional_native_cdc_in_measured_encoder": false
+  },
+  "corpus": {
+    "logical_bytes": 4821269202,
+    "regular_files": 378283,
+    "directories": 28792,
+    "symlinks": 4748,
+    "selected_member_bytes": 4321
+  },
+  "repetitions": 1,
+  "same_source_manifest": true,
+  "source_stable": true,
+  "semantics": {
+    "layer": "fresh processes, full CLI; uncontrolled/warm filesystem cache",
+    "rss": "maximum individual child high-water RSS, not simultaneous aggregate",
+    "exactness": "SHA-256 of every regular file; full path/kind set and symlink targets",
+    "metadata": "default encoder/extractor settings; ownership/xattrs/hardlink topology not adjudicated",
+    "integrity": "tar zstd checksums; CMPCT read validation; external SHA-256 after extraction",
+    "durability": "no fsync on either side",
+    "tar": "GNU tar --sort=name, default GNU format",
+    "cmpct_source_links": "trusted original source only; no link-parent pivots; never follow targets",
+    "creation_workers": 4,
+    "cmpct_reproducible_flag": false
+  },
+  "provenance_note": "The local raw tar aggregate misdescribed default format as PAX; command actually used GNU tar default GNU. This corrects the description, not the executed commands.",
+  "results": {
+    "cmpct_diagnostic": {
+      "bytes": 170786966,
+      "create": {
+        "wall_s": 224.84012672794051,
+        "rss_max_child_kib": 1829360
+      },
+      "extract": {
+        "wall_s": 65.38932606298476,
+        "rss_max_child_kib": 1247408
+      },
+      "single": {
+        "wall_s": 25.414516507997178,
+        "rss_max_child_kib": 426172
+      },
+      "roundtrip_exact": true,
+      "single_exact": true
+    },
+    "index_window_diagnostic": {
+      "bytes": 166305380,
+      "extract": {
+        "wall_s": 103.55689174507279,
+        "rss_max_child_kib": 1250816
+      },
+      "single": {
+        "wall_s": 5.662329217069782,
+        "rss_max_child_kib": 427428
+      },
+      "roundtrip_exact": true,
+      "single_exact": true,
+      "create": {
+        "base_create_s": 224.84012672794051,
+        "rewrite_s": 80.76,
+        "sum_s": 305.6001267279405,
+        "rss_max_successive_child_kib": 1829360,
+        "rewrite_rss_kib": 1201740,
+        "integrated_encoder_measured": false
+      }
+    },
+    "zstd-long": [
+      {
+        "create": {
+          "wall_s": 1284.589889668976,
+          "rss_max_child_kib": 3803044
+        },
+        "bytes": 184019152,
+        "extract": {
+          "wall_s": 20.13679691508878,
+          "rss_max_child_kib": 2102244
+        },
+        "roundtrip_exact": true,
+        "single": {
+          "wall_s": 5.225400827941485,
+          "rss_max_child_kib": 2102244
+        },
+        "single_exact": true
+      }
+    ],
+    "zstd": [
+      {
+        "create": {
+          "wall_s": 3397.08138629701,
+          "rss_max_child_kib": 696372
+        },
+        "bytes": 1629725194,
+        "extract": {
+          "wall_s": 17.518287498038262,
+          "rss_max_child_kib": 13796
+        },
+        "roundtrip_exact": true,
+        "single": {
+          "wall_s": 7.326995829003863,
+          "rss_max_child_kib": 13596
+        },
+        "single_exact": true
+      }
+    ]
+  },
+  "index_rewrite": {
+    "research_only": true,
+    "selected": true,
+    "base_bytes": 170786966,
+    "candidate_bytes": 166305380,
+    "index_raw_bytes": 57247558,
+    "index_base_bytes": 4086273,
+    "index_trial_bytes": 1845480,
+    "payload_bytes_changed": 0
+  },
+  "index_ablation": {
+    "12": {
+      "bytes": 4274116,
+      "wall_s": 2.081702488940209
+    },
+    "19": {
+      "bytes": 3219043,
+      "wall_s": 63.547680053976364
+    }
+  },
+  "cdc_raw_oracle": {
+    "tier": "raw chunk inventory only, not a complete archive or compression comparison",
+    "unique_large_files": 39,
+    "native_cdc_eligible_files": 11,
+    "logical_bytes": 91340487,
+    "fixed_unique_chunk_bytes": 86310581,
+    "cdc_unique_chunk_bytes": 85511333,
+    "fixed_chunks": 350,
+    "cdc_chunks": 228,
+    "exact_reassembly": true,
+    "wall_s": 0.8594042609911412
+  },
+  "measurement_launchers": "Local one-shot CMPCT drivers used the same CLI commands and unchanged timed_pipeline/manifest helpers. Committed --diagnostic-runtime support was added after these measurements for reproduction; helper hashes do not claim byte-identical launcher provenance.",
+  "limits": [
+    "one repetition and uncontrolled background/cache; timing causality not established",
+    "source paths, contents, member hashes and corpus fingerprint intentionally withheld",
+    "all regular bytes/namespace/link targets verified; UID/GID/xattrs/hardlink topology not adjudicated",
+    "index candidate is research only; genuine native resource/portability and release-parity gates due"
+  ],
+  "reproduction_helper_sha256": {
+    "benchmarks/cold_archive_bench.py": "580614065de3455a9d1fb34cc0083ecf5ccd7cf2f78b7502effc91e863be8c99",
+    "benchmarks/diagnostic_zstd_adapter.py": "51ca6b56f70283c87d9e7ce52be92dfe5685ab4165b23e90cd11efa7ac34188a",
+    "experiments/cold_index_window.py": "bd10f8a1afbcf48e762ca604ac58521b772a06ff7539ef82da0e009850208c62"
+  }
+}
