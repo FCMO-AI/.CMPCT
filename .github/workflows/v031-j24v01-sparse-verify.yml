@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/cmpct/reader.py'
       - 'tests/test_j24v01_sparse_verify_streamed.py'
+      - 'research/j24v01_sparse_digest_oracle.py'
       - 'docs/v031-research/2026-10-27-j24v01-*'
       - '.github/workflows/v031-j24v01-sparse-verify.yml'
   workflow_dispatch:
@@ -40,6 +41,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .
           python -m pip install pytest
+      - name: Independent stdlib SHA/geometry oracle
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24v01_sparse_digest_oracle.py | tee evidence/independent-oracle.json
       - name: Run frozen vector, hostile mutations and real sparse RSS
         shell: bash
         run: |
