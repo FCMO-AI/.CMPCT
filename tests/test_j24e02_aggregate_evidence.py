@@ -63,6 +63,26 @@ def _hostile(kind):
         token = {"zip-NaN": "NaN", "zip-Infinity": "Infinity",
                  "zip--Infinity": "-Infinity", "zip-overflow": "1e309"}[kind]
         return good.replace(needle, '"zip":{"bytes":1000,"create_s_median":' + token, 1)
+    if kind in ("zip-string-nan", "zip-string-inf", "zip-zero-time",
+                "zip-string-time", "zip-bool-bytes", "zip-negative-bytes",
+                "cmpct-string-time"):
+        record = _report()
+        row = record["corpora"]["independent"]
+        if kind == "zip-string-nan":
+            row["library"]["zip"]["create_s_median"] = "nan"
+        elif kind == "zip-string-inf":
+            row["library"]["zip"]["extract_s_median"] = "inf"
+        elif kind == "zip-zero-time":
+            row["library"]["zip"]["create_s_median"] = 0
+        elif kind == "zip-string-time":
+            row["cli"]["zip"]["create_s_median"] = "0.1"
+        elif kind == "zip-bool-bytes":
+            row["library"]["zip"]["bytes"] = True
+        elif kind == "zip-negative-bytes":
+            row["cli"]["zip"]["bytes"] = -1
+        else:
+            row["library"]["cmpct"]["create_s_median"] = "0.1"
+        return _dump(record)
     raise AssertionError(kind)
 
 
@@ -133,6 +153,26 @@ class AggregateEvidenceCourt(unittest.TestCase):
                     "nonfinite" if kind in ("zip-NaN", "zip-Infinity", "zip--Infinity", "zip-overflow") else "duplicate JSON object key",
                     fixed_run.stderr, kind + ": " + fixed_run.stderr,
                 )
+
+    def test_typed_metric_laundering_above_json_parser(self):
+        good = _dump(_report())
+        for kind in ("zip-string-nan", "zip-string-inf", "zip-zero-time",
+                     "zip-string-time", "zip-bool-bytes", "zip-negative-bytes",
+                     "cmpct-string-time"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as td:
+                d = Path(td)
+                base_run, base = _aggregate(CANDIDATE_AGG, good, good, d, "base")
+                self.assertEqual(base_run.returncode, 0, base_run.stderr)
+                hostile = _hostile(kind)
+                original_run, old_path = _aggregate(ORIGINAL_AGG, hostile, hostile, d, "original")
+                self.assertEqual(original_run.returncode, 0, kind + ": " + original_run.stderr)
+                old_verdict = _command(CHECKER, "--base", base, "--candidate", old_path)
+                self.assertEqual(old_verdict.returncode, 0, kind + ": " + old_verdict.stderr + old_verdict.stdout)
+                fixed_run, output = _aggregate(CANDIDATE_AGG, hostile, hostile, d, "fixed")
+                self.assertNotEqual(fixed_run.returncode, 0, kind)
+                self.assertFalse(output.exists(), kind)
+                self.assertIn("ValueError", fixed_run.stderr, kind)
+                self.assertIn("expected", fixed_run.stderr, kind + ": " + fixed_run.stderr)
 
 
 if __name__ == "__main__":
