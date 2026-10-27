@@ -1,0 +1,75 @@
+# ci-lane: fast
+name: CMPCT J24N02 native CDC size_t bounds source-exact court
+on:
+  pull_request:
+    paths:
+      - native/cmpct_cdc.c
+      - tests/native_cdc_bounds_court.c
+      - tests/native_cdc_bounds_runner.py
+      - docs/v031-research/2026-10-27-j24n02-cdc-size-t-bounds-prereg.md
+      - .github/workflows/v031-j24n02-native-cdc-bounds.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24n02-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-boundary:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact source and unshallow historical parent
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+
+      - name: Configure native C compiler on Windows
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Exact-source ordinary parity and extreme-boundary native court
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          mkdir -p j24n02-receipts
+          python tests/native_cdc_bounds_runner.py
+
+      - name: Linux ASan/UBSan candidate-only boundary court
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O1 -g -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            tests/native_cdc_bounds_court.c native/cmpct_cdc.c \
+            -o j24n02-receipts/native-cdc-sanitized
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+            UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+            j24n02-receipts/native-cdc-sanitized candidate \
+            > j24n02-receipts/sanitized-candidate.log
+          grep -q '^EXTREME_BOUNDARY_COURT PASS' j24n02-receipts/sanitized-candidate.log
+
+      - name: Preserve exact-source native experiment receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24n02-${{ matrix.os }}-${{ github.run_id }}
+          path: |
+            j24n02-receipts/*.json
+            j24n02-receipts/*.log
+          if-no-files-found: warn
+
+# Native correctness is necessary but not sufficient for product promotion.
+# Optional native CDC is not automatically exercised by shipping Builder/Reader.
