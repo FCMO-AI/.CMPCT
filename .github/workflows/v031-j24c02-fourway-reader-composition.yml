@@ -1,0 +1,175 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24C02 fixed/CDC/sparse + fd publication
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24c02-fixed-geometry-fd-composition-20261027
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_o212_sparse_admission.py'
+      - 'tests/test_o214_cdc_admission.py'
+      - 'tests/test_o215_fixed_chunk_admission.py'
+      - 'research/o215_fixed_chunk_baseline_probe.py'
+      - 'tests/test_chunked_extract_platform_fchmod.py'
+      - 'research/j24f11_fd_fresh_chunk_publication_court.py'
+      - 'research/j24f12_opath_wx_parent_court.py'
+      - 'research/j24c01_geometry_fd_composed_court.py'
+      - '.github/workflows/v031-j24c02-fourway-reader-composition.yml'
+      - 'docs/v031-research/2026-10-27-j24c02-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c02-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  composed-reader:
+    name: Same installed Reader on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate exact commit and inherited source families
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git merge-base --is-ancestor dd723d128b5a020f154b4c9f7d37c6eedc929f24 HEAD
+          git merge-base --is-ancestor 2e6ff5b89c0a0fba32e306ee1ce47a78a093c9ac HEAD
+          git merge-base --is-ancestor ad1c1a923d20da8c2f737b923af725c69484e875 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = "$(git rev-parse dd723d128b5a020f154b4c9f7d37c6eedc929f24:src/cmpct/validation.py)"
+          test "$(git rev-parse HEAD:tests/test_o212_sparse_admission.py)" = 10605b0a255c90c9ebe2473bf7aefdb14e9b4ea3
+          test "$(git rev-parse HEAD:tests/test_o214_cdc_admission.py)" = ce5bb0c6da2f6d38dcf2b32956b6dfc08e05eaec
+          test "$(git rev-parse HEAD:tests/test_chunked_extract_platform_fchmod.py)" = 8261888e8067da2f417ebe9e50bbb648c2838b19
+          test "$(git rev-parse HEAD:tests/test_o215_fixed_chunk_admission.py)" = a8efaebd9fff8b3203cfd55304d365c309ff394b
+          test "$(git rev-parse HEAD:research/o215_fixed_chunk_baseline_probe.py)" = 7707f2f0f5431bde3786b0d293175071d72d2c9e
+          # Surgical composition: entire O215 constructor, all other J24C01 Reader source.
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+          def committed(ref):
+              return subprocess.check_output(["git","show",ref+":src/cmpct/reader.py"]).decode()
+          parent=committed("d3b12852511095d6e98803f55cfd700b8e9ac6b3")
+          owner=committed("3aad965da3b81eb47257e974e1bd86a21add45da")
+          candidate=Path("src/cmpct/reader.py").read_text()
+          def split(text):
+              first=text.index("    def __init__(self,path:Path):",text.index("class CMPCT:"))
+              last=text.index("    def close(self):",first)
+              return text[:first],text[first:last],text[last:]
+          p0,p1,p2=split(parent);o0,o1,o2=split(owner);c0,c1,c2=split(candidate)
+          assert c0==p0 and c2==p2,"unexpected mutation outside constructor"
+          assert c1==o1,"O215 owner constructor drift"
+          assert "S_CHUNKS" in c1 and "S_CDC" in c1 and "S_SPARSE" in c1
+          print("J24C02_INHERITED_METHODS_EXACT=PASS")
+          print("J24C02_O215_CONSTRUCTOR_EXACT=PASS")
+          PY
+          python -m py_compile src/cmpct/reader.py tests/test_o212_sparse_admission.py tests/test_o214_cdc_admission.py tests/test_o215_fixed_chunk_admission.py
+          mkdir -p j24c02-evidence
+          git rev-parse HEAD > j24c02-evidence/head.sha
+          git rev-parse HEAD:src/cmpct/reader.py > j24c02-evidence/reader.blob
+          git rev-parse HEAD:src/cmpct/validation.py > j24c02-evidence/validation.blob
+          git diff --stat dd723d128b5a020f154b4c9f7d37c6eedc929f24 HEAD > j24c02-evidence/diff-stat.txt
+      - name: Independently install genuine CMPCT and test runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+      - name: Verify site-installed Reader and validator are exact Git HEAD bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import hashlib,inspect,os,subprocess
+          from pathlib import Path
+          import cmpct.reader as rd
+          import cmpct.validation as va
+          repo=Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for module,path in ((rd,"src/cmpct/reader.py"),(va,"src/cmpct/validation.py")):
+              actual=Path(inspect.getfile(module)).resolve()
+              assert not actual.is_relative_to(repo),("site-install required",str(actual))
+              committed=subprocess.check_output(["git","show","HEAD:"+path],cwd=repo)
+              normalize=lambda b:b.replace(b"\r\n",b"\n")
+              assert normalize(actual.read_bytes())==normalize(committed),("installed-source drift",path)
+              print("J24C02_INSTALLED_SOURCE="+path+" SHA256="+hashlib.sha256(normalize(committed)).hexdigest(),flush=True)
+          PY
+      - name: Re-run unchanged independent authenticated S_SPARSE and S_CDC courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$GITHUB_WORKSPACE/tests/test_o212_sparse_admission.py" "$RUNNER_TEMP/test_o212_sparse_admission.py"
+          cp "$GITHUB_WORKSPACE/tests/test_o214_cdc_admission.py" "$RUNNER_TEMP/test_o214_cdc_admission.py"
+          cp "$GITHUB_WORKSPACE/tests/test_chunked_extract_platform_fchmod.py" "$RUNNER_TEMP/test_chunked_extract_platform_fchmod.py"
+          cp "$GITHUB_WORKSPACE/tests/test_o215_fixed_chunk_admission.py" "$RUNNER_TEMP/test_o215_fixed_chunk_admission.py"
+          mkdir -p "$RUNNER_TEMP/conformance"
+          cp "$GITHUB_WORKSPACE/tests/conformance/v24-chunk-maps.json" "$RUNNER_TEMP/conformance/v24-chunk-maps.json"
+          cd "$RUNNER_TEMP"
+          python -m pytest -q test_o212_sparse_admission.py test_o214_cdc_admission.py test_o215_fixed_chunk_admission.py test_chunked_extract_platform_fchmod.py \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24c02-evidence/geometry-tests.log"
+      - name: Genuine J24C01 pre-change negative on installed parent (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/j24c02-parent" d3b12852511095d6e98803f55cfd700b8e9ac6b3
+          python -m pip install --no-deps "$RUNNER_TEMP/j24c02-parent" --target "$RUNNER_TEMP/j24c02-parent-site"
+          cd "$RUNNER_TEMP"
+          PYTHONPATH="$RUNNER_TEMP/j24c02-parent-site:$RUNNER_TEMP" \
+            python "$GITHUB_WORKSPACE/research/o215_fixed_chunk_baseline_probe.py" \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24c02-evidence/j24c01-original-negative.json"
+          grep -q 'PARENT_SELECTIVE_IN_BOUNDS_SHORT_READ' "$GITHUB_WORKSPACE/j24c02-evidence/j24c01-original-negative.json"
+      - name: Re-run inherited Linux fd-ownership and write-search-only publication courts
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          blob="$(git rev-parse HEAD:src/cmpct/reader.py)"
+          python research/j24f11_fd_fresh_chunk_publication_court.py \
+            --expected-blob "$blob" \
+            --output "$PWD/j24c02-evidence/inherited-j24f11.json" \
+            | tee j24c02-evidence/inherited-j24f11.log
+          grep -q 'J24F11_DECISION=SCOPED_LINUX_FRESH_CHUNK_FD_PUBLISH_PASS' j24c02-evidence/inherited-j24f11.log
+          python research/j24f12_opath_wx_parent_court.py \
+            --expected-blob "$blob" \
+            --output "$PWD/j24c02-evidence/inherited-j24f12.json" \
+            | tee j24c02-evidence/inherited-j24f12.log
+          grep -q 'J24F12_DECISION=WX_ONLY_PARENT_EXACT_FD_TRANSFER_PASS' j24c02-evidence/inherited-j24f12.log
+      - name: Integrated hostile/positive CDC geometry × anonymous published inode
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          blob="$(git rev-parse HEAD:src/cmpct/reader.py)"
+          python research/j24c01_geometry_fd_composed_court.py \
+            --expected-reader-blob "$blob" \
+            --output "$PWD/j24c02-evidence/integrated-cdc-publication.json" \
+            | tee j24c02-evidence/integrated-cdc-publication.log
+          grep -q 'J24C01_DECISION=COMPOSED_CDC_ADMISSION_AND_FD_PUBLICATION_PASS' j24c02-evidence/integrated-cdc-publication.log
+      - name: Preserve raw results including failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24c02-${{ runner.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24c02-evidence/
+          if-no-files-found: warn
+          retention-days: 30
