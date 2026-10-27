@@ -15,6 +15,14 @@ def check(baseline_path, fixed_path):
     assert old["mode"]=="vulnerable" and new["mode"]=="repaired"
     assert old["case_count"]==new["case_count"]==24
     assert old["empty_owners_verified"]==new["empty_owners_verified"]==2
+    assert old["frozen_vectors"]==new["frozen_vectors"]
+    assert len(old["frozen_vectors"])==3
+    assert all(v["result"]=="PASS" for v in old["frozen_vectors"])
+    assert len(old["raw_header_controls"])==len(new["raw_header_controls"])==2
+    for x,y in zip(old["raw_header_controls"],new["raw_header_controls"]):
+        assert x["kind"]==y["kind"] and x["archive_sha256"]==y["archive_sha256"]
+        assert x["preflight"]==y["preflight"]=="REJECT"
+        assert x["selected"]=="ACCEPT" and y["selected"]=="REJECT"
     positives=negatives=historical_spills=0
     for a,b in zip(old["cases"],new["cases"]):
         invariant=("codec","kind","declared","physical","archive_sha256","frame_sha256","tail_prefix")
@@ -38,7 +46,8 @@ def check(baseline_path, fixed_path):
     assert positives==6 and negatives==18 and historical_spills==2
     report={"decision":"J24B03_SIGNED_DIRECT_BLOB_SIZE_GUARD_CONFIRMED_IN_COURT",
             "cases":24,"positive":positives,"negative":negatives,
-            "original_tail_spills":historical_spills,"referee":"PASS"}
+            "original_tail_spills":historical_spills,"frozen_vectors":3,
+            "raw_header_controls":2,"referee":"PASS"}
     print(json.dumps(report,sort_keys=True))
     return report
 
