@@ -221,6 +221,9 @@ def run(args):
             plain = [r for r in group if r["arm"] == "plain"]
             skip = [r for r in group if r["arm"] == "skip"]
             staged = [r for r in group if r["arm"] == "instrumented"]
+            nonmonotonic = [r for r in staged if any(a > b for a, b in zip(
+                [e["rss"]["VmHWM_kib"] for e in r["events"]],
+                [e["rss"]["VmHWM_kib"] for e in r["events"]][1:]))]
             plain_hwm = med(plain, "after_open")
             skip_hwm = med(skip, "after_open")
             staged_hwm = med(staged, "after_open")
@@ -246,17 +249,20 @@ def run(args):
                 "largest_stage": phase,
                 "largest_stage_fraction": (
                     stages[phase] / baseline_growth if phase and baseline_growth > 0 else None),
-                "valid_stage_claim": bool(not missing and perturbation <= 0.15 and
+                "nonmonotonic_staged_samples": len(nonmonotonic),
+                "valid_stage_claim": bool(not missing and not nonmonotonic and perturbation <= 0.15 and
                                           baseline_growth > 0 and phase),
             })
     observed_perturbation = any(x["instrumentation_inflation_fraction"] > 0.15 for x in findings)
-    dominant = (not observed_perturbation and all(
+    invalid_stage_hwm = any(x["nonmonotonic_staged_samples"] > 0 for x in findings)
+    dominant = (not invalid_stage_hwm and not observed_perturbation and all(
         x["valid_stage_claim"] and x["largest_stage_fraction"] >= .60 and
         x["stage_hwm_increment_kib"][x["largest_stage"]] >= 65536 for x in findings)
         and len({x["largest_stage"] for x in findings}) == 1)
     omit = all(x["no_validation_hwm_saving_kib"] >= 65536 for x in findings)
     decision = {
-        "stage": ("DOMINANT_PHASE_SCOPED" if dominant else
+        "stage": ("INVALID_STAGE_HWM_SEQUENCE" if invalid_stage_hwm else
+                  "DOMINANT_PHASE_SCOPED" if dominant else
                   "MEASUREMENT_PERTURBED" if observed_perturbation else "MIXED_OR_UNRESOLVED"),
         "largest_stage": findings[0]["largest_stage"] if dominant else None,
         "validation_counterfactual": (
