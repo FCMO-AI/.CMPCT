@@ -1,0 +1,77 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24F12 unreadable-parent descriptor publication
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24f12_opath_wx_parent_court.py'
+      - '.github/workflows/v031-j24f12-opath-wx-parent.yml'
+      - 'docs/v031-research/2026-10-27-j24f12-opath-wx-parent-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: j24f12-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-wx-parent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate prereg, J24F11 ancestry and current head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 2c58c7efab718207e0f22e2497213c2fa9174652 HEAD
+          git merge-base --is-ancestor 98139bceefb605f548d632882d007e1a40d8112a HEAD
+          python -m py_compile src/cmpct/reader.py research/j24f12_opath_wx_parent_court.py
+          python -m py_compile research/j24f11_fd_fresh_chunk_publication_court.py
+          git show -s --format='%H %s'
+      - name: Independently install actual CMPCT package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Execute genuine write-search-only destination cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence-artifacts
+          blob="$(git hash-object src/cmpct/reader.py)"
+          printf 'J24F12_HEAD=%s\nJ24F12_READER_BLOB=%s\n' "$(git rev-parse HEAD)" "$blob" | tee evidence-artifacts/source.txt
+          python research/j24f12_opath_wx_parent_court.py \
+            --expected-blob "$blob" \
+            --output "$PWD/evidence-artifacts/j24f12.json" \
+            | tee evidence-artifacts/stdout-j24f12.txt
+          grep -q 'J24F12_DECISION=WX_ONLY_PARENT_EXACT_FD_TRANSFER_PASS' evidence-artifacts/stdout-j24f12.txt
+      - name: Re-run unchanged J24F11 eight-case inheritance court
+        shell: bash
+        run: |
+          set -euo pipefail
+          blob="$(git hash-object src/cmpct/reader.py)"
+          python research/j24f11_fd_fresh_chunk_publication_court.py \
+            --expected-blob "$blob" \
+            --output "$PWD/evidence-artifacts/j24f11-inherited.json" \
+            | tee evidence-artifacts/stdout-j24f11.txt
+          grep -q 'J24F11_DECISION=SCOPED_LINUX_FRESH_CHUNK_FD_PUBLISH_PASS' evidence-artifacts/stdout-j24f11.txt
+      - name: Preserve raw evidence, including failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24f12-${{ runner.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: evidence-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
