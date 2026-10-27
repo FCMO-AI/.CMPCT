@@ -1,0 +1,70 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Scientific Reader contract test: no product edits, no release credit.
+name: CMPCT J24P04 post-link pathname custody court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24p03-anonymous-overwrite-boundary-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24p04-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-reader-linux-postlink:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate unchanged Reader and prospective preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 7cccb4e2d36001cd2a3672f778c010cb30c53c28 HEAD
+          git merge-base --is-ancestor cba3636f7cbc28562908ef02cedb69ba11f98afa HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 83c6600fa6cc951c1e6a136d239a39bb2c5d836b
+          test -z "$(git diff --name-only dd723d128b5a020f154b4c9f7d37c6eedc929f24 HEAD -- src/ native/ tests/ benchmarks/)"
+          python -m py_compile research/j24p04_postlink_reader_court.py research/j24p04_receipt_audit.py
+          mkdir -p j24p04-evidence
+          git rev-parse HEAD > j24p04-evidence/source-head.txt
+          git rev-parse HEAD:research/j24p04_postlink_reader_court.py > j24p04-evidence/instrument-blob.txt
+          git rev-parse HEAD:docs/v031-research/2026-10-27-j24p04-postlink-namespace-custody-prereg.md > j24p04-evidence/prereg-blob.txt
+          git rev-parse HEAD:src/cmpct/reader.py > j24p04-evidence/reader-blob.txt
+      - name: Install exact CMPCT independently of checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Authentic r24 fixed and CDC Linux Reader after-link court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24p04_postlink_reader_court.py \
+            --expected-blob 83c6600fa6cc951c1e6a136d239a39bb2c5d836b \
+            --output j24p04-evidence/result.json \
+            2>&1 | tee j24p04-evidence/observations.txt
+          grep -F "J24P04_DECISION=DIRECT_FD_LINK_AUTHENTIC_AT_SYSCALL_NOT_PERPETUAL_PATH_CUSTODY" j24p04-evidence/observations.txt
+          python research/j24p04_receipt_audit.py j24p04-evidence/result.json | tee j24p04-evidence/independent-audit.txt
+          sha256sum j24p04-evidence/result.json > j24p04-evidence/result.sha256
+      - name: Preserve original receipts, also on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p04-postlink-${{ github.sha }}
+          path: j24p04-evidence/
+          if-no-files-found: warn
