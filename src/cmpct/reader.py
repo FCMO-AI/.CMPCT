@@ -524,8 +524,19 @@ class CMPCT:
         if row[1] not in (K_FILE,K_SYMLINK) or not storage or storage[0]!=S_BLOB:return None
         idx=storage[1];off,us,cs,codec,ml=self.blobs[idx]
         if codec!=CODEC_DEFLATE:return None
-        pos=self.record_base+off;m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+        # ZIP's zero-recompression path bypasses _blob(). It must independently honor the
+        # same signed logical owner and physical BHDR restrictions as ordinary reads.
+        if type(row[4]) is not int or row[4]!=us:
+            raise IOError('Deflate export logical owner size mismatch')
+        pos=self.record_base+off
+        if pos<self.record_base or pos+BHDR.size>len(self.mm):
+            raise IOError('Deflate export blob header outside archive')
+        m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+        if m!=BMAGIC or c!=CODEC_DEFLATE or flags or res or rus!=us or rcs!=cs or rml!=ml:
+            raise IOError('Deflate export blob header mismatch')
         p=pos+BHDR.size+rml
+        if p<0 or p+rcs>len(self.mm):
+            raise IOError('Deflate export stream outside archive')
         return self.mm[p:p+rcs],rcrc,rus
 
     def export_zip(self,out:Path,level=6):
