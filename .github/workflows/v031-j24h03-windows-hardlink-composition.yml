@@ -1,0 +1,112 @@
+# ci-lane: fast
+name: CMPCT J24H03 Win32 Builder x owner-first Reader composition
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/reader.py'
+      - 'tests/test_v031_win32_builder_hardlink_o47.py'
+      - 'tests/j24h02_writer_forward_transfer_court.py'
+      - '.github/workflows/v031-j24h03-windows-hardlink-composition.yml'
+      - 'docs/v031-research/2026-10-27-j24h03-*'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  authentic-win32-composition:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 27
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          ref: 3b852473cda137b8333fd0f214e1d4bcaf0788a3
+          path: historical
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install actual candidate and source-faithful historical native packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e './candidate[test]' pytest
+          python -m pip install --no-deps -e './historical'
+      - name: Rehydrate exact committed Reader bytes after checkout EOL conversion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import subprocess
+          for root, expected in (
+              ('candidate', '243b46d68211a2b125e07f7c92966535f5f0bdc9'),
+              ('historical', 'e716233403dabd0966863c45635e18fa5ac6afb8'),
+          ):
+              blob = subprocess.check_output(['git', '-C', root, 'show', 'HEAD:src/cmpct/reader.py'])
+              got = hashlib.sha1(b'blob ' + str(len(blob)).encode() + b'\0' + blob).hexdigest()
+              assert got == expected, (root, 'committed blob wrong', got, expected)
+              p = Path(root) / 'src/cmpct/reader.py'
+              p.write_bytes(blob)
+              actual = p.read_bytes()
+              assert actual == blob, (root, 'imported Reader not exactly Git committed bytes')
+              print('J24H03B_IMPORTED_GIT_SOURCE=' + root + ':' + got)
+          PY
+      - name: Bind immutable source identities and run O47 genuine filesystem tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts o47-isolated
+          test "$(git -C candidate rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git -C historical rev-parse HEAD)" = "3b852473cda137b8333fd0f214e1d4bcaf0788a3"
+          test "$(git -C candidate hash-object src/cmpct/builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
+          test "$(git -C candidate hash-object src/cmpct/reader.py)" = "243b46d68211a2b125e07f7c92966535f5f0bdc9"
+          test "$(git -C candidate hash-object tests/test_v031_win32_builder_hardlink_o47.py)" = "6c00ae49eea075957453d6d7238d988add6eedee"
+          test "$(git -C historical hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          git -C candidate rev-parse HEAD > benchmark-artifacts/candidate-head.txt
+          git -C historical rev-parse HEAD > benchmark-artifacts/historical-head.txt
+          git -C candidate hash-object src/cmpct/builder.py > benchmark-artifacts/builder-blob.txt
+          git -C candidate hash-object src/cmpct/reader.py > benchmark-artifacts/reader-blob.txt
+          python candidate/tools/check_ci_topology.py candidate/.github/workflows/v031-j24h03-windows-hardlink-composition.yml
+          cp candidate/tests/test_v031_win32_builder_hardlink_o47.py o47-isolated/test_v031_win32_builder_hardlink_o47.py
+          PYTHONPATH="$GITHUB_WORKSPACE/candidate/src" python -m pytest -v o47-isolated/test_v031_win32_builder_hardlink_o47.py --junitxml=benchmark-artifacts/o47-pytest.xml 2>&1 | tee benchmark-artifacts/o47-pytest.log
+      - name: Three-process first-party Writer forward-link historical negative and candidate positive
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$GITHUB_WORKSPACE/candidate/src" python candidate/tests/j24h02_writer_forward_transfer_court.py --root "$GITHUB_WORKSPACE/j24h03-fixture" --mode prepare --reader-blob 243b46d68211a2b125e07f7c92966535f5f0bdc9 --receipt-dir benchmark-artifacts | tee benchmark-artifacts/prepare.log
+          PYTHONPATH="$GITHUB_WORKSPACE/historical/src" python candidate/tests/j24h02_writer_forward_transfer_court.py --root "$GITHUB_WORKSPACE/j24h03-fixture" --mode parent-negative --reader-blob e716233403dabd0966863c45635e18fa5ac6afb8 --receipt-dir benchmark-artifacts | tee benchmark-artifacts/parent-negative.log
+          PYTHONPATH="$GITHUB_WORKSPACE/candidate/src" python candidate/tests/j24h02_writer_forward_transfer_court.py --root "$GITHUB_WORKSPACE/j24h03-fixture" --mode candidate-positive --reader-blob 243b46d68211a2b125e07f7c92966535f5f0bdc9 --receipt-dir benchmark-artifacts | tee benchmark-artifacts/candidate-positive.log
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path('benchmark-artifacts')
+          a, b, c = (json.loads((root / (mode + '.json')).read_text())
+                     for mode in ('prepare', 'parent-negative', 'candidate-positive'))
+          assert a['renamed_sha256'] == b['renamed_sha256'] == c['renamed_sha256'], 'same physical archive must be evaluated'
+          assert b['result'] == 'EXPECTED_BUG_REPRODUCED', 'genuine historical negative must survive'
+          assert c['result'] == 'EXACT_SHARED_INODE_RESTORED', 'candidate must preserve hardlink inode'
+          if os.name != 'nt':
+              assert a['renamed_sha256'] == 'b608efbb0b11bc6a42c1c1299fc5fde94e303120e0c685f96cff6fc99d08eee9', 'POSIX archive identity regressed'
+          print('J24H03_THREE_PROCESS_CUSTODY=PASS', a['renamed_sha256'])
+          PY
+      - name: Retain all raw source and behavioral receipts including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24h03-hardlink-composition-${{ matrix.os }}-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
