@@ -88,6 +88,8 @@ def run() -> dict:
                     lambda: ar.read_range("direct.bin", 128, 8))
             report["cases"][label] = case
 
+    # Preserve all observations even if the prospectively frozen discriminator fails.
+    print("J24B01_RAW_OBSERVATIONS=" + json.dumps(report, sort_keys=True), flush=True)
     valid, bad = report["cases"]["valid"], report["cases"]["oversized"]
     assert valid["physical_sha256"] == bad["physical_sha256"]
     assert valid["preflight"]["status"] == "ACCEPT"
