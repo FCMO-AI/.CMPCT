@@ -1,0 +1,69 @@
+# ci-lane: scientific
+name: J24K01 authenticated PACK selective integrity court
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/v031-j24k01-pack-selective.yml"
+      - "research/j24k01_*.py"
+      - "docs/v031-research/2026-10-27-j24k01*"
+      - "src/cmpct/reader.py"
+      - "tests/conformance/v24-pack.json"
+      - "tests/native_pack_auth_index_abi.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24k01-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  signed-pack-selective:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install exact source and independent fixture dependencies
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pip install -e '.[test]'
+          python - <<'PY'
+          import ctypes.util, msgpack
+          assert ctypes.util.find_library('zstd'), "independent golden generator requires system libzstd"
+          print("msgpack", msgpack.__version__)
+          PY
+      - name: Execute exact Reader / authenticated hostile-wire experiment
+        run: |
+          set -euo pipefail
+          mkdir -p j24k01-artifact
+          git rev-parse HEAD | tee j24k01-artifact/head.txt
+          git hash-object src/cmpct/reader.py | tee j24k01-artifact/reader-blob.txt
+          git hash-object tests/conformance/v24-pack.json | tee j24k01-artifact/golden-blob.txt
+          python research/j24k01_pack_selective_court.py > j24k01-artifact/court.json
+          python -m json.tool j24k01-artifact/court.json > /dev/null
+      - name: Independent receipt/wire referee and hostile mutations
+        run: |
+          set -euo pipefail
+          python research/j24k01_independent_referee.py j24k01-artifact/court.json --hostile-selftest | tee j24k01-artifact/referee.txt
+          sha256sum j24k01-artifact/* | tee j24k01-artifact-sha256.txt
+      - name: Preserve independent evidence including negative cases
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24k01-signed-pack-selective-${{ github.sha }}
+          path: |
+            j24k01-artifact/
+            j24k01-artifact-sha256.txt
+          if-no-files-found: warn
+          retention-days: 30
