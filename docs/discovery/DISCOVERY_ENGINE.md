@@ -97,21 +97,13 @@ The Discovery Engine cannot alter frozen benchmarks, thresholds, comparators, pr
 
 Success is a changed map of what is possible: product improvement, decisive falsification, newly measured bound, preserved breakthrough with reduced debt, or an evidence-backed search-method lesson that makes future decisions cheaper/better.
 
-## Current bootstrap target — temporal, not permanent doctrine
+## Volatile frontier — read live state, not a frozen bootstrap
 
-At this reconciliation point, v0.30 runtime rehabilitation remains release-critical, but the create-side search question has changed decisively. PR #139 / fresh-process run `35415287116` demonstrates that G04 can reuse the exact attempt-5 candidate already paid for by the accepted v0.29 portfolio: exact final archive/tree identity, one graph build, 0 B retained payload rewrite, median wall saving 23.359 s / 34.665%, and median CPU saving 26.355%. This exceeds the numerical `shared-build-rehab` research hurdle but is not release credit because the proof still lives in an experimental ownership seam rather than the authoritative candidate fingerprint.
+The former v0.30/G04 shared-build rehabilitation bootstrap is **historical**, not a standing work assignment. Published `docs/V030_EFFICIENCY_RECOVERY.md` says the v0.30 release gate is CLOSED, while v0.31 experiments now live on separate concurrent draft PR branches. Its experimental result and historic follow-ups remain in Git history; deleting the temporal assignment does not retire or reclassify those measurements.
 
-The next cycle should therefore productize before reopening nearby create variants:
+On every activation, reconcile `docs/discovery/STATE.json` against **live** `AGENTS.md`, `docs/CURRENT_STATE.md`, current PR/issue ownership, source SHAs and exact-head evidence. Follow the present highest-leverage unclaimed action, not a mechanism hard-coded in this doctrine. `STATE.json` is a cache, not a lock, release gate, truth source or independent roadmap.
 
-1. fold attempt-5 lifetime/output into the authoritative scheduler/G04 ownership boundary, preferably through caller-owned same-filesystem workspace semantics rather than duplicate scheduler code, hardlink-specific product semantics, or global interception;
-2. require exact archive/tree identity, `attempt5_graph_build_count == 1`, zero archive-sized retention copy, and fresh-process wall/CPU/RSS/temp-I/O accounting on the authoritative path;
-3. rebuild fingerprint-bound `shared-build-rehab` and full runtime evidence without weakening its thresholds;
-4. then return to extraction as a separate causal owner: wrapper/session fusion measured only ~2.09%, so do not repeat that family without new evidence—localize reconstruction/verification/data-movement cost instead;
-5. keep one cheap worldview-distance representation/proof hypothesis queued so Forge rehabilitation does not become a permanent local optimum.
-
-An isolated r24 binary/CLI timing failure on the experimental PR is evidence debt to replicate, not a reason to erase the ownership result or waive the gate. If a candidate branch changes no canonical CLI code, use replication and causal comparison to classify such a result; scientific evidence wins over convenience either way.
-
-Update/remove this bootstrap section whenever repository truth changes again.
+This removes a superseded temporal pointer only. The BONK filters, anti-Goodhart contract, evidence hierarchy, evaluator boundaries and release gates above are unchanged.
 
 ## Completion criterion
 
