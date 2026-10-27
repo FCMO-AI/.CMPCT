@@ -7,7 +7,7 @@ on:
       - agent/phased3-v031-o221-chunk-range-stride-court-20261027
   pull_request:
     branches:
-      - agent/phased3-v031-j24c02-fixed-chunk-fourway-reader-composition-20261027
+      - agent/phased2-v031-j24c02-fixed-geometry-fd-composition-20261027
   workflow_dispatch:
 
 permissions:
