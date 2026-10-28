@@ -12,7 +12,6 @@ import binascii
 import hashlib
 import io
 import json
-import os
 from pathlib import Path
 import struct
 import sys
@@ -40,9 +39,14 @@ def sha(data: bytes) -> bytes:
     return hashlib.sha256(data).digest()
 
 
+CHECKS = 0
+
+
 def check(condition, why: str):
+    global CHECKS
     if not condition:
         raise AssertionError(why)
+    CHECKS += 1
 
 
 def audit_archive(wire: bytes, case: str, expected_member_sha: str) -> tuple[bytes, bytes, int, int]:
@@ -101,7 +105,6 @@ def audit(root: Path) -> dict:
     cases = report["cases"]
     check({x["case"] for x in cases} == set(EXPECTED) and len(cases) == 5,
           "exact case roster")
-    counter = 0
     summary = []
     for item in cases:
         case = item["case"]
@@ -112,7 +115,7 @@ def audit(root: Path) -> dict:
               and len(wire) == item["r24_bytes"], "archive receipt")
         raw, comp, trailer_len, crc = audit_archive(wire, case, report["member_sha256"])
         check(trailer_len == item["trailing_bytes"], "footer and report trailer")
-        check(len(comp) == item["deflate_size"] and len(raw) == item["r24_bytes"] * 0 + report["member_bytes"],
+        check(len(comp) == item["deflate_size"] and len(raw) == report["member_bytes"],
               "record logical size")
         check(sha(independent).hex() == item["independent_zip_sha256"],
               "independent ZIP receipt")
@@ -140,14 +143,13 @@ def audit(root: Path) -> dict:
         else:
             check(emitted.startswith(b"existing-output-must-survive-rejection:"),
                   "no overwritten preexisting output")
-        counter += 19
         summary.append({"case": case, "physical_archive_sha256": sha(wire).hex(),
                         "trailing_bytes": trailer_len, "read": item["read"]["status"],
                         "verify": item["verify"]["status"], "export": item["export"]["status"]})
     check(report.get("decision") == "PR284_REJECTS_RELEASED_VALID_TRAILING_DEFLATE",
           "research decision")
     result = {"schema": "cmpct-j24g25-independent-physical-referee-v1",
-              "checks": counter + 4, "status": "PASS",
+              "checks": CHECKS, "status": "PASS",
               "scope": "detached physical r24, standard ZIP and reported Reader outcomes; not a second Reader",
               "cases": summary}
     (root / "referee_result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
