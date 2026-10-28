@@ -149,16 +149,22 @@ class ModelCourt(unittest.TestCase):
                     # A longer sparse logical file may simply have a valid trailing hole.
                     # A negative size is hostile for every member kind, without exception.
                     target[4] = -1
-                    with self.assertRaises(UnprovedEffect):
+                    with self.assertRaisesRegex(UnprovedEffect, "declared size"):
                         planned_logical_bytes(mod)
                 direct = next((x for x in obj["files"]
                     if x[1] in (K_FILE, K_SYMLINK) and x[6][0] == S_BLOB), None)
                 if direct:
-                    mod = copy.deepcopy(obj)
-                    victim = next(x for x in mod["files"] if x[0] == direct[0])
-                    victim[4] += 1  # Signed nonnegative/physical disagreement.
-                    with self.assertRaises(UnprovedEffect):
-                        planned_logical_bytes(mod)
+                    # Isolate this specific physical disagreement: an earlier
+                    # uncertified VZIP must not accidentally pass the falsifier.
+                    isolated = {
+                        "files": [copy.deepcopy(direct)],
+                        "blobs": copy.deepcopy(obj["blobs"]),
+                        "recipes": [],
+                    }
+                    isolated["files"][0][4] += 1
+                    with self.assertRaisesRegex(UnprovedEffect,
+                        "direct size/owner disagreement|symlink size/owner disagreement"):
+                        planned_logical_bytes(isolated)
         self.assertEqual(certified + uncertified_vzip, 2000)
         self.assertGreater(certified, 0)
         self.assertGreater(uncertified_vzip, 0)
