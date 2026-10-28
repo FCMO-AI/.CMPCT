@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/v031-a16-o0-sharing-run.yml'
       - 'research/a16_o0_sharing_run_court.py'
+      - 'research/a16_o1_coowner_intersection_hostile.py'
       - 'docs/v031-research/2026-10-28-a16-o0-sharing-run-*'
 jobs:
   source-exact-science:
@@ -28,6 +29,8 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y zstd libzstd1
       - name: Run falsifiable byte-bound and exact reconstruction
         run: python3 research/a16_o0_sharing_run_court.py --out a16-artifacts
+      - name: Run preregistered co-owner overlap hostile
+        run: python3 research/a16_o1_coowner_intersection_hostile.py --out a16-artifacts
       - name: Upload raw receipt even when hypothesis loses
         if: always()
         uses: actions/upload-artifact@v4
