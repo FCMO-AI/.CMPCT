@@ -1,0 +1,23 @@
+# J24H05 — Prospective first-party Win32 default-metadata hardlink composition
+
+**Date / prospective state:** 2026-10-27 UTC. PREDICTION FROZEN BEFORE PRODUCT MUTATION. Research-only; no automatic promotion. Base is immutable #625 `d3dcf26941f2fc02f1d682c647bf0fcc549d1420`, original Reader Git blob `243b46d68211a2b125e07f7c92966535f5f0bdc9`, original O47 Builder blob `6f60dfe63742ff4b777f959a15d6fb828ae29610`.
+
+## Decision question and mechanism
+Can the **unchanged O167** Windows handle-bound non-following file/directory mtime helper (O167 #504, source commit `841c32d435494f6e4d83c44cd00a1a2f8f7ab148`; helper blob `70308f454c74fad7b247db6ee36aa8cc7d38c99c`) compose with the **unchanged O47 Builder** and **unchanged #262 dependency-first Reader** of #625 to restore the default public `extractall(metadata=True)` contract on Windows *without modifying authenticated r24 bytes, changing hardlink ownership or following final-component symlinks*? This is a D5 portability/convergence question, not a compression invention.
+
+## Baseline / alternative explanations / strong controls
+- Original #625 exact Writer forward-alias test in J24H03c: Ubuntu/macOS PASS, Win32 PASS only using `metadata=False`. The original Win32 default API raises `NotImplementedError: utime: follow_symlinks unavailable` on a valid Builder-created signed archive (#626).
+- O167 #504 authentic hosted positive: physical ordinary file and directory 2020 mtimes within ±3s and reparse leaf refused. O180 #513 shows symlink-specific `except OSError` must also include `NotImplementedError`.
+- Stronger simpler control is **only** donor O167 exact helper + O167 static regular/dir method, two call-site replacements in #262 Reader and exception-specific symlink guard; do not replace the Reader, mask errors broadly, invoke pathname-following `os.utime`, or turn metadata off.
+- Alternative: actual hardlink scheduling issue persists after metadata repair, Windows timestamp precision/ACL makes test fail, helper rejects legitimate regular files, or Windows checkout EOL changes source identity. Independently distinguish each by custody, authenticated row assertions and OS physical inode/mtime checks.
+
+## Prospective expected results / kill
+1. On Ubuntu 24.04, macOS 14 and Windows Server 2022/Python 3.11 install exact committed candidate and compile native portion as normal; verify imported Reader, Builder and donor helper blob identities by direct Git-object/source comparisons (rehydrate Git source on Windows before wheel build).
+2. Using actual `Builder` on genuine filesystem hardlinks plus independently equal-content regular copy and dated nested directory, run `Writer.append_rename` to create a valid signed forward alias. `preflight_archive`, `read`, `read_range`, `verify` and default `extractall(metadata=True)` must all succeed. Genuine owner+alias must share an inode, independent copy must **not**; physical regular-file/directory mtimes must match signed values ±3s. Compare actual physical archive byte SHA across fresh-process steps when possible and retain raw receipts.
+3. Run the **unmodified O167 four-test host court** with strict Win32 reparse-target no-follow witness. Linux/macOS should skip only its Win32-exclusive test; Windows must execute all four. Failure of a previously accepted control is a failure, not a skip.
+4. Explicitly retain original historical negatives: (#619) original Reader fails on forward hardlink; (#626) #625 fails Win32 `metadata=True`. Do not assert these historical sources suddenly pass, nor replace their source identity.
+
+Any loss of exact data, inode topology, signed/file timestamp fidelity, final reparse refusal, source identity, or Win32 default API success kills the narrow composition claim. Partial success or runner error = INCONCLUSIVE; never label infrastructure failure as product red. Hosted specialized green is NOT release credit until full inherited General Tests, O166/O180 source attribution and complete end-to-end size, create/extract/read CPU/wall/RSS, hostile namespace, recovery and portability gates pass. Historical frozen benchmark gates remain immutable.
+
+## Ownership, concurrency and limits
+Stack a new distinct branch on #625, never mutate #262/#401/#504/#625 owner branches. Recheck current owners and current target SHA before shared changes; never force push. Research source and tests only; no on-disk revision change, version bump, or uncontrolled release. `docs/discovery/STATE.json` remains owned by other activations and is a staleable cache. Success on non-hostile known paths does not prove ancestor-junction swap resistance or atomic whole-tree publication. Preserve all raw failures and cross-host fingerprints.
