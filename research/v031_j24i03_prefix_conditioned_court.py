@@ -54,7 +54,7 @@ print(json.dumps({"engine":str(engine),"module":str(Path(cmpct.__file__).resolve
                    "repetitions":reps,"prefix":list(results),
                    "results":results,
                    "process_wall_ms":(time.perf_counter_ns()-t0)/1e6,
-                   "peak_rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_max}))
+                   "peak_rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}))
 """
 
 def sha_file(path:Path)->str:
@@ -91,7 +91,7 @@ def main():
     for court,labels in ORDER.items():
         for ordinal,label in enumerate(labels):
             engine=candidate if label=="B" else base
-            output=args.output.parent/(court+"-"+str(ordinal)+"-out")
+            output=Path("/tmp/cmpct-j24i03-prefix-"+court+"-"+str(ordinal)+"-out")
             env=dict(os.environ)
             env["PYTHONPATH"]=str(engine/"src")
             env["CMPCT_PARITY_REPS"]=str(args.reps)
