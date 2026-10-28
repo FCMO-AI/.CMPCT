@@ -128,7 +128,7 @@ jobs:
               assert r["full_read"] == "REJECT" and r["verify"] == "REJECT"
               assert r["wrong_byte_count"] >= 1 and r["truncated_probes"] == 0
           Path("j24k07-evidence/heldout-canonical.json").write_text(
-              json.dumps(heldout, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+              json.dumps(heldout, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           print("J24K07B_CANONICAL_TWO_SIGNED_CELLS_CONFIRMED", flush=True)
           Path("j24k07-evidence/receipts.json").write_text(
               json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8")
