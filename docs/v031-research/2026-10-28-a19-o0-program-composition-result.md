@@ -32,6 +32,12 @@ A fully separate Linux/Python3.13.5/local-libzstd **1.5.7** implementation measu
 
 The contradictory result must not be averaged away, called infrastructure failure, or hidden. The *same* encoded input and program portfolio can cross a narrow byte threshold as a compressor's actual implementation changes. The original prospective question did not freeze libzstd version; the strictly truthful claim is therefore **positive in observed hosted 1.5.5, not robustly positive across available versions**. A new predeclared environment/codec control is necessary before generalizing or proposing product admission.
 
+## Third independent physical counterfactual — encoder-version output identity
+
+A separate implementation in Linux/Python 3.13.5 with libzstd 1.5.7 regenerated all 200 transformed inputs from the **ten SHA-256-matched original logical inputs**, with the **exact same 200 byte-for-byte MessagePack headers/program descriptions** as the hosted 1.5.5 physical frame files. It then reran `ZSTD_compress(level=19)` for each and byte-compared compressed outputs: **125/200 compressed payloads match exactly, 75/200 differ** (not an input mismatch, a missing descriptor charge or a different program). Among outputs with changed **length**, progression accounts for 29, quantized 16, heldout 16, random 0, and periodic 10. In the progression family, candidate-size deltas (local v1.5.7 minus hosted v1.5.5) range from **−1,552 to +584 B** across arms. This checks the codec-version effect at the *exact physical frame* layer, not just after comparing winners, and supports the restricted cross-version conclusion.
+
+The third-party audit's original verified artifact and a separate local machine-readable decoder/codec-contrast receipt are auxiliary analysis; the authoritative run data and 200 preserved physical bytes remain in GitHub Actions artifact 12843216143. This is not a new preregistration or amended result.
+
 ## CPU / decoder work and strongest controls
 Hosted **progression seed0** median five repeated in-process observations:
 
