@@ -29,3 +29,7 @@ Exact-source installed-reader/validator identity, host O_TMPFILE/O_PATH/pread an
 The minimal useful discriminator was to execute the three **unchanged inherited tests** on the **same installed combined Reader** instead of writing a fourth independent parser or strengthening tests by assertion count. The original shell-quote failure could have been caught by static shell syntax validation before dispatch; it is evidence-enablement debt but does not authorize weakening original judges. Source owner #630 and #569 were not edited. Discovery policy and `docs/discovery/STATE.json` remain unchanged under #574 ownership.
 
 **Next executable priority:** pass remaining exact-head general/engineering evidence gates, reconcile J24C04 economic run, and send this complete source-locked evidence to #630/#569 for composition review. No merge, version, format or release changes have been made.
+
+## Disproof scope and release boundary
+
+This exact-source transfer would have failed if any original installed Reader observation returned wrong bytes, accepted invalid signed CDC geometry, changed inode owner before publication, replaced a foreign late leaf, or failed required cases. The original verdict strings and test cases are not weakened. The first workflow red remains a true infrastructure failure. Matching the original Linux behavior is not proof of general filesystem or release eligibility.
