@@ -131,20 +131,46 @@ def main():
         key=f'{x["n"]}/{x["family"]}/{x["position"]}'
         group.setdefault(key,{}).setdefault(x["arm"],[]).append(x)
     summary={}
+    import platform
+    host=platform.system()
+    rss_unit=1 if host=="Linux" else (1024 if host=="Darwin" else None)
     for key, arms in group.items():
         a=statistics.median(z["read_wall_ns"] for z in arms["strict"])
         b=statistics.median(z["read_wall_ns"] for z in arms["witness"])
+        ac=statistics.median(z["read_cpu_ns"] for z in arms["strict"])
+        bc=statistics.median(z["read_cpu_ns"] for z in arms["witness"])
+        rss_delta=None
+        if rss_unit is not None and all(z["rss_raw"] is not None
+                for xs in arms.values() for z in xs):
+            rs=statistics.median(z["rss_raw"] for z in arms["strict"])
+            rw=statistics.median(z["rss_raw"] for z in arms["witness"])
+            rss_delta=(rw-rs)*rss_unit/(1024*1024)
         summary[key]={"strict_median_read_ns":a,"witness_median_read_ns":b,
-                      "ratio_strict_over_witness":a/b if b else None}
-    decision=all(summary[f'{n}/{family}/late']["ratio_strict_over_witness"]>=2.0
-                 for n in (65536,262144) for family in ("one","owners256"))
+                      "ratio_strict_over_witness":a/b if b else None,
+                      "strict_median_cpu_ns":ac,"witness_median_cpu_ns":bc,
+                      "cpu_ratio":ac/bc if bc else None,
+                      "peak_rss_delta_mib":rss_delta}
+    late_keys=[f'{n}/{family}/late' for n in (65536,262144)
+                for family in ("one","owners256")]
+    wall_gate=all(summary[k]["ratio_strict_over_witness"]>=2.0 for k in late_keys)
+    cpu_direction=all(summary[k]["cpu_ratio"]>1.0 for k in late_keys)
+    negative_keys=[k for k in summary if k.endswith("/early") or "/ragged/" in k]
+    no_early_or_ragged_debt=all(summary[k]["ratio_strict_over_witness"]>=1/1.05
+                                for k in negative_keys)
+    rss_measured=all(summary[k]["peak_rss_delta_mib"] is not None for k in summary)
+    rss_gate=rss_measured and all(summary[k]["peak_rss_delta_mib"]<=8.0 for k in summary)
+    decision=wall_gate and cpu_direction and no_early_or_ragged_debt and rss_gate
     payload={"schema":"j24c10-installed-range-v1",
              "utc_created":__import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
              "source_head":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
              "reader_sha256":sha(path.read_bytes()),"python":sys.version,
              "repetitions":args.repetitions,"records":run,"summary":summary,
-             "late_four_profile_wall_gate":decision,
-             "memory_gate":"UNMEASURED: process HWM includes startup and common allocations; not independent peak delta",
+             "late_four_profile_wall_gate":wall_gate,
+             "late_four_profile_cpu_direction":cpu_direction,
+             "early_ragged_no_gt5pct_debt":no_early_or_ragged_debt,
+             "rss_measured":rss_measured,"rss_no_gt8mib_debt":rss_gate if rss_measured else None,
+             "scientific_gate_all_preregistered":decision,
+             "memory_caveat":"Child VmHWM/resource RSS includes package startup; Windows unavailable",
              "product_release_credit":False}
     Path(args.output).parent.mkdir(parents=True,exist_ok=True)
     Path(args.output).write_text(json.dumps(payload,indent=2,sort_keys=True)+"\n",encoding="utf-8")
