@@ -119,13 +119,14 @@ def run(out,repeats):
                     assert p.returncode==0,(case,arm,p.stderr,p.stdout)
                     records.append(json.loads(p.stdout))
                 raw[case][arm]=records
+        (out/'raw_observations.json').write_text(json.dumps({'observations':raw,'files':files,'checkpoint':checkpoint},indent=2,sort_keys=True)+'\n')
         for arm in READERS:
             for case,member,depth in [('checkpoint','owner.bin',0),('writer','renamed.bin',1),
                     ('linked-large','renamed.bin',1),('orphan-large','owner.bin',0),
                     ('linked-unicode','renamed.bin',1),('linked-small','renamed.bin',1),
                     ('linked-duplicate','renamed.bin',1)]:
                 assert all(r['status']=='opened' and r['depth']==depth and
-                    r['members'].get(member)==digest(BODY) for r in raw[case][arm]),(case,arm)
+                    r['members'].get(member)==digest(BODY) for r in raw[case][arm]),(case,arm,raw[case][arm])
             assert all(r['status']=='error' for r in raw['malformed'][arm]),arm
             assert all(r['footer']>checkpoint for r in raw['linked-large'][arm])
             assert all(r['footer']==checkpoint for r in raw['orphan-large'][arm])
