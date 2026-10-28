@@ -24,7 +24,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  source-custody:
+    name: Original guarded Reader and ABI3 scanner algorithm unchanged
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - name: Prove exact source isolation
+        run: python research/j24c08_source_isolation.py
+
   installed-abi3-cross-minor:
+    needs: source-custody
     name: Native installed cp311 ABI3 to cp313 - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 50
@@ -103,6 +118,7 @@ jobs:
           if-no-files-found: warn
 
   python310-fallback:
+    needs: source-custody
     name: Original strict fallback on Python 3.10
     runs-on: ubuntu-24.04
     timeout-minutes: 40
