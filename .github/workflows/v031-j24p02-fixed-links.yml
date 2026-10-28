@@ -1,0 +1,94 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: v0.31 J24P02 independent link-tree r24 wire
+
+on:
+  pull_request:
+    paths:
+      - "tests/conformance/v24-link-tree.json"
+      - "tests/conformance/generate_v24_link_tree_golden.py"
+      - "tests/test_v031_link_tree_fixed_golden.py"
+      - "research/j24p02_link_wire_referee.py"
+      - ".github/workflows/v031-j24p02-fixed-links.yml"
+      - "docs/v031-research/2026-10-28-j24p02-*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24p02-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-fixed-links:
+    name: Signed fixed links installed Python and detached wire (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      CMPCT_EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24P02_EVIDENCE: ${{ github.workspace }}/j24p02-evidence
+    steps:
+      - name: Checkout exactly the invoking PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CMPCT_EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind source identity and existing product boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CMPCT_EVIDENCE_HEAD"
+          git merge-base --is-ancestor e9d9f0a0ea56a3ebd5f0a33d8973e8cbe742de37 HEAD
+          test -z "$(git diff --name-only 80c358f8824ec1b20d349c92ed94c898090969b0 HEAD -- src/ native/)"
+          mkdir -p "$CMPCT_J24P02_EVIDENCE"
+          git rev-parse HEAD > "$CMPCT_J24P02_EVIDENCE/head.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$CMPCT_J24P02_EVIDENCE/reader-git-blob.txt"
+          git rev-parse HEAD:tests/conformance/v24-link-tree.json > "$CMPCT_J24P02_EVIDENCE/wire-git-blob.txt"
+          python -c 'import hashlib,os,pathlib; p=pathlib.Path("tests/conformance/v24-link-tree.json"); (pathlib.Path(os.environ["CMPCT_J24P02_EVIDENCE"])/"manifest-sha256.txt").write_text(hashlib.sha256(p.read_bytes()).hexdigest()+"\n")'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install actual distribution and independent test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest zstandard
+      - name: Verify installed Reader is truly sourced from this HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python -c 'import cmpct.reader,os,pathlib; r=pathlib.Path(cmpct.reader.__file__).resolve(); src=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()/"src/cmpct/reader.py"; norm=lambda b:b.replace(b"\r\n",b"\n"); assert norm(r.read_bytes())==norm(src.read_bytes()), (r,src); assert not r.is_relative_to(src.parent.parent.parent), "uninstalled checkout used"; print("INSTALLED_READER_SOURCE_EXACT",r)'
+      - name: Original frozen-wire regeneration (Linux, unchanged inputs)
+        if: matrix.os == 'ubuntu-24.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/conformance/generate_v24_link_tree_golden.py 2>&1 | tee "$CMPCT_J24P02_EVIDENCE/generator.log"
+      - name: Actual Reader, preflight, read-range and filesystem semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -q -vv "$GITHUB_WORKSPACE/tests/test_v031_link_tree_fixed_golden.py" 2>&1 | tee "$CMPCT_J24P02_EVIDENCE/pytest.log"
+      - name: Independent physical/index/semantic referee and receipt attacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24p02_link_wire_referee.py" 2>&1 | tee "$CMPCT_J24P02_EVIDENCE/referee.log"
+          grep -q '"status": "PASS"' "$CMPCT_J24P02_EVIDENCE/referee.json"
+      - name: Preserve exact-head evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p02-links-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24p02-evidence/
+          if-no-files-found: warn
+          retention-days: 90
