@@ -114,7 +114,13 @@ physical BHDR checks, owner-size checks, decoding and ordinary extract verificat
 The fast-path applies only when the new ABI3 helper has checked **all** reference
 indices, strict built-in value types, physical blob tuple shape and the complete
 logical-size sum. It is bounded to 512–4,194,304 references; shorter or larger
-lists use inherited native admission without new index ownership. An unavailable
+lists use inherited native admission without new index ownership.
+Across all members in one Reader, at most 65,536 prefix entries may be
+retained in total (roughly 3 MiB of tuple pointers and Python integer objects
+on a typical 64-bit runtime). If a further valid member exceeds the budget,
+the Reader retains its full prior structural admission but uses the inherited
+unindexed range search. This bounds cumulative carrying cost rather than only
+per-member metadata; it is not a measured RSS claim or a file-format limit. An unavailable
 module, rejected native proof, or native exception falls back through the old
 native scanner and ultimately the unchanged Python strict validator. A successfully
 admitted map is a search hint for selective chunk reads, **not** a substitute for
