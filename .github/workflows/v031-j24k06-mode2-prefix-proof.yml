@@ -9,6 +9,7 @@ on:
       - 'tests/test_j24k06_mode2_prefix_projection.py'
       - 'tests/test_j24c07c_signed_mode2_regeneration.py'
       - 'research/j24k06_source_guard.py'
+      - 'research/j24k06_prefix_cost.py'
       - 'docs/v031-research/2026-10-28-j24k06-*'
       - '.github/workflows/v031-j24k06-mode2-prefix-proof.yml'
   workflow_dispatch:
@@ -55,7 +56,7 @@ jobs:
           git hash-object src/cmpct/codec.py > j24k06-evidence/codec-blob.txt
           git hash-object src/cmpct/reader.py > j24k06-evidence/reader-blob.txt
           python research/j24k06_source_guard.py --candidate . --parent frozen-j24c07 --out j24k06-evidence/source-custody.json
-          python -m py_compile src/cmpct/codec.py tests/test_j24k06_mode2_prefix_projection.py tests/test_j24c07c_signed_mode2_regeneration.py
+          python -m py_compile src/cmpct/codec.py tests/test_j24k06_mode2_prefix_projection.py tests/test_j24c07c_signed_mode2_regeneration.py research/j24k06_prefix_cost.py
       - name: Install CMPCT wheel and pytest, not editable source
         shell: bash
         run: |
@@ -111,6 +112,11 @@ jobs:
             test_o214_cdc_admission.py \
             test_chunked_extract_platform_fchmod.py \
             2>&1 | tee "$GITHUB_WORKSPACE/j24k06-evidence/courts.txt"
+      - name: Component-only source-exact ABBA of honest mode2 prefix work
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k06_prefix_cost.py --parent frozen-j24c07 --out j24k06-evidence/component-abba.json
       - name: Check workflow topology on Linux
         if: runner.os == 'Linux'
         shell: bash
