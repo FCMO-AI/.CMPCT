@@ -1,3 +1,8 @@
+# ci-lane: fast
+concurrency:
+  group: j24g24-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 name: J24G24 Verified Deflate ZIP Copy
 on:
   pull_request:
@@ -41,6 +46,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: j24g24-${{ matrix.os }}-${{ github.sha }}
+          name: j24g24-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ runner.temp }}/j24g24-evidence/
           if-no-files-found: warn
