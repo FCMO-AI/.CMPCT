@@ -42,6 +42,8 @@ def audit(receipt: dict, folder: Path, check_disk: bool = True):
         raise AssertionError("semantic control missing")
     if [tuple((x["count"], x["owners"])) for x in receipt["fixtures"]] != list(PROFILES):
         raise AssertionError("fixture selection drift")
+    if sha(json.dumps(receipt["raw_workers"], sort_keys=True, separators=(",", ":")).encode()) != receipt.get("raw_workers_sha256"):
+        raise AssertionError("raw-worker content digest mismatch")
     if len(receipt["raw_workers"]) != len(PROFILES)*len(MODES)*N_WORKERS:
         raise AssertionError("missing workers")
     if check_disk:
