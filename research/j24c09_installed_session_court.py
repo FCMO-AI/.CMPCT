@@ -179,19 +179,21 @@ def controller(output: Path) -> None:
 
     raw = []
     fixtures = []
+    fixture_dir = output.parent / "fixtures"
+    fixture_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="cmpct-j24c09-sessions-") as td:
-        td_path = Path(td)
         for count, owners in PROFILES:
             blobs = tuple(bytes((65 + i % 23, 66, 67, 68)) for i in range(owners))
             refs = [i % owners for i in range(count)]
             logical = b"".join(blobs[i] for i in refs)
             wire = _make_archive(refs, logical, blobs=blobs)
-            path = td_path / ("signed-" + str(count) + "-" + str(owners) + ".cmpct")
-            spec_path = td_path / ("signed-" + str(count) + "-" + str(owners) + ".json")
+            path = fixture_dir / ("signed-" + str(count) + "-" + str(owners) + ".cmpct")
+            spec_path = fixture_dir / ("signed-" + str(count) + "-" + str(owners) + ".json")
             offsets = (0, 8, len(logical)//2 - 16, len(logical)//2,
                        len(logical) - 32, len(logical) - 16)
             spec = {
                 "count": count, "owners": owners,
+                "fixture_file": path.name,
                 "archive_bytes": len(wire), "logical_bytes": len(logical),
                 "archive_sha256": hashlib.sha256(wire).hexdigest(),
                 "logical_sha256": hashlib.sha256(logical).hexdigest(),
