@@ -63,6 +63,14 @@ jobs:
           # H4 original complete ZIP and adversarial assertions; H3 original with the sole
           # descriptor-backed full-slice compatibility adaptation, not weaker bytes checks.
           PYTHONPATH=src python -m pytest --noconftest -q tests/test_reader_deflate_export_custody.py tests/test_reader_unsupported_blob_bits.py tests/test_o215_fixed_chunk_admission.py
+      - name: Preserve inherited #569 S_SPARSE S_CDC and extraction host tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object tests/test_o212_sparse_admission.py)" = 10605b0a255c90c9ebe2473bf7aefdb14e9b4ea3
+          test "$(git hash-object tests/test_o214_cdc_admission.py)" = ce5bb0c6da2f6d38dcf2b32956b6dfc08e05eaec
+          test "$(git hash-object tests/test_chunked_extract_platform_fchmod.py)" = 8261888e8067da2f417ebe9e50bbb648c2838b19
+          PYTHONPATH=src python -m pytest --noconftest -q tests/test_o212_sparse_admission.py tests/test_o214_cdc_admission.py tests/test_chunked_extract_platform_fchmod.py 2>&1 | tee benchmark-artifacts/inherited-j24c02-geometry.log
       - name: Validate hosted workflow topology
         if: runner.os == 'Linux'
         run: python tools/check_ci_topology.py .github/workflows/v031-j24c03-direct-owner-composed-reader.yml
