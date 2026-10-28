@@ -1,0 +1,43 @@
+name: J24G23 Deflate ZIP Export Integrity
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/j24g23-deflate-export-integrity.yml'
+      - 'tests/research_j24g23_deflate_export_integrity.py'
+      - 'docs/v031-research/2026-10-28-j24g23-deflate-export-integrity-*.md'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/transactions.py'
+  workflow_dispatch:
+
+jobs:
+  source-exact-court:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@v4
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact package including native core
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Run preregistered source-exact negative court
+        env:
+          J24G23_ARTIFACT_DIR: ${{ runner.temp }}/j24g23-evidence
+        run: |
+          python tests/research_j24g23_deflate_export_integrity.py | tee ${{ runner.temp }}/j24g23-log.txt
+      - name: Upload full physical evidence and original results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g23-court-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/j24g23-evidence/
+            ${{ runner.temp }}/j24g23-log.txt
+          if-no-files-found: warn
