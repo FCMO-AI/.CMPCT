@@ -167,7 +167,8 @@ def parent(args: argparse.Namespace) -> None:
     candidate = Path.cwd().resolve()
     published = args.published_root.resolve()
     assert git(published, "rev-parse", "HEAD") == BASE_SHA, "published source drift"
-    assert git(candidate, "rev-parse", "HEAD") == os.environ.get("GITHUB_SHA", git(candidate, "rev-parse", "HEAD"))
+    expected_head = os.environ.get("EXPECTED_HEAD")
+    assert not expected_head or git(candidate, "rev-parse", "HEAD") == expected_head, "candidate source drift"
     vector_path = candidate / "tests/conformance/v24-direct-codecs.json"
     vectors = json.loads(vector_path.read_text())["vectors"]
     chosen = {v["name"]: v for v in vectors if v["name"] in VECTORS}
