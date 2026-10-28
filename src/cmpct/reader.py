@@ -24,11 +24,15 @@ def _safe_output_path(dest:Path,rel:str)->Path:
 # J24G10: operation-scoped *exact* invalid-footer proof, spilled only for hostile
 # non-arithmetic ancestry that exceeds the cheap in-memory proof budget. SQLite is
 # imported lazily: ordinary Reader startup has no new module import dependency.
+# J24G11: a fixed-byte, sorted u64 middle tier may avoid SQLite for moderately
+# large exact sets without changing any trusted footer-selection semantics.
 class _FooterInvalidProof:
     _HOT_LIMIT = 16384
+    _PACKED_LIMIT_BYTES = 1024 * 1024  # hard byte ceiling for packed uint64 payload
 
     def __init__(self):
         self.hot = set()
+        self._packed = None  # array('Q'), exactly eight payload bytes per offset
         self._tmp = None
         self._db = None
         self._path = None
@@ -43,19 +47,60 @@ class _FooterInvalidProof:
         return pos if pos < (1 << 63) else pos - (1 << 64)
 
     def __len__(self):
-        return len(self.hot) if self._db is None else self._count
+        if self._db is not None:
+            return self._count
+        return len(self.hot) if self._packed is None else len(self._packed)
 
     def __contains__(self, pos: int) -> bool:
         if pos in self.hot:
             return True
+        if self._packed is not None:
+            # No approximate bloom/range membership: search an exact u64 array.
+            import bisect
+            i = bisect.bisect_left(self._packed, pos)
+            if i < len(self._packed) and self._packed[i] == pos:
+                return True
         if self._db is None:
             return False
         return self._db.execute('SELECT 1 FROM bad WHERE p=?',
                                 (self._key(pos),)).fetchone() is not None
 
+    def _update_packed(self, positions):
+        import array
+        if self._packed is None:
+            merged = sorted(self.hot.union(positions))
+            for pos in merged:
+                self._key(pos)
+            self._packed = array.array('Q', merged)
+            self.hot.clear()
+        else:
+            import heapq
+            new = sorted(positions)
+            for pos in new:
+                self._key(pos)
+            # Bounded merge: no extra Python set of all existing packed members.
+            sentinel = object()
+            previous = sentinel
+            def merged_unique():
+                nonlocal previous
+                for pos in heapq.merge(self._packed, new):
+                    if pos != previous:
+                        previous = pos
+                        yield pos
+            self._packed = array.array('Q', merged_unique())
+        # The byte ceiling is checked before construction; assert it afterwards.
+        if self._packed.buffer_info()[1] * self._packed.itemsize > self._PACKED_LIMIT_BYTES:
+            raise ValueError('packed footer proof exceeded byte ceiling')
+
     def update(self, positions):
-        if self._db is None and len(self.hot) + len(positions) <= self._HOT_LIMIT:
+        if self._db is None and self._packed is None and len(self.hot) + len(positions) <= self._HOT_LIMIT:
             self.hot.update(positions)
+            return
+        # Use only a fixed 1-MiB u64 payload tier. This *does not* globally bound
+        # the caller's failed-chain seen/decoded objects, Python temporaries or RSS.
+        # Conservatively count duplicates twice; a premature disk spill is safe.
+        if self._db is None and (len(self) + len(positions)) * 8 <= self._PACKED_LIMIT_BYTES:
+            self._update_packed(positions)
             return
         if self._db is None:
             import sqlite3
@@ -70,9 +115,11 @@ class _FooterInvalidProof:
             self._db.execute('PRAGMA cache_size=-512')
             self._db.execute('CREATE TABLE bad(p INTEGER PRIMARY KEY) WITHOUT ROWID')
             self._db.execute('BEGIN')
+            previous = self._packed if self._packed is not None else self.hot
             self._db.executemany('INSERT OR IGNORE INTO bad(p) VALUES (?)',
-                                 ((self._key(p),) for p in self.hot))
-            self._count = len(self.hot)
+                                 ((self._key(p),) for p in previous))
+            self._count = len(previous)
+            self._packed = None
             self.hot.clear()
         self._db.executemany('INSERT OR IGNORE INTO bad(p) VALUES (?)',
                              ((self._key(p),) for p in positions))
