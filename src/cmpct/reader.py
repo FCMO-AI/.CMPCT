@@ -387,9 +387,19 @@ class CMPCT:
         directory tree once, then writes members using plain OS paths. This changes no archive
         semantics; it only removes Python/filesystem bookkeeping from the hot loop.
         """
+        # Footnote: signed index hashes authenticate the metadata bytes, not their meaning.
+        # A negative symlink/hardlink length could cancel real file sizes in the extraction
+        # budget (J24B06), allowing more bytes to be published than max_bytes permits.
+        # Account and validate in the same O(files) scan before creating any destination.
+        total=0
+        for row in self.files:
+            declared=row[4]
+            if type(declared) is not int or declared<0:
+                raise IOError(f'invalid nonnegative logical size for {row[0]!r}')
+            if row[1]!=K_DIR:total+=declared
+        if max_bytes is not None and total>max_bytes:
+            raise IOError(f'archive expands to {total} bytes, above limit {max_bytes}')
         dest=Path(dest);dest.mkdir(parents=True,exist_ok=True);dest_s=os.fspath(dest)
-        total=sum(x[4] for x in self.files if x[1]!=K_DIR)
-        if max_bytes is not None and total>max_bytes:raise IOError(f'archive expands to {total} bytes, above limit {max_bytes}')
 
         # Validate every logical path once and reject aliases/symlink pivots before writing anything.
         canonical_rows=[];seen=set();syms=set()
