@@ -52,8 +52,25 @@ def native_chunk_proof(storage, blobs, size):
     if _scan_refs_index is not None:
         try:
             proof = _scan_refs_index(storage[1], blobs, size)
-            if proof is True or type(proof) is tuple:
-                return proof
+            if proof is True:
+                return True
+            if type(proof) is tuple:
+                # A native extension is optional, not a licence to install
+                # malformed search metadata. Shape-check only O(N/256) hints,
+                # never repeat its mandatory complete O(N) descriptor scan.
+                expected=(len(storage[1])+255)//256
+                if not (512 <= len(storage[1]) <= 4*1024*1024):
+                    return native_chunk_ok(storage,blobs,size)
+                if len(proof)==expected and proof and type(proof[0]) is int and proof[0]==0:
+                    previous=0
+                    for prefix in proof:
+                        if type(prefix) is not int or prefix<previous or prefix>size:
+                            break
+                        previous=prefix
+                    else:
+                        return proof
+                # Corrupt/unknown proof is never an admission grant.
+                return native_chunk_ok(storage,blobs,size)
         except Exception:
             pass
     return native_chunk_ok(storage, blobs, size)
