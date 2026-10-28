@@ -1,0 +1,70 @@
+# ci-lane: fast
+name: CMPCT v031 J24G15 signed MsgPack object-expansion falsifier
+on:
+  pull_request:
+    paths:
+      - 'research/j24g15_*'
+      - 'docs/v031-research/2026-10-28-j24g15-*'
+      - '.github/workflows/v031-j24g15-msgpack-expansion.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  original-source-adversarial-memory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G15_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G15_ARTIFACTS: j24g15-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G15_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify exact source and preregistration boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$J24G15_ARTIFACTS"
+          test "$(git rev-parse HEAD)" = "$J24G15_HEAD"
+          git merge-base --is-ancestor e5dc38006a49d38b4f68071c9afeed9db7366952 HEAD
+          git merge-base --is-ancestor 3f6dcb04422af2090917f6d421f343b6d7d5656a HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          paths=['src/cmpct/reader.py','research/j24g12_lazy_ancestry_court.py',
+                 'research/j24g14_adaptive_ancestry_court.py',
+                 'research/j24g15_msgpack_expansion_court.py',
+                 'research/j24g15_independent_receipt_referee.py',
+                 'docs/v031-research/2026-10-28-j24g15-msgpack-object-amplification-prereg.md']
+          files={}
+          for name in paths:
+              data=subprocess.check_output(['git','show','HEAD:'+name])
+              assert pathlib.Path(name).read_bytes()==data
+              files[name]={'sha256':hashlib.sha256(data).hexdigest()}
+          pathlib.Path('j24g15-artifacts/source.json').write_text(json.dumps(
+              {'head':os.environ['J24G15_HEAD'],'files':files},indent=2)+'\n')
+          PY
+      - name: Run installed original Reader versus guarded and adaptive source-locked controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24g15_msgpack_expansion_court.py research/j24g15_independent_receipt_referee.py
+          python -m pip install .
+          python research/j24g15_msgpack_expansion_court.py 2>&1 | tee j24g15-artifacts/court.log
+          python research/j24g15_independent_receipt_referee.py 2>&1 | tee j24g15-artifacts/referee.log
+      - name: Preserve exact-head raw positives and negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g15-msgpack-admission-${{ github.sha }}
+          path: j24g15-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
