@@ -81,18 +81,20 @@ jobs:
         run: |
           set -euo pipefail
           blob="$(git hash-object src/cmpct/reader.py)"
-          python research/j24f11_fd_fresh_chunk_publication_court.py \
-            --expected-blob "$blob" --output "$PWD/benchmark-artifacts/j24f11.json" \
-            2>&1 | tee benchmark-artifacts/j24f11.log
-          grep -q 'J24F11_DECISION=SCOPED_LINUX_FRESH_CHUNK_FD_PUBLISH_PASS' benchmark-artifacts/j24f11.log
-          python research/j24f12_opath_wx_parent_court.py \
-            --expected-blob "$blob" --output "$PWD/benchmark-artifacts/j24f12.json" \
-            2>&1 | tee benchmark-artifacts/j24f12.log
-          grep -q 'J24F12_DECISION=WX_ONLY_PARENT_EXACT_FD_TRANSFER_PASS' benchmark-artifacts/j24f12.log
-          python research/j24c01_geometry_fd_composed_court.py \
-            --expected-reader-blob "$blob" --output "$PWD/benchmark-artifacts/j24c01.json" \
-            2>&1 | tee benchmark-artifacts/j24c01.log
-          grep -q 'J24C01_DECISION=COMPOSED_CDC_ADMISSION_AND_FD_PUBLICATION_PASS' benchmark-artifacts/j24c01.log
+          root="$GITHUB_WORKSPACE/benchmark-artifacts"
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24f11_fd_fresh_chunk_publication_court.py" \
+            --expected-blob "$blob" --output "$root/j24f11.json" \
+            2>&1 | tee "$root/j24f11.log"
+          grep -q 'J24F11_DECISION=SCOPED_LINUX_FRESH_CHUNK_FD_PUBLISH_PASS' "$root/j24f11.log"
+          python "$GITHUB_WORKSPACE/research/j24f12_opath_wx_parent_court.py" \
+            --expected-blob "$blob" --output "$root/j24f12.json" \
+            2>&1 | tee "$root/j24f12.log"
+          grep -q 'J24F12_DECISION=WX_ONLY_PARENT_EXACT_FD_TRANSFER_PASS' "$root/j24f12.log"
+          python "$GITHUB_WORKSPACE/research/j24c01_geometry_fd_composed_court.py" \
+            --expected-reader-blob "$blob" --output "$root/j24c01.json" \
+            2>&1 | tee "$root/j24c01.log"
+          grep -q 'J24C01_DECISION=COMPOSED_CDC_ADMISSION_AND_FD_PUBLICATION_PASS' "$root/j24c01.log
       - name: Independently audit original receipts against expected full case counts
         shell: bash
         run: |
