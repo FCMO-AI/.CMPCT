@@ -126,6 +126,37 @@ class LazyStrideProof(unittest.TestCase):
             self.assertEqual(admission.native_uniform_stride([1, refs], blobs, size), 4)
             self.assertEqual(admission.native_uniform_stride([1, refs[:-1]+[0]], blobs, size), 0)
 
+    def test_signed_256_distinct_physical_owners_equal_stride(self):
+        blobs = tuple(bytes([i]) * 4 for i in range(256))
+        refs = list(range(256)) * 4
+        logical = b"".join(blobs[i] for i in refs)
+        path = self.root / "multiowner.cmpct"
+        path.write_bytes(_make_archive(refs, logical, blobs=blobs))
+        with CMPCT(path) as rd:
+            for at, length in ((0, 8), (len(logical)//2+3, 25),
+                               (len(logical)-23, 23), (len(logical), 0)):
+                self.assertEqual(rd.read_range("fixed.bin", at, length),
+                                 logical[at:at+length])
+            self.assertEqual(rd._chunk_stride_cache.get("fixed.bin"),
+                             4 if REQUIRED else 0)
+            self.assertEqual(rd.verify(), 1)
+
+    def test_signed_smaller_final_chunk_and_ragged_fallback(self):
+        for name, refs, blobs in (
+            ("short-tail", [0]*63+[1], (b"ABCD", b"XY")),
+            ("ragged", [0,1,2]*64, (b"ABCD", b"F", b"XYZ"))):
+            logical=b"".join(blobs[i] for i in refs)
+            path=self.root / (name+".cmpct")
+            path.write_bytes(_make_archive(refs, logical, blobs=blobs))
+            with CMPCT(path) as rd:
+                for at, length in ((12, 8), (len(logical)//2, 11),
+                                   (len(logical)-17, 17), (len(logical), 0)):
+                    self.assertEqual(rd.read_range("fixed.bin", at, length),
+                                     logical[at:at+length], name)
+                expected=4 if name=="short-tail" and REQUIRED else 0
+                self.assertEqual(rd._chunk_stride_cache.get("fixed.bin"), expected)
+                self.assertEqual(rd.verify(), 1)
+
     def test_deterministic_hostile_differential_no_false_positives(self):
         if not REQUIRED:
             self.skipTest("no native extension; strict Python is the only route")
