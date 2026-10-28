@@ -1,0 +1,110 @@
+# ci-lane: fast
+name: CMPCT J24G08 O10R-depth versus cache-fallback same-archive court
+on:
+  pull_request:
+    paths:
+      - 'research/j24g08_depth_cache_fallback_court.py'
+      - 'research/j24g08_independent_footer_audit.py'
+      - 'docs/v031-research/2026-10-28-j24g08-*'
+      - '.github/workflows/v031-j24g08-o10r-cache-fallback-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  exact-source-same-archive-comparison:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      J24G08_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G08_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind preregistration, source HEADs and test code to exact Git objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g08-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G08_HEAD"
+          git merge-base --is-ancestor 023b2b3f1544073be2214dafe64b040b9ccd29c5 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "bead2ea6a09a6daaadc3ec2389cfb8853e3dd172"
+          test "$(git rev-parse 54c998200b1908b696ade049fe94df71a736c284:src/cmpct/reader.py)" = "2402721258531a56cfa2a53dcbd81874fd6c1f76"
+          test "$(git show HEAD:research/j24g08_depth_cache_fallback_court.py | sha256sum | cut -d' ' -f1)" = "$(sha256sum research/j24g08_depth_cache_fallback_court.py | cut -d' ' -f1)"
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          data={"head":os.environ["J24G08_HEAD"],"prereg":"023b2b3f1544073be2214dafe64b040b9ccd29c5","sources":{}}
+          for commit in (os.environ["J24G08_HEAD"],"54c998200b1908b696ade049fe94df71a736c284"):
+              path="src/cmpct/reader.py"
+              raw=subprocess.check_output(["git","show",f"{commit}:{path}"])
+              data["sources"][commit]={"blob":subprocess.check_output(["git","rev-parse",f"{commit}:{path}"],text=True).strip(),
+                                       "sha256":hashlib.sha256(raw).hexdigest()}
+          pathlib.Path("j24g08-artifacts/source.json").write_text(json.dumps(data,indent=2)+"\n")
+          print("J24G08_SOURCE_CUSTODY="+json.dumps(data,sort_keys=True))
+          PY
+      - name: Prepare genuine O10R checkout and two isolated installed wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/j24g08-o10r-source" 54c998200b1908b696ade049fe94df71a736c284
+          test "$(git -C "$RUNNER_TEMP/j24g08-o10r-source" rev-parse HEAD)" = "54c998200b1908b696ade049fe94df71a736c284"
+          python -m venv "$RUNNER_TEMP/j24g08-cache-venv"
+          python -m venv "$RUNNER_TEMP/j24g08-o10r-venv"
+          "$RUNNER_TEMP/j24g08-cache-venv/bin/python" -m pip install .
+          "$RUNNER_TEMP/j24g08-o10r-venv/bin/python" -m pip install "$RUNNER_TEMP/j24g08-o10r-source"
+          for variant in cache o10r; do
+            if [ "$variant" = cache ]; then ref="$J24G08_HEAD"; else ref="54c998200b1908b696ade049fe94df71a736c284"; fi
+            export REF="$ref"
+            "$RUNNER_TEMP/j24g08-${variant}-venv/bin/python" - <<'PY'
+          import cmpct.reader,hashlib,os,pathlib,subprocess
+          path=pathlib.Path(cmpct.reader.__file__).resolve()
+          expected=subprocess.check_output(["git","show",os.environ["REF"]+":src/cmpct/reader.py"])
+          actual=path.read_bytes()
+          assert "site-packages" in str(path),path
+          assert actual==expected,(path,hashlib.sha256(actual).hexdigest(),hashlib.sha256(expected).hexdigest())
+          print("INSTALLED_READER_PINNED",os.environ["REF"],hashlib.sha256(actual).hexdigest())
+          PY
+          done
+      - name: Generate one physical archive set and examine unchanged installed Readers
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/j24g08-cache-venv/bin/python" research/j24g08_depth_cache_fallback_court.py make 2>&1 | tee j24g08-artifacts/make.log
+          "$RUNNER_TEMP/j24g08-cache-venv/bin/python" research/j24g08_depth_cache_fallback_court.py assess --variant cache 2>&1 | tee j24g08-artifacts/cache.log
+          "$RUNNER_TEMP/j24g08-o10r-venv/bin/python" research/j24g08_depth_cache_fallback_court.py assess --variant o10r 2>&1 | tee j24g08-artifacts/o10r.log
+          "$RUNNER_TEMP/j24g08-cache-venv/bin/python" research/j24g08_depth_cache_fallback_court.py referee 2>&1 | tee j24g08-artifacts/referee.log
+      - name: Independently verify archived r24 physical SHA and footer ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root=Path("j24g08-artifacts")
+          with ZipFile(root/"physical-audit-input.zip", "w", ZIP_DEFLATED) as z:
+              for p in sorted(root.rglob("*")):
+                  if p.is_file() and p.name != "physical-audit-input.zip":
+                      z.write(p, p.relative_to(root))
+          PY
+          python research/j24g08_independent_footer_audit.py \
+            j24g08-artifacts/physical-audit-input.zip \
+            j24g08-artifacts/independent_audit.json \
+            2>&1 | tee j24g08-artifacts/independent_audit.log
+      - name: Preserve raw negative and positive artifacts without changing product verdict
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g08-depth-cache-same-archive-${{ github.sha }}
+          path: |
+            j24g08-artifacts/*.json
+            j24g08-artifacts/*.log
+            j24g08-artifacts/specimens/*.cmpct
+          if-no-files-found: warn
+          retention-days: 30
