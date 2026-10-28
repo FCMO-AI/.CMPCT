@@ -50,7 +50,7 @@ jobs:
           test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip-deflate-mode1.json)" = "06381fab57609252bfb9b887e33c2bdd480de681"
           test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip-deflate-mode0.json)" = "663b9fdb4df560fb9572fa14bf003928a2379e5e"
           test -s docs/v031-research/2026-10-28-j24k09-lazy-physical-stream-prereg.md
-          python -m py_compile src/cmpct/codec.py src/cmpct/reader.py tests/test_j24k09_signed_stream_guard.py tests/test_j24k09_stream_size_oracle.py
+          python -m py_compile src/cmpct/codec.py src/cmpct/reader.py tests/test_j24k09_signed_stream_guard.py tests/test_j24k09_stream_size_oracle.py tests/test_j24k09_heldout_mixed_geometry.py
           mkdir -p j24k09-evidence
           git rev-parse HEAD > j24k09-evidence/head.txt
           git ls-tree HEAD src/cmpct/codec.py src/cmpct/reader.py src/cmpct/validation.py > j24k09-evidence/source-blobs.txt
@@ -88,6 +88,7 @@ jobs:
           mkdir -p "$TEST_HOME/conformance"
           cp tests/test_j24k09_signed_stream_guard.py "$TEST_HOME/"
           cp tests/test_j24k09_stream_size_oracle.py "$TEST_HOME/"
+          cp tests/test_j24k09_heldout_mixed_geometry.py "$TEST_HOME/"
           cp tests/test_j24k06_mode2_prefix_projection.py "$TEST_HOME/"
           cp tests/test_j24c07c_signed_mode2_regeneration.py "$TEST_HOME/"
           cp tests/conformance/v24-virtual-zip.json "$TEST_HOME/conformance/"
@@ -97,6 +98,7 @@ jobs:
           python -m pytest --noconftest -q -s \
             test_j24k09_signed_stream_guard.py \
             test_j24k09_stream_size_oracle.py \
+            test_j24k09_heldout_mixed_geometry.py \
             test_j24k06_mode2_prefix_projection.py \
             test_j24c07c_signed_mode2_regeneration.py \
             2>&1 | tee "$GITHUB_WORKSPACE/j24k09-evidence/court.txt"
