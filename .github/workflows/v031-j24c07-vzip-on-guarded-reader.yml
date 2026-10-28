@@ -8,6 +8,7 @@ on:
       - 'src/cmpct/validation.py'
       - 'src/cmpct/codec.py'
       - 'tests/test_j24c07_vzip_guard_composition.py'
+      - 'tests/test_j24c07c_signed_mode2_regeneration.py'
       - 'research/j24c07_source_custody.py'
       - 'docs/v031-research/2026-10-28-j24c07-*'
       - '.github/workflows/v031-j24c07-vzip-on-guarded-reader.yml'
@@ -64,7 +65,7 @@ jobs:
           git hash-object src/cmpct/codec.py > j24c07-evidence/codec-blob.txt
           git hash-object tests/test_j24c07_vzip_guard_composition.py > j24c07-evidence/court-blob.txt
           python research/j24c07_source_custody.py --candidate . --parent frozen-j24c03 --owner frozen-j24k05 --out j24c07-evidence/source-custody.json
-          python -m py_compile src/cmpct/validation.py src/cmpct/codec.py tests/test_j24c07_vzip_guard_composition.py research/j24c07_source_custody.py
+          python -m py_compile src/cmpct/validation.py src/cmpct/codec.py tests/test_j24c07_vzip_guard_composition.py tests/test_j24c07c_signed_mode2_regeneration.py research/j24c07_source_custody.py
       - name: Install actual CMPCT wheel and pytest, not editable source
         shell: bash
         run: |
@@ -99,6 +100,7 @@ jobs:
           TEST_HOME="$RUNNER_TEMP/j24c07-tests"
           mkdir -p "$TEST_HOME/conformance"
           cp tests/test_j24c07_vzip_guard_composition.py "$TEST_HOME/"
+          cp tests/test_j24c07c_signed_mode2_regeneration.py "$TEST_HOME/"
           cp tests/test_reader_deflate_export_custody.py "$TEST_HOME/"
           cp tests/test_reader_unsupported_blob_bits.py "$TEST_HOME/"
           cp tests/test_o215_fixed_chunk_admission.py "$TEST_HOME/"
@@ -112,6 +114,7 @@ jobs:
           cd "$TEST_HOME"
           python -m pytest --noconftest -q -s \
             test_j24c07_vzip_guard_composition.py \
+            test_j24c07c_signed_mode2_regeneration.py \
             test_reader_deflate_export_custody.py \
             test_reader_unsupported_blob_bits.py \
             test_o215_fixed_chunk_admission.py \
