@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/cmpct/reader.py'
       - 'research/j24g11b_staged_proof_court.py'
+      - 'research/j24g11b_independent_receipt_audit.py'
       - 'docs/v031-research/2026-10-28-j24g11b-*'
       - '.github/workflows/v031-j24g11b-staged-proof-court.yml'
   workflow_dispatch:
@@ -43,7 +44,7 @@ jobs:
           python - <<'PY'
           import hashlib,json,os,pathlib,subprocess
           files={}
-          for p in ['src/cmpct/reader.py','research/j24g11b_staged_proof_court.py']:
+          for p in ['src/cmpct/reader.py','research/j24g11b_staged_proof_court.py','research/j24g11b_independent_receipt_audit.py']:
               src=subprocess.check_output(['git','show','HEAD:'+p])
               assert pathlib.Path(p).read_bytes()==src
               files[p]={'sha256':hashlib.sha256(src).hexdigest(),'blob':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()}
@@ -56,6 +57,7 @@ jobs:
           set -euo pipefail
           python -m pip install .
           python research/j24g11b_staged_proof_court.py 2>&1 | tee j24g11b-artifacts/court.log
+          python research/j24g11b_independent_receipt_audit.py j24g11b-artifacts/court.json | tee j24g11b-artifacts/audit.log
       - name: Preserve original raw evidence, failures and control results
         if: always()
         uses: actions/upload-artifact@v4
