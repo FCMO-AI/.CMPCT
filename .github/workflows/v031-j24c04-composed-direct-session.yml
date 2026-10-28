@@ -1,0 +1,108 @@
+# ci-lane: fast
+# J24C04 precommitted #569-vs-#630 direct session economics. No CI verdict is a release gate.
+name: CMPCT v031 J24C04 composed direct-session economics
+on:
+  pull_request:
+    paths:
+      - 'docs/v031-research/2026-10-28-j24c04-composed-direct-session-prereg.md'
+      - '.github/workflows/v031-j24c04-composed-direct-session.yml'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/validation.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  same-wire-guard-economics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: c5e13bb3fbb4cdade8b64246658ce7c7818de41f
+          path: frozen-baseline
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 45e7d24600f3e9a79e0ac99c9e28624f01418584
+          path: frozen-guard-court
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Authenticate all three independent sources and frozen scientific court
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git -C frozen-baseline rev-parse HEAD)" = c5e13bb3fbb4cdade8b64246658ce7c7818de41f
+          test "$(git -C frozen-guard-court rev-parse HEAD)" = 45e7d24600f3e9a79e0ac99c9e28624f01418584
+          test "$(git -C frozen-baseline hash-object src/cmpct/reader.py)" = dbd4ac576a05a47eae97e1e40de89cf1de440516
+          test "$(git -C frozen-baseline hash-object src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          test "$(git hash-object src/cmpct/reader.py)" = b37b786966ac1506a0439567d4a58eea472d85f8
+          test "$(git hash-object src/cmpct/validation.py)" = fbcf6e9c108799dc8b6f5c19e95bcb0618cf41e8
+          test "$(git -C frozen-guard-court hash-object research/j24b03_direct_session_cost.py)" = 3e9dad748ead32cfe306064b0b4ddd9f5706b17b
+          test "$(git -C frozen-guard-court hash-object research/j24b03_direct_session_referee.py)" = e3a93d6ef5cc1a0b4a727b6277b4740dea01a74b
+          git rev-parse HEAD > benchmark-artifacts/child-head.txt
+          git -C frozen-baseline rev-parse HEAD > benchmark-artifacts/parent-head.txt
+          git -C frozen-guard-court rev-parse HEAD > benchmark-artifacts/science-source-head.txt
+          git hash-object src/cmpct/reader.py > benchmark-artifacts/child-reader-blob.txt
+          git -C frozen-baseline hash-object src/cmpct/reader.py > benchmark-artifacts/parent-reader-blob.txt
+      - name: Provide common dependencies for genuine installed Python Reader modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Each source needs its own package-owned native codec; a checkout alone is not runnable.
+          python -m pip install -e './frozen-baseline[test]'
+          python -m pip install -e '.[test]'
+      - name: Preserve first worker error and classify source versus harness
+        shell: bash
+        run: python research/j24c04_first_worker_diagnostic.py
+      - name: Measure complete authentic r24 Reader sessions in 36 ABBA workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python frozen-guard-court/research/j24b03_direct_session_cost.py --run \
+            --root benchmark-artifacts/j24c04-inputs \
+            --out benchmark-artifacts/j24c04-results.json \
+            2>&1 | tee benchmark-artifacts/j24c04-cost.log
+          python frozen-guard-court/research/j24b03_direct_session_referee.py \
+            benchmark-artifacts/j24c04-results.json \
+            --out benchmark-artifacts/j24c04-referee.json \
+            2>&1 | tee benchmark-artifacts/j24c04-audit.log
+          grep -q '"audit": "PASS"' benchmark-artifacts/j24c04-audit.log
+          grep -q '"forged_receipts_rejected": 3' benchmark-artifacts/j24c04-audit.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path('benchmark-artifacts/j24c04-results.json').read_text())
+          assert len(a['rows'])==36
+          assert a['decision'] in {'MATERIAL_DIRECT_SESSION_AND_PREFLIGHT_DEBT',
+             'MATERIAL_DIRECT_SESSION_DEBT','MATERIAL_DIRECT_PREFLIGHT_DEBT',
+             'NO_PREREGISTERED_MACRO_DEBT_SIGNAL'}
+          print('J24C04_DECISION='+a['decision'])
+          for n in (1,4096,65536):
+              q=a['summary'][str(n)]
+              print(f"J24C04_N={n} SESSION_DELTA_MS={q['delta']['session_wall_ns']/1e6:.6f} SESSION_RATIO={q['ratio']['session_wall_ns']:.6f} READ_DELTA_MS={q['delta']['read_wall_ns']/1e6:.6f}")
+          PY
+      - name: Verify existing workflow topology
+        if: always()
+        shell: bash
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24c04-composed-direct-session.yml
+      - name: Preserve all original raw observations and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24c04-${{ github.event.pull_request.head.sha || github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
+          retention-days: 30

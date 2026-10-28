@@ -328,7 +328,10 @@ def _validate_storage(path: str, kind: int, size: int, storage, blobs, recipes) 
     if kind == K_SYMLINK:
         if not isinstance(storage, list) or len(storage) != 2 or storage[0] != S_BLOB:
             raise ValidationError(f"symlink {path!r} must use direct blob storage")
-        _ref(storage[1], blob_count, f"symlink {path!r}")
+        idx = _ref(storage[1], blob_count, f"symlink {path!r}")
+        # Signed direct symlinks must own their full physical blob, not an arbitrary-length view.
+        if size != blobs[idx][1]:
+            raise ValidationError(f"symlink {path!r} size disagrees with blob")
         return
     if kind != K_FILE or not isinstance(storage, list) or not storage:
         raise ValidationError(f"file {path!r} has invalid storage")
@@ -337,7 +340,9 @@ def _validate_storage(path: str, kind: int, size: int, storage, blobs, recipes) 
     if tag == S_BLOB:
         if len(storage) != 2:
             raise ValidationError(f"file {path!r} has malformed blob storage")
-        _ref(storage[1], blob_count, f"file {path!r}")
+        idx = _ref(storage[1], blob_count, f"file {path!r}")
+        if size != blobs[idx][1]:
+            raise ValidationError(f"file {path!r} direct blob size mismatch")
     elif tag == S_PACK:
         if len(storage) != 4:
             raise ValidationError(f"file {path!r} has malformed pack storage")

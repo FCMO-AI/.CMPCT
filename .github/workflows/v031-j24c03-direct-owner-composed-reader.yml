@@ -1,0 +1,83 @@
+# ci-lane: fast
+name: CMPCT v031 J24C03 direct-owner custody on composed Reader
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/validation.py'
+      - 'research/j24c03_composition_source_audit.py'
+      - 'research/j24b03_direct_blob_size_court.py'
+      - 'tests/test_reader_deflate_export_custody.py'
+      - 'tests/test_reader_unsupported_blob_bits.py'
+      - 'docs/v031-research/2026-10-28-j24c03-direct-owner-guard-composition-prereg.md'
+      - '.github/workflows/v031-j24c03-direct-owner-composed-reader.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-locked-direct-owner:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+        python: ['3.11']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: c5e13bb3fbb4cdade8b64246658ce7c7818de41f
+          path: frozen-j24c02
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install exact child source dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[test]'
+      - name: Audit source continuity and inherited guard semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git -C frozen-j24c02 rev-parse HEAD)" = "c5e13bb3fbb4cdade8b64246658ce7c7818de41f"
+          test "$(git -C frozen-j24c02 hash-object src/cmpct/reader.py)" = "dbd4ac576a05a47eae97e1e40de89cf1de440516"
+          test "$(git -C frozen-j24c02 hash-object src/cmpct/validation.py)" = "51c2849061f99a4afeddb7666956b24566ce7de0"
+          mkdir -p benchmark-artifacts
+          git rev-parse HEAD > benchmark-artifacts/j24c03-head.txt
+          git hash-object src/cmpct/reader.py > benchmark-artifacts/j24c03-reader-blob.txt
+          git hash-object src/cmpct/validation.py > benchmark-artifacts/j24c03-validation-blob.txt
+          python research/j24c03_composition_source_audit.py --parent-root frozen-j24c02 --output benchmark-artifacts/source-audit.json
+          # Original 24-wire size-custody court: no easier fixture or altered expectations.
+          J24B03_RECEIPT=benchmark-artifacts/direct-custody.json PYTHONPATH=src python research/j24b03_direct_blob_size_court.py --expect repaired
+          # H4 original complete ZIP and adversarial assertions; H3 original with the sole
+          # descriptor-backed full-slice compatibility adaptation, not weaker bytes checks.
+          PYTHONPATH=src python -m pytest --noconftest -q tests/test_reader_deflate_export_custody.py tests/test_reader_unsupported_blob_bits.py tests/test_o215_fixed_chunk_admission.py
+      - name: Preserve inherited #569 S_SPARSE S_CDC and extraction host tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object tests/test_o212_sparse_admission.py)" = 10605b0a255c90c9ebe2473bf7aefdb14e9b4ea3
+          test "$(git hash-object tests/test_o214_cdc_admission.py)" = ce5bb0c6da2f6d38dcf2b32956b6dfc08e05eaec
+          test "$(git hash-object tests/test_chunked_extract_platform_fchmod.py)" = 8261888e8067da2f417ebe9e50bbb648c2838b19
+          PYTHONPATH=src python -m pytest --noconftest -q tests/test_o212_sparse_admission.py tests/test_o214_cdc_admission.py tests/test_chunked_extract_platform_fchmod.py 2>&1 | tee benchmark-artifacts/inherited-j24c02-geometry.log
+      - name: Validate hosted workflow topology
+        if: runner.os == 'Linux'
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24c03-direct-owner-composed-reader.yml
+      - name: Preserve exact-source J24C03 receipts on failure too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24c03-${{ matrix.os }}-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
