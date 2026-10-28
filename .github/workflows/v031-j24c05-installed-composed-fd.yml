@@ -94,7 +94,7 @@ jobs:
           python "$GITHUB_WORKSPACE/research/j24c01_geometry_fd_composed_court.py" \
             --expected-reader-blob "$blob" --output "$root/j24c01.json" \
             2>&1 | tee "$root/j24c01.log"
-          grep -q 'J24C01_DECISION=COMPOSED_CDC_ADMISSION_AND_FD_PUBLICATION_PASS' "$root/j24c01.log
+          grep -q 'J24C01_DECISION=COMPOSED_CDC_ADMISSION_AND_FD_PUBLICATION_PASS' "$root/j24c01.log"
       - name: Independently audit original receipts against expected full case counts
         shell: bash
         run: |
