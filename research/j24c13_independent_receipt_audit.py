@@ -66,6 +66,21 @@ def audit(source):
                 else: assert abs(computed[key]-reported[key])<1e-9
             else:
                 assert computed[key]==reported[key], (key,computed,reported)
+    # RSS is process HWM, not a proof of small per-object allocations. Preserve
+    # unavailable Windows readings and flag, rather than erase, >8 MiB debt.
+    rss={}
+    for case in sorted({x["case"] for x in raw}):
+        d={}
+        for arm in ("native-original","fused"):
+            vals=[r["max_rss_mib"] for r in raw
+                  if r["case"]==case and r["arm"]==arm]
+            assert len(vals)==reps and all(v is None or
+                  (isinstance(v,(int,float)) and 0<=v<1e7) for v in vals)
+            d[arm]=None if any(v is None for v in vals) else statistics.median(vals)
+        rss[case]={"original_mib":d["native-original"],
+                   "fused_mib":d["fused"],
+                   "delta_mib":(d["fused"]-d["native-original"]
+                                if None not in d.values() else None)}
     q6=[x for x in expected if x["field"]=="session_wall_ns" and "-q6-" in x["case"]]
     assert len(q6)==4
     q1=[x for x in expected if x["field"]=="session_wall_ns" and "-q1-" in x["case"]]
@@ -79,6 +94,9 @@ def audit(source):
                 q6_speedups={x["case"]:x["speedup"] for x in q6},
                 q6_no_gain=[x["case"] for x in original_faster],
                 q1_material_losses=[x["case"] for x in significant_q1_loss],
+                rss_mib=rss,
+                rss_above_8mib=[k for k,v in rss.items() if
+                                v["delta_mib"] is not None and v["delta_mib"]>8],
                 caveats=["No published Reader A/B in this court",
                          "No full product release gate",
                          "Windows RSS unavailable when returned null"])
