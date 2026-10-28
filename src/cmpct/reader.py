@@ -21,6 +21,82 @@ def _safe_output_path(dest:Path,rel:str)->Path:
     if pp.is_absolute() or any(x in ('..','') for x in pp.parts):raise IOError(f'unsafe archive path: {rel!r}')
     return dest/pp
 
+# J24G10: operation-scoped *exact* invalid-footer proof, spilled only for hostile
+# non-arithmetic ancestry that exceeds the cheap in-memory proof budget. SQLite is
+# imported lazily: ordinary Reader startup has no new module import dependency.
+class _FooterInvalidProof:
+    _HOT_LIMIT = 16384
+
+    def __init__(self):
+        self.hot = set()
+        self._tmp = None
+        self._db = None
+        self._path = None
+        self._count = 0
+
+    @staticmethod
+    def _key(pos: int) -> int:
+        # The footer prev field is unsigned uint64. SQLite INTEGER is signed;
+        # this bijection avoids silently losing high-bit adversarial offsets.
+        if not 0 <= pos < (1 << 64):
+            raise ValueError('footer offset outside unsigned 64-bit range')
+        return pos if pos < (1 << 63) else pos - (1 << 64)
+
+    def __len__(self):
+        return len(self.hot) if self._db is None else self._count
+
+    def __contains__(self, pos: int) -> bool:
+        if pos in self.hot:
+            return True
+        if self._db is None:
+            return False
+        return self._db.execute('SELECT 1 FROM bad WHERE p=?',
+                                (self._key(pos),)).fetchone() is not None
+
+    def update(self, positions):
+        if self._db is None and len(self.hot) + len(positions) <= self._HOT_LIMIT:
+            self.hot.update(positions)
+            return
+        if self._db is None:
+            import sqlite3
+            self._tmp = tempfile.TemporaryDirectory(prefix='cmpct-footer-proof-')
+            self._path = os.path.join(self._tmp.name, 'bad.sqlite3')
+            self._db = sqlite3.connect(self._path, timeout=0.1)
+            # This is throwaway, one-open evidence. No durable recovery journal is
+            # promised; any SQLite/I/O failure aborts Reader open, never skips a
+            # candidate based on an unproven membership.
+            self._db.execute('PRAGMA journal_mode=MEMORY')
+            self._db.execute('PRAGMA synchronous=OFF')
+            self._db.execute('PRAGMA cache_size=-512')
+            self._db.execute('CREATE TABLE bad(p INTEGER PRIMARY KEY) WITHOUT ROWID')
+            self._db.execute('BEGIN')
+            self._db.executemany('INSERT OR IGNORE INTO bad(p) VALUES (?)',
+                                 ((self._key(p),) for p in self.hot))
+            self._count = len(self.hot)
+            self.hot.clear()
+        self._db.executemany('INSERT OR IGNORE INTO bad(p) VALUES (?)',
+                             ((self._key(p),) for p in positions))
+        # A counting query is not required for decisions; used only by the cap
+        # predicate for subsequent chains and never to determine validity.
+        self._count = self._db.execute('SELECT count(*) FROM bad').fetchone()[0]
+
+    def close(self):
+        try:
+            if self._db is not None:
+                self._db.close()
+                self._db = None
+        finally:
+            if self._tmp is not None:
+                self._tmp.cleanup()
+                self._tmp = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
     def __init__(self,path:Path):
@@ -92,35 +168,42 @@ class CMPCT:
         if known_bad is not None and len(seen)>1:
             if len(known_bad)+len(seen)<=16384:
                 known_bad.update(seen)
-            elif known_bad_runs is not None and len(known_bad_runs)<32 and len(seen)>=3:
-                ordered=sorted(seen)
-                step=ordered[1]-ordered[0]
-                if step>0 and all(p==ordered[0]+i*step for i,p in enumerate(ordered)):
-                    known_bad_runs.append((ordered[0],ordered[-1],step))
+            else:
+                # Preserve the existing cheap AP seed when it can prove the
+                # whole chain. Non-AP paths need exact external membership.
+                certified=False
+                if known_bad_runs is not None and len(known_bad_runs)<32 and len(seen)>=3:
+                    ordered=sorted(seen)
+                    step=ordered[1]-ordered[0]
+                    if step>0 and all(p==ordered[0]+i*step for i,p in enumerate(ordered)):
+                        known_bad_runs.append((ordered[0],ordered[-1],step))
+                        certified=True
+                if not certified:
+                    known_bad.update(seen)
         return None
     def _latest_generation(self):
         # Scan backward for the newest valid commit footer. A partial append after an older footer
         # is harmless: the older footer remains discoverable and its hash/parent chain still validates.
         self.f.seek(0,2);size=self.f.tell();block=1024*1024;pos=size;carry=b'';magic=FMAGIC
-        known_bad=set()  # transient: no global Reader cache or persistent evidence
-        known_bad_runs=[]  # bounded, exact progressions of already-proved invalid positions
-        while pos>0:
-            n=min(block,pos);pos-=n;self.f.seek(pos);chunk=self.f.read(n)+carry;search=len(chunk)
-            while True:
-                i=chunk.rfind(magic,0,search)
-                if i<0:break
-                fp=pos+i
-                if fp+FTR.size<=size:
-                    # A certificate may skip *only* its exact step-aligned members.
-                    # It cannot infer badness for positions between known members.
-                    in_bad_run=any(lo<=fp<=hi and (fp-lo)%step==0
-                                   for lo,hi,step in known_bad_runs)
-                    if not in_bad_run:
-                        got=self._index_from_footer(fp,known_bad,known_bad_runs)
-                        if got is not None:return got[0],fp,got[1]
-                search=i
-            carry=chunk[:len(magic)-1]
-        return None
+        with _FooterInvalidProof() as known_bad:
+            known_bad_runs=[]  # bounded, exact progressions of already-proved invalid positions
+            while pos>0:
+                n=min(block,pos);pos-=n;self.f.seek(pos);chunk=self.f.read(n)+carry;search=len(chunk)
+                while True:
+                    i=chunk.rfind(magic,0,search)
+                    if i<0:break
+                    fp=pos+i
+                    if fp+FTR.size<=size:
+                        # A certificate may skip *only* its exact step-aligned members.
+                        # It cannot infer badness for positions between known members.
+                        in_bad_run=any(lo<=fp<=hi and (fp-lo)%step==0
+                                       for lo,hi,step in known_bad_runs)
+                        if not in_bad_run:
+                            got=self._index_from_footer(fp,known_bad,known_bad_runs)
+                            if got is not None:return got[0],fp,got[1]
+                    search=i
+                carry=chunk[:len(magic)-1]
+            return None
     def _load_index(self):
         latest=self._latest_generation()
         self.f.seek(0);m,v,fl,cs,us,ds,ih=HDR.unpack(self.f.read(HDR.size))
