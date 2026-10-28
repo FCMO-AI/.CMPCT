@@ -37,8 +37,19 @@ def check(data, basedir: Path):
     semantics = data["semantics"]
     assert semantics["inherited_cases"] >= 19
     assert len(semantics["named_cases"]) == 24 and semantics["fuzz_cases"] == 2500
-    assert all(entry["outcome"][0] in ("ACCEPT", "REJECT")
-               for entry in semantics["named_cases"])
+    accepted = {"empty", "one", "repeated", "distinct", "large-valid"}
+    named = {
+        "empty", "one", "repeated", "distinct", "short", "long",
+        "bool", "false", "float", "negative", "outside", "giant",
+        "text", "none", "dict", "sublist", "late-bool", "late-outside",
+        "empty-storage", "missing-list", "extra", "map",
+        "large-valid", "large-late-bool",
+    }
+    actual = {entry["case"]: entry["outcome"][0]
+              for entry in semantics["named_cases"]}
+    assert set(actual) == named and len(actual) == len(semantics["named_cases"])
+    assert all(actual[label] == ("ACCEPT" if label in accepted else "REJECT")
+               for label in named)
 
     tc = data["timing_contract"]
     assert tc == {
@@ -150,6 +161,10 @@ def forge_tests(data, directory):
     x = copy.deepcopy(data)
     x["build"]["binary_sha256"] = "0" * 64
     probes.append(("counterfeit_binary", x))
+    x = copy.deepcopy(data)
+    next(e for e in x["semantics"]["named_cases"]
+         if e["case"] == "bool")["outcome"] = ["ACCEPT"]
+    probes.append(("false_hostile_semantics", x))
     for label, item in probes:
         try:
             check(item, directory)
