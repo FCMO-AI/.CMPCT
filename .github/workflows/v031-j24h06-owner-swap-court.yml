@@ -1,0 +1,101 @@
+# ci-lane: fast
+name: CMPCT J24H06 hardlink owner-swap scientific falsifier
+on:
+  pull_request:
+    paths:
+      - 'research/j24h06_owner_swap_court.py'
+      - '.github/workflows/v031-j24h06-owner-swap-court.yml'
+      - 'docs/v031-research/2026-10-28-j24h06-*'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+jobs:
+  hostile-destination-court:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      J24H06_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24H06_ARTIFACTS: j24h06-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24H06_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify immutable product owner and exact court source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24h06-artifacts
+          test "$(git rev-parse HEAD)" = "$J24H06_HEAD"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "931545520b5a649903a8bdac4e9a1806bc38d58d"
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, subprocess
+          entries={}
+          for rel in ("src/cmpct/reader.py","src/cmpct/builder.py","research/j24h06_owner_swap_court.py"):
+              raw=subprocess.check_output(["git","show","HEAD:"+rel])
+              actual=Path(rel).read_bytes()
+              assert actual.replace(b"\r\n",b"\n")==raw.replace(b"\r\n",b"\n"),rel
+              entries[rel]={"git_blob":subprocess.check_output(["git","rev-parse","HEAD:"+rel],text=True).strip(),
+                            "sha256":hashlib.sha256(raw).hexdigest()}
+          Path("j24h06-artifacts/source-custody.json").write_text(json.dumps(entries,sort_keys=True,indent=2)+"\n")
+          print("J24H06_SOURCE_CUSTODY="+json.dumps(entries,sort_keys=True))
+          PY
+      - name: Install real CMPCT wheel and execute immutable scientific script
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python - <<'PY'
+          import cmpct,cmpct.reader
+          from pathlib import Path
+          x=Path(cmpct.__file__).resolve().parent
+          assert "site-packages" in str(x),x
+          print("J24H06_INSTALLED_CMPCT="+str(x))
+          PY
+          python research/j24h06_owner_swap_court.py 2>&1 | tee j24h06-artifacts/court.log
+      - name: Independent outcome and provenance referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,pathlib
+          j=json.loads(pathlib.Path("j24h06-artifacts/court.json").read_text())
+          c=j["control"]
+          assert j["hypothesis"]=="J24H06-OWNER-SWAP"
+          assert c["verified_members"]==2 and c["metadata"] is True
+          assert c["same_inode"] and c["owner"]["sha256"]==c["alias"]["sha256"]==j["signed_payload_sha256"]
+          assert not c["owner"]["symlink"] and not c["alias"]["symlink"]
+          assert j["external_initial_sha256"]==j["external_final_sha256"]
+          assert j["injection"]["calls"]==[{"owner_swapped":True,"replacement":"symlink to external"}]
+          assert j["injection"]["original_owner_displaced"]["sha256"]==j["signed_payload_sha256"]
+          assert j["injection"]["swapped_owner"]["symlink"] is True
+          assert j["result"] in ("SILENT_SIGNED_OWNER_MISMATCH",
+                  "EXTRACTION_REJECTED_AFTER_SWAP", "SAFE_OWNER_IDENTITY_PRESERVED")
+          if j["result"]=="SILENT_SIGNED_OWNER_MISMATCH":
+              assert j["accepted_without_postextract_validation"] is True
+              assert j["silent_mismatch"] is True
+              a=j["injection"]["alias"]
+              assert a.get("sha256") != j["signed_payload_sha256"] or a.get("symlink") is True or a.get("stat_ino") != j["injection"]["original_owner_displaced"].get("stat_ino")
+          print("J24H06_REFEREE_PASS_CLASSIFICATION="+j["result"])
+          PY
+      - name: Preserve original source-pinned artifacts including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24h06-owner-swap-${{ matrix.os }}-${{ github.sha }}
+          path: j24h06-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
