@@ -50,7 +50,7 @@ jobs:
             'src/cmpct/reader.py':'931545520b5a649903a8bdac4e9a1806bc38d58d',
             'src/cmpct/_win32_times.py':'70308f454c74fad7b247db6ee36aa8cc7d38c99c',
             'tests/test_v031_o167_win32_mtime.py':'4d93ee6ba26f198bd35d826c64a009a83e5eecde',
-            'tests/test_v031_j24h05_win32_default_hardlink.py':'c7efe9ac0508c94e06bfdc8a20959d6c96f04465',
+            'tests/test_v031_j24h05_win32_default_hardlink.py':'b1e74b4a246f4f55a0832278c495fdc9b50189c0',
           }
           for rel,want in expected.items():
             raw=subprocess.check_output(['git','show','HEAD:'+rel])
