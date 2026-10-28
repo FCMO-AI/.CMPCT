@@ -23,7 +23,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       J24B07_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      J24B07_OUT: ${{ runner.temp }}/j24b07-evidence
+      J24B07_OUT: j24b07-evidence
     steps:
       - name: Checkout exact preregistered candidate source
         uses: actions/checkout@v4
