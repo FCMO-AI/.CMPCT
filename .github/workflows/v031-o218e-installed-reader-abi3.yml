@@ -1,0 +1,206 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 O218e installed Reader stable ABI economics
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-o218e-abi3-fullreader-20261028
+  pull_request:
+    paths:
+      - 'research/o218e_*'
+      - '.github/workflows/v031-o218e-installed-reader-abi3.yml'
+      - 'docs/v031-research/2026-10-28-o218e-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o218e-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reader:
+    name: Same abi3 wheel and exact installed Reader on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Preserve exact Git source bytes on all platforms
+        shell: bash
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Preregistration, ancestry and immutable product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p o218e-evidence/archives o218e-evidence/py311 o218e-evidence/py313
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor 066c99caed747a0de62974f7be9f05e4c9a0ad5d HEAD
+          git merge-base --is-ancestor 3dd2e24b99eacf8f61b363278ff35e6ffb45b77b HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = dbd4ac576a05a47eae97e1e40de89cf1de440516
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          test "$(git rev-parse HEAD:research/o218_fastscan.c)" = a54f15181d9dbe667b9e8c9d52e927b09c80152f
+          git diff --quiet 3dd2e24b99eacf8f61b363278ff35e6ffb45b77b HEAD -- src/cmpct native/cmpct-core
+          git rev-parse HEAD > o218e-evidence/source-head.txt
+          python -m py_compile research/o218e_installed_reader_abi3_court.py research/o218e_installed_reader_referee.py
+      - name: Build stable-ABI wheel only once under CPython 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install setuptools wheel 'abi3audit==0.0.26'
+          python - <<'PY'
+          import hashlib,json,subprocess,sys,time
+          from pathlib import Path
+          root=Path("research/o218d_abi3_package").resolve()
+          t=time.perf_counter_ns()
+          p=subprocess.run([sys.executable,"setup.py","bdist_wheel","--dist-dir","dist"],cwd=root,capture_output=True,text=True)
+          ms=(time.perf_counter_ns()-t)/1e6
+          Path("o218e-evidence/wheel-build.log").write_text(p.stdout+"\n"+p.stderr)
+          if p.returncode:
+              raise SystemExit(p.stdout+"\n"+p.stderr)
+          wheels=list((root/"dist").glob("*.whl"))
+          assert len(wheels)==1 and "cp311-abi3-" in wheels[0].name,wheels
+          wire=wheels[0].read_bytes()
+          Path("o218e-evidence/wheel-build.json").write_text(json.dumps(
+              {"name":wheels[0].name,"sha256":hashlib.sha256(wire).hexdigest(),
+               "bytes":len(wire),"build_wall_ms":ms,"build_python":"3.11"},indent=2)+"\n")
+          print("O218E_ABI3_ONE_BUILD",wheels[0].name,ms)
+          PY
+          python -m abi3audit --strict research/o218d_abi3_package/dist/*.whl > o218e-evidence/abi3audit.log 2>&1 || { cat o218e-evidence/abi3audit.log; exit 1; }
+          cat o218e-evidence/abi3audit.log
+      - name: Install true CMPCT wheel plus abi3 wheel on CPython 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest setuptools wheel > o218e-evidence/cmpct-py311-install.log 2>&1 || { cat o218e-evidence/cmpct-py311-install.log; exit 1; }
+          python -m pip install research/o218d_abi3_package/dist/*.whl
+          python research/o218e_installed_reader_abi3_court.py --make-fixtures o218e-evidence/archives
+      - name: Exact Reader ABBA, adversarial semantics and independent audit on 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o218e_installed_reader_abi3_court.py --fixtures o218e-evidence/archives --output o218e-evidence/py311 --wheel-dir research/o218d_abi3_package/dist > o218e-evidence/py311/court.log 2>&1 || { cat o218e-evidence/py311/court.log; exit 1; }
+          cat o218e-evidence/py311/court.log
+          python research/o218e_installed_reader_referee.py o218e-evidence/py311 | tee o218e-evidence/py311/referee.log
+          grep -q 'O218E_INDEPENDENT_REFEREE_PASS' o218e-evidence/py311/referee.log
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Reuse the same abi3 wheel, compile only direct-C interpreter control
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest setuptools wheel > o218e-evidence/cmpct-py313-install.log 2>&1 || { cat o218e-evidence/cmpct-py313-install.log; exit 1; }
+          python -m pip install research/o218d_abi3_package/dist/*.whl
+          python research/o218e_installed_reader_abi3_court.py --fixtures o218e-evidence/archives --output o218e-evidence/py313 --wheel-dir research/o218d_abi3_package/dist > o218e-evidence/py313/court.log 2>&1 || { cat o218e-evidence/py313/court.log; exit 1; }
+          cat o218e-evidence/py313/court.log
+          python research/o218e_installed_reader_referee.py o218e-evidence/py313 | tee o218e-evidence/py313/referee.log
+          grep -q 'O218E_INDEPENDENT_REFEREE_PASS' o218e-evidence/py313/referee.log
+      - name: Compare the same physical archive and wheel across two interpreters
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("o218e-evidence")
+          a=json.loads((root/"py311/result.json").read_text())
+          b=json.loads((root/"py313/result.json").read_text())
+          assert a["source"]==b["source"],"source mismatch"
+          assert a["semantics"]==b["semantics"],"semantic mismatch"
+          assert a["fixtures"]==b["fixtures"],"wire mismatch"
+          assert a["wheel"]["wheel_sha256"]==b["wheel"]["wheel_sha256"],"abi3 wheel recompiled or changed"
+          assert a["wheel"]["installed_binary_sha256"]==b["wheel"]["installed_binary_sha256"],"abi3 binary changed"
+          assert a["host"]["python_minor"]==[3,11] and b["host"]["python_minor"]==[3,13]
+          assert {x["count"] for x in a["summary"]}=={65536,262144}
+          verdict={"source":a["source"],"wheel_sha256":a["wheel"]["wheel_sha256"],
+                   "decision_py311":a["decision"],"decision_py313":b["decision"],
+                   "semantic_sha256":a["semantics"]["decision_sha256"],
+                   "fixtures":[x["archive_sha256"] for x in a["fixtures"]]}
+          (root/"within-host.json").write_text(json.dumps(verdict,indent=2)+"\n")
+          print("O218E_CROSS_MINOR_SOURCE_WHEEL_PARITY_PASS")
+          PY
+      - name: Retain all raw artifacts even on a failed attempt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o218e-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            o218e-evidence/
+            research/o218d_abi3_package/dist/*.whl
+          retention-days: 30
+          if-no-files-found: warn
+
+  cross_host:
+    name: Independent three-host source/wheel/semantic parity
+    needs: reader
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: o218e-*-${{ github.event.pull_request.head.sha || github.sha }}
+          merge-multiple: false
+          path: o218e-all
+      - name: Require six completed exact-head verdicts and preserve negative economics
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          dirs=list(Path("o218e-all").iterdir())
+          assert len(dirs)==3,dirs
+          rows=[]
+          for folder in dirs:
+              root=folder/"o218e-evidence"
+              assert (root/"source-head.txt").read_text().strip()=="${{ github.event.pull_request.head.sha || github.sha }}"
+              a=json.loads((root/"py311/result.json").read_text())
+              b=json.loads((root/"py313/result.json").read_text())
+              v=json.loads((root/"within-host.json").read_text())
+              assert a["semantics"]==b["semantics"]
+              assert a["wheel"]["wheel_sha256"]==b["wheel"]["wheel_sha256"]==v["wheel_sha256"]
+              assert json.loads((root/"py311/referee.json").read_text())["forgeries_rejected"]==5
+              assert json.loads((root/"py313/referee.json").read_text())["forgeries_rejected"]==5
+              rows.append({"platform":a["host"]["platform"],
+                           "source":a["source"],"semantics":a["semantics"]["decision_sha256"],
+                           "decision_py311":a["decision"],"decision_py313":b["decision"],
+                           "focus_py311":[(x["count"],x["safe_python_over_abi3"],x["abi3_over_direct"]) for x in a["summary"] if x["owners"]==1],
+                           "focus_py313":[(x["count"],x["safe_python_over_abi3"],x["abi3_over_direct"]) for x in b["summary"] if x["owners"]==1]})
+          assert {r["platform"] for r in rows}=={"linux","darwin","win32"},rows
+          assert len({json.dumps(r["source"],sort_keys=True) for r in rows})==1
+          assert len({r["semantics"] for r in rows})==1
+          # Scientific workflow passes for well-audited negative evidence too.
+          overall="STRONG_CROSS_HOST_HYPOTHESIS" if all(r["decision_py311"]==r["decision_py313"]=="ABI3_FULL_READER_STRONG_HOST_PASS" for r in rows) else "MIXED_OR_NEGATIVE_ECONOMICS"
+          Path("o218e-crosshost.json").write_text(json.dumps({"decision":overall,"head":"${{ github.event.pull_request.head.sha || github.sha }}","hosts":rows},indent=2)+"\n")
+          print("O218E_CROSS_HOST_AUDIT_PASS",overall)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o218e-crosshost-${{ github.event.pull_request.head.sha || github.sha }}
+          path: o218e-crosshost.json
+          retention-days: 30
+          if-no-files-found: warn
