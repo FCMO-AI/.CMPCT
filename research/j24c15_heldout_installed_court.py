@@ -213,7 +213,7 @@ def controller(output: Path, executables):
     for arm, py in executables.items():
         assert Path(py).is_file(), (arm, py)
     output.parent.mkdir(parents=True, exist_ok=True)
-    fixture_dir = output.parent / "fixtures"
+    # Worker executes from an isolated cwd; signed fixture paths must be absolute.\n    fixture_dir = output.resolve().parent / "fixtures"
     fixture_dir.mkdir(parents=True, exist_ok=True)
     fixture_specs, workers = [], []
     with tempfile.TemporaryDirectory(prefix="j24c15-independent-cwd-") as cwd:
