@@ -55,7 +55,7 @@ def rss():
     return None
 
 
-def worker(path, size, mode):
+def worker(path, size, mode, tail_hex):
     if mode not in ("strict", "native"):
         raise ValueError("unknown arm")
     if mode == "strict":
@@ -67,7 +67,7 @@ def worker(path, size, mode):
     # MUST NOT contaminate the preregistered constructor-only wall/CPU samples.
     with CMPCT(Path(path)) as rd:
         assert len(rd.files) == 1 and rd.files[0][4] == size
-        assert rd.read_range("fixed.bin", size - 4, 4) == b"ABCD"
+        assert rd.read_range("fixed.bin", size - 4, 4) == bytes.fromhex(tail_hex)
     samples = []
     for index in range(IN_WORKER_REPEATS):
         start = time.perf_counter_ns()
@@ -112,7 +112,7 @@ def controller(output):
                     "native", "strict", "strict", "native")
                 for slot, mode in enumerate(arms):
                     command = [sys.executable, str(Path(__file__).resolve()),
-                               "--worker", str(file), str(len(logical)), mode]
+                               "--worker", str(file), str(len(logical)), mode, logical[-4:].hex()]
                     before = time.perf_counter_ns()
                     p = subprocess.run(command, capture_output=True, text=True,
                                        cwd=td, timeout=120, check=True)
@@ -144,10 +144,10 @@ def controller(output):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--worker", nargs=3)
+    parser.add_argument("--worker", nargs=4)
     args = parser.parse_args()
     if args.worker:
-        worker(args.worker[0], int(args.worker[1]), args.worker[2])
+        worker(args.worker[0], int(args.worker[1]), args.worker[2], args.worker[3])
     else:
         if args.output is None:
             parser.error("controller needs --output")
