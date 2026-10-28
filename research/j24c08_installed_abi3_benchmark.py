@@ -62,14 +62,18 @@ def worker(path, size, mode):
         admission._scan_refs = None
     elif admission._scan_refs is None:
         raise RuntimeError("native arm must have an active shipping extension")
+    # Untimed parity control: the original physical bytes and public range answers
+    # must match before timing. A late S_CHUNKS range is O(reference_count) and
+    # MUST NOT contaminate the preregistered constructor-only wall/CPU samples.
+    with CMPCT(Path(path)) as rd:
+        assert len(rd.files) == 1 and rd.files[0][4] == size
+        assert rd.read_range("fixed.bin", size - 4, 4) == b"ABCD"
     samples = []
     for index in range(IN_WORKER_REPEATS):
         start = time.perf_counter_ns()
         cpu_start = time.process_time_ns()
         with CMPCT(Path(path)) as rd:
             assert len(rd.files) == 1 and rd.files[0][4] == size
-            # Admission must precede a genuine selective read.
-            assert rd.read_range("fixed.bin", size - 4, 4) == b"ABCD"
         samples.append({"wall_ns": time.perf_counter_ns() - start,
                         "cpu_ns": time.process_time_ns() - cpu_start,
                         "sample": index})
