@@ -59,6 +59,8 @@ jobs:
           set -euo pipefail
           cc -O3 -std=c11 -Wall -Wextra -Werror -fPIC -shared research/j24g17_msgpack_token_counter.c -o research/j24g17_token_counter.so
           python -m pip install .
+          # Bind MessagePack to the J24G17 component court's actual decoder version.
+          python -m pip install msgpack==1.1.2
           python - <<'PY'
           import pathlib, subprocess, cmpct.reader, msgpack
           f=pathlib.Path(cmpct.reader.__file__).resolve()
