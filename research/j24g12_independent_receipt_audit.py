@@ -61,6 +61,7 @@ def verify(d, s):
     expected_files = (
         "src/cmpct/reader.py",
         "research/j24g12_lazy_ancestry_court.py",
+        "research/j24g12_independent_receipt_audit.py",
         "docs/v031-research/2026-10-28-j24g12-lazy-ancestry-prereg.md",
     )
     req(len(s.get("head", "")) == 40, "head receipt")
