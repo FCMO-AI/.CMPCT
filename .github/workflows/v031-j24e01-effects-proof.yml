@@ -1,0 +1,45 @@
+name: J24E01 metadata-only extraction effects court
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24e01_extract_effects_model.py'
+      - 'research/test_j24e01_extract_effects_model.py'
+      - '.github/workflows/v031-j24e01-effects-proof.yml'
+      - 'docs/v031-research/2026-10-28-j24e01-extract-effects-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24e01-effects-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-head-model-court:
+    name: Source-exact physical-effects model (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact source and run 2,000 + 50,000-alias court
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python -B -m unittest -v research.test_j24e01_extract_effects_model
+      - name: Record source identity
+        if: always()
+        shell: bash
+        run: |
+          git rev-parse HEAD
+          git hash-object research/j24e01_extract_effects_model.py
+          git hash-object research/test_j24e01_extract_effects_model.py
