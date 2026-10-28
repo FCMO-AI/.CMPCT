@@ -157,6 +157,29 @@ class LazyStrideProof(unittest.TestCase):
                 self.assertEqual(rd._chunk_stride_cache.get("fixed.bin"), expected)
                 self.assertEqual(rd.verify(), 1)
 
+    def test_late_witness_does_not_bypass_corrupt_physical_blob_header(self):
+        # Signing the index does not authenticate hostile physical BHDR control
+        # flags. A shortcut in range location must never become a codec bypass.
+        from cmpct.codec import BHDR, HDR
+        path = self._signed([0]*256, b"ABCD"*256)
+        wire = bytearray(path.read_bytes())
+        record_start = HDR.size + HDR.unpack_from(wire, 0)[3]
+        head = list(BHDR.unpack_from(wire, record_start))
+        self.assertEqual(head[2], 0)
+        head[2] = 1
+        wire[record_start:record_start + BHDR.size] = BHDR.pack(*head)
+        path.write_bytes(wire)
+
+        current = admission._uniform_stride
+        outcomes = []
+        for witness in (None, current):
+            admission._uniform_stride = witness
+            with CMPCT(path) as rd:
+                with self.assertRaises(IOError) as error:
+                    rd.read_range("fixed.bin", 1020, 4)
+                outcomes.append((type(error.exception).__name__, str(error.exception)))
+        self.assertEqual(outcomes[0], outcomes[1])
+
     def test_deterministic_hostile_differential_no_false_positives(self):
         if not REQUIRED:
             self.skipTest("no native extension; strict Python is the only route")
