@@ -161,15 +161,35 @@ def measure(blob):
     return {"wall_median_ns":sorted(x[0] for x in samples)[3],
             "cpu_median_ns":sorted(x[1] for x in samples)[3],"raw":samples}
 def hostile(blob):
-    checks={}
-    tests={"bad_magic":(0,127),"bad_kind":(4,7),"bad_program_count":(7,255),"truncated":None}
-    for label,alter in tests.items():
-        b=bytearray(blob)
-        if alter is None:b=b[:-1]
-        else:b[alter[0]]=alter[1]
-        try:read(bytes(b));checks[label]=False
-        except ValueError:checks[label]=True
-    return checks
+    catalog=HD.size
+    nprograms=HD.unpack_from(blob)[3]
+    for _ in range(nprograms):
+        n=struct.unpack_from("<H",blob,catalog)[0]
+        catalog+=2+n
+    member=catalog
+    if member+REC.size>=len(blob):raise AssertionError("invalid science fixture")
+    first_program=HD.size+2
+    tests={}
+    def mutate(label,at,payload):
+        b=bytearray(blob);b[at:at+len(payload)]=payload;tests[label]=bytes(b)
+    mutate("bad_magic",0,b"x")
+    mutate("bad_kind",4,b"\x07")
+    mutate("bad_program_count",7,b"\xff\xff")
+    mutate("invalid_program_length",HD.size,b"\xff\xff")
+    mutate("invalid_program_code",first_program,b"\xff")
+    mutate("invalid_member_owner",member,b"\xff\xff")
+    mutate("oversized_raw",member+2,b"\xff\xff\xff\xff")
+    mutate("bad_digest",member+6,bytes([blob[member+6]^0xff]))
+    mutate("oversized_zstd",member+38,b"\xff\xff\xff\xff")
+    mutate("broken_frame",member+REC.size,b"\xff")
+    tests["truncation"]=blob[:-1]
+    tests["trailing"]=blob+b"x"
+    outcome={}
+    for label,b in tests.items():
+        try:read(b);outcome[label]=False
+        except ValueError:outcome[label]=True
+    return outcome
+
 def run(out):
     out.mkdir(parents=True,exist_ok=True);cases=[];bad=[]
     for family in ("lane16","lane32","diff","zeros","opaque"):
