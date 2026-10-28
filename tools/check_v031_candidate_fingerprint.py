@@ -133,6 +133,27 @@ def assert_git_head_custody(
             f"({len(untracked)} paths; first: {untracked[:5]})"
         )
 
+    # git diff consults the index and can silently skip a changed source when
+    # assume-unchanged or skip-worktree is set. Do not accept such an index as
+    # evidence that scanned worktree bytes match this HEAD. Git -v shows normal
+    # entries as "H path"; both "h" (assume-unchanged) and "S" (skip-worktree)
+    # must fail closed even when git diff reports no modifications.
+    flagged: list[str] = []
+    selected = set(rows)
+    for entry in git_bytes("ls-files", "-v", "-z", "--").split(b"\0"):
+        if not entry:
+            continue
+        if len(entry) < 3 or entry[1:2] != b" ":
+            raise ValueError("unparseable Git index status for candidate source")
+        relative = entry[2:].decode("utf-8")
+        if relative in selected and entry[:1] != b"H":
+            flagged.append(relative)
+    if flagged:
+        raise ValueError(
+            "Git index flags prevent trustworthy HEAD/worktree custody "
+            f"({len(flagged)} selected paths; first: {sorted(flagged)[:5]})"
+        )
+
     # HEAD-vs-worktree includes both staged and unstaged tracked changes,
     # including removals that no longer appear in the filesystem glob scan.
     # Git's own filters preserve legitimate platform checkout line endings.
