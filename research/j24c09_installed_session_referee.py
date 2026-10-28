@@ -18,7 +18,7 @@ SOURCE = {
 PHASES = ("open", "list", "ranges", "full_verify", "close")
 
 
-def evaluate(raw: dict) -> dict:
+def evaluate(raw: dict, fixture_dir: Path | None = None) -> dict:
     assert raw["schema"] == "cmpct-j24c09-installed-selective-session-v1"
     assert raw["preregistered"] == {
         "large_one_owner_wall_ratio_min": 1.5,
@@ -26,6 +26,7 @@ def evaluate(raw: dict) -> dict:
         "cycles": 3, "repeats": 3,
     }
     assert len(raw["raw_workers"]) == 48
+    assert len(bytes.fromhex(raw["evidence_head"])) == 20
     source = raw["source"]
     for name, value in SOURCE.items():
         assert source[name + "_git_blob"] == value
@@ -34,6 +35,12 @@ def evaluate(raw: dict) -> dict:
     assert set(manifest) == set(PROFILES)
     for f in manifest.values():
         assert f["archive_bytes"] > 0 and f["logical_bytes"] == 4*f["count"]
+        filename = f["fixture_file"]
+        assert filename == "signed-" + str(f["count"]) + "-" + str(f["owners"]) + ".cmpct"
+        if fixture_dir is not None:
+            wire = (fixture_dir / filename).read_bytes()
+            assert len(wire) == f["archive_bytes"]
+            assert hashlib.sha256(wire).hexdigest() == f["archive_sha256"]
         assert len(bytes.fromhex(f["archive_sha256"])) == 32
         assert len(bytes.fromhex(f["logical_sha256"])) == 32
         assert len(f["ranges"]) == 6
@@ -130,7 +137,9 @@ def main() -> None:
     p.add_argument("--output",type=Path,required=True)
     args=p.parse_args()
     raw=json.loads(args.input.read_text())
-    verdict=evaluate(raw)
+    fixture_dir = args.input.parent / "fixtures"
+    assert fixture_dir.is_dir(), "original signed fixtures were not retained"
+    verdict=evaluate(raw, fixture_dir)
     for mutation in ("missing-worker", "false-native-engagement", "wrong-answer",
                      "wrong-source"):
         forged=copy.deepcopy(raw)
@@ -144,7 +153,7 @@ def main() -> None:
         else:
             forged["raw_workers"][0]["source"]["reader_git_blob"]="11"*20
         try:
-            evaluate(forged)
+            evaluate(forged, fixture_dir)
         except (AssertionError,ValueError,KeyError):
             pass
         else:
