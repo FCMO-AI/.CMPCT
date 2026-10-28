@@ -87,5 +87,6 @@ jobs:
           path: |
             j24g08-artifacts/*.json
             j24g08-artifacts/*.log
+            j24g08-artifacts/specimens/*.cmpct
           if-no-files-found: warn
           retention-days: 30
