@@ -11,6 +11,7 @@ from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
 from .path_policy import canonical_logical_path
+from ._chunk_admission import native_chunk_ok
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -91,6 +92,11 @@ class CMPCT:
                 canonical_seen.add(key)
                 storage=row[6]
                 if row[1]==K_FILE and isinstance(storage,list) and storage and storage[0] in (S_SPARSE, S_CDC, S_CHUNKS):
+                    # ABI3 is an optional positive-only proof for exact built-in S_CHUNKS.
+                    # Invalid, unknown and unavailable cases ALWAYS run the inherited strict validator.
+                    # This happens after canonical path admission and before mmap allocation.
+                    if storage[0]==S_CHUNKS and native_chunk_ok(storage,self.index['blobs'],row[4]):
+                        continue
                     if storage_validator is None:
                         from .validation import _validate_storage
                         storage_validator=_validate_storage
