@@ -8,11 +8,13 @@ on:
       - agent/phased3-v031-j24i04-full-matrix-aa-sham-20261028
     paths:
       - benchmarks/v031_j24i04_full_matrix_aa.py
+      - research/j24i04_independent_receipt_referee.py
       - .github/workflows/v031-j24i04-full-matrix-aa.yml
       - docs/v031-research/2026-10-28-j24i04-full-matrix-aa-preregistration.md
   pull_request:
     paths:
       - benchmarks/v031_j24i04_full_matrix_aa.py
+      - research/j24i04_independent_receipt_referee.py
       - .github/workflows/v031-j24i04-full-matrix-aa.yml
       - docs/v031-research/2026-10-28-j24i04-full-matrix-aa-preregistration.md
   workflow_dispatch:
@@ -128,6 +130,12 @@ jobs:
             --engine-a /tmp/cmpct-j24i04-A \
             --engine-b /tmp/cmpct-j24i04-B \
             --output j24i04-artifacts | tee j24i04-artifacts/scientific.stdout.txt
+
+      - name: Independent third-root receipt referee, including seven adversarial forgeries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24i04_independent_receipt_referee.py --folder j24i04-artifacts | tee j24i04-artifacts/referee.stdout.txt
 
       - name: Upload raw outcomes, even if scientific court fails
         if: always()
