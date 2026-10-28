@@ -11,7 +11,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from cmpct.codec import K_FILE, S_CHUNKS
+from cmpct.codec import BHDR, HDR, K_FILE, S_CHUNKS
 from cmpct.reader import CMPCT
 from cmpct.validation import ValidationError, _validate_storage
 import cmpct._chunk_admission as admission
@@ -104,6 +104,27 @@ class InstalledOptionalAbi3(unittest.TestCase):
         # Positive data must still work if the native module is absent/failing.
         good = self._wire("good-fallback", [0, 0], logical=b"ABCDABCD")
         self.assertEqual(self._reader_outcome(good), ("ACCEPT", b"ABCD"))
+
+    def test_positive_native_descriptor_never_waives_corrupt_physical_header(self):
+        # Authentication of the index does not authenticate every physical
+        # BHDR control bit. A positive C descriptor admission must not bypass
+        # the original _blob framing check during a genuine selective read.
+        path = self._wire("bad-physical", [0, 0], logical=b"ABCDABCD")
+        wire = bytearray(path.read_bytes())
+        index_comp_size = HDR.unpack_from(wire, 0)[3]
+        record_start = HDR.size + index_comp_size
+        fields = list(BHDR.unpack_from(wire, record_start))
+        self.assertEqual(fields[2], 0)
+        fields[2] = 1  # Unsupported physical RAW flags; signed index unchanged.
+        wire[record_start:record_start + BHDR.size] = BHDR.pack(*fields)
+        path.write_bytes(wire)
+
+        admission._scan_refs = None
+        baseline = self._reader_outcome(path)
+        self.assertEqual(baseline[0], "REJECT")
+        if self.original_scanner is not None:
+            admission._scan_refs = self.original_scanner
+            self.assertEqual(self._reader_outcome(path), baseline)
 
     def test_native_helper_never_admits_other_storage_shapes(self):
         blobs = [[0, 4, 4, 0, 0]]
