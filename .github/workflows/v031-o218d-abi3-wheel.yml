@@ -81,6 +81,14 @@ jobs:
           Path('o218d-evidence/build.json').write_text(json.dumps(data,indent=2)+'\n')
           print('ABI3_WHEEL_BUILT',json.dumps(data))
           PY
+      - name: Audit actual wheel binary against CPython Stable ABI manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install 'abi3audit==0.0.26'
+          python -m abi3audit --strict research/o218d_abi3_package/dist/*.whl \
+            > o218d-evidence/abi3audit.log 2>&1 || { cat o218d-evidence/abi3audit.log; exit 1; }
+          cat o218d-evidence/abi3audit.log
       - name: Validate installed identical wheel in CPython 3.11
         shell: bash
         run: |
