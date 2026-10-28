@@ -378,6 +378,22 @@ class CMPCT:
                     try:os.setxattr(full,name,value,follow_symlinks=False)
                     except OSError:pass
 
+    @staticmethod
+    def _restore_regular_mtime(full, mt, *, directory):
+        """Preserve physical mtimes without following Win32 leaf reparse points.
+
+        Python's no-follow utime is unsupported on Windows; silently swallowing
+        that exception loses authenticated timestamps. The Windows-only handle
+        fallback rejects reparse points and verifies the opened leaf type.
+        """
+        try:
+            os.utime(full, ns=(mt, mt), follow_symlinks=False)
+        except NotImplementedError:
+            if os.name != 'nt':
+                raise
+            from ._win32_times import restore_win32_leaf_mtime
+            restore_win32_leaf_mtime(full, mt, directory=directory)
+
     def extractall(self,dest:Path,metadata=True,max_bytes:int|None=None,safe_symlinks=True):
         """Extract the logical tree with a low-syscall fast path.
 
@@ -439,7 +455,7 @@ class CMPCT:
                 os.symlink(target,full)
                 if metadata:
                     try:os.utime(full,ns=(mt,mt),follow_symlinks=False)
-                    except OSError:pass
+                    except (OSError, NotImplementedError):pass
                 continue
             if storage and storage[0] in (S_CHUNKS,S_CDC):
                 self._extract_chunked_verified(row,full)
@@ -473,7 +489,7 @@ class CMPCT:
                     # os.open created the requested mode on new files; chmod is needed only when an
                     # existing destination had a different mode (or umask masked creation bits).
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
-                    os.utime(full,ns=(mt,mt),follow_symlinks=False)
+                    self._restore_regular_mtime(full,mt,directory=False)
                 except OSError:pass
         # Resolve each link through its in-archive dependency graph. Explicit iterative resolution
         # avoids recursion limits and quadratic retry loops on long alias chains. Hardlinks may only
@@ -501,7 +517,7 @@ class CMPCT:
             for full,mode,mt in sorted(dirs,key=lambda x:x[0].count(os.sep),reverse=True):
                 try:
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
-                    os.utime(full,ns=(mt,mt),follow_symlinks=False)
+                    self._restore_regular_mtime(full,mt,directory=True)
                 except OSError:pass
     def verify(self):
         n=0

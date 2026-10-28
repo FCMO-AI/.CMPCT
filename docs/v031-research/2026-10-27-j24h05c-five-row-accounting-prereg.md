@@ -1,0 +1,9 @@
+# J24H05c — Correct the archive row-census assertion without changing acceptance criteria
+
+**Date:** 2026-10-27 UTC, preregistered after exact-source J24H05b [run #40608554266](https://github.com/FCMO-AI/.CMPCT/actions/runs/40608554266), before modifying the test. On Ubuntu the unchanged inherited O167 tests produced 3 PASS + 1 POSIX expected SKIP. J24H05 composed product court failed its *first census assertion* `preflight_archive(original)["files"] == 4`, observed actual 5; no extraction/mtime/inode verdict was reached. This is a test-author accounting error: fixture has one directory entry `nested` plus four non-directory entries `b-owner, z-alias, x-independent, nested/other.bin`. The strict `reader.verify()==4` non-directory count remains correct and must not be relaxed.
+
+## Prediction and narrow correction
+
+The appropriate structural preflight census for both original and Writer-renamed authentic archives is exactly **five index rows**, while verified non-directory rows remain four. Change only two `preflight_archive(...)[files]` expected constants from 4 to 5, preserve every file SHA, public `metadata=True`, Writer forward hardlink, physical inode parity/independent-copy separation, logical byte, timestamp ±3s, O167 reparse, source custody and all host assertions. **Falsifier:** any other subsequent test failure is evidence to diagnose under its actual mechanism, not an excuse to adjust the corpus or lower the requirement. Do not modify product code or policy in this J24H05c adjustment.
+
+The failing exact HEAD and artifacts remain available at run #40608554266; this is no product failure or passed extraction claim because the assertion fired before the extraction operation.

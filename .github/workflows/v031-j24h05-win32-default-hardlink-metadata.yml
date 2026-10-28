@@ -1,0 +1,126 @@
+# ci-lane: fast
+name: CMPCT J24H05 default metadata hardlink portability court
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/_win32_times.py'
+      - 'src/cmpct/builder.py'
+      - 'tests/test_v031_o167_win32_mtime.py'
+      - 'tests/test_v031_j24h05_win32_default_hardlink.py'
+      - '.github/workflows/v031-j24h05-win32-default-hardlink-metadata.yml'
+      - 'docs/v031-research/2026-10-27-j24h05-*'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  full-default-hardlink-metadata:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      J24H05_RECEIPTS: j24h05-artifacts
+      O167_RECEIPT_DIR: j24h05-artifacts
+      J24H05_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24H05_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Exact Git source custody, normalize working files on Windows
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24h05-artifacts
+          test "$(git rev-parse HEAD)" = "$J24H05_HEAD"
+          python - <<'PY'
+          import hashlib,json,pathlib,subprocess
+          expected={
+            'src/cmpct/builder.py':'6f60dfe63742ff4b777f959a15d6fb828ae29610',
+            'src/cmpct/reader.py':'931545520b5a649903a8bdac4e9a1806bc38d58d',
+            'src/cmpct/_win32_times.py':'70308f454c74fad7b247db6ee36aa8cc7d38c99c',
+            'tests/test_v031_o167_win32_mtime.py':'4d93ee6ba26f198bd35d826c64a009a83e5eecde',
+            'tests/test_v031_j24h05_win32_default_hardlink.py':'b1e74b4a246f4f55a0832278c495fdc9b50189c0',
+          }
+          for rel,want in expected.items():
+            raw=subprocess.check_output(['git','show','HEAD:'+rel])
+            got=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+            assert got==want,(rel,got,want)
+            pathlib.Path(rel).write_bytes(raw)
+            assert pathlib.Path(rel).read_bytes()==raw,rel
+            print('J24H05_GIT_SOURCE='+rel+':'+got)
+          pathlib.Path('j24h05-artifacts/source-blobs.json').write_text(json.dumps(expected,sort_keys=True,indent=2)+'\n')
+          PY
+      - name: Install actual package and verify installed sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+          python - <<'PY'
+          import cmpct,cmpct.reader,cmpct.builder,cmpct._win32_times
+          import pathlib,subprocess
+          root=pathlib.Path(cmpct.__file__).resolve().parent
+          assert 'site-packages' in str(root).lower(),root
+          for filename in ('reader.py','builder.py','_win32_times.py'):
+            raw=subprocess.check_output(['git','show','HEAD:src/cmpct/'+filename])
+            installed=(root/filename).read_bytes()
+            assert installed.replace(b'\r\n',b'\n')==raw.replace(b'\r\n',b'\n'),filename
+          print('J24H05_INSTALLED_PACKAGE_SOURCE=PASS',root)
+          PY
+      - name: Run inherited O167 physical and reparse tests and default API integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Exact test bodies, isolated from unrelated experiments imported by tests/conftest.py.
+          mkdir -p j24h05-isolated
+          cp tests/test_v031_o167_win32_mtime.py j24h05-isolated/test_v031_o167_win32_mtime.py
+          cp tests/test_v031_j24h05_win32_default_hardlink.py j24h05-isolated/test_v031_j24h05_win32_default_hardlink.py
+          python - <<'PY'
+          import hashlib,pathlib
+          for name in ('test_v031_o167_win32_mtime.py','test_v031_j24h05_win32_default_hardlink.py'):
+            original=pathlib.Path('tests')/name
+            isolated=pathlib.Path('j24h05-isolated')/name
+            assert original.read_bytes()==isolated.read_bytes(),name
+            print('J24H05_ISOLATED_TEST_SHA256='+name+':'+hashlib.sha256(isolated.read_bytes()).hexdigest())
+          PY
+          python -m pytest -v -s j24h05-isolated/test_v031_o167_win32_mtime.py j24h05-isolated/test_v031_j24h05_win32_default_hardlink.py --junitxml=j24h05-artifacts/junit.xml 2>&1 | tee j24h05-artifacts/pytest.log
+          python - <<'PY'
+          import json,pathlib,sys,xml.etree.ElementTree as ET
+          root=pathlib.Path('j24h05-artifacts')
+          x=ET.parse(root/'junit.xml').getroot()
+          suite=x if x.tag=='testsuite' else x.find('testsuite')
+          assert suite is not None
+          n=int(suite.get('tests',-1));bad=int(suite.get('failures',-1))+int(suite.get('errors',-1));skipped=int(suite.get('skipped',-1))
+          assert n==5 and bad==0,(n,bad,skipped)
+          assert skipped==(0 if sys.platform=='win32' else 1),(sys.platform,skipped)
+          phys=json.loads((root/'physical.json').read_text())
+          assert phys['read_verified'] is True and phys['file_error_ns']<=3_000_000_000 and phys['dir_error_ns']<=3_000_000_000
+          app=json.loads((root/'j24h05-default-extract.json').read_text())
+          assert app['result']=='DEFAULT_METADATA_WRITER_FORWARD_HARDLINK_RECONSTRUCTED'
+          assert app['metadata_true'] and app['owner_and_alias_same_inode'] and app['identical_independent_content_distinct_inode']
+          assert app['verified_non_directory_rows']==4 and app['timestamp_tolerance_ns']==3_000_000_000
+          if sys.platform=='win32':
+            leaf=json.loads((root/'reparse.json').read_text())
+            assert leaf['external_target_mtime_unchanged'] and leaf['reparse_refused']
+          verdict={'platform':sys.platform,'tests':n,'bad':bad,'skipped':skipped,'archive_sha256':app['renamed_sha256'],'physical_mtime':phys,'default_api':app['result']}
+          (root/'auditor.json').write_text(json.dumps(verdict,sort_keys=True,indent=2)+'\n')
+          print('J24H05_SOURCE_BOUND_HOSTED_VERDICT='+json.dumps(verdict,sort_keys=True))
+          PY
+      - name: Retain all original receipts including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24h05-win32-default-metadata-${{ matrix.os }}-${{ github.sha }}
+          path: j24h05-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
