@@ -1,0 +1,16 @@
+# J24B08a — Win32 process-CPU clock quantization (measurement-layer repair)
+
+Date: 2026-10-28 UTC. **Append-only addendum after original CI failure, before modified referee. No change to the original preregistered input, source, baseline, timings, success threshold or experiment hypothesis.**
+
+## Original failure and source evidence
+Exact-source [J24B08 run #40745941238](https://github.com/FCMO-AI/.CMPCT/actions/runs/40745941238), first Windows job `123019953014`, source `c7386d0537d36419a28293e0752605ef56831210`, published a complete accepted-data measurement receipt before its independent referee failed. Its [original raw artifact #12842390428](https://github.com/FCMO-AI/.CMPCT/actions/runs/40745941238/artifacts/12842390428) is permanently linked, original artifact SHA-256 `d5c43c9434e17f5a70cfe85a0e8ec6cdf0da3895ebaf7c2b0699c7cb3667c437`.
+
+The independent referee asserted `type(row[metric]) is int and row[metric] > 0` for **all** four measured metrics. The Windows OS process CPU clock frequently returns exactly **0 nanoseconds of CPU difference** for a fast Reader constructor, despite real positive monotonic wall elapsed; downloaded original receipt confirms this specifically affects `open_cpu_ns` and **not** full extraction wall. Windows source custody matches Git after LF-normalization. The candidate and release both exhibit the same clock behavior. No product/codec/Reader exception occurred; original Windows `J24B08_RECEIPT` printed all four successful cells, with candidate/base full extract wall ratios `0.9788901`, `0.9895398`, `0.9920510`, `0.9952649` respectively, all below the frozen regression threshold.
+
+## Safe repair boundary
+Accept nonnegative **integer** CPU samples, including zero, because zero is a quantized *observation*, not missing data. Continue requiring strictly positive monotonic **wall** samples for open and full extraction. Continue recomputing every median, source/file identity, output digest, wall ratio, 5% AND 3ms diagnostic, all six forged-receipt tests, real input inspection and cross-OS results. Retain and report Windows CPU quantization as a limitation; never call zero CPU time measured literally or infer CPU speedup from its 0-valued constructor samples.
+
+This changes **only the independent referee's erroneous measurement invariant**; none of the raw original receipts, original control, preregistered prediction, evaluator semantics for full extraction, tests, product source or release gates changes. First job remains a failed CI attempt, not retroactively green. The exact-head repaired tribunal must rerun before claims of three-host source-exact success. No anti-Goodhart gate is weakened; we repair a false metrological assumption about clock resolution, not accept invalid product behavior.
+
+## Counterfactual prospective lesson
+A proper portable measurement contract specifies **CPU time >= 0** (clock quantization possible) while requiring monotonic wall elapsed >0, before platform testing. Future CPython installed Reader courts should validate timer semantics independently of product correctness, rather than conflating normal zero CPU deltas with failure. One instance is not yet enough to change global discovery policy.

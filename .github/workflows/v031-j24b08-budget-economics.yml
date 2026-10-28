@@ -1,0 +1,82 @@
+# ci-lane: fast
+name: CMPCT v0.31 J24B08 installed Reader extraction economics
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'research/j24b08_*'
+      - 'docs/v031-research/2026-10-28-j24b08-*'
+      - '.github/workflows/v031-j24b08-budget-economics.yml'
+      - 'src/cmpct/reader.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-source-installed-economics:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      J24B08_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out source branch HEAD, including historical release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify branch SHA and upstream parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24b08-evidence
+          git rev-parse HEAD | tee j24b08-evidence/source-head.txt
+          test "$(git rev-parse HEAD)" = "$J24B08_EXPECTED_HEAD"
+          git merge-base --is-ancestor adcf38cb5be022567c1faf6538aefeef2f6b72de HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "20f6e257a07a61a4c1aebe23ae23e4109d6c41c8"
+          test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          git status --short
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual candidate wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip setuptools setuptools-rust wheel
+          python -m pip install .
+      - name: Run full extracted-byte/cap paired economics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24b08_budget_guard_court.py --out j24b08-evidence \
+            2>&1 | tee j24b08-evidence/court.log
+      - name: Independent physical referee and six forged-receipt controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24b08_budget_guard_referee.py --out j24b08-evidence \
+            2>&1 | tee j24b08-evidence/referee.log
+      - name: Check CI topology
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          python tools/check_ci_topology.py .github/workflows/v031-j24b08-budget-economics.yml
+      - name: Preserve raw exact-head scientific evidence, even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24b08-${{ matrix.os }}-${{ github.run_id }}
+          path: j24b08-evidence/
+          retention-days: 30
+          if-no-files-found: warn
