@@ -1,5 +1,6 @@
 # ci-lane: release
 # ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 name: J24I04 full-matrix same-source A/A (research only)
 
 on:
@@ -33,7 +34,39 @@ env:
   CMPCT_PARITY_REPS: "7"
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_research: ${{ steps.scope.outputs.run_research }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Admit expensive full court only on explicitly source-bound workflow trigger
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_research=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -qx '.github/workflows/v031-j24i04-full-matrix-aa.yml' /tmp/latest-head-files.txt; then
+            echo 'run_research=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_research=false' >> "$GITHUB_OUTPUT"
+          fi
+
   research:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_research == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
