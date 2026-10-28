@@ -227,6 +227,6 @@ if __name__ == "__main__":
             (args.released_python, args.fused_python, args.native_python)):
             p.error("--output, --released-python, --native-python, --fused-python required")
         controller(args.output, {
-            "released": args.released_python, "strict": args.strict_python,
-            "native": args.native_python,
+            "released": args.released_python, "native": args.native_python,
+            "fused": args.fused_python,
         })
