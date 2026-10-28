@@ -1,0 +1,138 @@
+# ci-lane: fast
+# J24C08: actual package optional-ABI3 admission, no research runtime monkeypatch.
+name: CMPCT v031 J24C08 optional installed ABI3 Reader
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24c08-optional-abi3-installed-reader-20261028
+  pull_request:
+    paths:
+      - 'src/cmpct/_fastscan_abi3.c'
+      - 'src/cmpct/_chunk_admission.py'
+      - 'src/cmpct/reader.py'
+      - 'setup.py'
+      - 'tests/test_j24c08_optional_abi3.py'
+      - '.github/workflows/v031-j24c08-optional-installed-abi3.yml'
+      - 'docs/v031-research/2026-10-28-j24c08-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c08-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-abi3-cross-minor:
+    name: Native installed cp311 ABI3 to cp313 - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build actual noneditable package wheel on Python 3.11
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip build wheel
+          python -m pip wheel --no-deps . -w dist
+          ls -l dist/
+      - name: Install and test on Python 3.11
+        shell: bash
+        env:
+          CMPCT_J24C08_EXPECT_NATIVE: '1'
+        run: |
+          python -m pip install pytest dist/*.whl
+          mkdir -p receipts
+          python - <<'PY' > receipts/installed-cp311.json
+          import cmpct, cmpct.reader, cmpct._chunk_admission as a, hashlib, json, os
+          from pathlib import Path
+          p=Path(cmpct.reader.__file__).resolve()
+          assert "site-packages" in p.parts or "dist-packages" in p.parts, p
+          assert a._scan_refs is not None, "wheel missing optional native module"
+          print(json.dumps({"python":"3.11", "evidence_head":os.environ["EVIDENCE_SHA"],
+                            "installed_reader":str(p), "reader_sha256":hashlib.sha256(p.read_bytes()).hexdigest(),
+                            "native_engaged":True},sort_keys=True))
+          PY
+          python -m pytest -q tests/test_j24c08_optional_abi3.py tests/test_o215_fixed_chunk_admission.py tests/test_reader_unsupported_blob_bits.py tests/test_reader_deflate_export_custody.py 2>&1 | tee receipts/pytest-cp311.log
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Reuse identical wheel on Python 3.13 and retest
+        shell: bash
+        env:
+          CMPCT_J24C08_EXPECT_NATIVE: '1'
+        run: |
+          python -m pip install pytest dist/*.whl
+          python - <<'PY' > receipts/installed-cp313.json
+          import cmpct, cmpct.reader, cmpct._chunk_admission as a, hashlib, json, os
+          from pathlib import Path
+          p=Path(cmpct.reader.__file__).resolve()
+          assert "site-packages" in p.parts or "dist-packages" in p.parts, p
+          assert a._scan_refs is not None, "cp311-abi3 wheel not usable under Python 3.13"
+          print(json.dumps({"python":"3.13", "evidence_head":os.environ["EVIDENCE_SHA"],
+                            "installed_reader":str(p), "reader_sha256":hashlib.sha256(p.read_bytes()).hexdigest(),
+                            "native_engaged":True},sort_keys=True))
+          PY
+          python -m pytest -q tests/test_j24c08_optional_abi3.py tests/test_o215_fixed_chunk_admission.py tests/test_reader_unsupported_blob_bits.py tests/test_reader_deflate_export_custody.py 2>&1 | tee receipts/pytest-cp313.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24c08-optional-abi3-${{ matrix.os }}-${{ env.EVIDENCE_SHA }}
+          path: |
+            receipts/
+            dist/
+          if-no-files-found: warn
+
+  python310-fallback:
+    name: Original strict fallback on Python 3.10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24C08_EXPECT_NATIVE: '0'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+      - name: Build/install actual legacy package and prove strict fallback
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip wheel pytest
+          python -m pip wheel --no-deps . -w dist
+          python -m pip install dist/*.whl
+          mkdir -p receipts
+          python - <<'PY' > receipts/fallback-cp310.json
+          import cmpct.reader, cmpct._chunk_admission as a, hashlib, json, os
+          from pathlib import Path
+          p=Path(cmpct.reader.__file__).resolve()
+          assert "site-packages" in p.parts or "dist-packages" in p.parts, p
+          assert a._scan_refs is None, "cp311-abi3 extension improperly loaded on Python 3.10"
+          print(json.dumps({"python":"3.10","evidence_head":os.environ["EVIDENCE_SHA"],
+                            "installed_reader":str(p),"reader_sha256":hashlib.sha256(p.read_bytes()).hexdigest(),
+                            "native_engaged":False,"strict_fallback":True},sort_keys=True))
+          PY
+          python -m pytest -q tests/test_j24c08_optional_abi3.py tests/test_o215_fixed_chunk_admission.py tests/test_reader_unsupported_blob_bits.py tests/test_reader_deflate_export_custody.py 2>&1 | tee receipts/pytest-cp310.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24c08-strict-python310-${{ env.EVIDENCE_SHA }}
+          path: |
+            receipts/
+            dist/
+          if-no-files-found: warn
