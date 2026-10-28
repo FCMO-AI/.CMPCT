@@ -97,6 +97,10 @@ jobs:
           cat j24c06-evidence/py311/court.log
           python research/j24c06_installed_reader_referee.py j24c06-evidence/py311 | tee j24c06-evidence/py311/referee.log
           grep -q 'O218E_INDEPENDENT_REFEREE_PASS' j24c06-evidence/py311/referee.log
+          # Exact #630 inherited adversarial physical custody and O215 source semantics.
+          # --noconftest avoids unrelated optional-native preloading on Windows/macOS.
+          python -m pytest --noconftest -q tests/test_reader_deflate_export_custody.py tests/test_reader_unsupported_blob_bits.py tests/test_o215_fixed_chunk_admission.py 2>&1 | tee j24c06-evidence/py311/guarded-regression.log
+          echo J24C06_GUARDED_INSTALLED_FOCUS_PASS_PY311
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -110,6 +114,10 @@ jobs:
           cat j24c06-evidence/py313/court.log
           python research/j24c06_installed_reader_referee.py j24c06-evidence/py313 | tee j24c06-evidence/py313/referee.log
           grep -q 'O218E_INDEPENDENT_REFEREE_PASS' j24c06-evidence/py313/referee.log
+          # Exact #630 inherited adversarial physical custody and O215 source semantics.
+          # --noconftest avoids unrelated optional-native preloading on Windows/macOS.
+          python -m pytest --noconftest -q tests/test_reader_deflate_export_custody.py tests/test_reader_unsupported_blob_bits.py tests/test_o215_fixed_chunk_admission.py 2>&1 | tee j24c06-evidence/py313/guarded-regression.log
+          echo J24C06_GUARDED_INSTALLED_FOCUS_PASS_PY313
       - name: Compare the same physical archive and wheel across two interpreters
         shell: bash
         run: |
