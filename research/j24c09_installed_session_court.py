@@ -148,6 +148,11 @@ def worker(path: Path, spec_path: Path, mode: str) -> None:
             raise RuntimeError("installed native scanner not engaged exactly once")
     else:
         admission._scan_refs = None
+        # Equal untimed warm-up for strict arm: otherwise native's engagement
+        # probe would give it an extra page-cache/metadata warm-up.
+        with CMPCT(path) as rd:
+            if len(rd.files) != 1:
+                raise RuntimeError("invalid strict engagement control")
     # Retain the exact same source and loaded product; the control only disables
     # its optional native predicate. Each timed session opens its own Reader.
     samples = [one_session(path, spec) for _ in range(REPEATS)]
