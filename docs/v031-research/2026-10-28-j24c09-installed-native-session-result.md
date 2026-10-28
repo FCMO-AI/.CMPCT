@@ -10,6 +10,11 @@ Status: DECISION-COMPLETE RESEARCH / THREE HOSTED PLATFORMS / NO PRODUCT MERGE O
   - [Ubuntu #12793700103](https://github.com/FCMO-AI/.CMPCT/actions/runs/40634835335/artifacts/12793700103)
   - [macOS #12793450840](https://github.com/FCMO-AI/.CMPCT/actions/runs/40634835335/artifacts/12793450840)
   - [Windows #12793486009](https://github.com/FCMO-AI/.CMPCT/actions/runs/40634835335/artifacts/12793486009)
+- Original GitHub artifact ZIP SHA-256 values (independently downloaded and hashed):
+  - Ubuntu `fae058643ec4ed0d56991d705e85a58ff03b89211285a2ca55892a4c2dc05400`
+  - macOS `1d9cfd9e5eb571184fc463e259ae91c79427f1ea9fc3c1b0847052fc549702d6`
+  - Windows `cb1ce018b69bd557265509c22afbdb1ba15d86bcc3687f1e03cc51e2f885e30b`
+
 - External replay independently downloaded the three artifacts and recomputed 12 median-of-worker-median rows, checked 4 original archived wire SHA-256 per host, matched 48 process records per host (144 total) and six returned-range byte digests per individual session; all agreed with the hosted referee. The original referee also rejected 4 deliberately forged receipts.
 
 ## Question and baseline
