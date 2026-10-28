@@ -1,0 +1,14 @@
+# A19-O1 — same-host codec-version transfer falsifier (prospective post-O0 test)
+
+**Status:** source-locked, test question frozen before O1 instrument. **This is NOT a rewrite of O0's `A19_COMPOSITION_O0_HEADROOM` on libzstd 1.5.5**. O0's raw physical frames/artifact SHA and 1%/128B gate stay unchanged. Parent science HEAD is `8862f5f0a1ba6b56058acc5a0cd235a1f6472fc6`. No product Reader/Builder/codec/format/release/policy/benchmark mutation.
+
+## Observation and causal ambiguity
+O0 current hosted source in Python3.11/Linux/libzstd1.5.5 passed the prereg two-seed progression gate: unary→composed +169 B/+197 B. A completely independent Python3.13/Linux/libzstd1.5.7 corpus-identical/MessagePack-header-identical cross-check yielded only +134 B (0.817%) on progression seed1, failing the same frozen criterion. An independent 200-frame byte comparison observed 75 compressed payloads different, but source bytes and headers identical. Different Python runtime and execution environment remain alternative explanations. Need a same-runner codec-version discriminator, not more grammar tuning.
+
+## Prediction and disproof
+On one Ubuntu24.04/Python3.11 host, compare the exact O0 system libzstd C API `ZSTD_compress(level=19)` with bundled-zstd version **1.5.7** from a pinned `zstandard==0.25.0` wheel using ZstdCompressor(level=19) (must report its actual ZSTD_VERSION, do not assume). For each **same 200 transformed byte payloads**, encode the exact original MessagePack header and count complete frames; record SHA source, SHA transformed, all raw zstd payload identities. Decoding/inverting every arm must be exact. Recompute both progression-seed best unary/composed comparisons on each implementation using the **unchanged O0 gate** (both >=1% and >=128 B vs best unary, beat direct).
+
+If wheel's bundled Zstd version is not **1.5.7**, or Python high-level compression emits materially different frame/parameter semantics from same-version native simple API, return **VERSION_COMPARISON_UNCERTAIN** rather than declaring a causal proof. If source/frame header identities differ, invalidate. If result flips with 1.5.5 vs 1.5.7 on same host, narrow O0 headroom to a version-dependent physical compressor outcome; if it stays positive on both, local difference needs another root-cause investigation. No thresholds change and no product win inferred.
+
+## Evidence scope
+O1 is post-hoc **version sensitivity** replication with preregistration before new source, not a second chance to rescue O0 or a new source data selector. At most one hosted question. Preserve original O0 artifact and negative local audit. Cost: additional Python wheel/probe and 200 full compressed arm passes, ~seconds. Prefer no broad release matrix. Failing infrastructure must not be called scientific loss. Shared repo state untouched. O1 outcome to be appended to PR #696 as supporting/contradictory evidence, not auto merged.
