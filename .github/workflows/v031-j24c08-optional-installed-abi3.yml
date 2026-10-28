@@ -66,6 +66,13 @@ jobs:
                             "native_engaged":True},sort_keys=True))
           PY
           python -m pytest -q tests/test_j24c08_optional_abi3.py tests/test_o215_fixed_chunk_admission.py tests/test_reader_unsupported_blob_bits.py tests/test_reader_deflate_export_custody.py 2>&1 | tee receipts/pytest-cp311.log
+      - name: Compare complete installed Reader constructor against strict Python
+        shell: bash
+        env:
+          CMPCT_J24C08_EXPECT_NATIVE: '1'
+        run: |
+          python research/j24c08_installed_abi3_benchmark.py --output receipts/j24c08-economics-cp311.json
+          python research/j24c08_installed_abi3_referee.py --input receipts/j24c08-economics-cp311.json --output receipts/j24c08-decision-cp311.json
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
