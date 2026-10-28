@@ -33,7 +33,12 @@ REPEATS = 3
 
 
 def git_blob(data: bytes) -> str:
-    return hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
+    # Git for Windows text checkouts may install CRLF copies of Python source.
+    # Permit only reversible CRLF->LF checkout transport, not edited code.
+    if b"\r" in data.replace(b"\r\n", b""):
+        raise RuntimeError("unexpected source carriage return")
+    git_data = data.replace(b"\r\n", b"\n")
+    return hashlib.sha1(b"blob " + str(len(git_data)).encode("ascii") + b"\0" + git_data).hexdigest()
 
 
 def source_info() -> dict:
@@ -179,7 +184,7 @@ def controller(output: Path) -> None:
 
     raw = []
     fixtures = []
-    fixture_dir = output.parent / "fixtures"
+    fixture_dir = output.resolve().parent / "fixtures"
     fixture_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="cmpct-j24c09-sessions-") as td:
         for count, owners in PROFILES:
