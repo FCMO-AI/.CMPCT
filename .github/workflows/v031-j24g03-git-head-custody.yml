@@ -81,8 +81,8 @@ jobs:
                   "worktree_sha256": hashlib.sha256(checkout).hexdigest(),
                   "equal": git_bytes == checkout,
                   "crlf_only": git_bytes != checkout and (
-                      git_bytes.replace(b"\\r\\n", b"\\n") ==
-                      checkout.replace(b"\\r\\n", b"\\n")
+                      git_bytes.replace(b"\r\n", b"\n") ==
+                      checkout.replace(b"\r\n", b"\n")
                   ),
                   "git_size": len(git_bytes),
                   "worktree_size": len(checkout),
@@ -99,7 +99,7 @@ jobs:
               "samples": rows,
           }
           pathlib.Path("j24g03-artifacts/git-vs-worktree-samples.json").write_text(
-              json.dumps(output, indent=2) + "\\n"
+              json.dumps(output, indent=2) + "\n"
           )
           print("J24G03D_GIT_VS_WORKTREE=", json.dumps(output, sort_keys=True))
           PY
