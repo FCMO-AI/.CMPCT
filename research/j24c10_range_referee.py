@@ -8,6 +8,8 @@ def check(payload):
     assert payload["schema"] == "j24c10-installed-range-v1"
     assert payload["product_release_credit"] is False
     rows = payload["records"]
+    unit = {"Linux": 1, "Darwin": 1024, "Windows": 1}.get(payload["host"])
+    assert unit is not None, payload["host"]
     assert len(rows) == 2*3*2*2*payload["repetitions"], len(rows)
     summaries={}
     for n in (65536,262144):
@@ -46,6 +48,14 @@ def check(payload):
                 assert result["witness_median_cpu_ns"]==wc
                 assert abs(result["ratio_strict_over_witness"]-ratio)<1e-10
                 assert abs(result["cpu_ratio"]-sc/wc)<1e-10
+                if all(x["rss_raw"] is not None for a in arms.values() for x in a):
+                    rss_strict=statistics.median(x["rss_raw"] for x in arms["strict"])
+                    rss_witness=statistics.median(x["rss_raw"] for x in arms["witness"])
+                    rss_delta=(rss_witness-rss_strict)*unit/(1024*1024)
+                    assert result["peak_rss_delta_mib"] is not None
+                    assert abs(result["peak_rss_delta_mib"]-rss_delta)<1e-10
+                else:
+                    assert result["peak_rss_delta_mib"] is None
                 summaries[key]=result
     late=[summaries[f"{n}/{family}/late"] for n in (65536,262144)
           for family in ("one","owners256")]
