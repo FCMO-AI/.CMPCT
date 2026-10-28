@@ -16,6 +16,8 @@
     "native/**/*.c",
     "native/**/*.h",
     "experiments/**/*.py",
+    "research/**/*.py",
+    "research/**/*.jsonl",
     "tools/**/*.py",
     "tests/**/*.py",
     "tests/conformance/**/*",
