@@ -1,0 +1,86 @@
+{
+  "schema": "cmpct-mosaic-v029-full-artifact-attempt2-summary-v1",
+  "date": "2026-08-17",
+  "source_commit": "3e43477b70e338060c7085687c6060175062b7eb",
+  "workflow_run": 31983698246,
+  "artifact": {
+    "id": 9273137944,
+    "sha256": "19d6143014b9e8a20889adada3906c284263e75e2000852b61b1a0592f01727a"
+  },
+  "accepted": false,
+  "frozen_gate": {
+    "v2_smaller_than_v028_pct_gt": 2.0,
+    "combined_smaller_than_v028_pct_gt": 3.0,
+    "v2_workloads_improved_gte": 4,
+    "combined_mosaic_selected_gte": 5,
+    "workloads_regressed_eq": 0,
+    "max_descriptor_read_amplification_lte": 8.0
+  },
+  "failure_reason": "leaf eligibility repaired the exact attempt-1 blind spot and improved combined size/coverage, but v2 remained at 1.8698% with only one complete-artifact workload win; primitive/direct cost was not the correct marginal baseline inside v0.28 solid root packs",
+  "causal_findings": [
+    "v1 reordered-two-parent changed from zero auditions/fallback in attempt 1 to a selected full mosaic artifact in attempt 2",
+    "v2 shifted/reordered now produced a valid depth-1 mosaic node with 1.993x descriptor-actual amplification, but its complete mosaic graph was 1,944 bytes larger than v0.28 and therefore fell back",
+    "the shifted/reordered mosaic estimated 246,534 bytes of record savings against standalone direct storage, demonstrating that standalone direct cost dramatically overstates the marginal cost of a node already compressed inside a v0.28 similarity-ordered root pack",
+    "record-store conflict, source-like merge, root-diversity pressure and small-metadata control still failed to assemble useful multi-root candidates because per-target candidate retention required each single-root delta to be individually profitable",
+    "attempt 3 must compare leaf mosaic cost against the marginal physical pack cost with and without the target, and retain bounded roots that copy meaningful information even when they lose individually"
+  ],
+  "v1_totals": {
+    "v028_bytes": 6240113,
+    "candidate_bytes": 5813433,
+    "smaller_than_v028_pct": 6.837696689146494,
+    "workloads": 8,
+    "workloads_improved": 4,
+    "workloads_regressed": 0,
+    "mosaic_selected": 4,
+    "mosaic_nodes": 4,
+    "max_mosaic_read_amplification": 4.000457763671875,
+    "portfolio_create_s": 23.227318710999995
+  },
+  "v2_totals": {
+    "v028_bytes": 8589119,
+    "candidate_bytes": 8428520,
+    "smaller_than_v028_pct": 1.8697959592829019,
+    "workloads": 10,
+    "workloads_improved": 1,
+    "workloads_regressed": 0,
+    "mosaic_selected": 1,
+    "mosaic_nodes": 2,
+    "max_mosaic_read_amplification": 2.0198333740234373,
+    "portfolio_create_s": 44.95345821900001
+  },
+  "combined": {
+    "v028_bytes": 14829232,
+    "candidate_bytes": 14241953,
+    "smaller_than_v028_pct": 3.960279264630832,
+    "workloads": 18,
+    "workloads_improved": 5,
+    "workloads_regressed": 0,
+    "mosaic_selected": 5,
+    "mosaic_nodes": 6,
+    "max_mosaic_read_amplification": 4.000457763671875
+  },
+  "rows": {
+    "v1": [
+      {"name":"01_two_parent_branch_merge","selected":"mosaic","v028_bytes":656918,"mosaic_graph_bytes":526091,"candidate_bytes":526091,"saving_vs_v028_pct":19.915271007949244,"mosaic_nodes":1,"mosaic_auditions":1,"max_mosaic_read_amplification":2.0012054443359375},
+      {"name":"02_four_way_cherry_pick","selected":"mosaic","v028_bytes":1246940,"mosaic_graph_bytes":1050557,"candidate_bytes":1050557,"saving_vs_v028_pct":15.749194026978042,"mosaic_nodes":1,"mosaic_auditions":1,"max_mosaic_read_amplification":4.000457763671875},
+      {"name":"03_reordered_two_parent_merge","selected":"mosaic","v028_bytes":493384,"mosaic_graph_bytes":394936,"candidate_bytes":394936,"saving_vs_v028_pct":19.953626384317285,"mosaic_nodes":1,"mosaic_auditions":1,"max_mosaic_read_amplification":1.9993549796082135},
+      {"name":"04_source_tree_merge","selected":"mosaic","v028_bytes":5915,"mosaic_graph_bytes":4893,"candidate_bytes":4893,"saving_vs_v028_pct":17.27810650887574,"mosaic_nodes":1,"mosaic_auditions":1,"max_mosaic_read_amplification":2.0010870270002252},
+      {"name":"05_single_parent_control","selected":"v028-fallback","v028_bytes":1050647,"candidate_bytes":1050647,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0},
+      {"name":"06_false_mosaic_sources","selected":"v028-fallback","v028_bytes":1271614,"candidate_bytes":1271614,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0},
+      {"name":"07_incompressible_control","selected":"v028-fallback","v028_bytes":1311515,"candidate_bytes":1311515,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0},
+      {"name":"08_duplicate_root_pressure","selected":"v028-fallback","v028_bytes":203180,"candidate_bytes":203180,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0}
+    ],
+    "v2": [
+      {"name":"01_noisy_two_parent_merge","selected":"mosaic","v028_bytes":823844,"mosaic_graph_bytes":663245,"candidate_bytes":663245,"saving_vs_v028_pct":19.49386048815067,"mosaic_nodes":1,"mosaic_auditions":1,"max_mosaic_read_amplification":2.0198333740234373},
+      {"name":"02_shifted_reordered_merge","selected":"v028-fallback","v028_bytes":502014,"mosaic_graph_bytes":503958,"candidate_bytes":502014,"saving_vs_v028_pct":0.0,"mosaic_nodes":1,"mosaic_auditions":1,"mosaic_estimated_record_savings":246534,"max_mosaic_read_amplification":1.992986158771467},
+      {"name":"03_record_store_conflict_merge","selected":"v028-fallback","v028_bytes":552652,"candidate_bytes":552652,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0,"single_delta_nodes":1},
+      {"name":"04_source_like_merge","selected":"v028-fallback","v028_bytes":9488,"candidate_bytes":9488,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0},
+      {"name":"05_compressed_stream_avalan","selected":"v028-fallback","v028_bytes":531664,"candidate_bytes":531664,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0,"single_delta_nodes":12},
+      {"name":"06_single_parent_noisy_control","selected":"v028-fallback","v028_bytes":1316776,"candidate_bytes":1316776,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0,"single_delta_nodes":1},
+      {"name":"07_false_neighbors_control","selected":"v028-fallback","v028_bytes":1537677,"candidate_bytes":1537677,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":3},
+      {"name":"08_incompressible_control","selected":"v028-fallback","v028_bytes":1639193,"candidate_bytes":1639193,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0},
+      {"name":"09_root_diversity_pressure","selected":"v028-fallback","v028_bytes":1671174,"candidate_bytes":1671174,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":1},
+      {"name":"10_small_metadata_control","selected":"v028-fallback","v028_bytes":4637,"candidate_bytes":4637,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0,"single_delta_nodes":1}
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "cmpct-v030-release-receipt-v1",
+  "gate_id": "shared-build-rehab",
+  "candidate_fingerprint": "de41a1705e2c5099563982bf355a274e35a25f2b9395c5fab5a4c969d5536e41",
+  "evidence": {
+    "path": "benchmarks/history/v030_shared_build_rehab_receipt_evidence_20260919.json",
+    "sha256": "639dab2bdd960cfaa41388dc99b6fbf241c725536e5f45efba443238fd7ae1f4",
+    "source_sha": "4a44115797be18e4975417a1792dc1884868a7e6",
+    "run_id": 35420528763,
+    "artifact_id": 10577562422,
+    "url": "https://github.com/FCMO-AI/.CMPCT/actions/runs/35420528763"
+  },
+  "facts": {
+    "byte_identical": true,
+    "wallclock_improvement_pct": 34.179643104128075,
+    "wallclock_improvement_s": 25.851210563500025,
+    "attempt5_graph_build_count": 1
+  }
+}

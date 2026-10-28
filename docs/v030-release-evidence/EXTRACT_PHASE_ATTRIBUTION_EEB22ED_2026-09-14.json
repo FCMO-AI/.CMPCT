@@ -1,0 +1,60 @@
+{
+  "schema": "cmpct-v030-research-evidence-v1",
+  "status": "PASS",
+  "evidence_class": "research-oracle",
+  "product_release_credit": false,
+  "claim": "The frozen runtime extraction regressions are owned by the v0.30 extraction/restoration call rather than the post-extraction treehash included in the end-to-end timer.",
+  "experiment_commit": "eeb22edd586dc9b0d24cb21ffac190f0046fbba4",
+  "workflow_run_id": 34819657968,
+  "job_id": 103898059784,
+  "artifact": {
+    "id": 10337897290,
+    "name": "v030-extract-phase-attribution-eeb22edd586dc9b0d24cb21ffac190f0046fbba4",
+    "digest": "sha256:b6f3423cfe2164f4d742f562972111d36585aec6be898eee917c11397c084144"
+  },
+  "contract": {
+    "repetitions_per_engine": 3,
+    "fresh_process_per_extract_sample": true,
+    "same_product_front_doors_as_runtime_gate": true,
+    "same_treehash_inside_combined_boundary": true,
+    "product_code_changed": false,
+    "release_thresholds_changed": false
+  },
+  "measurements": [
+    {
+      "suite": "neutral_hostile_v1",
+      "workload": "05_logs_and_telemetry",
+      "v029_median_extract_call_s": 0.038191424000018515,
+      "v030_median_extract_call_s": 0.05025393300002179,
+      "extract_call_ratio_v030_over_v029": 1.3158433945798258,
+      "v029_median_post_treehash_s": 0.01476412499999924,
+      "v030_median_post_treehash_s": 0.012973079999994752,
+      "post_treehash_ratio_v030_over_v029": 0.8786893906679482,
+      "combined_ratio_v030_over_v029": 1.197601992842112,
+      "v030_treehash_fraction_of_combined": 0.20508636014314024
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "workload": "09_ml_artifacts",
+      "v029_median_extract_call_s": 0.08923919299999739,
+      "v030_median_extract_call_s": 0.24812517300000536,
+      "extract_call_ratio_v030_over_v029": 2.7804506591628706,
+      "v029_median_post_treehash_s": 0.01479842800000597,
+      "v030_median_post_treehash_s": 0.013278635999995458,
+      "post_treehash_ratio_v030_over_v029": 0.8973004429923301,
+      "combined_ratio_v030_over_v029": 2.51265268844202,
+      "v030_treehash_fraction_of_combined": 0.050794702203333666
+    }
+  ],
+  "verdict": {
+    "treehash_explanation": "falsified",
+    "primary_owner": "v0.30 extraction/restoration path",
+    "strongest_case": "neutral_hostile_v1/09_ml_artifacts",
+    "implication": "Do not weaken or move the runtime measurement boundary. Diagnose the selected r25 reader/restoration path itself; on ML the post-treehash phase is slightly faster than v0.29 while the extraction call is 2.78x slower."
+  },
+  "caveats": [
+    "This is a causal research oracle, not a release receipt.",
+    "The logs combined ratio was lower than the prior frozen runtime sample, so absolute wall ratios remain noise-sensitive; the phase ownership conclusion is nevertheless consistent because post-treehash is not slower in either target.",
+    "No claim is made that one reader mechanism explains both workloads."
+  ]
+}

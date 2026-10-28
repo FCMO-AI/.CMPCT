@@ -1,0 +1,134 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 micropack extension-bucket ablation
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r24_micropack_extension_bucket_ablation.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_hostile_transfer.py'
+      - 'benchmarks/v030_r25_membership_complete_artifact_referee.py'
+      - '.github/workflows/v030-r24-micropack-extension-bucket-ablation.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_micropack_extension_bucket_ablation.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_hostile_transfer.py'
+      - 'benchmarks/v030_r25_membership_complete_artifact_referee.py'
+      - '.github/workflows/v030-r24-micropack-extension-bucket-ablation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v030-micropack-extension-ablation-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_r24_micropack_extension_bucket_ablation\.py|benchmarks/v030_r24_locality_derived_micropack_referee\.py|benchmarks/v030_r24_micropack_same_grammar_attribution\.py|benchmarks/v030_r24_locality_derived_micropack_hostile_transfer\.py|benchmarks/v030_r25_membership_complete_artifact_referee\.py|\.github/workflows/v030-r24-micropack-extension-bucket-ablation\.yml)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  extension-bucket-ablation:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_r24_micropack_extension_bucket_ablation.py benchmarks/v030_r24_locality_derived_micropack_referee.py benchmarks/v030_r24_micropack_same_grammar_attribution.py benchmarks/v030_r24_locality_derived_micropack_hostile_transfer.py benchmarks/v030_r25_membership_complete_artifact_referee.py
+      - name: Execute extension-bucket causal ablation
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_micropack_extension_bucket_ablation.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-micropack-extension-ablation-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-micropack-extension-ablation.json"
+      - name: Enforce receipt integrity, not scientific victory
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-micropack-extension-ablation.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-micropack-extension-bucket-ablation-v1'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert d['eligibility_still_extension_gated'] is True
+          assert d['locality_budget'] == 8.0
+          assert len(d['sources']) == 7
+          assert d['verdict'] in {
+              'RETIRE_PATH_BLIND_BUCKET_ABLATION',
+              'EXTENSION_BUCKET_HAS_MEASURED_ECONOMIC_VALUE',
+              'EXTENSION_BUCKET_NOT_REQUIRED',
+          }
+          PY
+      - name: Expose receipt summary
+        id: receipt
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-micropack-extension-ablation.json').read_text())
+          short={
+              'RETIRE_PATH_BLIND_BUCKET_ABLATION':'retire',
+              'EXTENSION_BUCKET_HAS_MEASURED_ECONOMIC_VALUE':'extension-value',
+              'EXTENSION_BUCKET_NOT_REQUIRED':'bucket-not-required',
+          }[d['verdict']]
+          print(f"artifact_name=v030-micropack-ext-ablation-{short}-delta{d['aggregate_delta_bytes']}-losses{len(d['economic_losses'])}-wins{len(d['strict_path_blind_wins'])}")
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r24-micropack-extension-bucket-ablation.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ${{ steps.receipt.outputs.artifact_name || 'v030-micropack-ext-ablation-no-summary' }}-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-micropack-extension-ablation.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only. This removes only extension *bucketing*. Eligibility remains the
+# existing text-extension gate and is explicitly not promoted by this experiment.

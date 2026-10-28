@@ -1,0 +1,68 @@
+name: CMPCT v0.30 G04 release fastpath check
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - experiments/v030_g04_release_fastpath_promotion_check.py
+      - experiments/entropygraph_v030_verified_restore.py
+      - .github/workflows/v030-g04-release-fastpath-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-fastpath-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install product/test dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile promoted path and adversarial check
+        run: |
+          python -m py_compile experiments/entropygraph_v030_verified_restore.py experiments/v030_g04_release_fastpath_promotion_check.py
+      - name: Run differently rooted exact check
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_g04_release_fastpath_promotion_check.py --output benchmark-artifacts/g04-release-fastpath-check.json
+      - name: Validate check receipt
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/g04-release-fastpath-check.json').read_text())
+          assert d['status']=='PASS', d.get('error')
+          assert d['product_release_credit'] is False
+          f=d['facts']
+          assert f['release_frontdoor_installs_fastpath'] is True
+          assert f['historical_oracle_remains_distinct'] is True
+          assert f['exact_cases'] >= 3000
+          assert f['max_segments_checked'] >= 20000
+          assert f['malformed_refusals_checked'] == 4
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-g04-release-fastpath-check-${{ github.sha }}
+          path: benchmark-artifacts/g04-release-fastpath-check.json
+          if-no-files-found: error
+          retention-days: 90

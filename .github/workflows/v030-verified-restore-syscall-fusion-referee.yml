@@ -1,0 +1,123 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 verified-restore syscall fusion referee
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/v030_verified_restore_syscall_fusion_referee.py'
+      - '.github/workflows/v030-verified-restore-syscall-fusion-referee.yml'
+      - 'experiments/entropygraph_v030_verified_restore.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_perf_worker.py'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/v030_verified_restore_syscall_fusion_referee.py'
+      - '.github/workflows/v030-verified-restore-syscall-fusion-referee.yml'
+      - 'experiments/entropygraph_v030_verified_restore.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_perf_worker.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-verified-restore-syscall-fusion-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          cat /tmp/files
+          if grep -Eq '^(experiments/v030_verified_restore_syscall_fusion_referee\.py|\.github/workflows/v030-verified-restore-syscall-fusion-referee\.yml|experiments/entropygraph_v030_verified_restore\.py|experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_release_product_base\.py|benchmarks/v030_release_performance\.py|benchmarks/v030_perf_worker\.py)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  verified-restore-syscall-fusion:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile referee
+        run: python -m py_compile experiments/v030_verified_restore_syscall_fusion_referee.py
+      - name: Execute frozen syscall-fusion A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_verified_restore_syscall_fusion_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-verified-restore-syscall-fusion-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-verified-restore-syscall-fusion.json"
+      - name: Validate frozen contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-verified-restore-syscall-fusion.json').read_text())
+          assert d['schema']=='cmpct-v030-verified-restore-syscall-fusion-v1'
+          assert d['release_credit'] is False and d['rounds_per_arm']==5
+          assert d['frozen_gate']=={
+            'ml_min_median_improvement_fraction':0.10,
+            'control_max_median_regression_fraction':0.02,
+            'exact_output_identity_required':True,
+          }
+          assert d['decision'] in {'ADVANCE_SYSCALL_FUSION','RETIRE_SYSCALL_FUSION'}
+          assert len(d['rows'])==3
+          PY
+      - name: Check workflow topology
+        run: python tools/check_ci_topology.py .github/workflows/v030-verified-restore-syscall-fusion-referee.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-verified-restore-syscall-fusion-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-verified-restore-syscall-fusion.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only runtime causal referee. Green means receipt integrity, not product or release credit.

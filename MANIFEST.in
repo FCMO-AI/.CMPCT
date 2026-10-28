@@ -1,0 +1,5 @@
+# The Python wheel owns the existing cmpct-core cdylib. Source distributions must therefore carry the
+# exact locked Rust build graph rather than relying on a repository checkout that users will not have.
+include native/cmpct-core/Cargo.toml
+include native/cmpct-core/Cargo.lock
+recursive-include native/cmpct-core/src *.rs

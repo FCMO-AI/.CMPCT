@@ -1,0 +1,94 @@
+# ci-lane: deep
+name: CMPCT v0.30 EG08 decoded-pack reuse oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_eg08_verify_decode_reuse_oracle.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v5.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_direct_v4.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_direct_v5.py'
+      - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
+      - '.github/workflows/v030-eg08-verify-decode-reuse.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-eg08-verify-decode-reuse-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  eg08-verify-decode-reuse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic Office benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile decode-reuse oracle
+        run: python -m py_compile benchmarks/v030_eg08_verify_decode_reuse_oracle.py
+      - name: Run exact-semantics decode-reuse A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_eg08_verify_decode_reuse_oracle \
+            --work-root benchmark-artifacts/v030-eg08-verify-decode-reuse-work \
+            --output benchmark-artifacts/v030-eg08-verify-decode-reuse.json
+      - name: Independently enforce verification and claim boundary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-eg08-verify-decode-reuse.json')
+          assert p.exists(), 'EG08 decode-reuse evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-eg08-verify-decode-reuse-v1'
+          assert d['rounds']==15
+          g=d['gate']
+          assert g['exact_verification_identity'] is True
+          assert g['physical_corruption_rejected_by_both'] is True
+          assert g['second_archive_read_preserved'] is True
+          assert g['physical_pack_sha256_preserved'] is True
+          assert g['logical_and_canonical_tree_checks_preserved'] is True
+          assert g['experiment_valid'] is True
+          assert g['release_credit'] is False
+          assert isinstance(g['material_speedup'], bool)
+          assert isinstance(g['promotion_signal'], bool)
+          assert g['promotion_signal'] is g['material_speedup']
+          assert d['minimum_material_relative_improvement']==0.15
+          assert d['minimum_material_absolute_saving_s']==0.005
+          assert d['decoded_pack_cache_entries'] > 0
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-eg08-verify-decode-reuse.yml
+      - name: Upload exact-head decode-reuse evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-verify-decode-reuse-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-eg08-verify-decode-reuse.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Exact evidence shows only ~9.6% verification improvement, below the 15% materiality gate. Keep the negative A/B
+# reproducible when its inputs change, but do not spend this one-hour diagnostic on unrelated PR synchronizations.

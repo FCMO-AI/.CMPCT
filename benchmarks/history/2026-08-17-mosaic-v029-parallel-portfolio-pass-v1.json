@@ -1,0 +1,48 @@
+{
+  "schema": "cmpct-v029-parallel-portfolio-evidence-invalidated-v1",
+  "decision": "INVALIDATED_STALE_ENGINE",
+  "invalidated_on": "2026-08-17",
+  "reason": "The scheduling measurement itself was internally byte-identical, but the experiment imported the obsolete attempt-1 CMPNX9 Mosaic portfolio instead of the accepted attempt-5 Residual Program Packing portfolio. Its 47,197,165-byte result selected the exact v0.28 fallback, while accepted attempt #5 produces a smaller 47,147,764-byte hostile aggregate. This record therefore cannot support a v0.29 release-speed claim.",
+  "supersession": {
+    "corrected_engine_identity": "attempt5-residual-program-packing",
+    "corrected_workflow": "CMPCT v0.29 byte-identical parallel portfolio",
+    "corrected_schema": "cmpct-v029-parallel-portfolio-oracle-v3",
+    "status": "A corrected ABBA scheduler experiment is the only admissible successor."
+  },
+  "invalidated_evidence": {
+    "schema": "cmpct-v029-parallel-portfolio-evidence-v1",
+    "decision": "PASS_SINGLE_RUN_PENDING_REPEATABILITY",
+    "source": {
+      "workflow_name": "CMPCT v0.29 byte-identical parallel portfolio",
+      "run_id": 32040852704,
+      "artifact_id": 9291974652,
+      "artifact_sha256": "e149ade4290f48fc1e7e21379aac4f380abd27fc05c036947866eb41e61ed264",
+      "head_sha": "24b291578e166a2b44d61a324e569d2fd71e23bf",
+      "runner": "ubuntu-24.04"
+    },
+    "policy": {
+      "scheduling_only": true,
+      "spawned_workers": 2,
+      "exact_archive_identity_required": true,
+      "minimum_wallclock_improvement_pct": 20.0,
+      "minimum_absolute_improvement_s": 5.0,
+      "measured_repetitions": 1,
+      "promotion_requires_repeatability": true
+    },
+    "result": {
+      "sequential_s": 167.46011419299998,
+      "parallel_s": 95.70964247799998,
+      "wallclock_saved_s": 71.750471715,
+      "wallclock_improvement_pct": 42.84630525947608,
+      "archive_bytes": 47197165,
+      "archive_sha256": "9b0bc96f86379a88ee2fd8ce23ca76d0c9602a5057ba94820ee8dfcd85325764",
+      "byte_identical": true,
+      "selected": "v028-fallback",
+      "v028_child_s": 95.563461716,
+      "mosaic_child_s": 73.90540948200004,
+      "research_gate_pass": true
+    },
+    "interpretation": "Process-level overlap cleared the preregistered speed hurdle with zero archive-byte change. This remains useful evidence about scheduling potential for the obsolete attempt-1 portfolio, but it is not evidence about the accepted attempt-5 release candidate."
+  },
+  "footnote": "History is preserved rather than deleted so future audits can see both why the original run looked valid and why engine identity is now a first-class release invariant."
+}

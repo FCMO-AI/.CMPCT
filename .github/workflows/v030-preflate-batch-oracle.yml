@@ -1,0 +1,167 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 batch preflate oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'native/preflate-bridge/**'
+      - 'benchmarks/v030_preflate_batch_oracle.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - '.github/workflows/v030-preflate-batch-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-preflate-batch-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(native/preflate-bridge/|benchmarks/v030_(preflate_batch_oracle|external_competitors)\.py|benchmarks/resemblance_hostile_corpus_v1\.py|\.github/workflows/v030-preflate-batch-oracle\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect batch-preflate evidence.'
+          fi
+
+  oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Build audited preflate bridges
+        run: |
+          cargo build --release --manifest-path native/preflate-bridge/Cargo.toml \
+            --bin cmpct-preflate-bridge --bin cmpct-preflate-batch
+          native/preflate-bridge/target/release/cmpct-preflate-bridge 2>&1 | head -n 1 || true
+          native/preflate-bridge/target/release/cmpct-preflate-batch 2>&1 | head -n 1 || true
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_preflate_batch_oracle.py
+      - name: Run verified batch-preflate frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_preflate_batch_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-preflate-batch-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-preflate-batch.json"
+      - name: Independently enforce evidence boundary and persist domination decision
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-preflate-batch.json')
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-preflate-batch-oracle-v1'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['workload']=='resemblance_hostile_v1/04_deflate_family'
+          assert d['source_zip_files']==14
+          assert d['gate']['exact_workload'] is True
+          assert d['gate']['all_candidates_exact_tree'] is True
+          assert d['gate']['all_candidates_locality_green'] is True
+          assert d['gate']['passed'] is True
+          assert len(d['candidates'])==12
+          assert all(c['max_member_read_amplification']<=8.0 for c in d['candidates'])
+          assert all(c['max_decode_unit_bytes']<=8*1024*1024 for c in d['candidates'])
+          if d['viable_candidate'] is not None:
+              c=d['viable_candidate']
+              assert c['tree_verified'] is True and c['locality_green'] is True
+              assert c['archive_bytes'] < d['zip']['archive_bytes']
+              assert c['archive_bytes'] < d['tar_zstd19']['archive_bytes']
+              assert c['create_s'] < d['zip']['create_s']
+              assert c['create_s'] < d['tar_zstd19']['create_s']
+
+          best_size=min(d['candidates'], key=lambda c:c['archive_bytes'])
+          # The audited batch pack+verify stage is an unavoidable lower bound for every arm in this family.
+          # If it alone is already slower than ZIP, further outer-segment tuning cannot satisfy the strict-create law.
+          batch_floor=float(d['batch_pack_verify_s'])
+          zip_s=float(d['zip']['create_s'])
+          zstd_s=float(d['tar_zstd19']['create_s'])
+          terminal = batch_floor >= zip_s
+          d['evidence_head']=os.environ['EVIDENCE_HEAD']
+          d['domination_audit']={
+              'strict_target':'15/15 strictly smaller and faster than ZIP/Deflate and solid Zstd-19',
+              'diagnosis':'D2',
+              'radicality':'R2',
+              'saturation_trigger':'S1' if terminal else 'S4',
+              'research_priority_score':88,
+              'best_size_bytes':best_size['archive_bytes'],
+              'best_size_gap_vs_zstd19_bytes':best_size['archive_bytes']-d['tar_zstd19']['archive_bytes'],
+              'batch_pack_verify_floor_s':batch_floor,
+              'batch_floor_vs_zip_ratio':batch_floor/zip_s,
+              'batch_floor_vs_zstd19_ratio':batch_floor/zstd_s,
+              'strongest_self_critique':(
+                  'This retires the audited full batch-preflate construction as a strict-create route; it does not '
+                  'prove that a fundamentally cheaper native deflate-normalization representation is impossible.'
+              ),
+              'terminal_decision':'RETIRE_FAMILY' if terminal else 'ITERATE_SAME_FAMILY',
+              'next_decisive_test':(
+                  'invent a representation that avoids audited preflate reconstruction cost rather than tuning '
+                  'outer group size/level' if terminal else 'reduce the mandatory batch floor before outer tuning'
+              ),
+          }
+          assert d['domination_audit']['terminal_decision'] in {'RETIRE_FAMILY','ITERATE_SAME_FAMILY'}
+          p.write_text(json.dumps(d, indent=2)+'\n')
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-preflate-batch-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-preflate-batch-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-preflate-batch.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Negative evidence is first-class: this family may substantially beat Zstd-19 on bytes while remaining terminally
+# unable to satisfy the ZIP creation-time contract because the audited preflate pack+verify stage is already slower
+# than ZIP before any outer construction. The receipt records that causal floor explicitly instead of encouraging
+# repeated group-size/level tuning.

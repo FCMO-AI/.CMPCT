@@ -1,0 +1,150 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
+name: CMPCT v0.30 candidate reclaim RSS attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/entropygraph_v030_*.py'
+      - 'benchmarks/v030_r25_candidate_reclaim_rss_*.py'
+      - 'docs/v030-rnd/R25_CANDIDATE_RECLAIM_RSS_PREREG.md'
+      - '.github/workflows/v030-r25-candidate-reclaim-rss.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_*.py'
+      - 'benchmarks/v030_r25_candidate_reclaim_rss_*.py'
+      - 'docs/v030-rnd/R25_CANDIDATE_RECLAIM_RSS_PREREG.md'
+      - '.github/workflows/v030-r25-candidate-reclaim-rss.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-r25-candidate-reclaim-rss-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      should_run: ${{ steps.scope.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v030_.*\.py$|benchmarks/v030_r25_candidate_reclaim_rss_.*\.py$|docs/v030-rnd/R25_CANDIDATE_RECLAIM_RSS_PREREG\.md$|\.github/workflows/v030-r25-candidate-reclaim-rss\.yml$)' /tmp/latest-head-files.txt; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  candidate-reclaim-rss:
+    needs: latest-head-scope
+    if: needs.latest-head-scope.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    concurrency:
+      group: cmpct-v030-r25-candidate-reclaim-rss-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen reclaim instrument
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m py_compile benchmarks/v030_r25_candidate_reclaim_rss_worker.py benchmarks/v030_r25_candidate_reclaim_rss_oracle.py
+      - name: Run candidate reclaim RSS attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r25_candidate_reclaim_rss_oracle.py --work-root benchmark-artifacts/v030-r25-candidate-reclaim-rss-work --output benchmark-artifacts/v030-r25-candidate-reclaim-rss.json
+      - name: Ratchet frozen claim boundary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-r25-candidate-reclaim-rss.json')
+          assert p.is_file(), 'candidate reclaim evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-r25-candidate-reclaim-rss-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['release_credit'] is False
+          assert d['preregistration']=='docs/v030-rnd/R25_CANDIDATE_RECLAIM_RSS_PREREG.md'
+          c=d['contract']
+          assert c['serialized_seam_diagnostic_only'] is True
+          assert c['prefixgraph_result_retained_exactly'] is True
+          assert c['deep_size_diagnostic_only'] is True
+          assert c['live_vmrss_diagnostic_only'] is True
+          assert c['ru_maxrss_decisive'] is True
+          assert c['trim_linux_glibc_diagnostic_only'] is True
+          assert c['exact_product_identity_required'] is True
+          assert c['production_source_changed'] is False
+          assert c['candidate_semantics_changed'] is False
+          assert c['release_thresholds_changed'] is False
+          assert c['decision_thresholds']=={'support':0.20,'retire':0.10}
+          assert d['arm_counts']=={'control':3,'gc':3,'trim':3}
+          if d['experiment_valid']:
+            assert d['worker_failures']==[]
+            assert len(d['rows'])==9
+            identities=set()
+            for row in d['rows']:
+              assert row['executor_restored'] is True
+              assert row['intercepted_prefixgraph_executor_constructions']==1
+              assert row['intercepted_prefixgraph_submissions']==1
+              assert row['semantic_owners']['identity_exact'] is True
+              obs=row['reclaim_observation']
+              assert obs['pre_action_vmrss_kib']>0
+              assert obs['post_action_vmrss_kib']>0
+              assert obs['retained_result_deep_bytes']>0
+              identities.add((row['archive_bytes'],row['archive_sha256'],row['tree_sha256'],row['selected'],row['format_revision'],row['r24_product_bytes'],row['r25_product_bytes']))
+            assert len(identities)==1
+          else:
+            assert d['worker_failures'] or len(set(tuple(row.get(k) for k in ('archive_bytes','archive_sha256','tree_sha256','selected','format_revision','r24_product_bytes','r25_product_bytes')) for row in d['rows'])) != 1
+            raise SystemExit('candidate reclaim RSS evidence invalid')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r25-candidate-reclaim-rss.yml
+      - name: Upload exact reclaim evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r25-candidate-reclaim-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r25-candidate-reclaim-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. No release credit; production source and release thresholds remain unchanged.

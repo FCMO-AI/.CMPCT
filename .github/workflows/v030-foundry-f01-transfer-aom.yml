@@ -1,0 +1,91 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 Foundry F-01 structural transfer AOM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  transfer-aom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact frozen transfer head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile unchanged grammar and transfer instrument
+        run: |
+          python -m py_compile experiments/entropygraph_v030_reversible_structure_compiler_o01.py
+          python -m py_compile experiments/entropygraph_v030_reversible_structure_compiler_transfer_aom.py
+      - name: Verify frozen transfer contract
+        run: |
+          grep -F 'F-01 structural transfer + AOM preregistration' docs/v030-rnd/F01_TRANSFER_AOM_PREREG.md
+          grep -F 'CAUSAL_SEED' docs/v030-rnd/F01_CAUSAL_RESULT.md
+      - name: Execute structural transfer, AOM and carrying-cost A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m experiments.entropygraph_v030_reversible_structure_compiler_transfer_aom \
+            --source-commit "$EVIDENCE_HEAD" \
+            --output benchmark-artifacts/v030-foundry-f01-transfer-aom.json
+      - name: Enforce transfer evidence contract independently
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == os.environ['EVIDENCE_HEAD']
+          d=json.loads(Path('benchmark-artifacts/v030-foundry-f01-transfer-aom.json').read_text())
+          assert d['schema']=='cmpct-v030-foundry-f01-transfer-aom-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['causal_source']=='2876698d311b13f296a6f11f23d89eaab51cd09c'
+          assert d['causal_artifact_digest']=='sha256:e910165ad51b2501f44a8531dab39ccbd697a1a1b150f9d958fb03290d33f2b6'
+          assert len(d['corpus_fingerprint'])==64
+          assert d['decision'] in {'TRANSFER_ADVANCE','TRANSFER_NARROW','TRANSFER_FAIL','TRANSFER_EVIDENCE_CONFLICT'}
+          assert len(d['cases'])==10
+          assert {row['family'] for row in d['cases']} >= {'lane+record','lane+lane','hostile-random'}
+          for row in d['cases']:
+              assert row['logical_bytes'] > 0
+              assert row['synthesized_bytes'] > 0 and row['pruned_bytes'] > 0
+              assert row['full_search']['heuristic_prunes']==0
+              assert row['pruned_search']['heuristic_prunes']==0
+          a=d['aom']; c=d['carrying_cost']
+          assert 0.0 <= a['addressable_byte_fraction'] <= 1.0
+          assert 0.0 <= a['conditional_saving_fraction'] <= 1.0
+          assert c['full_lane_widths']==[2,4,8,16]
+          assert c['pruned_lane_widths']==[8,16]
+          assert c['full_generated_states'] >= c['pruned_generated_states']
+          assert c['full_costed_states'] >= c['pruned_costed_states']
+          assert d['oracle_gift_ledger']['never_gifted']
+          assert d['oracle_gift_ledger']['deferred']
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-foundry-f01-transfer-aom.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-foundry-f01-transfer-aom-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-foundry-f01-transfer-aom.json
+          if-no-files-found: error
+          retention-days: 90
+
+# F-01 is retired in docs/ACTIVE_RESEARCH_THESIS.md after its frozen hostile review.
+# The historical transfer/AOM instrument remains replayable manually for custody/audit,
+# but it no longer consumes automatic PR runner capacity or grants canonical/release credit.

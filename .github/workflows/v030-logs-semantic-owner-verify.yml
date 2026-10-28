@@ -1,0 +1,161 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 logs semantic-owner runtime oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_logs_semantic_owner_verify_oracle.py'
+      - 'benchmarks/v030_logs_fused_extract_oracle.py'
+      - 'benchmarks/v030_logs_terminal_admission_oracle.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_logs_fused_extract.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'tests/test_v030_logs_fused_extract.py'
+      - '.github/workflows/v030-logs-semantic-owner-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-semantic-owner-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_(logs_semantic_owner_verify_oracle|logs_fused_extract_oracle|logs_terminal_admission_oracle)\.py|experiments/entropygraph_v030_(logs_inverse_profile_v3|logs_fused_extract|release_product|release_product_logs_candidate)\.py|tests/test_v030_logs_fused_extract\.py|\.github/workflows/v030-logs-semantic-owner-verify\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect logs runtime oracles.'
+          fi
+
+  logs-semantic-owner-runtime:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        id: candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile runtime proof surfaces
+        run: |
+          python -m py_compile benchmarks/v030_logs_semantic_owner_verify_oracle.py
+          python -m py_compile benchmarks/v030_logs_fused_extract_oracle.py
+          python -m py_compile experiments/entropygraph_v030_logs_fused_extract.py
+          python -m py_compile tests/test_v030_logs_fused_extract.py
+      - name: Run fused extraction semantic ratchets
+        run: pytest -q tests/test_v030_logs_fused_extract.py
+      - name: Run rotated verifier A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_semantic_owner_verify_oracle \
+            --work-root "$RUNNER_TEMP/v030-logs-semantic-owner" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-semantic-owner.json"
+      - name: Preserve verifier negative/positive evidence honestly
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          e=json.loads(Path('benchmark-artifacts/v030-logs-semantic-owner.json').read_text()); c=e['contract']
+          assert e['schema']=='cmpct-v030-logs-semantic-owner-verify-oracle-v1'
+          assert c['rounds']==21 and c['release_credit'] is False and e['release_credit'] is False
+          assert e['experiment_valid'] is True and e['same_integrity_receipt'] is True and e['corruption_rejected'] is True
+          expected=(e['absolute_saving_s']>=c['minimum_absolute_speedup_s'] and e['relative_speedup']>=c['minimum_relative_speedup'])
+          assert e['promotion_signal'] is expected
+          PY
+      - name: Run one-session extraction A/B
+        run: |
+          python -m benchmarks.v030_logs_fused_extract_oracle \
+            --work-root "$RUNNER_TEMP/v030-logs-fused-extract" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-fused-extract.json"
+      - name: Ratchet exact fused extraction boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=json.loads(Path('benchmark-artifacts/v030-logs-fused-extract.json').read_text()); c=e['contract']
+          assert e['schema']=='cmpct-v030-logs-fused-extract-oracle-v1'
+          assert c['rounds']==11 and c['minimum_relative_speedup']==0.10
+          assert c['same_archive_bytes'] is True and c['same_archive_semantic_owner'] is True
+          assert c['same_filesystem_manifest'] is True and c['one_authenticated_archive_session'] is True
+          assert c['second_on_disk_sha_pass'] is False
+          assert c['archive_bytes_changed'] is False and c['selector_change'] is False
+          assert c['release_credit'] is False and e['release_credit'] is False
+          assert e['all_outputs_exact'] is True
+          assert len(e['samples_s']['current'])==len(e['samples_s']['fused'])==11
+          expected=e['all_outputs_exact'] and e['relative_speedup']>=c['minimum_relative_speedup']
+          assert e['promotion_signal'] is expected
+          Path('benchmark-artifacts/v030-logs-runtime-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-semantic-owner-verify.yml
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-semantic-owner-runtime-${{ steps.candidate.outputs.sha || env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-logs-semantic-owner.json
+            benchmark-artifacts/v030-logs-fused-extract.json
+            benchmark-artifacts/v030-logs-runtime-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only. Positive extraction evidence must still re-earn ordinary logs/external/runtime/native/Android/final
+# authority before product promotion. Negative verifier evidence remains durable and earns zero release credit.
+# Exact-newest-head admission prevents these already-falsified sub-1% runtime variants from consuming 90-minute
+# lanes on unrelated integration commits.

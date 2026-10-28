@@ -1,0 +1,14 @@
+[package]
+name = "cmpct-logs-auth-oracle"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+description = "Research-only fused CRC32 + SHA-256 FFI seam for CMPCT Logs attribution"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+crc32fast = "1.5"
+sha2 = "0.10"

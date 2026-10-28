@@ -1,0 +1,86 @@
+name: CMPCT v0.30 content retained state referee
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_r24_micropack_content_retained_state_referee.py
+      - benchmarks/v030_r24_micropack_content_economic_admission.py
+      - benchmarks/v030_r24_micropack_same_grammar_attribution.py
+      - benchmarks/v030_r24_locality_derived_micropack_referee.py
+      - benchmarks/v030_compact_pack_control_attribution.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-micropack-content-retained-state.yml
+
+permissions:
+  contents: read
+
+jobs:
+  retained-state:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Compile referee
+        run: python -m py_compile benchmarks/v030_r24_micropack_content_retained_state_referee.py
+      - name: Execute retained-state referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r24_micropack_content_retained_state_referee \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-content-retained-state-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-content-retained-state.json"
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-content-retained-state.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-content-retained-state-v1'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert d['product_state_claim'] is False
+          assert d['verdict']=='CONTENT_RETAINED_STATE_ATTRIBUTED'
+          c=d['arms']['content_economic']; i=d['arms']['independent']
+          assert c['archive_bytes'] < i['archive_bytes']
+          assert c['max_decode_unit_bytes'] <= 8*1024*1024
+          delta=d['deltas_content_minus_independent']
+          top=d['largest_attribute_deltas'][0] if d['largest_attribute_deltas'] else ['none',0]
+          slug=lambda s: re.sub(r'[^A-Za-z0-9_-]+','-',str(s))[:24]
+          outs={
+              'live':str(delta['builder_graph_bytes']),
+              'rss':str(delta['rss_post_build_kib']),
+              'gc':str(delta['rss_post_gc_kib']),
+              'trim':str(delta['rss_post_trim_kib']),
+              'peak':str(delta['peak_rss_kib']),
+              'attr':slug(top[0]),
+              'attrb':str(top[1]),
+          }
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+              for k,v in outs.items(): fh.write(f'{k}={v}\n')
+          print(json.dumps({'deltas':delta,'largest_attribute_deltas':d['largest_attribute_deltas'][:8],'content':{'auditions':c['auditions'],'accepted':c['accepted_groups'],'rejected':c['rejected_groups']}},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-retstate-live${{ steps.receipt.outputs.live }}-rss${{ steps.receipt.outputs.rss }}-gc${{ steps.receipt.outputs.gc }}-trim${{ steps.receipt.outputs.trim }}-peak${{ steps.receipt.outputs.peak }}-${{ steps.receipt.outputs.attr }}-${{ steps.receipt.outputs.attrb }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-content-retained-state.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic memory attribution only; no release credit.

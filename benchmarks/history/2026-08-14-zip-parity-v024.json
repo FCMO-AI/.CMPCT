@@ -1,0 +1,41 @@
+{
+  "schema": "cmpct-zip-parity-v1",
+  "repetitions": 3,
+  "timing_statistic": "median",
+  "cache_semantics": "warm/ordinary filesystem cache; no cache dropping between repetitions",
+  "integrity_semantics": {
+    "cmpct": "normal reader/extractor integrity checks",
+    "zip": "Python zipfile normal CRC behavior"
+  },
+  "filesystem_semantic_mismatch": "CMPCT preserves links/sparse/uid-gid/xattrs in the archive; this Python ZIP baseline dereferences symlinks and does not preserve the richer filesystem semantics.",
+  "corpora": {
+    "tiny": {"logical_bytes": 1291090, "library": {"cmpct": {"bytes": 178951, "create_s_median": 0.213639833, "extract_s_median": 0.224356808}, "zip": {"bytes": 674152, "create_s_median": 0.300583963, "extract_s_median": 0.385739677}}, "cli": {"cmpct": {"bytes": 178951, "create_s_median": 0.288788339, "extract_s_median": 0.292651764}, "zip": {"bytes": 674152, "create_s_median": 0.544189955, "extract_s_median": 0.418891537}}},
+    "source": {"logical_bytes": 96980, "library": {"cmpct": {"bytes": 13807, "create_s_median": 0.040972407, "extract_s_median": 0.034212001}, "zip": {"bytes": 140010, "create_s_median": 0.054384707, "extract_s_median": 0.06561198}}, "cli": {"cmpct": {"bytes": 13807, "create_s_median": 0.11465174, "extract_s_median": 0.105412053}, "zip": {"bytes": 140010, "create_s_median": 0.125821329, "extract_s_median": 0.098619542}}},
+    "media": {"logical_bytes": 4931984, "library": {"cmpct": {"bytes": 4225083, "create_s_median": 0.033484429, "extract_s_median": 0.004568553}, "zip": {"bytes": 4230623, "create_s_median": 0.102590667, "extract_s_median": 0.007635415}}, "cli": {"cmpct": {"bytes": 4225083, "create_s_median": 0.194911978, "extract_s_median": 0.075611796}, "zip": {"bytes": 4230623, "create_s_median": 0.13763706, "extract_s_median": 0.042802753}}},
+    "binary": {"logical_bytes": 50331648, "library": {"cmpct": {"bytes": 16793313, "create_s_median": 0.172190145, "extract_s_median": 0.063817826}, "zip": {"bytes": 16880276, "create_s_median": 0.566417896, "extract_s_median": 0.049135449}}, "cli": {"cmpct": {"bytes": 16793313, "create_s_median": 0.275268082, "extract_s_median": 0.142828449}, "zip": {"bytes": 16880276, "create_s_median": 0.590092649, "extract_s_median": 0.10449715}}},
+    "dedup_links": {"logical_bytes": 27262976, "library": {"cmpct": {"bytes": 1601, "create_s_median": 0.03800342, "extract_s_median": 0.009763487}, "zip": {"bytes": 86991, "create_s_median": 0.145307705, "extract_s_median": 0.028427293}}, "cli": {"cmpct": {"bytes": 1601, "create_s_median": 0.113032828, "extract_s_median": 0.083424614}, "zip": {"bytes": 86991, "create_s_median": 0.180612352, "extract_s_median": 0.069161275}}},
+    "sparse": {"logical_bytes": 134217728, "library": {"cmpct": {"bytes": 4196500, "create_s_median": 0.104889064, "extract_s_median": 0.002962114}, "zip": {"bytes": 4327490, "create_s_median": 0.748170957, "extract_s_median": 0.359520975}}, "cli": {"cmpct": {"bytes": 4196500, "create_s_median": 0.187805944, "extract_s_median": 0.076752584}, "zip": {"bytes": 4327490, "create_s_median": 0.785973463, "extract_s_median": 0.410072964}}},
+    "nested": {"logical_bytes": 845291, "library": {"cmpct": {"bytes": 797706, "create_s_median": 0.017462277, "extract_s_median": 0.001933821}, "zip": {"bytes": 808377, "create_s_median": 0.020203649, "extract_s_median": 0.003140751}}, "cli": {"cmpct": {"bytes": 797706, "create_s_median": 0.09339718, "extract_s_median": 0.074206837}, "zip": {"bytes": 808377, "create_s_median": 0.055489641, "extract_s_median": 0.037886039}}},
+    "combined": {"logical_bytes": 84759969, "library": {"cmpct": {"bytes": 22007165, "create_s_median": 0.538328587, "extract_s_median": 0.341562882}, "zip": {"bytes": 22861727, "create_s_median": 1.197528759, "extract_s_median": 0.545428407}}, "cli": {"cmpct": {"bytes": 22007165, "create_s_median": 0.727828798, "extract_s_median": 0.43063362}, "zip": {"bytes": 22861727, "create_s_median": 1.255321368, "extract_s_median": 0.589210613}}}
+  },
+  "record_kind": "development_regression_evidence",
+  "source_commit": "679fcf55977afed0e46787b6df77d7aff8946ff2",
+  "format_revision": 24,
+  "harness": "benchmarks/zip_parity_bench.py",
+  "environment": {
+    "commit": "679fcf55977afed0e46787b6df77d7aff8946ff2",
+    "version": "0.24.0",
+    "python": "Python 3.11.15",
+    "uname": "Linux runnervmzvulz 6.17.0-1022-azure #22-Ubuntu SMP Mon Jul 27 17:24:03 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux",
+    "filesystem": "/dev/root ext4; GitHub shared runner",
+    "cpu_count": "2",
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "mem": "7.8Gi",
+    "zstd": "Zstandard CLI 1.5.7"
+  },
+  "interpretation": {
+    "library_zip_wins": ["binary extraction"],
+    "cli_zip_wins": ["source extraction", "media create/extract", "binary extraction", "dedup_links extraction", "nested create/extract"],
+    "note": "CLI gaps include interpreter/import startup; library and CLI layers must remain separate. Filesystem semantics are not equivalent: CMPCT preserves richer link/sparse/metadata semantics. Shared-runner timings are development evidence, not public performance guarantees."
+  }
+}

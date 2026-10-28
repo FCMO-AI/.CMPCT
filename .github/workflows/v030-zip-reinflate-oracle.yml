@@ -1,0 +1,84 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 reversible ZIP reinflate oracle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_zip_reinflate_oracle.py
+      - name: Run reversible ZIP normalization experiment
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_zip_reinflate_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-reinflate-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-reinflate.json"
+      - name: Independently enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-zip-reinflate.json').read_text())
+          assert d['schema']=='cmpct-v030-zip-reinflate-oracle-v1'
+          assert d['gate']['exact_tree_reconstructed'] is True
+          assert d['gate']['passed'] is True
+          assert d['workload']=='resemblance_hostile_v1/04_deflate_family'
+          assert d['claim_boundary'].startswith('research-only')
+          if d['viable_candidate'] is not None:
+              c=d['viable_candidate']
+              assert c['tree_verified'] is True
+              assert c['archive_bytes'] < d['zip']['archive_bytes']
+              assert c['archive_bytes'] < d['tar_zstd19']['archive_bytes']
+              assert c['create_s'] < d['zip']['create_s']
+              assert c['create_s'] < d['tar_zstd19']['create_s']
+          Path('benchmark-artifacts/v030-zip-reinflate-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zip-reinflate-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-zip-reinflate-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-zip-reinflate.json
+            benchmark-artifacts/v030-zip-reinflate-candidate.txt
+          if-no-files-found: error
+          retention-days: 90
+
+# Exact evidence at the v0.30 integration frontier reconstructed the frozen Deflate-family tree correctly but found
+# no reversible ZIP-normalization candidate simultaneously smaller and faster than both ZIP/Deflate and solid
+# Zstd-19. Preserve this as terminal negative evidence and manual reproducibility instead of automatic PR churn.

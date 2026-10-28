@@ -1,0 +1,68 @@
+{
+  "schema": "cmpct-v030-research-oracle-result-v1",
+  "status": "FAIL_AS_DOMINANT_OWNER",
+  "evidence_class": "research-oracle",
+  "product_release_credit": false,
+  "claim_scope": "canonical-r24 pack-geometry attribution on the exact repaired 15-workload substrate",
+  "candidate_sha": "2b95a240181769fbf42c36100f70f7e101d24fbd",
+  "workflow_run_id": 34817208976,
+  "workflow_artifact_id": 10336502064,
+  "workflow_artifact_digest": "sha256:3adbfb23291fc6df19adc3bcc93925ed522259ed54eeb617f6be3fd0046e0108",
+  "accepted_v029_aggregate_bytes": 137499525,
+  "shipping_r24_aggregate_bytes": 181158907,
+  "shipping_r24_delta_vs_v029_bytes": 43659382,
+  "variants": {
+    "default_pack_target_256KiB": {
+      "aggregate_bytes": 181127690,
+      "recovery_vs_shipping_bytes": 31217,
+      "workloads_smaller_than_shipping": 2,
+      "workloads_larger_than_shipping": 3,
+      "locality_failures": 1,
+      "max_selected_member_amplification": 89.20451527224435
+    },
+    "default_pack_max_file_32KiB": {
+      "aggregate_bytes": 181255214,
+      "recovery_vs_shipping_bytes": -96307,
+      "workloads_smaller_than_shipping": 2,
+      "workloads_larger_than_shipping": 3,
+      "locality_failures": 1,
+      "max_selected_member_amplification": 13.91404958677686
+    },
+    "disable_medium_bin_pack": {
+      "aggregate_bytes": 181719313,
+      "recovery_vs_shipping_bytes": -560406,
+      "workloads_smaller_than_shipping": 1,
+      "workloads_larger_than_shipping": 5,
+      "locality_failures": 0,
+      "max_selected_member_amplification": 7.972111553784861
+    }
+  },
+  "dominant_loss_rows": {
+    "neutral_hostile_v1/02_office_workspace": {
+      "accepted_v029_bytes": 5954026,
+      "shipping_r24_bytes": 15445448,
+      "delta_bytes": 9491422,
+      "all_three_ablations_change_bytes": false,
+      "all_three_ablations_recovery_bytes": 0
+    },
+    "neutral_hostile_v1/04_analytics_and_database": {
+      "accepted_v029_bytes": 6135172,
+      "shipping_r24_bytes": 10392498,
+      "delta_bytes": 4257326,
+      "all_three_ablations_change_bytes": false,
+      "all_three_ablations_recovery_bytes": 0
+    }
+  },
+  "adjudication": {
+    "hypothesis": "The dominant canonical-r24 byte regressions are primarily caused by the shipping micro-pack target, maximum packed-file size, or medium-binary pack admission changes.",
+    "result": "falsified_as_dominant_owner",
+    "reason": "The strongest aggregate recovery is only 31,217 bytes and violates locality catastrophically. The other two ablations increase aggregate bytes. Most importantly, Office (+9,491,422 bytes) and Analytics (+4,257,326 bytes), which dominate the canonical generalization loss, are byte-identical under all three pack-geometry ablations. Threshold gardening these knobs cannot explain or close the megabyte-scale debt.",
+    "next_causal_target": "Measure the exported cost from internal G0-G4 capability into complete canonical r25/r24 product artifacts, including filesystem-control and selector/canonicality boundaries."
+  },
+  "integrity": {
+    "release_thresholds_changed": false,
+    "product_policy_changed": false,
+    "baseline_changed": false,
+    "historical_evidence_rewritten": false
+  }
+}

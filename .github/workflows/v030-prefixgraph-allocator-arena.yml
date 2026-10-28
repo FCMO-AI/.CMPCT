@@ -1,0 +1,94 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 PrefixGraph allocator-arena frontier
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  allocator-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen corpus dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile allocator oracle and preserve shipping PrefixGraph tests
+        run: |
+          python -m py_compile benchmarks/v030_prefixgraph_allocator_arena_oracle.py benchmarks/v030_prefixgraph_lowmem_params_worker.py
+          python -m pytest -q tests/test_v030_prefixgraph_parallel_release.py
+      - name: Run fresh-process Shifted allocator frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_prefixgraph_allocator_arena_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-allocator-arena-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-allocator-arena.json"
+      - name: Enforce exact identity and research-only boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-prefixgraph-allocator-arena.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-allocator-arena.json').read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-allocator-arena-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
+          assert d['experiment_valid'] is True
+          assert d['selector_change'] is False and d['release_credit'] is False
+          assert d['rounds']==2 and d['arms']==['allocator-default','arena-4','arena-2','arena-1']
+          c=d['contract']
+          for key in ('fresh_process_per_arm','four_anchor_workers_unchanged','compression_parameters_unchanged','direct_zstd19_payload_floor_unchanged','anchor_nomination_unchanged','complete_archive_tournament_unchanged','reader_and_integrity_law_unchanged'):
+              assert c[key] is True
+          for key in ('child_process_memory_hidden','production_bytes_changed','release_thresholds_changed','benchmark_identity_dispatch'):
+              assert c[key] is False
+          baseline=d['summaries']['allocator-default']
+          for row in d['repetitions']:
+              for arm in d['arms']:
+                  r=row['arms'][arm]
+                  assert r['strong_verify_ok'] is True
+                  assert r['tree_sha256']==d['tree_sha256']
+                  assert r['anchor_audition_workers']==4
+                  assert r['release_credit'] is False
+          for arm in d['arms'][1:]:
+              s=d['summaries'][arm]
+              assert s['exact_archive_identity'] is True
+              assert set(s['archive_bytes'])=={baseline['archive_bytes'][0]}
+              assert set(s['archive_sha256'])=={baseline['archive_sha256'][0]}
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-allocator-arena.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-prefixgraph-allocator-arena-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-prefixgraph-allocator-arena.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Terminal negative retained for manual reproduction. Exact evidence found arena caps save at most about 8.2% RSS
+# while costing about 8.3% wall time, with tighter caps becoming worse. This does not explain Shifted's ~3x RSS;
+# automatic work has moved to direct live-CCtx attribution.

@@ -1,0 +1,100 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.29 v0.30 process-tree CPU pair
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_genesis_rss_attribution.py'
+      - 'benchmarks/v030_v029_process_tree_cpu_pair.py'
+      - '.github/workflows/v030-v029-process-tree-cpu-pair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+  FROZEN_V029: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+  FROZEN_V030: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+
+concurrency:
+  group: cmpct-v029-v030-tree-cpu-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  pair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Bind exact head and frozen contenders
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git cat-file -e "$FROZEN_V029^{commit}"
+          git cat-file -e "$FROZEN_V030^{commit}"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029-frozen" "$FROZEN_V029"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v030-frozen" "$FROZEN_V030"
+          test "$(git -C "$RUNNER_TEMP/cmpct-v029-frozen" rev-parse HEAD)" = "$FROZEN_V029"
+          test "$(git -C "$RUNNER_TEMP/cmpct-v030-frozen" rev-parse HEAD)" = "$FROZEN_V030"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install shared corpus/product dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile paired CPU diagnostic
+        run: |
+          python -m py_compile \
+            benchmarks/v030_genesis_rss_attribution.py \
+            benchmarks/v030_v029_process_tree_cpu_pair.py
+      - name: Run same-runner source-sealed pair
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_v029_process_tree_cpu_pair.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --v029-checkout "$RUNNER_TEMP/cmpct-v029-frozen" \
+            --v030-checkout "$RUNNER_TEMP/cmpct-v030-frozen" \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-v029-tree-cpu-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-v029-tree-cpu.json"
+      - name: Enforce diagnostic custody
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-v029-tree-cpu.json').read_text())
+          assert d['schema']=='cmpct-v030-v029-process-tree-cpu-pair-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['v029_sha']==os.environ['FROZEN_V029'] and d['v030_sha']==os.environ['FROZEN_V030']
+          assert {r['workload'] for r in d['rows']}=={'analytics','deflate_family'}
+          for r in d['rows']:
+              assert r['v029']['loaded_modules'] and r['v030']['loaded_modules']
+              assert r['v029']['tree_cpu_s'] >= r['v029']['self_cpu_s'] >= 0
+              assert r['v030']['tree_cpu_s'] >= r['v030']['self_cpu_s'] >= 0
+          c=d['contract']; assert c['diagnostic_only'] and not c['release_credit']
+          assert c['same_runner'] and c['same_source_tree'] and c['same_dependency_environment']
+          assert c['fresh_process_per_engine_workload'] and c['self_and_reaped_child_cpu_charged'] and c['source_sealed_both_contenders']
+          print(json.dumps([{k:r[k] for k in ('workload','v030_over_v029_tree_cpu_ratio','v030_over_v029_wall_ratio','v030_minus_v029_bytes')} for r in d['rows']],sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-v029-tree-cpu-pair-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-v029-tree-cpu.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. It fixes comparator accounting, not the original Genesis result or release state.

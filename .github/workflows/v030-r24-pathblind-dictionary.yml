@@ -1,0 +1,77 @@
+name: CMPCT v0.30 path-blind dictionary referee
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_r24_pathblind_dictionary_referee.py
+      - benchmarks/v030_r24_micropack_content_selective_read_referee.py
+      - benchmarks/v030_r24_micropack_content_economic_admission.py
+      - benchmarks/v030_r24_micropack_current15_transfer.py
+      - benchmarks/v030_current15_stable_corpus.py
+      - benchmarks/neutral_hostile_corpus_v1.py
+      - benchmarks/resemblance_hostile_corpus_v1.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-pathblind-dictionary.yml
+
+permissions:
+  contents: read
+
+jobs:
+  pathblind-dictionary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Compile referee
+        run: python -m py_compile benchmarks/v030_r24_pathblind_dictionary_referee.py
+      - name: Execute path-blind dictionary referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r24_pathblind_dictionary_referee \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pathblind-dict-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pathblind-dict.json"
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-pathblind-dict.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-pathblind-dictionary-v1'
+          assert d['release_credit'] is False and d['canonical_builder_changed'] is False
+          assert d['genesis_rescore'] is False and d['path_signal_used'] is False
+          assert d['verdict'] in {'RETIRE_PATHBLIND_DICTIONARY','PATHBLIND_DICTIONARY_EARNS_CURRENT15_TRANSFER','PATHBLIND_DICTIONARY_SAFE_BUT_NO_DENSITY_GAIN'}
+          short={'RETIRE_PATHBLIND_DICTIONARY':'retire','PATHBLIND_DICTIONARY_EARNS_CURRENT15_TRANSFER':'earn','PATHBLIND_DICTIONARY_SAFE_BUT_NO_DENSITY_GAIN':'safe0'}[d['verdict']]
+          outs={
+            'short':short,'loss':str(len(d['byte_losses_vs_independent'])),'read':str(len(d['read_debts'])),
+            'op':str(len(d['open_plus_read_debts'])),'inv':str(len(d['invariant_failures'])),
+            'wins':str(len(d['strict_wins_vs_independent'])),'fp':d['corpus_fingerprint'][:10],
+          }
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+            for k,v in outs.items(): fh.write(f'{k}={v}\n')
+          print(json.dumps({'verdict':d['verdict'],'losses':d['byte_losses_vs_independent'],'read_debts':d['read_debts'],'operation_debts':d['open_plus_read_debts'],'wins':d['strict_wins_vs_independent'],'fingerprint':d['corpus_fingerprint'],'rows':{k:{'di':v['dictionary_delta_vs_independent_bytes'],'de':v['dictionary_delta_vs_extension_bytes'],'dc':v['dictionary_delta_vs_current_bytes'],'read_debt':v['dictionary_read_debt'],'operation_debt':v['dictionary_operation_debt'],'dict':v['variants']['dictionary']['dictionary_charge']} for k,v in d['rows'].items()}},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-pathdict-${{ steps.receipt.outputs.short || 'nosummary' }}-loss${{ steps.receipt.outputs.loss }}-read${{ steps.receipt.outputs.read }}-op${{ steps.receipt.outputs.op }}-inv${{ steps.receipt.outputs.inv }}-win${{ steps.receipt.outputs.wins }}-fp${{ steps.receipt.outputs.fp }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-pathblind-dict.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only; never rewrites frozen Genesis or the canonical Builder.

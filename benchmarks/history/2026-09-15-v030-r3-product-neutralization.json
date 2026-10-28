@@ -1,0 +1,75 @@
+{
+  "schema": "cmpct-v030-r3-product-neutralization-durable-v1",
+  "source_commit": "92e3269f466e48f35b49cd622be417f19643fa68",
+  "source_workflow_run": 34950951684,
+  "source_artifact_id": 10391702077,
+  "source_record_schema": "cmpct-v030-discovery-r3-product-ab-v1",
+  "frozen_prereg": "docs/v030-rnd/R25_DISCOVERY_SOURCE_GENERIC_R3_BUILDER_PREREG.md",
+  "scope": "research/product-neutralization evidence; not release authority",
+  "decision": "PROMOTE_R3_PRODUCT_NEUTRALIZATION",
+  "totals": {
+    "workloads": 15,
+    "byte_identical_rows": 15,
+    "runtime_targets": 3,
+    "material_runtime_regressions": 0,
+    "runtime_regression_rows": [],
+    "max_selected_member_read_amplification": 7.684560232628689
+  },
+  "timing_regression_rule": {
+    "relative": 0.05,
+    "absolute_s": 0.003,
+    "material_only_if_both_exceeded": true,
+    "authority": "docs/PERFORMANCE_RELEASE_GATE.md"
+  },
+  "runtime_targets": [
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "05_logs_and_telemetry",
+      "baseline_wall_median_s": 101.60290734549994,
+      "candidate_wall_median_s": 97.68257951199996,
+      "wall_delta_s": -3.9203278334999823,
+      "wall_ratio": 0.9614152002543693,
+      "material_runtime_regression": false,
+      "baseline_attempt5_child_median_s": 67.142721532,
+      "candidate_attempt5_child_median_s": 65.06459843449989,
+      "attempt5_child_ratio": 0.9690491679502493
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "09_ml_artifacts",
+      "baseline_wall_median_s": 48.13719026799993,
+      "candidate_wall_median_s": 48.69550109950001,
+      "wall_delta_s": 0.55831083150008,
+      "wall_ratio": 1.0115983261256365,
+      "material_runtime_regression": false,
+      "baseline_attempt5_child_median_s": 26.833114875500087,
+      "candidate_attempt5_child_median_s": 25.97416882999994,
+      "attempt5_child_ratio": 0.9679893277584256
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "baseline_wall_median_s": 56.39981329249986,
+      "candidate_wall_median_s": 45.51511562399992,
+      "wall_delta_s": -10.884697668499939,
+      "wall_ratio": 0.8070082677038329,
+      "material_runtime_regression": false,
+      "baseline_attempt5_child_median_s": 50.634659393500215,
+      "candidate_attempt5_child_median_s": 39.7556094654999,
+      "attempt5_child_ratio": 0.785146181325023
+    }
+  ],
+  "workflow_outcome": {
+    "scientific_steps_green": true,
+    "builder_decision_law_green": true,
+    "workflow_conclusion": "failure",
+    "failure_class": "infrastructure/evidence-topology false negative",
+    "failure_detail": "The final CI topology step called deleted tools/ci_topology_selfcheck.py after the full product A/B and frozen decision-law assertions had passed. Commit 1b97f0c3db86271dfdd5c7e12f339fbec46c0b1e repairs the workflow to use tools/check_ci_topology.py."
+  },
+  "release_credit": false,
+  "notes": [
+    "All 15 rows were byte-identical between the baseline and candidate neutralization paths.",
+    "The ML whole-process median moved +1.16%, below the frozen material-regression rule, while its attempt-5 child median improved by about 3.20%.",
+    "This record preserves the measured result even though the source workflow's final infrastructure-only step failed. Exact-head release receipts remain separately required."
+  ]
+}

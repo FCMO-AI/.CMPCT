@@ -1,0 +1,257 @@
+{
+  "schema": "cmpct-zip-parity-v1",
+  "repetitions": 3,
+  "timing_statistic": "median",
+  "cache_semantics": "warm/ordinary filesystem cache; no cache dropping between repetitions",
+  "integrity_semantics": {
+    "cmpct": "normal reader/extractor integrity checks",
+    "zip": "Python zipfile normal CRC behavior"
+  },
+  "filesystem_semantic_mismatch": "CMPCT preserves links/sparse/uid-gid/xattrs in the archive; this Python ZIP baseline dereferences symlinks and does not preserve the richer filesystem semantics.",
+  "corpus_semantics": "external immutable corpus shared by base/candidate",
+  "corpora": {
+    "tiny": {
+      "logical_bytes": 1291090,
+      "library": {
+        "cmpct": {
+          "bytes": 151677,
+          "create_s_median": 0.15906798500000002,
+          "extract_s_median": 0.2171031845
+        },
+        "zip": {
+          "bytes": 674152,
+          "create_s_median": 0.26885523899999997,
+          "extract_s_median": 0.36436297500000003
+        }
+      },
+      "cli": {
+        "cmpct": {
+          "bytes": 151677,
+          "create_s_median": 0.267120907,
+          "extract_s_median": 0.28508808249999995
+        },
+        "zip": {
+          "bytes": 674152,
+          "create_s_median": 0.482644862,
+          "extract_s_median": 0.401682895
+        }
+      }
+    },
+    "source": {
+      "logical_bytes": 97380,
+      "library": {
+        "cmpct": {
+          "bytes": 9094,
+          "create_s_median": 0.0322963615,
+          "extract_s_median": 0.0334453475
+        },
+        "zip": {
+          "bytes": 140409,
+          "create_s_median": 0.0492819985,
+          "extract_s_median": 0.060985
+        }
+      },
+      "cli": {
+        "cmpct": {
+          "bytes": 9094,
+          "create_s_median": 0.108831612,
+          "extract_s_median": 0.10151381300000001
+        },
+        "zip": {
+          "bytes": 140409,
+          "create_s_median": 0.11765244899999999,
+          "extract_s_median": 0.096054844
+        }
+      }
+    },
+    "media": {
+      "logical_bytes": 4931984,
+      "library": {
+        "cmpct": {
+          "bytes": 4224917,
+          "create_s_median": 0.0384063385,
+          "extract_s_median": 0.0044531865
+        },
+        "zip": {
+          "bytes": 4230623,
+          "create_s_median": 0.102554151,
+          "extract_s_median": 0.007535769
+        }
+      },
+      "cli": {
+        "cmpct": {
+          "bytes": 4224917,
+          "create_s_median": 0.191243659,
+          "extract_s_median": 0.073685151
+        },
+        "zip": {
+          "bytes": 4230623,
+          "create_s_median": 0.14039201499999998,
+          "extract_s_median": 0.041924920000000004
+        }
+      }
+    },
+    "binary": {
+      "logical_bytes": 50331648,
+      "library": {
+        "cmpct": {
+          "bytes": 16793303,
+          "create_s_median": 0.161950461,
+          "extract_s_median": 0.052641110000000005
+        },
+        "zip": {
+          "bytes": 16880276,
+          "create_s_median": 0.5647560604999999,
+          "extract_s_median": 0.055316586
+        }
+      },
+      "cli": {
+        "cmpct": {
+          "bytes": 16793303,
+          "create_s_median": 0.2698288305,
+          "extract_s_median": 0.13237616000000002
+        },
+        "zip": {
+          "bytes": 16880276,
+          "create_s_median": 0.6016960179999999,
+          "extract_s_median": 0.09455788600000001
+        }
+      }
+    },
+    "dedup_links": {
+      "logical_bytes": 27262976,
+      "library": {
+        "cmpct": {
+          "bytes": 1373,
+          "create_s_median": 0.0389423265,
+          "extract_s_median": 0.008924362
+        },
+        "zip": {
+          "bytes": 86991,
+          "create_s_median": 0.1531966845,
+          "extract_s_median": 0.027879227
+        }
+      },
+      "cli": {
+        "cmpct": {
+          "bytes": 1373,
+          "create_s_median": 0.110826098,
+          "extract_s_median": 0.0777536385
+        },
+        "zip": {
+          "bytes": 86991,
+          "create_s_median": 0.1828215285,
+          "extract_s_median": 0.0669976095
+        }
+      }
+    },
+    "sparse": {
+      "logical_bytes": 134217728,
+      "library": {
+        "cmpct": {
+          "bytes": 4196500,
+          "create_s_median": 0.100976661,
+          "extract_s_median": 0.0028889855
+        },
+        "zip": {
+          "bytes": 4327446,
+          "create_s_median": 0.8201520965,
+          "extract_s_median": 0.3550813065
+        }
+      },
+      "cli": {
+        "cmpct": {
+          "bytes": 4196500,
+          "create_s_median": 0.18260767649999998,
+          "extract_s_median": 0.071616827
+        },
+        "zip": {
+          "bytes": 4327446,
+          "create_s_median": 0.8111789035,
+          "extract_s_median": 0.403739655
+        }
+      }
+    },
+    "nested": {
+      "logical_bytes": 845291,
+      "library": {
+        "cmpct": {
+          "bytes": 797604,
+          "create_s_median": 0.011060608,
+          "extract_s_median": 0.001741212
+        },
+        "zip": {
+          "bytes": 808362,
+          "create_s_median": 0.019830733,
+          "extract_s_median": 0.0029789085000000003
+        }
+      },
+      "cli": {
+        "cmpct": {
+          "bytes": 797604,
+          "create_s_median": 0.085804375,
+          "extract_s_median": 0.069580647
+        },
+        "zip": {
+          "bytes": 808362,
+          "create_s_median": 0.052277469,
+          "extract_s_median": 0.035809714500000006
+        }
+      }
+    },
+    "combined": {
+      "logical_bytes": 84760369,
+      "library": {
+        "cmpct": {
+          "bytes": 21974962,
+          "create_s_median": 0.4084521565,
+          "extract_s_median": 0.325017581
+        },
+        "zip": {
+          "bytes": 22862111,
+          "create_s_median": 1.159686828,
+          "extract_s_median": 0.5246950305
+        }
+      },
+      "cli": {
+        "cmpct": {
+          "bytes": 21974962,
+          "create_s_median": 0.677633162,
+          "extract_s_median": 0.40745247250000005
+        },
+        "zip": {
+          "bytes": 22862111,
+          "create_s_median": 1.2220644815,
+          "extract_s_median": 0.568843136
+        }
+      }
+    }
+  },
+  "aggregate_runs": 2,
+  "aggregate_statistic": "median of per-run medians",
+  "source_repetitions_per_run": [
+    3,
+    3
+  ],
+  "project_version": "0.28.0",
+  "source_commit": "95eade37a9f573590862242b25cf94a32194c564",
+  "date": "2026-08-17",
+  "record_kind": "release_candidate_regression_evidence",
+  "harness": "benchmarks/zip_parity_bench.py",
+  "release_design": "ABBA; median of two 3-repetition run medians per engine",
+  "format_revision": 24,
+  "comparison_base_commit": "aca8d8c7571a02a1418ebc095b28861b379f0833",
+  "corpus_manifest": {
+    "tree_sha256": "b0cc877945eb66602e9ac5e3d7626d3935462aed616ac6011de1afd57858688f",
+    "files": 7713,
+    "logical_bytes": 303738466,
+    "fixed_mtime_ns": 1767225600000000000
+  },
+  "environment": {
+    "python": "3.11.15",
+    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "cpu_count": 4,
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "zstd": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***"
+  }
+}

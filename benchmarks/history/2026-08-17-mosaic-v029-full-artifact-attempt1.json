@@ -1,0 +1,80 @@
+{
+  "schema": "cmpct-mosaic-v029-full-artifact-attempt1-summary-v1",
+  "date": "2026-08-17",
+  "source_commit": "24187acd739d62988e01c086078a58bd4c007d65",
+  "workflow_run": 31983309529,
+  "artifact": {
+    "id": 9273013398,
+    "sha256": "82d415ac29be6897fd459101e7f19be14c241f03a85b333abf5a5678f35535d0"
+  },
+  "accepted": false,
+  "frozen_gate": {
+    "v2_smaller_than_v028_pct_gt": 2.0,
+    "combined_smaller_than_v028_pct_gt": 3.0,
+    "v2_workloads_improved_gte": 4,
+    "combined_mosaic_selected_gte": 5,
+    "workloads_regressed_eq": 0,
+    "max_descriptor_read_amplification_lte": 8.0
+  },
+  "failure_reason": "v2 size improvement and workload-selection coverage missed the preregistered gate; combined size and no-regression requirements passed",
+  "claim_boundary": "complete research artifacts versus complete v0.28 portfolio artifacts; canonical revision 24 unchanged",
+  "v1_totals": {
+    "v028_bytes": 6240113,
+    "candidate_bytes": 5911835,
+    "smaller_than_v028_pct": 5.260770117464219,
+    "workloads": 8,
+    "workloads_improved": 3,
+    "workloads_regressed": 0,
+    "mosaic_selected": 3,
+    "mosaic_nodes": 3,
+    "max_mosaic_read_amplification": 4.000457763671875,
+    "portfolio_create_s": 16.590437732999987
+  },
+  "v2_totals": {
+    "v028_bytes": 8589119,
+    "candidate_bytes": 8428504,
+    "smaller_than_v028_pct": 1.8699822414848368,
+    "workloads": 10,
+    "workloads_improved": 1,
+    "workloads_regressed": 0,
+    "mosaic_selected": 1,
+    "mosaic_nodes": 1,
+    "max_mosaic_read_amplification": 2.0198333740234373,
+    "portfolio_create_s": 24.913218247000003
+  },
+  "combined": {
+    "v028_bytes": 14829232,
+    "candidate_bytes": 14340339,
+    "smaller_than_v028_pct": 3.296819417215942,
+    "workloads": 18,
+    "workloads_improved": 4,
+    "workloads_regressed": 0,
+    "mosaic_selected": 4,
+    "mosaic_nodes": 4,
+    "max_mosaic_read_amplification": 4.000457763671875
+  },
+  "rows": {
+    "v1": [
+      {"name":"01_two_parent_branch_merge","selected":"mosaic","v028_bytes":656918,"mosaic_graph_bytes":526077,"candidate_bytes":526077,"saving_vs_v028_bytes":130841,"saving_vs_v028_pct":19.91740217196058,"mosaic_nodes":1,"single_delta_nodes":0,"mosaic_auditions":1,"pack_read_amplification":2.0,"max_mosaic_read_amplification":2.0012054443359375},
+      {"name":"02_four_way_cherry_pick","selected":"mosaic","v028_bytes":1246940,"mosaic_graph_bytes":1050541,"candidate_bytes":1050541,"saving_vs_v028_bytes":196399,"saving_vs_v028_pct":15.750477168107526,"mosaic_nodes":1,"single_delta_nodes":0,"mosaic_auditions":1,"pack_read_amplification":2.0,"max_mosaic_read_amplification":4.000457763671875},
+      {"name":"03_reordered_two_parent_merge","selected":"v028-fallback","v028_bytes":493384,"mosaic_graph_bytes":493474,"candidate_bytes":493384,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":1,"mosaic_auditions":0,"pack_read_amplification":2.0,"max_mosaic_read_amplification":0.0},
+      {"name":"04_source_tree_merge","selected":"mosaic","v028_bytes":5915,"mosaic_graph_bytes":4877,"candidate_bytes":4877,"saving_vs_v028_bytes":1038,"saving_vs_v028_pct":17.548605240912934,"mosaic_nodes":1,"single_delta_nodes":0,"mosaic_auditions":1,"pack_read_amplification":2.0,"max_mosaic_read_amplification":2.0010870270002252},
+      {"name":"05_single_parent_control","selected":"v028-fallback","v028_bytes":1050647,"mosaic_graph_bytes":1050737,"candidate_bytes":1050647,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":1,"mosaic_auditions":0,"pack_read_amplification":2.0,"max_mosaic_read_amplification":0.0},
+      {"name":"06_false_mosaic_sources","selected":"v028-fallback","v028_bytes":1271614,"mosaic_graph_bytes":1272534,"candidate_bytes":1271614,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":0,"mosaic_auditions":0,"pack_read_amplification":1.8,"max_mosaic_read_amplification":0.0},
+      {"name":"07_incompressible_control","selected":"v028-fallback","v028_bytes":1311515,"mosaic_graph_bytes":1312481,"candidate_bytes":1311515,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":0,"mosaic_auditions":0,"pack_read_amplification":1.8,"max_mosaic_read_amplification":0.0},
+      {"name":"08_duplicate_root_pressure","selected":"v028-fallback","v028_bytes":203180,"mosaic_graph_bytes":203270,"candidate_bytes":203180,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":12,"mosaic_auditions":0,"pack_read_amplification":1.0,"max_mosaic_read_amplification":0.0}
+    ],
+    "v2": [
+      {"name":"01_noisy_two_parent_merge","selected":"mosaic","v028_bytes":823844,"mosaic_graph_bytes":663229,"candidate_bytes":663229,"saving_vs_v028_bytes":160615,"saving_vs_v028_pct":19.495802603405497,"mosaic_nodes":1,"single_delta_nodes":0,"mosaic_auditions":1,"pack_read_amplification":1.0,"max_mosaic_read_amplification":2.0198333740234373},
+      {"name":"02_shifted_reordered_merge","selected":"v028-fallback","v028_bytes":502014,"mosaic_graph_bytes":502104,"candidate_bytes":502014,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":0,"mosaic_auditions":0,"pack_read_amplification":3.0,"max_mosaic_read_amplification":0.0},
+      {"name":"03_record_store_conflict_merge","selected":"v028-fallback","v028_bytes":552652,"mosaic_graph_bytes":552742,"candidate_bytes":552652,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":1,"mosaic_auditions":0,"pack_read_amplification":2.0,"max_mosaic_read_amplification":0.0},
+      {"name":"04_source_like_merge","selected":"v028-fallback","v028_bytes":9488,"mosaic_graph_bytes":9570,"candidate_bytes":9488,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":0,"mosaic_auditions":0,"pack_read_amplification":3.0,"max_mosaic_read_amplification":0.0},
+      {"name":"05_compressed_stream_avalan","selected":"v028-fallback","v028_bytes":531664,"mosaic_graph_bytes":531756,"candidate_bytes":531664,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":12,"mosaic_auditions":0,"pack_read_amplification":1.3347386043389888,"max_mosaic_read_amplification":0.0},
+      {"name":"06_single_parent_noisy_control","selected":"v028-fallback","v028_bytes":1316776,"mosaic_graph_bytes":1316866,"candidate_bytes":1316776,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":1,"mosaic_auditions":0,"pack_read_amplification":1.0,"max_mosaic_read_amplification":0.0},
+      {"name":"07_false_neighbors_control","selected":"v028-fallback","v028_bytes":1537677,"mosaic_graph_bytes":1538955,"candidate_bytes":1537677,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":0,"mosaic_auditions":0,"pack_read_amplification":1.0,"max_mosaic_read_amplification":0.0},
+      {"name":"08_incompressible_control","selected":"v028-fallback","v028_bytes":1639193,"mosaic_graph_bytes":1640163,"candidate_bytes":1639193,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":0,"mosaic_auditions":0,"pack_read_amplification":1.0,"max_mosaic_read_amplification":0.0},
+      {"name":"09_root_diversity_pressure","selected":"v028-fallback","v028_bytes":1671174,"mosaic_graph_bytes":1671270,"candidate_bytes":1671174,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":0,"mosaic_auditions":0,"pack_read_amplification":4.567292066775003,"max_mosaic_read_amplification":0.0},
+      {"name":"10_small_metadata_control","selected":"v028-fallback","v028_bytes":4637,"mosaic_graph_bytes":6252,"candidate_bytes":4637,"saving_vs_v028_bytes":0,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"single_delta_nodes":1,"mosaic_auditions":0,"pack_read_amplification":2.0,"max_mosaic_read_amplification":0.0}
+    ]
+  }
+}

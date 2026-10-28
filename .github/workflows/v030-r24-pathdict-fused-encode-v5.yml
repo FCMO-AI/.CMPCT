@@ -1,0 +1,86 @@
+name: CMPCT v0.30 pathdict fused-encode rehabilitation v5
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_r24_pathdict_fused_encode_referee.py
+      - benchmarks/v030_r24_pathdict_fused_encode_referee_v2.py
+      - benchmarks/v030_r24_pathdict_fused_encode_referee_v3.py
+      - benchmarks/v030_r24_pathdict_fused_encode_referee_v4.py
+      - benchmarks/v030_r24_pathdict_fused_encode_referee_v5.py
+      - benchmarks/v030_r24_pathblind_dictionary_referee.py
+      - benchmarks/v030_r24_micropack_same_grammar_attribution.py
+      - benchmarks/v030_r24_micropack_current15_transfer.py
+      - benchmarks/v030_current15_stable_corpus.py
+      - benchmarks/neutral_hostile_corpus_v1.py
+      - benchmarks/resemblance_hostile_corpus_v1.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-pathdict-fused-encode-v5.yml
+
+permissions:
+  contents: read
+
+jobs:
+  fused-encode-v5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 1}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Compile referee
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r24_pathdict_fused_encode_referee.py \
+            benchmarks/v030_r24_pathdict_fused_encode_referee_v2.py \
+            benchmarks/v030_r24_pathdict_fused_encode_referee_v3.py \
+            benchmarks/v030_r24_pathdict_fused_encode_referee_v4.py \
+            benchmarks/v030_r24_pathdict_fused_encode_referee_v5.py
+      - name: Execute dictionary-determinism attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r24_pathdict_fused_encode_referee_v5 \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pathdict-fused-v5-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pathdict-fused-v5.json"
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-pathdict-fused-v5.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-pathdict-fused-encode-v1'
+          assert d['release_credit'] is False and d['canonical_builder_changed'] is False and d['genesis_rescore'] is False
+          assert d['verdict'] in {'FUSED_ENCODE_INVALID','FUSED_ENCODE_HELPS_BUT_CREATION_DEBT_REMAINS','FUSED_ENCODE_CLOSES_CREATION_DEBT'}
+          bad=d['identity_failures']
+          trainer_rows={k:{'identity_pass':v['identity_pass'],'trainer':v['trainer_attribution']} for k,v in d['rows'].items()}
+          print(json.dumps({'verdict':d['verdict'],'identity_failures':bad,'remaining_cpu':d['remaining_cpu_debts'],'remaining_wall':d['remaining_wall_debts'],'aggregate':d['aggregate'],'trainer_rows':trainer_rows},sort_keys=True))
+          short='invalid' if bad else ('closes' if d['verdict']=='FUSED_ENCODE_CLOSES_CREATION_DEBT' else 'helps')
+          diff=sum(1 for v in d['rows'].values() if not v['trainer_attribution']['dictionary_exact'])
+          smdiff=sum(1 for v in d['rows'].values() if not v['trainer_attribution']['sample_manifest_exact'])
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+            fh.write(f'short={short}\n')
+            fh.write(f'id={len(bad)}\n')
+            fh.write(f'dictdiff={diff}\n')
+            fh.write(f'samplediff={smdiff}\n')
+            fh.write(f'fp={d["corpus_fingerprint"][:10]}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-pathdict-fused-v5-${{ steps.receipt.outputs.short || 'nosummary' }}-id${{ steps.receipt.outputs.id }}-dictdiff${{ steps.receipt.outputs.dictdiff }}-samplediff${{ steps.receipt.outputs.samplediff }}-fp${{ steps.receipt.outputs.fp }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-pathdict-fused-v5.json
+          if-no-files-found: error
+          retention-days: 90

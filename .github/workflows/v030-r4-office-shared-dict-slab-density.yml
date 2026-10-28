@@ -1,0 +1,95 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 Office shared-context slab density
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_shared_dict_slab_density.py'
+      - '.github/workflows/v030-r4-office-shared-dict-slab-density.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-office-dict8-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_office_shared_dict_slab_density\.py|\.github/workflows/v030-r4-office-shared-dict-slab-density\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  dict-density:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - run: python -m py_compile benchmarks/v030_r4_office_shared_dict_slab_density.py
+      - name: Run fixed 8KiB shared-context density referee
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_shared_dict_slab_density.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-dict8-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-dict8.json"
+          python - <<'PY'
+          import json, os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-dict8.json'))
+          assert d['schema']=='cmpct-v030-r4-office-shared-dict-slab-density-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          c=d['candidate']; assert c['slab_bytes']==4096 and c['dictionary_budget_bytes']==8192 and c['zstd_level']==3 and c['frame_tax_bytes']==53
+          k=d['contract']; assert k['diagnostic_only'] and not k['release_credit'] and not k['locality_credit'] and k['dictionary_charged_in_archive'] and k['future_reader_must_charge_dictionary_per_cold_read'] and k['no_parameter_sweep']
+          print(json.dumps({'candidate':d['candidate'],'stream_store':d['stream_store'],'economics':d['economics'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-shared-dict-slab-density.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-dict8-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-dict8.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green only means the fixed dictionary-density experiment executed. It grants no locality/release credit.

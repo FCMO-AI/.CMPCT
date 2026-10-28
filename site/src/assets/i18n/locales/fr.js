@@ -1,0 +1,67 @@
+/* CMPCT curated fr adaptation pack — Surface 0.29.i.
+   Footnote: the locale pack assembles two review-sized phrase shards and parameterized UI messages.
+   No runtime translator or fallback synthesis exists here. */
+import { PHRASES as A } from './fr.a.js';
+import { PHRASES as B } from './fr.b.js';
+export const META={
+  "label": "Français",
+  "short": "FR",
+  "htmlLang": "fr",
+  "title": ".CMPCT — la performance fait partie du contrat de chaque version",
+  "description": "CMPCT est un projet d’archive sans perte qui fait progresser ensemble taille, accès, intégrité et récupération, avec des affirmations publiques dérivées de preuves enregistrées."
+};
+export const PHRASES=Object.freeze({...A,...B});
+export const MESSAGES={
+  "files": "{n} fichiers",
+  "file": "{n} fichier",
+  "logical": "{bytes} logiques",
+  "logicalInputFiles": "{bytes} d’entrée logique · {n} fichiers",
+  "smallerThan": "{pct} plus petit que {name}",
+  "largerThan": "{pct} plus grand que {name}",
+  "sameStored": "autant d’octets stockés que {name}",
+  "versus": "vs {name}",
+  "cmpctSmaller": "CMPCT plus petit · octets stockés appariés",
+  "cmpctLarger": "CMPCT plus grand · octets stockés appariés",
+  "sameBytes": "mêmes octets stockés",
+  "unavailableMatched": "octets stockés appariés indisponibles",
+  "currentFrontier": "frontière de recherche actuelle de CMPCT",
+  "categoryScore": "{wins}/{total} plus petits · {losses} plus grands",
+  "noCategory": "preuves par catégorie indisponibles",
+  "noFreshCategory": "Aucune preuve récente par catégorie sur arbres exacts n’est disponible pour cette frontière.",
+  "comparisonUnavailable": "comparaison indisponible",
+  "noQualification": "Aucune réserve de benchmark n’est enregistrée pour cette frontière publique.",
+  "heroIf": "Si {name} stocke 100 Mo dans ce test apparié, CMPCT a besoin d’environ {value} Mo.",
+  "heroNeeds": "CMPCT a actuellement besoin d’environ {value} Mo pour 100 Mo stockés par {name} dans ce test apparié.",
+  "seriousBaseline": "Référence sérieuse de taille : {relation}.",
+  "scopedScheduler": "Résultat borné de l’ordonnanceur : {pct} % de temps réel en moins sur son test fixe.",
+  "canonicalRemains": "Le format canonique reste r{revision}.",
+  "frontierQualification": "{frontier} · {files} fichiers sur l’arbre structurel apparié.{serious}{speed} Le format canonique reste r{revision}.",
+  "fixedSchedulerGate": "test hostile fixe de l’ordonnanceur · pas une affirmation globale de vitesse",
+  "winsAgainst": "{wins}/{total} victoires face à {name}",
+  "noCommittedParity": "Aucun enregistrement de parité versionné",
+  "repetitionsMedian": "médiane de {n}×",
+  "semanticQualification": "Réserve sémantique :",
+  "interpretation": "Interprétation :",
+  "currentProjectRelease": "Version actuelle du projet",
+  "versionedMilestone": "Jalon versionné",
+  "writerVerified": "Encodeur portable vérifié pour le format canonique r{revision}.",
+  "regularSubset": "Sous-ensemble de fichiers ordinaires uniquement ; la sémantique complète du système de fichiers reste du ressort de la CLI.",
+  "writerPaused": "Encodeur du navigateur suspendu après la révision de format {revision}.",
+  "writerRefuses": "Ce build est vérifié pour r{supported} ; il refuse de deviner une grammaire plus récente.",
+  "readyLocally": "Prêt localement",
+  "cliOverLimit": "Utilisez la CLI : limite du navigateur dépassée",
+  "input": "Entrée",
+  "archive": "Archive",
+  "delta": "Écart",
+  "smaller": "{bytes} plus petit",
+  "overhead": "{bytes} de surcharge",
+  "buildingLocally": "Création locale…",
+  "builtOnDevice": "Archive créée sur cet appareil.",
+  "logicalFilesUnique": "{logical} fichiers logiques → {unique} blobs uniques · {deflate} Deflate / {raw} RAW.",
+  "saveCmpct": "Enregistrer .cmpct",
+  "couldNotBuild": "Impossible de créer l’archive.",
+  "fixedMagicError": "La signature fixe ne ressemble pas à CMPCT.",
+  "inspection": "Inspection",
+  "benchmarkUnavailable": "Données de benchmark indisponibles : {error}",
+  "canonicalDataMissing": "Les données canoniques du site n’ont pas été chargées."
+};

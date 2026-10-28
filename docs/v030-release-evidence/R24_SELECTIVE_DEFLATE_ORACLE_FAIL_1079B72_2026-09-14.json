@@ -1,0 +1,55 @@
+{
+  "schema": "cmpct-v030-r24-selective-deflate-oracle-failure-evidence-v1",
+  "source": {
+    "github_run_id": 34811643190,
+    "github_job_id": 103874022869,
+    "artifact_id": 10334688912,
+    "artifact_zip_sha256": "346352ba6808208950c09804cd8784fd71b3467253a2be6a9b9251b9e5cd31db",
+    "candidate_head": "1079b72c36f7dd7afd54db4f15f093af08978f9b",
+    "experiment_commit": "ccb124fb894d4e00cbb308d230e15808eb9de7a1"
+  },
+  "scope": {
+    "evidence_class": "component_oracle_negative",
+    "product_release_credit": false,
+    "corpora": ["neutral_hostile_v1", "resemblance_hostile_v1"],
+    "workloads": 15,
+    "policy_under_test": "64 KiB mature exact-Deflate cutoff plus exact Deflate streams referenced by the largest regular selected S_VZIP member",
+    "control_retain_all_min_bytes": 0,
+    "control_mature_min_bytes": 65536,
+    "maximum_selected_member_read_amplification": 8.0,
+    "fixture_identity_inputs": false
+  },
+  "totals": {
+    "retain_all_bytes": 181109149,
+    "mature_64k_bytes": 181074530,
+    "selective_bytes": 181106946,
+    "accepted_v029_bytes_reference_only": 137499525,
+    "selective_saving_vs_retain_all_bytes": 2203,
+    "selective_locality_failures": 1,
+    "mature_locality_failures": 1,
+    "rows_changed_vs_retain_all": 1
+  },
+  "decisive_rows": [
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "04_deflate_family",
+      "accepted_v029_bytes_reference_only": 14597,
+      "retain_all_bytes": 17776,
+      "retain_all_amplification": 6.968925619834711,
+      "mature_64k_bytes": 15573,
+      "mature_64k_amplification": 13.91404958677686,
+      "selective_bytes": 15573,
+      "selective_amplification": 13.91404958677686,
+      "selective_saving_vs_retain_all_bytes": 2203,
+      "selective_saving_vs_v029_reference_bytes": -976
+    }
+  ],
+  "interpretation": {
+    "decision": "RETIRE_POLICY_AS_TESTED",
+    "result": "FAIL",
+    "causal_result": "Selecting small exact-Deflate streams solely because they are referenced by the largest regular selected S_VZIP member is effectively inert on this frozen 15-workload oracle. Fourteen of fifteen rows are byte-identical to retain-all. The only changed row, deflate_family, collapses to the mature-cutoff artifact, saves 2203 bytes versus retain-all, but violates the <=8x locality contract at 13.914x and remains 976 bytes above the accepted-v0.29 reference.",
+    "scope_warning": "This oracle exercises the r24 fallback component directly. Its 181.1 MB aggregate is not the canonical v0.30 complete-product aggregate and must not be compared as if it were release-product evidence. The accepted-v0.29 numbers are reference context only.",
+    "next_question": "The fallback debt is not explained by ownership of small exact-Deflate streams for one largest member. Future work should target a different causal owner: complete fallback construction/selection semantics, effort allocation, metadata/framing, or a representation boundary with measurable headroom. Do not rescue this policy through workload-specific thresholds.",
+    "anti_goodhart": "No benchmark identity, comparator, success threshold, locality ceiling, or semantic contract was weakened after observing the result."
+  }
+}

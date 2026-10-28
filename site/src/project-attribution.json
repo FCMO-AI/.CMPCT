@@ -1,0 +1,12 @@
+{
+  "schema": "fcmo-open-source-attribution-v1",
+  "project": "CMPCT",
+  "credit": "CMPCT by FCMO AI",
+  "group_credit": "From the FCMO group",
+  "steward": "FCMO AI",
+  "relationship": "open-source project stewardship",
+  "steward_url": "https://github.com/FCMO-AI",
+  "repository": "https://github.com/FCMO-AI/.CMPCT",
+  "policy": "docs/OPEN_SOURCE_STEWARDSHIP.md",
+  "note": "Attribution records provenance only; it does not define benchmark authority, contributor identity, or licensing terms."
+}

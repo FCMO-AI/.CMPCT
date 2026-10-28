@@ -1,0 +1,38 @@
+name: CMPCT v0.29 inherited-frontier generalization v3 (accepted)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-pointer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Verify preserved portable-v3 frontier
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmarks/history/2026-08-17-mosaic-v029-generalization-v3.json')
+          r=json.loads(p.read_text())
+          assert r['schema'] == 'cmpct-v029-generalization-v3-accepted-v1'
+          assert r['decision']['portable_generalization_gate'] == 'PASS'
+          assert r['totals']['v028_bytes'] == 137_550_416
+          assert r['totals']['candidate_bytes'] == 137_501_815
+          assert r['totals']['saving_vs_v028_bytes'] == 48_601
+          assert r['totals']['workloads_improved'] == 2
+          assert r['totals']['workloads_regressed'] == 0
+          assert r['baseline_identity']['baseline_tree_drift_rows'] == 0
+          assert r['baseline_identity']['baseline_byte_drift_rows'] == 0
+          print(json.dumps(r, indent=2))
+          PY
+
+# Footnote: portable v3 already passed its 15-workload measurement, unchanged performance/locality gate,
+# full regressions and public-surface guard on repair-v5. Automatic execution is retired until a new
+# implemented compressor changes candidate bytes; oracle-only research must not repeatedly spend this
+# 15-workload budget while emitting exact attempt-5 artifacts.

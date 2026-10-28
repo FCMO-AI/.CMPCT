@@ -1,0 +1,126 @@
+{
+  "schema": "cmpct-v030-ml-bulk-varint-scope-parent-ab-v2",
+  "release_credit": false,
+  "candidate_sha": "d9146e3c661f71f47c4f38b235c08d3003125a8c",
+  "control_sha": "cab8e8dc21595b8bb342e0b39c18e06c91a16b7b",
+  "pairs": [
+    {
+      "rep": 0,
+      "order": [
+        "control",
+        "product"
+      ],
+      "rows": {
+        "control": {
+          "wall_s": 0.11395828700000266,
+          "cpu_s": 0.11396529899999996,
+          "maxrss_kib": 251416,
+          "inblock_delta": 0,
+          "oublock_delta": 35512,
+          "tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc"
+        },
+        "product": {
+          "wall_s": 0.08725183700001082,
+          "cpu_s": 0.087258641,
+          "maxrss_kib": 251416,
+          "inblock_delta": 0,
+          "oublock_delta": 35512,
+          "tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc"
+        }
+      },
+      "wall_improvement_pct": 23.435285579530703,
+      "cpu_improvement_pct": 23.434026176687322,
+      "maxrss_ratio": 1.0
+    },
+    {
+      "rep": 1,
+      "order": [
+        "product",
+        "control"
+      ],
+      "rows": {
+        "product": {
+          "wall_s": 0.08732766700001093,
+          "cpu_s": 0.08733487300000001,
+          "maxrss_kib": 251416,
+          "inblock_delta": 0,
+          "oublock_delta": 35512,
+          "tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc"
+        },
+        "control": {
+          "wall_s": 0.11414092600000458,
+          "cpu_s": 0.11413939499999999,
+          "maxrss_kib": 251416,
+          "inblock_delta": 0,
+          "oublock_delta": 35512,
+          "tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc"
+        }
+      },
+      "wall_improvement_pct": 23.491362773763175,
+      "cpu_improvement_pct": 23.484023198125403,
+      "maxrss_ratio": 1.0
+    },
+    {
+      "rep": 2,
+      "order": [
+        "control",
+        "product"
+      ],
+      "rows": {
+        "control": {
+          "wall_s": 0.11393482399999755,
+          "cpu_s": 0.113925468,
+          "maxrss_kib": 251416,
+          "inblock_delta": 0,
+          "oublock_delta": 35512,
+          "tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc"
+        },
+        "product": {
+          "wall_s": 0.08701518700000577,
+          "cpu_s": 0.08702180799999999,
+          "maxrss_kib": 251416,
+          "inblock_delta": 0,
+          "oublock_delta": 35512,
+          "tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc"
+        }
+      },
+      "wall_improvement_pct": 23.62722480704614,
+      "cpu_improvement_pct": 23.615141085046947,
+      "maxrss_ratio": 1.0
+    },
+    {
+      "rep": 3,
+      "order": [
+        "product",
+        "control"
+      ],
+      "rows": {
+        "product": {
+          "wall_s": 0.08764049799999896,
+          "cpu_s": 0.08764771699999999,
+          "maxrss_kib": 251416,
+          "inblock_delta": 0,
+          "oublock_delta": 35512,
+          "tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc"
+        },
+        "control": {
+          "wall_s": 0.11368163299999878,
+          "cpu_s": 0.113661452,
+          "maxrss_kib": 251416,
+          "inblock_delta": 0,
+          "oublock_delta": 35512,
+          "tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc"
+        }
+      },
+      "wall_improvement_pct": 22.907073300046722,
+      "cpu_improvement_pct": 22.887033855594254,
+      "maxrss_ratio": 1.0
+    }
+  ],
+  "median_wall_improvement_pct": 23.46332417664694,
+  "median_cpu_improvement_pct": 23.459024687406362,
+  "median_maxrss_ratio": 1.0,
+  "required_relative_improvement_for_median_1_10": 7.4722,
+  "decision": "advance",
+  "claim_boundary": "scoped candidate release product versus current exact authoritative parent; same archive/tree semantics; fresh-process ru_maxrss and block IO recorded; release authority unpaid"
+}

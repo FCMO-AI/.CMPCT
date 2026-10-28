@@ -1,0 +1,118 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 correlated content ZIP admission
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_content_zip_correlation_gate.py'
+      - 'experiments/v030_r4_content_zip_builder.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/codec.py'
+      - '.github/workflows/v030-r4-content-zip-correlation-gate.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_content_zip_correlation_gate.py'
+      - 'experiments/v030_r4_content_zip_builder.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/codec.py'
+      - '.github/workflows/v030-r4-content-zip-correlation-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r4-content-zip-correlation-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_content_zip_correlation_gate\.py|experiments/v030_r4_content_zip_builder\.py|benchmarks/(neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v[^/]*)\.py|src/cmpct/(builder|reader|codec)\.py|\.github/workflows/v030-r4-content-zip-correlation-gate\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  correlation-gate:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_r4_content_zip_correlation_gate.py experiments/v030_r4_content_zip_builder.py
+      - name: Measure correlation-gated 15-workload matrix
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_content_zip_correlation_gate.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-content-zip-correlation-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-content-zip-correlation.json"
+      - name: Enforce evidence contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-content-zip-correlation.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-content-zip-correlation-gate-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert len(d['rows'])==15 and d['totals']['workloads']==15
+          assert d['hypothesis']['all_gated_trees_exact']
+          c=d['contract']; assert c['diagnostic_only'] and c['release_credit'] is False
+          assert c['shipping_builder_changed'] is False and c['format_changed'] is False and c['reader_changed'] is False
+          assert c['crc_size_is_hint_not_proof'] and c['exact_recipe_and_tree_proof_retained']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r4-content-zip-correlation-gate.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-content-zip-correlation-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-content-zip-correlation.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only economic-admission falsifier. Green means receipt integrity, not promotion.

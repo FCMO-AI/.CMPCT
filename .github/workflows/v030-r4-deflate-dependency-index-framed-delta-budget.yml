@@ -1,0 +1,110 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 corrected-delta page dependency-index budget
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_deflate_dependency_index_budget.py'
+      - 'benchmarks/v030_r4_deflate_dependency_index_framed_budget.py'
+      - 'benchmarks/v030_r4_deflate_dependency_index_framed_delta_budget.py'
+      - '.github/workflows/v030-r4-deflate-dependency-index-framed-delta-budget.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-depframe-delta-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_deflate_dependency_index(_framed(_delta)?)?_budget\.py|\.github/workflows/v030-r4-deflate-dependency-index-framed-delta-budget\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  corrected-delta-page-index-budget:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile control
+        run: |
+          python -m py_compile benchmarks/v030_r4_deflate_dependency_index_budget.py
+          python -m py_compile benchmarks/v030_r4_deflate_dependency_index_framed_budget.py
+          python -m py_compile benchmarks/v030_r4_deflate_dependency_index_framed_delta_budget.py
+      - name: Price corrected-delta page dependency index
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_deflate_dependency_index_framed_delta_budget.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-depframe-delta-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-depframe-delta.json"
+          python - <<'PY'
+          import json, os
+          d=json.load(open('benchmark-artifacts/v030-r4-depframe-delta.json'))
+          assert d['schema']=='cmpct-v030-r4-deflate-dependency-index-framed-delta-budget-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          c=d['contract']
+          assert c['diagnostic_only'] and not c['release_credit']
+          assert c['no_threshold_sweep'] and c['no_page_size_sweep'] and c['no_codec_sweep']
+          assert c['frame_auth_bytes_charged']==32 and c['directory_record_bytes_charged']==16
+          assert c['causal_control'].startswith('only token-start coding differs')
+          print(json.dumps({'framed_index':d['framed_index'],'economics':d['economics'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-deflate-dependency-index-framed-delta-budget.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-dependency-index-framed-delta-budget-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-depframe-delta.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green means receipt integrity only; scientific support/falsification lives in the JSON hypothesis.

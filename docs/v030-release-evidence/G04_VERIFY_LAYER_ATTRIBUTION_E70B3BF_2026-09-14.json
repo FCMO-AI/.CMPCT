@@ -1,0 +1,58 @@
+{
+  "schema": "cmpct-v030-research-evidence-v1",
+  "recorded_date": "2026-09-14",
+  "status": "PASS",
+  "evidence_class": "research-oracle",
+  "product_release_credit": false,
+  "claim": "On neutral_hostile_v1/09_ml_artifacts, the promoted streamed G04 policy verifier owns nearly all canonical strong-verification wall time; the canonical manifest/member wrapper is not the dominant runtime owner.",
+  "source": {
+    "repository": "FCMO-AI/.CMPCT",
+    "branch": "agent/v030-authoritative-integration",
+    "experiment_head_sha": "e70b3bfa0d91e021057ac5653b1ca33aaa5f61e2",
+    "workflow_run_id": 34832203895,
+    "workflow_job_id": 103937883076,
+    "artifact_id": 10343065550,
+    "artifact_name": "v030-g04-verify-layer-e70b3bfa0d91e021057ac5653b1ca33aaa5f61e2",
+    "artifact_sha256": "c790680d20e6a1070a35aa9a6f75b23274e0ebd3aca540b33199ca476db3b0ab",
+    "engine": "v030-g04-verify-layer-attribution-v1"
+  },
+  "contract": {
+    "suite": "neutral_hostile_v1",
+    "workload": "09_ml_artifacts",
+    "fresh_process_per_sample": true,
+    "same_archive_all_operations": true,
+    "repetitions_per_operation": 5,
+    "product_code_changed": false,
+    "release_thresholds_changed": false,
+    "v030_selected": "g04-overlay",
+    "accepted_v029_bytes": 13836439,
+    "v030_archive_bytes": 13674815,
+    "historical_substrate_tree_sha256": "efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d",
+    "semantic_user_tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc",
+    "content_graph_tree_sha256": "a26e957c75f07e4c4a90b401844160c115a89e89137ea67344703b4d10d95f50",
+    "content_graph_logical_bytes": 18172821
+  },
+  "measurements": {
+    "policy_verify_median_wall_s": 0.30331990799999176,
+    "policy_verify_min_wall_s": 0.29981058599997823,
+    "policy_verify_max_wall_s": 0.3111350439999967,
+    "canonical_verify_median_wall_s": 0.3073359459999949,
+    "canonical_verify_min_wall_s": 0.3041073279999864,
+    "canonical_verify_max_wall_s": 0.3082157989999814,
+    "canonical_minus_policy_s": 0.004016038000003164,
+    "canonical_over_policy_ratio": 1.013240271719993,
+    "policy_fraction_of_canonical": 0.986932742322295,
+    "canonical_wrapper_fraction_of_canonical": 0.013067257677705002
+  },
+  "decision": {
+    "hypothesis": "The canonical strong_verify wrapper's manifest validation and second per-user-member read is a dominant cause of the measured G04 extraction regression.",
+    "verdict": "FALSIFIED_AS_DOMINANT_OWNER",
+    "reason": "The canonical wrapper added only 4.016 ms median, 1.31% of canonical verification wall time. The promoted streamed policy verifier accounted for 98.69% of canonical verification time on the exact fixed ML G04 archive.",
+    "retire": [
+      "Do not remove or weaken canonical manifest/member verification merely for speed; this experiment shows too little addressable wall-time headroom.",
+      "Do not move the timing boundary around the canonical wrapper to manufacture a runtime pass."
+    ],
+    "next_question": "Within the promoted streamed G04 verifier, which exact costs dominate: physical record decode/inverse transforms, repeated record/node reconstruction caused by bounded caches, hashing/integrity, or metadata/session opening? Attribute these components on the same fixed archive before changing product semantics."
+  },
+  "scope": "This is one-workload research attribution, not product or release evidence. It narrows the causal search for the G04 runtime regression and does not establish general transfer to every G04 archive or PrefixGraph/r24 path."
+}

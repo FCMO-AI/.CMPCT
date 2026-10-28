@@ -1,0 +1,101 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Analytics one SearchLog ablation
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_analytics_searchlog6_ablation_referee.py'
+      - '.github/workflows/v030-analytics-searchlog6-ablation.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_analytics_searchlog6_ablation_referee.py'
+      - '.github/workflows/v030-analytics-searchlog6-ablation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v030-analytics-searchlog6-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_analytics_searchlog6_ablation_referee\.py|\.github/workflows/v030-analytics-searchlog6-ablation\.yml)$' /tmp/files; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  searchlog-ablation:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_analytics_searchlog6_ablation_referee.py
+      - name: Execute single SearchLog-1 ablation
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_analytics_searchlog6_ablation_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-analytics-searchlog6-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-analytics-searchlog6.json"
+      - name: Enforce receipt integrity, not scientific victory
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-analytics-searchlog6.json').read_text())
+          assert d['schema']=='cmpct-v030-analytics-searchlog-minus-one-ablation-v1'
+          assert d['experiment_valid'] is True and d['release_credit'] is False
+          assert d['fixture']['admitted_count']==45
+          assert d['contract']['single_parameter_ablation']=='searchLog-1'
+          assert d['contract']['no_parameter_sweep'] is True
+          assert d['gate']['exact_decode_all_payloads'] is True
+          assert d['verdict'] in {'INTEGRATE_WITH_EARNED_BYTEPLANE4_MARGIN','RETIRE_SEARCHLOG_MINUS_ONE'}
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-analytics-searchlog6-ablation.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-analytics-searchlog6-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-analytics-searchlog6.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only causal ablation. Green means a valid receipt, not a positive result.

@@ -1,0 +1,176 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Shifted joint edit-stream oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_shifted_joint_patch_stream_oracle.py'
+      - 'benchmarks/v030_shifted_joint_edit_capacity_floor.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'experiments/entropygraph_v030_authoritative.py'
+      - 'tests/test_v030_shifted_joint_patch_stream_oracle.py'
+      - '.github/workflows/v030-shifted-joint-edit-stream.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-shifted-joint-edit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_shifted_joint_patch_stream_oracle\.py|benchmarks/v030_shifted_joint_edit_capacity_floor\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|experiments/entropygraph_v030_authoritative\.py|tests/test_v030_shifted_joint_patch_stream_oracle\.py|\.github/workflows/v030-shifted-joint-edit-stream\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect the joint edit-stream oracle.'
+          fi
+
+  joint-edit-oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Static and hostile parser ratchet
+        run: |
+          set -euo pipefail
+          python -m py_compile benchmarks/v030_shifted_joint_patch_stream_oracle.py benchmarks/v030_shifted_joint_edit_capacity_floor.py benchmarks/resemblance_hostile_corpus_v1.py tests/test_v030_shifted_joint_patch_stream_oracle.py
+          python -m pytest -q tests/test_v030_shifted_joint_patch_stream_oracle.py
+      - name: Measure exact semantic capacity first
+        id: capacity
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_shifted_joint_edit_capacity_floor \
+            --work-root "$RUNNER_TEMP/v030-shifted-joint-capacity" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-joint-capacity.json"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-joint-capacity.json').read_text())
+          print('admissible=' + ('true' if d['representation_admissible'] else 'false'))
+          PY
+      - name: Run exact joint edit-stream compression oracle only when admissible
+        if: steps.capacity.outputs.admissible == 'true'
+        run: |
+          set -euo pipefail
+          python -m benchmarks.v030_shifted_joint_patch_stream_oracle \
+            --work-root "$RUNNER_TEMP/v030-shifted-joint-edit" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-joint-edit.json"
+      - name: Enforce capacity or compression evidence boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          c=json.loads(Path('benchmark-artifacts/v030-shifted-joint-capacity.json').read_text())
+          assert c['schema']=='cmpct-v030-shifted-joint-edit-capacity-floor-v1'
+          assert c['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert c['contract']['benchmark_identity_used_in_representation'] is False
+          assert c['contract']['research_only'] is True
+          assert c['contract']['release_credit'] is False
+          assert c['contract']['exact_transform_constructed_once'] is True
+          ca=c['domination_audit']
+          assert ca['diagnosis']=='D4' and ca['radicality']=='R4'
+          assert set(ca['saturation_triggers']) >= {'S2','S3','S4'}
+          assert ca['research_priority_score'] >= 80
+          if not c['representation_admissible']:
+              assert (not c['decode_unit_le_8mib']) or (not c['locality_le_8x'])
+              assert ca['terminal_decision']=='RETIRE_FAMILY'
+              assert not Path('benchmark-artifacts/v030-shifted-joint-edit.json').exists()
+          else:
+              d=json.loads(Path('benchmark-artifacts/v030-shifted-joint-edit.json').read_text())
+              assert d['schema']=='cmpct-v030-shifted-joint-edit-stream-oracle-v1'
+              assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+              assert d['contract']['benchmark_identity_used_in_representation'] is False
+              assert d['contract']['research_only'] is True
+              assert d['contract']['release_credit'] is False
+              assert d['contract']['creation_includes_scan_selection_alignment_edit_build_compression_framing_hash_publication'] is True
+              assert d['contract']['single_joint_transformed_decode_unit'] is True
+              assert len(d['arms'])==6
+              assert all(a['tree_verified'] for a in d['arms'])
+              assert all(a['max_decode_unit_bytes'] <= 8*1024*1024 for a in d['arms'])
+              assert all(a['max_locality_amplification'] <= 8.0 for a in d['arms'])
+              assert all(a['strict']['beats_zip_size'] for a in d['arms'])
+              assert d['summary']['release_credit'] is False
+              a=d['domination_audit']
+              assert a['strict_target']=='15/15 strictly smaller and faster than ZIP/Deflate and solid Zstd-19'
+              assert a['diagnosis']=='D4' and a['radicality']=='R4'
+              assert set(a['saturation_triggers']) >= {'S2','S3','S4'}
+              assert a['research_priority_score'] >= 80
+              assert a['terminal_decision'] in {'PROMOTE_NEXT_PREREQUISITE','RETIRE_FAMILY'}
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-shifted-joint-edit-stream.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact research receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-joint-edit-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-shifted-joint-capacity.json
+            benchmark-artifacts/v030-shifted-joint-edit.json
+          if-no-files-found: error
+          retention-days: 90
+
+# D4/R4 structural falsifier.  Capacity law is checked before compression so an impossible
+# single joint decode unit becomes durable terminal evidence, not an artifact-less crash.
+# A capacity-positive result may proceed to the six-level compression oracle; a capacity miss
+# retires this one-joint-unit family and points toward genuinely segmented relation ownership.
+# No result earns release credit.

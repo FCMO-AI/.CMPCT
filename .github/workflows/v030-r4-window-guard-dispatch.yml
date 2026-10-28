@@ -1,0 +1,79 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 bounded window dispatch referee
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_window_guard_dispatch_referee.py'
+      - '.github/workflows/v030-r4-window-guard-dispatch.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-window-guard-dispatch-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  bounded-window-dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install zstandard
+      - run: python -m py_compile benchmarks/v030_r4_window_guard_dispatch_referee.py
+      - name: Run bounded-window dispatch referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_window_guard_dispatch_referee.py --output benchmark-artifacts/v030-r4-window-guard-dispatch.json
+      - name: Assert receipt integrity, not timing verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-window-guard-dispatch.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['contract']['physical_ranges_and_calls_identical']
+          assert d['contract']['no_archive_sized_compressed_buffer']
+          assert d['contract']['max_live_window_bound_bytes']==32768
+          print(json.dumps({'input':d['input'],'failures':d['failures'],'summary':d['summary'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - name: Persist scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' >/tmp/receipt.md
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-window-guard-dispatch.json'));s=d['summary'];h=d['hypothesis']
+          print('### v0.30 bounded local-window dispatch referee — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- physical identity: `{s['physical_identity_probes']}/{d['input']['probes']}`; bounded windows `{s['bounded_window_probes']}/{d['input']['probes']}`; failures `{d['failures']}`")
+          print(f"- repeated timing: improved probes `{s['timing_improved_probes']}/{d['input']['probes']}`; median window/cached `{s['median_window_vs_cached_wall_ratio']:.3f}x`; mean `{s['mean_window_vs_cached_wall_ratio']:.3f}x`; median window/dense `{s['median_window_vs_dense_wall_ratio']:.3f}x`")
+          print(f"- median recovered dense speedup: `{s['median_dense_speedup_recovered_fraction']:.3f}`; max live compressed window `{s['max_live_window_bytes']} B`")
+          print(f"- causal hypotheses: physical `{h['bounded_window_preserves_physical_semantics']}`; dispatch `{h['bounded_window_removes_material_dispatch_debt']}`; half-dense-recovery `{h['recovers_at_least_half_dense_speedup_median']}`")
+          print('- same 48-bit guard and page-triggered pread ranges/calls; no archive-sized compressed buffer; research only, no promotion credit.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-window-guard-dispatch.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-window-guard-dispatch-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-window-guard-dispatch.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity; JSON owns scientific verdict.

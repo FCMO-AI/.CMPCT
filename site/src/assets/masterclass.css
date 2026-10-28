@@ -1,0 +1,73 @@
+/* CMPCT Surface 0.29.g — rendered visual ratchet.
+   Footnote: this file contains only the changes that survived rendered desktop/mobile inspection after
+   0.29.f. The restored historical composition remains in styles.css/motion.css/cinematic.css; this layer
+   exists so later design work can audit exactly what was added rather than flattening the baseline again. */
+
+/* The evidence field must read as a deliberate celestial object instead of disappearing behind the hero
+   stacking context. The dots stay crisp; the halo is deliberately softer than the typography. */
+.hero { isolation: isolate; }
+.hero::after { z-index: 0; }
+.entropy-sun {
+  z-index: 1;
+  mix-blend-mode: screen;
+  opacity: .98;
+  filter: drop-shadow(0 0 28px rgba(253,82,4,.11)) drop-shadow(0 0 90px rgba(253,82,4,.035));
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  width: min(58vw,900px);
+  aspect-ratio: 1;
+  right: -9%;
+  top: -8%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle,rgba(253,82,4,.035) 0 22%,rgba(253,82,4,.018) 42%,transparent 68%),
+    conic-gradient(from 90deg,transparent,rgba(253,82,4,.018),transparent 33%,rgba(255,255,255,.012),transparent 68%);
+  filter: blur(14px);
+  pointer-events: none;
+}
+.hero-kicker,.hero-grid,.hero-metrics,.hero-proofline { z-index: 3; }
+.hero-score { z-index: 4; }
+.hero-score::selection { background: var(--acid); color: #090909; }
+
+/* The compiler graph becomes a route system: movement follows real relationship edges rather than adding
+   another atmospheric particle layer. This is the visual equivalent of data moving through the archive. */
+.graph-lines path { animation: cmpct-route-flow 9s linear infinite; }
+.graph-lines path:nth-child(2n) { animation-direction: reverse; animation-duration: 12s; }
+.graph-lines path:nth-child(3n) { animation-duration: 7s; }
+.graph-node::after {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  right: -3px;
+  top: 50%;
+  background: currentColor;
+  box-shadow: 0 0 14px currentColor;
+  opacity: .45;
+  transform: translateY(-50%);
+}
+.node-input::after,.node-stream::after { color: var(--hot); }
+.node-index::after { color: var(--acid); }
+@keyframes cmpct-route-flow { to { stroke-dashoffset: -156; } }
+
+/* The light authority chapter intentionally breaks the dark rhythm like a cut in a film. */
+.canonical-band {
+  box-shadow: 0 -1px 0 rgba(255,255,255,.7), 0 45px 130px rgba(0,0,0,.22);
+}
+.canonical-band .canonical-status { box-shadow: 0 28px 90px rgba(73,53,37,.08); }
+
+@media (max-width:1180px) {
+  .hero::before { width:94vw; right:-35%; top:1%; }
+  .entropy-sun { z-index:1; mix-blend-mode:screen; }
+}
+@media (max-width:760px) {
+  .hero::before { width:130vw; right:-75%; top:1%; opacity:.74; }
+  .entropy-sun { z-index:1; mix-blend-mode:screen; opacity:.68; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .graph-lines path { animation:none !important; }
+}

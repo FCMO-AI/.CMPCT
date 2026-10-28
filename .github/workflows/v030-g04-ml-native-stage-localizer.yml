@@ -1,0 +1,90 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 G0-G4 ML native stage localizer
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_g04_ml_native_stage_localizer.py'
+      - 'benchmarks/v030_release_performance*.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'native/cmpct-portable/**'
+      - '.github/workflows/v030-g04-ml-native-stage-localizer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-g04-ml-native-stage-localizer-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  localize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install deterministic ML-corpus dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+          cargo build --manifest-path native/preflate-bridge/Cargo.toml --release
+          cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
+      - name: Compile localizer
+        run: python -m py_compile benchmarks/v030_g04_ml_native_stage_localizer.py
+      - name: Localize metadata and member reconstruction
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_ml_native_stage_localizer.py \
+            --native-cli "$GITHUB_WORKSPACE/native/cmpct-portable/target/release/cmpct-portable" \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-native-stage-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-native-stage.json"
+      - name: Validate research-only result
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-g04-ml-native-stage.json'); d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-native-stage-localizer-v2'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['release_credit'] is False
+          for stage in ('corpus','shipping_build','shipping_strong_verify'):
+              assert float(d['stage_elapsed_s'][stage]) >= 0.0
+          receipt={'schema':'cmpct-v030-g04-ml-native-stage-localizer-receipt-v2','source_commit':os.environ['EVIDENCE_HEAD'],'scientific_data_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'release_credit':False}
+          Path('benchmark-artifacts/v030-g04-ml-native-stage-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-native-stage-localizer.yml
+      - name: Upload localization evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-ml-native-stage-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-g04-ml-native-stage.json
+            benchmark-artifacts/v030-g04-ml-native-stage-receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only: no bytes, grammar, thresholds, or release authority changed.

@@ -1,0 +1,35 @@
+{
+  "schema": "cmpct-v030-derived-attribution-v1",
+  "recorded_date": "2026-09-14",
+  "status": "PASS",
+  "evidence_class": "derived-from-frozen-product-evidence",
+  "product_release_credit": false,
+  "claim": "All six byte-regressing rows in the frozen authoritative generalization failure share the same selection shape: the inner G04/v0.29 tournament retains its v0.29 fallback, then the canonical product publishes a materially larger r24 fallback. The megabyte-scale loss is therefore primarily a fallback-cliff penalty rather than a comparably large gap between the accepted v0.29 floor and the already-built inner artifact.",
+  "source": {
+    "candidate_sha": "a68882e6d37e720849dcb08a0f4b4b89fa8a43d5",
+    "workflow_run_id": 34813378184,
+    "workflow_artifact_id": 10334956762,
+    "downloaded_artifact_sha256": "6ea4941f662b4810cbf251de8abb621b5673a529ba666909a31b731d9c933896",
+    "source_file": "canonical-generalization.json"
+  },
+  "rows": [
+    {"suite":"neutral_hostile_v1","name":"01_developer_repository","accepted_v029_bytes":744337,"inner_g04_tournament_bytes":750552,"inner_gap_vs_v029_bytes":6215,"published_r24_bytes":870448,"fallback_cliff_penalty_vs_inner_bytes":119896,"inner_selected":"v029-fallback","published_selected":"r24-fallback"},
+    {"suite":"neutral_hostile_v1","name":"02_office_workspace","accepted_v029_bytes":5954026,"inner_g04_tournament_bytes":5954336,"inner_gap_vs_v029_bytes":310,"published_r24_bytes":15445458,"fallback_cliff_penalty_vs_inner_bytes":9491122,"inner_selected":"v029-fallback","published_selected":"r24-fallback"},
+    {"suite":"neutral_hostile_v1","name":"04_analytics_and_database","accepted_v029_bytes":6135172,"inner_g04_tournament_bytes":6135340,"inner_gap_vs_v029_bytes":168,"published_r24_bytes":10392494,"fallback_cliff_penalty_vs_inner_bytes":4257154,"inner_selected":"v029-fallback","published_selected":"r24-fallback"},
+    {"suite":"neutral_hostile_v1","name":"07_incompressible_and_encrypted_like","accepted_v029_bytes":10193958,"inner_g04_tournament_bytes":10197924,"inner_gap_vs_v029_bytes":3966,"published_r24_bytes":10218061,"fallback_cliff_penalty_vs_inner_bytes":20137,"inner_selected":"v029-fallback","published_selected":"r24-fallback"},
+    {"suite":"neutral_hostile_v1","name":"08_many_tiny_files","accepted_v029_bytes":420318,"inner_g04_tournament_bytes":443044,"inner_gap_vs_v029_bytes":22726,"published_r24_bytes":721734,"fallback_cliff_penalty_vs_inner_bytes":278690,"inner_selected":"v029-fallback","published_selected":"r24-fallback"},
+    {"suite":"resemblance_hostile_v1","name":"04_deflate_family","accepted_v029_bytes":14597,"inner_g04_tournament_bytes":14832,"inner_gap_vs_v029_bytes":235,"published_r24_bytes":17760,"fallback_cliff_penalty_vs_inner_bytes":2928,"inner_selected":"v029-fallback","published_selected":"r24-fallback"}
+  ],
+  "totals": {
+    "regressing_rows": 6,
+    "inner_gap_vs_accepted_v029_bytes": 33620,
+    "published_gap_vs_accepted_v029_bytes": 14203547,
+    "fallback_cliff_penalty_vs_inner_bytes": 14169927
+  },
+  "adjudication": {
+    "observation": "The already-materialized inner artifacts are collectively only 33.6 KiB above the accepted row floors, while the later fallback step adds 14.17 MiB relative to those inner artifacts.",
+    "inference": "The highest-leverage compression/generalization question is now the exact canonicality/admission/exported-cost boundary that turns a near-floor inner fallback into a much larger canonical r24 publication. Treating the 14 MiB as if it required 14 MiB of new codec savings would be the wrong problem framing.",
+    "not_proven": "This derivation does not prove that the inner v0.29-fallback artifacts are canonical, locality-safe, releasable, or legally publishable under current format law, nor that shaving exactly 33,620 bytes would make all six rows publish r25. The raw G04 overlay bytes, profile identity and outer eligibility conditions must be measured directly before changing selection law.",
+    "next_decisive_measurement": "For the six rows, record staged v0.29 base bytes, raw canonical G04 overlay bytes/profile identity, exact outer r25 eligibility predicates, and locality/semantic status. Quantify the true per-row byte/canonicality bridge required to avoid the fallback cliff without weakening any release rule."
+  }
+}

@@ -1,0 +1,127 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 C25CC01 selector cost model
+
+# The C25CC01 physical family is shipping-retired and exact byte-floor evidence
+# proves its current locality-safe representation cannot beat Zstd-19 even with
+# zero control bytes. Preserve this causal decomposition for manual replay only;
+# a two-hour automatic selector study cannot change that physical impossibility.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-c25cc01-cost-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  selector-cost-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus and comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile structural cost oracle
+        run: |
+          python -m py_compile benchmarks/v030_r24_compact_control_cost_model_oracle.py
+          python -m py_compile benchmarks/v030_r24_compact_control_cost_model_oracle_v2.py
+      - name: Run exact structural cost decomposition
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_compact_control_cost_model_oracle_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-cost-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-cost.json"
+      - name: Require complete causal receipt without converting locality rejection into pass
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-cost.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-structural-cost-model-v1'
+          c=d['contract']; g=d['gate']
+          assert c['selector_change'] is False
+          assert c['release_credit'] is False
+          assert c['benchmark_identity_as_policy_input'] is False
+          assert c['actual_archive_strong_verification_timed'] is True
+          assert c['diagnostic_structure_scan_excluded_from_product_time'] is True
+          assert g['all_four_cases_complete'] is True
+          assert g['structural_fields_deterministic'] is True
+          rows=d['rows']
+          assert set(rows)=={'frozen_encrypted_like','entropy_mosaic_640','entropy_mosaic_1150','entropy_mosaic_1750'}
+          admitted=set()
+          for name,row in rows.items():
+              assert row['physical_blob_records'] >= 1
+              assert row['r24_bytes'] > 0
+              assert row['r24_over_logical_bytes'] == row['r24_bytes'] - row['logical_bytes']
+              if not row['profile_eligible']:
+                  assert row['profile_reject_reason']
+                  assert row['candidate_bytes'] is None
+                  assert row['candidate_to_r24'] is None
+                  assert row['candidate_to_logical'] is None
+                  assert row['candidate_over_logical_bytes'] is None
+                  assert row['candidate_overhead_per_regular_file'] is None
+                  assert row['control_bytes_per_regular_file'] is None
+                  assert row['payload_unchanged'] is False
+                  assert row['two_control_copies'] is False
+                  assert row['phase_samples'] == []
+                  assert row['admitted_by_current_predicate'] is False
+                  assert row['competitors'] is None
+                  continue
+              assert row['profile_reject_reason'] is None
+              assert row['candidate_bytes'] < row['r24_bytes']
+              assert row['compact_control_raw_bytes'] >= row['compact_control_comp_bytes_per_copy']
+              assert row['payload_unchanged'] is True
+              assert row['two_control_copies'] is True
+              assert len(row['phase_samples']) == 5
+              assert row['candidate_to_logical'] == row['candidate_bytes'] / max(1,row['logical_bytes'])
+              assert row['candidate_over_logical_bytes'] == row['candidate_bytes'] - row['logical_bytes']
+              assert isinstance(row['candidate_overhead_per_regular_file'], (int,float))
+              assert isinstance(row['control_bytes_per_regular_file'], (int,float))
+              if row['admitted_by_current_predicate']:
+                  admitted.add(name)
+                  assert row['competitors'] is not None
+                  assert 'strict_four_way_win' in row['competitors']
+          assert set(d['admitted_by_current_predicate']) == admitted
+          derived={name for name in admitted if not rows[name]['competitors']['strict_four_way_win']}
+          assert set(d['current_predicate_counterexamples']) == derived
+          if not admitted:
+              assert g['frozen_target_admitted'] is False
+              assert g['integrity_preserved'] is False
+              assert g['diagnostic_valid'] is False
+          Path('benchmark-artifacts/v030-c25cc01-cost-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-c25cc01-cost-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-c25cc01-cost.json
+            benchmark-artifacts/v030-c25cc01-cost-candidate.txt
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only causal decomposition for a shipping-retired physical family. Release authority is unchanged.

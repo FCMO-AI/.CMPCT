@@ -1,0 +1,106 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 r24 compact control external-normalized
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  external-normalized-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus/compressor dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact evidence surface
+        run: |
+          python -m py_compile benchmarks/v030_r24_compact_control_external_normalized.py
+          python -m py_compile benchmarks/v030_r24_compact_control_oracle.py
+          python -m py_compile benchmarks/v030_r24_compact_control_composition_oracle_v2.py
+          python -m py_compile benchmarks/v030_external_competitors.py
+      - name: Lock external-normalized measurement domain
+        run: pytest -q tests/test_v030_compact_control_external_normalized.py
+      - name: Run exact external-normalized all-15 compact-control shadow
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_compact_control_external_normalized.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-compact-control-extnorm-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-compact-control-extnorm.json"
+      - name: Independently enforce evidence and promotion boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-compact-control-extnorm.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-compact-control-external-normalized-v2'
+          c=d['contract']
+          assert c['workloads']==15
+          assert c['normalization_matches_external_matrix'] is True
+          assert c['tree_domains_separated'] is True
+          assert c['canonical_strong_verification_mandatory'] is True
+          assert c['external_tree_verified_by_independent_extract'] is True
+          assert c['release_credit'] is False
+          assert c['production_selector_change'] is False
+          assert c['format_revision_change'] is False
+          assert c['two_authenticated_control_copies_retained'] is True
+          assert c['physical_payload_records_unchanged'] is True
+          assert len(d['rows'])==15
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['zero_projected_byte_regressions'] is True
+          assert d['gate']['passed'] is True
+          assert d['summary']['regressions']==[]
+          assert all(r['semantic_index_roundtrip_exact'] for r in d['rows'])
+          assert all(r['external_tree_sha256'] for r in d['rows'])
+          assert all(r['canonical_tree_sha256'] for r in d['rows'])
+          assert all(r['two_authenticated_control_copies_retained'] for r in d['rows'])
+          assert all(r['physical_payload_records_unchanged'] for r in d['rows'])
+          assert all(r['selected_projected_bytes']<=r['shipping_r24_bytes'] for r in d['rows'])
+          t=d['target']
+          assert t['rounds']==5
+          assert t['size_and_tree_deterministic'] is True
+          assert t['semantic_index_roundtrip_exact'] is True
+          assert t['two_authenticated_control_copies_retained'] is True
+          assert t['physical_payload_records_unchanged'] is True
+          if d['gate']['promotion_signal']:
+              assert t['projected_bytes'] < t['shipping_r24_bytes']
+              assert t['projected_bytes'] < t['zip_bytes']
+              assert t['projected_bytes'] < t['zstd19_bytes']
+              assert t['median_conservative_create_s'] < t['median_zip_create_s']
+              assert t['median_conservative_create_s'] < t['median_zstd19_create_s']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-external-normalized.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-compact-control-extnorm-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r24-compact-control-extnorm.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Historical zero-credit exact-domain shadow retained for manual reproduction. The compact-control shipping terminal
+# is now explicitly retired; ordinary current external/generalization/final authorities are decisive and should
+# receive the runner capacity previously consumed by this three-hour automatic shadow.

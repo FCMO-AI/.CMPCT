@@ -1,0 +1,67 @@
+/* CMPCT curated de adaptation pack — Surface 0.29.i.
+   Footnote: the locale pack assembles two review-sized phrase shards and parameterized UI messages.
+   No runtime translator or fallback synthesis exists here. */
+import { PHRASES as A } from './de.a.js';
+import { PHRASES as B } from './de.b.js';
+export const META={
+  "label": "Deutsch",
+  "short": "DE",
+  "htmlLang": "de",
+  "title": ".CMPCT — Leistung gehört zum Vertrag jeder Version",
+  "description": "CMPCT ist ein verlustfreies Archivprojekt, das Größe, Zugriff, Integrität und Wiederherstellung gemeinsam vorantreibt; öffentliche Leistungsangaben stammen aus eingecheckter Evidenz."
+};
+export const PHRASES=Object.freeze({...A,...B});
+export const MESSAGES={
+  "files": "{n} Dateien",
+  "file": "{n} Datei",
+  "logical": "{bytes} logisch",
+  "logicalInputFiles": "{bytes} logischer Input · {n} Dateien",
+  "smallerThan": "{pct} kleiner als {name}",
+  "largerThan": "{pct} größer als {name}",
+  "sameStored": "gleich viele gespeicherte Bytes wie {name}",
+  "versus": "vs. {name}",
+  "cmpctSmaller": "CMPCT kleiner · gematchte gespeicherte Bytes",
+  "cmpctLarger": "CMPCT größer · gematchte gespeicherte Bytes",
+  "sameBytes": "gleiche gespeicherte Bytes",
+  "unavailableMatched": "gematchte gespeicherte Bytes nicht verfügbar",
+  "currentFrontier": "aktuelle CMPCT-Forschungsfront",
+  "categoryScore": "{wins}/{total} kleiner · {losses} größer",
+  "noCategory": "Kategorie-Evidenz nicht verfügbar",
+  "noFreshCategory": "Für diese Front ist keine aktuelle Kategorie-Evidenz auf exakten Bäumen verfügbar.",
+  "comparisonUnavailable": "Vergleich nicht verfügbar",
+  "noQualification": "Für diese öffentliche Front ist keine Benchmark-Einschränkung erfasst.",
+  "heroIf": "Wenn {name} in diesem gematchten Test 100 MB speichert, benötigt CMPCT ungefähr {value} MB.",
+  "heroNeeds": "CMPCT benötigt in diesem gematchten Test derzeit ungefähr {value} MB je 100 MB, die {name} speichert.",
+  "seriousBaseline": "Ernstzunehmende Größenreferenz: {relation}.",
+  "scopedScheduler": "Abgegrenztes Scheduler-Ergebnis: {pct}% weniger Wall-Time auf seinem festen Gate.",
+  "canonicalRemains": "Das kanonische Format bleibt r{revision}.",
+  "frontierQualification": "{frontier} · {files} Dateien auf dem gematchten Strukturbaum.{serious}{speed} Das kanonische Format bleibt r{revision}.",
+  "fixedSchedulerGate": "festes feindliches Scheduler-Gate · keine globale Geschwindigkeitsaussage",
+  "winsAgainst": "{wins}/{total} Siege vs. {name}",
+  "noCommittedParity": "Kein eingecheckter Paritätsdatensatz",
+  "repetitionsMedian": "{n}× Median",
+  "semanticQualification": "Semantische Einschränkung:",
+  "interpretation": "Interpretation:",
+  "currentProjectRelease": "Aktuelles Projekt-Release",
+  "versionedMilestone": "Versionierter Meilenstein",
+  "writerVerified": "Portabler Writer für kanonisches Format r{revision} verifiziert.",
+  "regularSubset": "Nur Teilmenge regulärer Dateien; vollständige Dateisystemsemantik bleibt Aufgabe der CLI.",
+  "writerPaused": "Browser-Writer nach Formatrevision {revision} pausiert.",
+  "writerRefuses": "Dieser Build ist für r{supported} verifiziert; er rät keine neuere Grammatik.",
+  "readyLocally": "Lokal bereit",
+  "cliOverLimit": "CLI verwenden: über Browser-Limit",
+  "input": "Eingabe",
+  "archive": "Archiv",
+  "delta": "Delta",
+  "smaller": "{bytes} kleiner",
+  "overhead": "{bytes} Overhead",
+  "buildingLocally": "Wird lokal gebaut…",
+  "builtOnDevice": "Archiv auf diesem Gerät erstellt.",
+  "logicalFilesUnique": "{logical} logische Dateien → {unique} eindeutige Blobs · {deflate} Deflate / {raw} RAW.",
+  "saveCmpct": ".cmpct speichern",
+  "couldNotBuild": "Archiv konnte nicht gebaut werden.",
+  "fixedMagicError": "Die feste Magic-Signatur sieht nicht nach CMPCT aus.",
+  "inspection": "Prüfung",
+  "benchmarkUnavailable": "Benchmark-Daten nicht verfügbar: {error}",
+  "canonicalDataMissing": "Kanonische Seitendaten wurden nicht geladen."
+};

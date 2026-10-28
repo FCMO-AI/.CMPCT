@@ -1,0 +1,89 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 G0-G4 ML cross-member reuse census
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_g04_ml_cross_member_reuse_census.py'
+      - 'benchmarks/v030_release_performance*.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - '.github/workflows/v030-g04-ml-cross-member-reuse-census.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-g04-ml-cross-member-reuse-census-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  reuse-census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install deterministic ML-corpus dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+          cargo build --manifest-path native/preflate-bridge/Cargo.toml --release
+      - name: Compile census instrument
+        run: python -m py_compile benchmarks/v030_g04_ml_cross_member_reuse_census.py
+      - name: Measure exact ML operation-scoped reuse headroom
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_ml_cross_member_reuse_census.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-reuse-census-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-reuse-census.json"
+      - name: Validate research-only receipt
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-g04-ml-reuse-census.json'); d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-cross-member-reuse-census-v1'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['release_credit'] is False
+          for key in ('per_member_node_closure_bytes','operation_unique_node_bytes','cross_member_repeated_node_bytes','per_member_record_decode_bytes','operation_unique_record_decode_bytes','cross_member_repeated_record_decode_bytes'):
+              assert int(d[key]) >= 0
+          assert int(d['per_member_node_closure_bytes']) - int(d['operation_unique_node_bytes']) == int(d['cross_member_repeated_node_bytes'])
+          assert int(d['per_member_record_decode_bytes']) - int(d['operation_unique_record_decode_bytes']) == int(d['cross_member_repeated_record_decode_bytes'])
+          receipt={'schema':'cmpct-v030-g04-ml-cross-member-reuse-census-instrument-v1','source_commit':os.environ['EVIDENCE_HEAD'],'scientific_data_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'release_credit':False}
+          Path('benchmark-artifacts/v030-g04-ml-reuse-census-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-cross-member-reuse-census.yml
+      - name: Upload census evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-ml-cross-member-reuse-census-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-g04-ml-reuse-census.json
+            benchmark-artifacts/v030-g04-ml-reuse-census-receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Static research-only census: no thresholds, no release credit, no product bytes changed.

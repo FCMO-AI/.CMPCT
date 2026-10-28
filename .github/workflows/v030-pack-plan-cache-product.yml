@@ -1,0 +1,80 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 bounded pack-plan cache product
+
+on:
+  push:
+    branches: [agent/v030-pack-plan-size-cache-product]
+    paths:
+      - 'experiments/entropygraph_v030_pack_plan_cache.py'
+      - 'benchmarks/v030_pack_plan_cache_product.py'
+      - 'tests/test_v030_pack_plan_cache.py'
+      - '.github/workflows/v030-pack-plan-cache-product.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-pack-plan-cache-product-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  product-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile and prove selector equivalence
+        run: |
+          python -m py_compile experiments/entropygraph_v030_pack_plan_cache.py benchmarks/v030_pack_plan_cache_product.py
+          pytest -q tests/test_v030_pack_plan_cache.py
+      - name: Run balanced fresh-process child A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_pack_plan_cache_product.py \
+            --pairs 3 \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pack-plan-cache-product.json"
+      - name: Validate evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-pack-plan-cache-product.json').read_text())
+          assert d['schema']=='cmpct-v030-pack-plan-cache-product-v1' and d['release_credit'] is False
+          for child in ('v028','attempt5'):
+              r=d['children'][child]
+              assert len(r['rows'])==3
+              for pair in r['rows']:
+                  assert pair['control']['archive_sha256']==pair['candidate']['archive_sha256']
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-pack-plan-cache-product-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-pack-plan-cache-product.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Product-transfer evidence for the two co-critical children only. Green is not release authority.

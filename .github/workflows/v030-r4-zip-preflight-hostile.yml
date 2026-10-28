@@ -1,0 +1,93 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 ZIP preflight hostile
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/v030_r4_zip_preflight.py'
+      - 'benchmarks/v030_r4_zip_preflight_hostile.py'
+      - '.github/workflows/v030-r4-zip-preflight-hostile.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/v030_r4_zip_preflight.py'
+      - 'benchmarks/v030_r4_zip_preflight_hostile.py'
+      - '.github/workflows/v030-r4-zip-preflight-hostile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-zip-preflight-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/v030_r4_zip_preflight\.py|benchmarks/v030_r4_zip_preflight_hostile\.py|\.github/workflows/v030-r4-zip-preflight-hostile\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  hostile:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile experiments/v030_r4_zip_preflight.py benchmarks/v030_r4_zip_preflight_hostile.py
+      - name: Run bounded preflight hostile receipt
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_zip_preflight_hostile.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-zip-preflight-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-zip-preflight.json"
+      - name: Enforce receipt contract only
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-zip-preflight.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-zip-preflight-hostile-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['contract']['diagnostic_only'] and not d['contract']['release_credit']
+          assert d['contract']['rejection_means_ordinary_storage_not_data_loss']
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-zip-preflight-hostile.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-zip-preflight-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-zip-preflight.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only resource preflight; green means receipt integrity, not shipping promotion.

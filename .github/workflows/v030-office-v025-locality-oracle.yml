@@ -1,0 +1,113 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 Office compact-floor locality oracle
+
+on:
+  # Push is the desired pre-admission route for ordinary integration work. Keep the PR
+  # route as the autonomous fallback: GitHub-App-authored repository writes do not
+  # reliably instantiate push workflows, while the PR synchronize event does fire.
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_office_v025_locality_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'experiments/entropygraph_v025.py'
+      - '.github/workflows/v030-office-v025-locality-oracle.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_office_v025_locality_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'experiments/entropygraph_v025.py'
+      - '.github/workflows/v030-office-v025-locality-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-office-v025-locality-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.classify.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: classify
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD^1..HEAD)"
+          if grep -Eq '^(benchmarks/v030_office_v025_locality_oracle\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|experiments/entropygraph_v025\.py|\.github/workflows/v030-office-v025-locality-oracle\.yml)$' <<<"$changed"; then
+            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'relevant=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  office-v025-locality:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.relevant == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install pinned corpus dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            msgpack pillow==12.3.0 reportlab==5.0.0 python-docx==1.2.0 \
+            openpyxl==3.1.5 python-pptx==1.0.2 numpy==2.4.6
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg libzstd1
+      - name: Run exact Office compact-floor locality and ownership falsifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_office_v025_locality_oracle.py | tee benchmark-artifacts/v030-office-v025-locality.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-office-v025-locality.json')
+          if p.stat().st_size == 0:
+              raise SystemExit('Office locality oracle emitted an empty receipt')
+          data=json.loads(p.read_text())
+          if data.get('schema') != 'cmpct-v030-office-v025-locality-oracle-v2':
+              raise SystemExit(f"unexpected Office locality receipt schema: {data.get('schema')!r}")
+          if data.get('locality_verdict') not in {'PASS','FAIL'}:
+              raise SystemExit('Office locality receipt lacks terminal locality verdict')
+          mechanisms=data.get('mechanisms')
+          if not isinstance(mechanisms,dict) or not mechanisms:
+              raise SystemExit('Office locality receipt lacks mechanism ownership attribution')
+          if data.get('dominant_logical_owner') not in mechanisms:
+              raise SystemExit('dominant mechanism owner is not represented')
+          PY
+      - name: Upload oracle result
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-office-v025-locality-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-office-v025-locality.json
+          if-no-files-found: error

@@ -1,0 +1,361 @@
+/* CMPCT Surface 0.29.h — ratio-aware responsive composition.
+   Footnote: this layer does not redesign the restored 0.29.g surface. It adapts the same typography,
+   evidence object, graph, authority band and tools to physical viewport constraints that width-only
+   breakpoints miss: short landscapes, tall portrait phones, tablets, 4:3-ish panels and ultrawide screens. */
+
+/* Universal geometry hygiene. Dynamic evidence strings are allowed to wrap; authored graphics are not
+   allowed to create document-level horizontal scrolling. */
+html { -webkit-text-size-adjust: 100%; }
+.hero,
+.section,
+.release-section,
+.site-footer,
+.canonical-band,
+.hero-grid,
+.performance-split,
+.lab-grid,
+.split-head,
+.tool-card,
+.hero-score,
+.arena,
+.matrix-card,
+.loss-card { min-inline-size: 0; }
+.hero-score p,
+.ladder-label,
+.ladder-value,
+.canonical-status,
+.inspect-output dd,
+.receipt-grid dd,
+.release-node,
+.tool-card { overflow-wrap: anywhere; }
+
+/* Notched landscape phones and edge-to-edge tablets keep authored gutters without allowing browser-safe
+   areas to cut through controls. Browsers that do not expose safe-area variables simply keep the gutter. */
+.site-header {
+  padding-left: max(var(--gutter), env(safe-area-inset-left));
+  padding-right: max(var(--gutter), env(safe-area-inset-right));
+}
+.hero,
+.section,
+.release-section,
+.site-footer {
+  padding-left: max(var(--gutter), env(safe-area-inset-left));
+  padding-right: max(var(--gutter), env(safe-area-inset-right));
+}
+
+@supports (height: 100svh) {
+  .hero { min-height: calc(100svh - 72px); }
+}
+
+/* Large and ultrawide displays should feel intentionally expansive rather than like a 1440px website
+   abandoned in the center of a cinema screen. The content width grows only one step; line lengths stay
+   bounded and the compression object, not empty whitespace, absorbs the extra canvas. */
+@media (min-width: 1920px) {
+  :root { --max: 1600px; --gutter: clamp(44px, 3.7vw, 88px); }
+  .hero-grid {
+    grid-template-columns: minmax(0, 1.5fr) minmax(420px, .5fr);
+    gap: clamp(62px, 4.8vw, 98px);
+  }
+  .hero-copy h1 {
+    max-width: 1120px;
+    font-size: clamp(6.4rem, 6.1vw, 8.6rem);
+  }
+  .hero-lede { max-width: 900px; }
+  .entropy-sun {
+    width: min(58vw, 1260px);
+    height: min(58vw, 1260px);
+    right: -13%;
+    top: -20%;
+  }
+  .section-head { max-width: 1020px; }
+}
+
+@media (min-width: 2400px) {
+  :root { --max: 1680px; }
+  .hero::after { left: max(2%, calc((100vw - var(--max)) / -6)); }
+  .section[data-chapter]::before,
+  .release-section[data-chapter]::before { right: max(var(--gutter), calc((100vw - var(--max))/2)); }
+}
+
+/* 21:9 and wider screens retain the celestial object within the viewer's peripheral field instead of
+   pushing it so far right that it becomes an accidental crop. */
+@media (min-width: 1400px) and (min-aspect-ratio: 21/9) {
+  .entropy-sun { right: -7%; top: -26%; }
+  .hero-axis { right: max(var(--gutter), 5vw); }
+  .hero::before { right: -2%; }
+}
+
+/* Short laptop screens and landscape tablets need reduced vertical ceremony, not smaller typography.
+   This keeps the first proof object reachable while retaining the historical hero hierarchy. */
+@media (min-width: 961px) and (max-height: 820px) {
+  .hero {
+    padding-top: clamp(54px, 6vh, 76px);
+    padding-bottom: 40px;
+    justify-content: flex-start;
+  }
+  .hero-grid { margin-top: 26px; gap: clamp(34px, 4vw, 62px); }
+  .hero-copy h1 { font-size: clamp(3.5rem, 5.85vw, 6.35rem); }
+  .hero-lede { margin-top: 24px; line-height: 1.58; }
+  .hero-actions { margin-top: 24px; }
+  .truth-line { margin-top: 19px; }
+  .hero-score { min-height: 330px; }
+  .hero-score strong { margin-top: 18px; }
+  .score-ruler { margin-top: 22px; }
+  .hero-metrics { margin-top: 36px; }
+  .section { padding-top: clamp(78px, 9vh, 110px); padding-bottom: clamp(78px, 9vh, 110px); }
+}
+
+/* Mid-size screens are a distinct composition class: enough width for navigational context, but not
+   enough for desktop chrome plus a release receipt. Keep the header quiet and let the page own attention. */
+@media (min-width: 761px) and (max-width: 1180px) {
+  .site-header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: clamp(14px, 2vw, 24px);
+  }
+  .release-chip { display: none; }
+  .top-nav { justify-self: center; gap: clamp(13px, 2vw, 23px); }
+  .header-right { gap: 10px; }
+  .hero { padding-top: clamp(70px, 8vw, 98px); }
+  .hero-grid { gap: 32px; }
+  .hero-score { min-height: clamp(300px, 38vw, 360px); }
+  .hero-metrics strong { font-size: clamp(1.8rem, 4vw, 2.7rem); }
+  .canonical-band { gap: 42px; }
+}
+
+/* Tall tablet portrait screens get a deliberate editorial stack rather than desktop spacing stretched
+   vertically. The proof object stays substantial but does not consume a full extra screen by itself. */
+@media (min-width: 761px) and (max-width: 1100px) and (max-aspect-ratio: 4/5) {
+  .hero { min-height: auto; padding-bottom: 44px; }
+  .hero-grid { margin-top: 30px; gap: 28px; }
+  .hero-score { min-height: 300px; }
+  .hero-score strong { font-size: clamp(5rem, 12vw, 7.2rem); }
+  .hero-metrics { margin-top: 40px; }
+  .section,
+  .release-section { padding-top: clamp(84px, 9vw, 116px); padding-bottom: clamp(84px, 9vw, 116px); }
+}
+
+/* Coarse pointers get reliable physical targets even when a visual treatment is intentionally minimal. */
+@media (pointer: coarse) {
+  .top-nav a,
+  .header-action,
+  .receipt-actions a,
+  .site-footer nav a { min-height: 44px; display: inline-flex; align-items: center; }
+  .inspect-picker { min-height: 48px; display: flex; align-items: center; }
+}
+
+/* Portrait phones retain the cinematic hierarchy: editorial title first, proof second, then the compact
+   evidence wall. Width-specific rules below prevent the proof score and dynamic data from clipping. */
+@media (max-width: 760px) {
+  :root { --gutter: clamp(16px, 5vw, 22px); }
+  .site-header {
+    height: 62px;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  .header-right { gap: 12px; }
+  .header-action { font-size: .68rem; }
+  .hero,
+  .section,
+  .release-section,
+  .site-footer {
+    padding-left: max(var(--gutter), env(safe-area-inset-left));
+    padding-right: max(var(--gutter), env(safe-area-inset-right));
+  }
+  .hero {
+    min-height: auto;
+    padding-top: clamp(58px, 11vw, 78px);
+    padding-bottom: 38px;
+  }
+  .hero-kicker { font-size: .58rem; line-height: 1.35; letter-spacing: .1em; }
+  .hero-pretitle { font-size: .58rem; }
+  .hero-grid { margin-top: 28px; gap: 28px; }
+  .hero-copy h1 {
+    font-size: clamp(2.85rem, 14vw, 4.85rem);
+    line-height: .91;
+    letter-spacing: -.061em;
+  }
+  .hero-lede { margin-top: 24px; font-size: clamp(.93rem, 4vw, 1.06rem); line-height: 1.62; }
+  .hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin-top: 26px;
+  }
+  .hero-actions .button { width: 100%; padding-inline: 12px; }
+  .hero-actions .button-text { grid-column: 1 / -1; justify-content: flex-start; min-height: 40px; }
+  .truth-line { margin-top: 20px; }
+  .hero-score {
+    min-height: clamp(260px, 76vw, 310px);
+    padding: clamp(20px, 6vw, 26px);
+  }
+  .hero-score strong {
+    font-size: clamp(4.2rem, 22vw, 5.35rem);
+    letter-spacing: -.08em;
+    max-width: 100%;
+  }
+  .score-unit { font-size: .88rem; }
+  .score-ruler { margin-top: 22px; }
+  .hero-metrics { margin-top: 36px; }
+  .hero-metrics article { min-width: 0; }
+  .hero-metrics strong { font-size: clamp(1.55rem, 9vw, 2.35rem); }
+  .hero-proofline {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .hero-proofline span {
+    min-width: 0;
+    padding: 12px 5px;
+    font-size: .49rem;
+    line-height: 1.25;
+  }
+  .regression-banner {
+    margin-left: max(12px, env(safe-area-inset-left));
+    margin-right: max(12px, env(safe-area-inset-right));
+  }
+  .section-head h2,
+  .canonical-copy h2 { font-size: clamp(2.55rem, 12vw, 4.4rem); }
+  .arena-head { align-items: flex-start; gap: 16px; }
+  .arena-legend { flex-wrap: wrap; justify-content: flex-end; }
+  .tool-card { padding: clamp(18px, 5vw, 24px); }
+  .drop-zone { min-height: 190px; }
+  .pick-actions { flex-wrap: wrap; }
+  .pick-actions .button { flex: 1 1 140px; }
+  .selection-summary { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .inspect-output div { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 12px; }
+  .inspect-output dd { min-width: 0; }
+  .site-footer { padding-bottom: max(42px, env(safe-area-inset-bottom)); }
+}
+
+/* Narrow phones are not a shrunken tablet. Competitor bars become a two-line instrument, the information
+   graph becomes a vertical route diagram, and result cards stop fighting for three columns. */
+@media (max-width: 520px) {
+  .hero-axis { display: none; }
+  .hero::before { right: -88%; width: 145vw; }
+  .entropy-sun { right: -70%; width: min(150vw, 720px); height: min(150vw, 720px); }
+  .ladder-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 14px;
+    padding: 14px 0;
+  }
+  .ladder-label { min-width: 0; }
+  .ladder-value { min-width: 0; }
+  .bar-track { grid-column: 1 / -1; grid-row: 2; height: 22px; }
+  .ladder-value strong { font-size: .9rem; }
+  .ladder-value small { max-width: 120px; margin-left: auto; }
+
+  .graph-stage {
+    height: auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 22px 18px 22px 46px;
+    overflow: hidden;
+  }
+  .graph-stage::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    left: 27px;
+    top: 34px;
+    bottom: 34px;
+    width: 1px;
+    background: linear-gradient(to bottom, var(--hot), #4a4640 55%, var(--acid));
+  }
+  .graph-aperture { opacity: .035; right: -11%; top: 8%; }
+  .graph-node {
+    position: relative !important;
+    inset: auto !important;
+    width: 100%;
+    min-width: 0;
+    padding: 13px 14px;
+    box-shadow: 0 10px 28px rgba(0,0,0,.2);
+  }
+  .graph-node::before {
+    content: "";
+    position: absolute;
+    left: -25px;
+    top: 50%;
+    width: 17px;
+    height: 1px;
+    background: #56514b;
+  }
+  .node-input::before,.node-stream::before { background: var(--hot); }
+  .node-index::before { background: var(--acid); }
+  .graph-lines { display: none; }
+
+  .canonical-status article { min-width: 0; padding: 17px; }
+  .canonical-status strong { font-size: clamp(1.45rem, 8vw, 1.85rem); }
+  .result-mini-grid { grid-template-columns: 1fr; }
+  .result-mini-grid div { padding: 9px 10px; }
+  .receipt-actions { gap: 8px 14px; }
+}
+
+@media (max-width: 360px) {
+  .brand { font-size: 1.06rem; }
+  .header-right .header-action:first-child { display: none; }
+  .hero-copy h1 { font-size: clamp(2.65rem, 13.8vw, 3.15rem); }
+  .hero-actions { grid-template-columns: 1fr; }
+  .hero-actions .button-text { grid-column: auto; }
+  .truth-line { grid-template-columns: 1fr; }
+  .hero-score strong { font-size: clamp(3.85rem, 21vw, 4.55rem); }
+  .hero-metrics { grid-template-columns: 1fr; }
+  .hero-metrics article,
+  .hero-metrics article+article {
+    padding: 16px 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero-metrics article:last-child { border-bottom: 0; }
+  .hero-proofline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workload-matrix { grid-template-columns: 1fr; }
+  .parity-kpis { grid-template-columns: 1fr; }
+  .parity-kpis div { border-right: 0 !important; border-bottom: 1px solid var(--line); }
+  .parity-kpis div:last-child { border-bottom: 0; }
+}
+
+/* Very short landscape screens are allowed to scroll; they are not allowed to waste half their height on
+   chrome. This class includes landscape phones, foldables and 1024x600-ish displays. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .site-header { height: 56px; }
+  .top-nav,
+  .release-chip { display: none; }
+  .header-right { gap: 12px; }
+  .hero {
+    min-height: auto;
+    padding-top: 38px;
+    padding-bottom: 32px;
+    justify-content: flex-start;
+  }
+  .hero-kicker { font-size: .54rem; }
+  .hero-grid { margin-top: 20px; gap: 22px; }
+  .hero-copy h1 { font-size: clamp(2.9rem, 7.2vw, 4.9rem); }
+  .hero-lede { margin-top: 18px; line-height: 1.5; }
+  .hero-actions { margin-top: 18px; }
+  .truth-line { margin-top: 16px; }
+  .hero-score { min-height: 230px; }
+  .hero-score strong { margin-top: 14px; }
+  .score-ruler { margin-top: 17px; margin-bottom: 10px; }
+  .hero-metrics { margin-top: 26px; }
+  .section,
+  .release-section { padding-top: 68px; padding-bottom: 68px; }
+  .entropy-sun { opacity: .62; }
+}
+
+/* Touch-landscape phones frequently report widths above the ordinary phone breakpoint. Keep their hero
+   stacked and their navigation quiet based on physical height/orientation rather than width alone. */
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 960px) {
+  .hero-grid { grid-template-columns: 1fr; }
+  .hero-score { width: min(100%, 640px); }
+  .hero-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .performance-split,
+  .lab-grid,
+  .canonical-band,
+  .split-head { grid-template-columns: 1fr; }
+  .mechanism-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Reduced motion preserves the same composition and data relationships while removing movement. */
+@media (prefers-reduced-motion: reduce) {
+  .entropy-sun { filter: none; }
+  .graph-node::after { box-shadow: none; }
+}

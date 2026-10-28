@@ -1,0 +1,178 @@
+name: CMPCT v0.30 registered diagnostic bridge / R41 global dictionary-effort concept compression
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+# Registered control-plane bridge for the frozen R41 superseding experiment.
+# Forge diagnostic only. R41 grants no direct product or release credit.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-r41-bridge-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Classify exact latest-head commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Fxq '.github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml'; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  r41-bridge:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    concurrency:
+      group: cmpct-v030-r41-bridge-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 256
+
+      - name: Bind frozen R41 substrate and superseding grammar
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor ad581ae0300637b779bcaeeb855fb55ae98f0ee1 HEAD
+          for path in \
+            src/cmpct/builder.py \
+            src/cmpct/transactions.py \
+            src/cmpct/codec.py \
+            experiments/entropygraph_v030_release_product.py \
+            experiments/entropygraph_v030_release_lock_strict.py \
+            benchmarks/v030_release_ablation_canonical.py \
+            benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py \
+            benchmarks/v030_r40_selected_dictionary_effort_hostile_review.py \
+            benchmarks/mosaic_v029_generalization_bench.py \
+            benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json \
+            docs/NATIVE_CORE.md \
+            docs/v030-rnd/R40_SELECTED_DICTIONARY_EFFORT_HOSTILE_REVIEW_RESULT.md \
+            docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_PREREG.md \
+            docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_SUPERSEDING_PREREG.md; do
+            test -n "$(git rev-parse HEAD:$path)"
+          done
+          test "$(git rev-parse b5aadc1d785c51ff5f8a916ae1977b8dc18ba9ce:benchmarks/v030_r41_global_dictionary_effort_concept_compression.py)" = "$(git rev-parse HEAD:benchmarks/v030_r41_global_dictionary_effort_concept_compression.py)"
+          test "$(git rev-parse ca2c029eed5b03fd522716db93d128760f5d6d52:docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_PREREG.md)"
+          test "$(git rev-parse 2ecbe9e645b929708f1b1da718dd96e37abc3f34:docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_SUPERSEDING_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_SUPERSEDING_PREREG.md)"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile frozen R41 instrument
+        run: python -m py_compile benchmarks/v030_r41_global_dictionary_effort_concept_compression.py
+
+      - name: Run frozen R41 concept-compression Builder
+        env:
+          CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r41_global_dictionary_effort_concept_compression.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r41-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r41-global-dictionary-effort-concept-compression.json"
+
+      - name: Enforce frozen R41 completeness and decision law
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/r41-global-dictionary-effort-concept-compression.json').read_text())
+          assert d['schema']=='cmpct-v030-r41-global-dictionary-effort-concept-compression-v1'
+          assert d['evidence_head']==os.environ['EVIDENCE_HEAD']
+          assert d['repetitions']==5
+          assert d['accepted_repaired_v029_bytes']==137499525
+          assert d['v030_absolute_hurdle_bytes']==687783
+          assert len(d['workloads'])==15
+          assert len({(r['suite'],r['name']) for r in d['workloads']})==15
+          allowed={'PROMOTE_GLOBAL_DICT9_PRODUCT_PREREQUISITE','RETAIN_SPLIT_POLICY_R40_BOUNDARY','REHABILITATE_GLOBAL_DICT9','RETIRE_DICTIONARY_EFFORT_UNIFICATION','SUBSTRATE_OR_CORRECTNESS_FAILURE'}
+          assert d['decision'] in allowed
+          p=d['policy_state']
+          assert p['full_build_dictionary_level_before']==12
+          assert p['transaction_dictionary_level_before']==9
+          assert p['candidate_shared_dictionary_level']==9
+          assert p['net_effort_policy_states']==-1
+          assert p['new_reader_grammar_states']==0
+          assert p['new_native_reader_or_c_abi_states']==0
+          assert p['new_platform_parser_copies_allowed']==0
+          for row in d['workloads']:
+              assert set(row['arms'])=={'release-all-exact','dict12-control','global-dict9'}
+              for arm in row['arms'].values():
+                  assert len(arm['repetitions'])==5
+              if d['decision']!='SUBSTRATE_OR_CORRECTNESS_FAILURE':
+                  assert row['accepted_tree_match'] and row['valid']
+                  for arm in row['arms'].values():
+                      assert arm['median']['strong_verify_ok']
+                      assert arm['median']['locality_within_8x']
+          agg=d['aggregate']
+          assert agg['logical_input_bytes']>=agg['dictionary_eligible_raw_bytes']>=0
+          assert agg['dictionary_eligible_candidate_count']>=0
+          if d['decision']=='PROMOTE_GLOBAL_DICT9_PRODUCT_PREREQUISITE':
+              assert agg['protected_incremental_backups_survives']
+              assert not agg['material_runtime_regression_vs_release_workloads']
+              assert not agg['rss_regression_over_10pct_vs_release_workloads']
+              assert not agg['lost_dict12_strict_win_workloads']
+              assert not agg['false_positive_admission_workloads']
+              assert agg['activation_workloads']>=2
+              assert agg['material_runtime_improvement_vs_dict12_workloads']
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml
+
+      - name: Upload immutable R41 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r41-global-dictionary-effort-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r41-global-dictionary-effort-concept-compression.json
+          if-no-files-found: error
+          retention-days: 90

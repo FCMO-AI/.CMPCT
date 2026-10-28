@@ -1,0 +1,68 @@
+name: CMPCT v0.30 pathdict shared-scan attribution
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_r24_pathdict_shared_scan_referee.py
+      - benchmarks/v030_r24_pathblind_dictionary_referee.py
+      - benchmarks/v030_r24_micropack_current15_transfer.py
+      - benchmarks/v030_current15_stable_corpus.py
+      - benchmarks/neutral_hostile_corpus_v1.py
+      - benchmarks/resemblance_hostile_corpus_v1.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-pathdict-shared-scan.yml
+
+permissions:
+  contents: read
+
+jobs:
+  shared-scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 1}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Compile referee
+        run: python -m py_compile benchmarks/v030_r24_pathdict_shared_scan_referee.py
+      - name: Execute shared-scan attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r24_pathdict_shared_scan_referee \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pathdict-shared-scan-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pathdict-shared-scan.json"
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-pathdict-shared-scan.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-pathdict-shared-scan-v1'
+          assert d['release_credit'] is False and d['canonical_builder_changed'] is False and d['genesis_rescore'] is False
+          assert d['verdict'] in {'SHARED_SCAN_INVALID','SHARED_SCAN_HELPS_BUT_FUSED_ENCODE_STILL_REQUIRED','SHARED_SCAN_CLOSES_CREATION_DEBT','SCAN_NOT_DOMINANT_FUSE_ENCODING'}
+          short={'SHARED_SCAN_INVALID':'invalid','SHARED_SCAN_HELPS_BUT_FUSED_ENCODE_STILL_REQUIRED':'helps','SHARED_SCAN_CLOSES_CREATION_DEBT':'closes','SCAN_NOT_DOMINANT_FUSE_ENCODING':'fuse'}[d['verdict']]
+          a=d['aggregate']; outs={'short':short,'idfail':str(len(d['identity_failures'])),'cpudebt':str(len(d['remaining_cpu_debts'])),'walldebt':str(len(d['remaining_wall_debts'])),'cpu':f"{a['cpu_ratio']:.3f}",'wall':f"{a['wall_ratio']:.3f}",'fp':d['corpus_fingerprint'][:10]}
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+              for k,v in outs.items():fh.write(f'{k}={v}\n')
+          print(json.dumps({'verdict':d['verdict'],'identity_failures':d['identity_failures'],'remaining_cpu_debts':d['remaining_cpu_debts'],'remaining_wall_debts':d['remaining_wall_debts'],'aggregate':a,'rows':{k:{'cpu_ratio':v['cpu_ratio'],'wall_ratio':v['wall_ratio'],'scan_cpu':v['shared_scan']['scan_cpu_s'],'scan_wall':v['shared_scan']['scan_wall_s'],'clone_cpu':v['shared_scan']['clone_cpu_s'],'clone_wall':v['shared_scan']['clone_wall_s']} for k,v in d['rows'].items()}},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-pathdict-sharedscan-${{ steps.receipt.outputs.short || 'nosummary' }}-id${{ steps.receipt.outputs.idfail }}-cpu${{ steps.receipt.outputs.cpu }}-wall${{ steps.receipt.outputs.wall }}-cd${{ steps.receipt.outputs.cpudebt }}-wd${{ steps.receipt.outputs.walldebt }}-fp${{ steps.receipt.outputs.fp }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-pathdict-shared-scan.json
+          if-no-files-found: error
+          retention-days: 90

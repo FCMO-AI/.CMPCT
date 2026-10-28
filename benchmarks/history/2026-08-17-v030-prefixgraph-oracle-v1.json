@@ -1,0 +1,72 @@
+{
+  "schema": "cmpct-v030-prefixgraph-oracle-v1",
+  "claim_boundary": "orthogonal two-workload mechanism oracle; canonical r24 unchanged",
+  "contract": {
+    "targets": [
+      "01_shifted_versions",
+      "03_boundary_churn"
+    ],
+    "historical_control": "benchmarks/history/2026-08-17-mosaic-v029-generalization-v3.json",
+    "accepted_artifact": {
+      "id": 9281456150,
+      "digest": "sha256:a25bdc766a0fb3630780337d4d430faed1e5f036bc8ea2155274b81c2c11db7e",
+      "workflow_run": 32008781417
+    },
+    "accepted_tree_sha256": {
+      "01_shifted_versions": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "03_boundary_churn": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d"
+    },
+    "minimum_aggregate_saving_bytes": 24576,
+    "minimum_each_workload_saving_bytes": 2048,
+    "max_dependency_depth": 1,
+    "regression_tolerance_bytes": 0,
+    "tree_and_v029_bytes_must_match_history": true
+  },
+  "rows": [
+    {
+      "name": "01_shifted_versions",
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "v029_bytes": 1723056,
+      "prefixgraph_bytes": 1700242,
+      "candidate_bytes": 1700242,
+      "selected": "prefixgraph",
+      "saving_vs_v029_bytes": 22814,
+      "raw_prefix_saving_vs_v029_bytes": 22814,
+      "prefix_records": 17,
+      "anchor": 0,
+      "anchor_auditions": 18,
+      "max_dependency_depth": 1,
+      "prefixgraph_create_s": 9.241171525999988,
+      "v029_create_s": 84.875242393,
+      "v029_selected": "mosaic"
+    },
+    {
+      "name": "03_boundary_churn",
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+      "v029_bytes": 79876,
+      "prefixgraph_bytes": 75480,
+      "candidate_bytes": 75480,
+      "selected": "prefixgraph",
+      "saving_vs_v029_bytes": 4396,
+      "raw_prefix_saving_vs_v029_bytes": 4396,
+      "prefix_records": 11,
+      "anchor": 0,
+      "anchor_auditions": 12,
+      "max_dependency_depth": 1,
+      "prefixgraph_create_s": 3.1908399330000066,
+      "v029_create_s": 60.81622547800001,
+      "v029_selected": "mosaic"
+    }
+  ],
+  "totals": {
+    "workloads": 2,
+    "v029_bytes": 1802932,
+    "candidate_bytes": 1775722,
+    "saving_vs_v029_bytes": 27210,
+    "workloads_improved": 2,
+    "workloads_regressed": 0,
+    "min_workload_saving_bytes": 4396,
+    "max_dependency_depth": 1,
+    "mechanism_gate": true
+  }
+}

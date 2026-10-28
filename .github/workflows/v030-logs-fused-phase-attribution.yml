@@ -1,0 +1,153 @@
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 Logs fused phase attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'docs/v030-rnd/R25_LOGS_FUSED_PHASE_ATTRIBUTION_PREREG.md'
+      - 'benchmarks/v030_logs_fused_phase_attribution.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'experiments/entropygraph_v030_logs_fused_extract.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_release_product_logs_runtime.py'
+      - '.github/workflows/v030-logs-fused-phase-attribution.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/v030-rnd/R25_LOGS_FUSED_PHASE_ATTRIBUTION_PREREG.md'
+      - 'benchmarks/v030_logs_fused_phase_attribution.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'experiments/entropygraph_v030_logs_fused_extract.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_release_product_logs_runtime.py'
+      - '.github/workflows/v030-logs-fused-phase-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-logs-phase-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(docs/v030-rnd/R25_LOGS_FUSED_PHASE_ATTRIBUTION_PREREG\.md|benchmarks/v030_logs_fused_phase_attribution\.py|benchmarks/neutral_hostile_corpus_v1\.py|experiments/entropygraph_v030_logs_fused_extract\.py|experiments/entropygraph_v030_release_product_logs_candidate\.py|experiments/entropygraph_v030_release_product_logs_runtime\.py|\.github/workflows/v030-logs-fused-phase-attribution\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  phase-attribution:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    concurrency:
+      group: cmpct-v030-logs-phase-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen attribution instrument
+        run: python -m py_compile benchmarks/v030_logs_fused_phase_attribution.py
+      - name: Run exact fused phase attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_fused_phase_attribution \
+            --work-root "$RUNNER_TEMP/v030-logs-fused-phase-attribution" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-fused-phase-attribution.json"
+      - name: Ratchet frozen exactness, overhead and terminal decision
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-fused-phase-attribution.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-fused-phase-attribution-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['rounds']==11 and len(d['control_s'])==11 and len(d['instrumented_rows'])==11
+          assert d['selected']=='logs-inverse'
+          assert d['all_exact'] is True and d['call_counts_stable'] is True
+          assert d['experiment_valid'] is True
+          assert float(d['instrumentation_wall_ratio']) <= 1.10
+          assert d['material_absolute_floor_s']==0.002
+          assert d['material_share_floor']==0.05
+          assert d['maximum_instrumentation_wall_ratio']==1.10
+          assert d['production_source_changed'] is False
+          assert d['release_thresholds_changed'] is False and d['release_credit'] is False
+          assert d['decision'] in {'TRACKED_PHASE_MATERIAL_HEADROOM','TRACKED_PHASES_INSUFFICIENT_FOR_LOGS_GAP'}
+          phase=d['largest_tracked_phase']
+          assert phase in {'archive_restore_session_s','manifest_decode_s','filesystem_metadata_s'}
+          if d['decision']=='TRACKED_PHASE_MATERIAL_HEADROOM':
+              assert any(d['tracked_phase_material'].values())
+          else:
+              assert not any(d['tracked_phase_material'].values())
+          Path('benchmark-artifacts/v030-logs-fused-phase-attribution-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-fused-phase-attribution.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-fused-phase-attribution-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-fused-phase-attribution.json
+            benchmark-artifacts/v030-logs-fused-phase-attribution-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# D2 attribution only. No phase is free and no result grants release credit; the next intervention must preserve
+# archive bytes, canonical filesystem semantics, safety and all existing runtime/release thresholds.

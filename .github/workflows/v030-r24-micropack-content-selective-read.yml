@@ -1,0 +1,103 @@
+name: CMPCT v0.30 content-economic selective read
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - benchmarks/v030_r24_micropack_content_selective_read_referee.py
+      - benchmarks/v030_r24_micropack_content_economic_admission.py
+      - benchmarks/v030_r24_locality_derived_micropack_referee.py
+      - benchmarks/v030_r24_micropack_same_grammar_attribution.py
+      - benchmarks/v030_compact_pack_control_attribution.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-micropack-content-selective-read.yml
+
+permissions:
+  contents: read
+
+jobs:
+  selective-read-referee:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact-head test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Run content-economic selective-read referee
+        run: |
+          python -m benchmarks.v030_r24_micropack_content_selective_read_referee \
+            --output benchmark-artifacts/v030-micropack-content-selective-read.json
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path('benchmark-artifacts/v030-micropack-content-selective-read.json')
+          r = json.loads(p.read_text())
+          assert r['experiment_valid'] is True
+          assert r['release_credit'] is False
+          assert r['canonical_builder_changed'] is False
+          assert r['source_commit'] == '${{ github.sha }}', (r.get('source_commit'), '${{ github.sha }}')
+          assert r['verdict'] in {
+              'CONTENT_ECONOMIC_SELECTIVE_READ_SURVIVES',
+              'CONTENT_ECONOMIC_SELECTIVE_READ_SAFE_WITH_EXTENSION_DEBT',
+              'CONTENT_ECONOMIC_SELECTIVE_READ_REHABILITATION_REQUIRED',
+              'RETIRE_CONTENT_ECONOMIC_SELECTIVE_READ',
+          }
+          assert not r['invariant_failures'], r['invariant_failures']
+          compact = {
+              'verdict': r['verdict'],
+              'timing_debt_vs_independent': r['timing_debt_vs_independent'],
+              'timing_debt_vs_extension': r['timing_debt_vs_extension'],
+              'sources': {
+                  name: {
+                      'content_bytes': row.get('variants', {}).get('content_economic', {}).get('final_membership_bytes'),
+                      'independent_bytes': row.get('variants', {}).get('independent', {}).get('final_membership_bytes'),
+                      'extension_bytes': row.get('variants', {}).get('extension', {}).get('final_membership_bytes'),
+                      'content_max_decode': row.get('variants', {}).get('content_economic', {}).get('max_decode_unit_bytes'),
+                      'content_max_amp': row.get('variants', {}).get('content_economic', {}).get('max_member_amplification'),
+                      'independent_ms_per_probe': row.get('timings', {}).get('independent', {}).get('median_read_wall_ms_per_probe'),
+                      'extension_ms_per_probe': row.get('timings', {}).get('extension', {}).get('median_read_wall_ms_per_probe'),
+                      'content_ms_per_probe': row.get('timings', {}).get('content_economic', {}).get('median_read_wall_ms_per_probe'),
+                      'content_decoded_context_sum': row.get('timings', {}).get('content_economic', {}).get('sum_decoded_context_bytes'),
+                      'independent_decoded_context_sum': row.get('timings', {}).get('independent', {}).get('sum_decoded_context_bytes'),
+                  }
+                  for name, row in r['sources'].items()
+              },
+          }
+          payload = json.dumps(compact, sort_keys=True, separators=(',', ':'))
+          print(payload)
+          print(f'::notice title=v030 selective-read receipt::{payload}')
+          dev = compact['sources']['origin_developer']
+          tiny = compact['sources']['origin_tiny_files']
+          def ms(v): return f'{float(v):.3f}'
+          outputs = {
+              'verdict': r['verdict'],
+              'dev_ind_ms': ms(dev['independent_ms_per_probe']),
+              'dev_ext_ms': ms(dev['extension_ms_per_probe']),
+              'dev_content_ms': ms(dev['content_ms_per_probe']),
+              'dev_decode': str(dev['content_max_decode']),
+              'tiny_ind_ms': ms(tiny['independent_ms_per_probe']),
+              'tiny_ext_ms': ms(tiny['extension_ms_per_probe']),
+              'tiny_content_ms': ms(tiny['content_ms_per_probe']),
+              'tiny_decode': str(tiny['content_max_decode']),
+          }
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+              for k, v in outputs.items():
+                  fh.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v030-sel-${{ steps.receipt.outputs.verdict }}-dev-${{ steps.receipt.outputs.dev_ind_ms }}-${{ steps.receipt.outputs.dev_ext_ms }}-${{ steps.receipt.outputs.dev_content_ms }}-d${{ steps.receipt.outputs.dev_decode }}-tiny-${{ steps.receipt.outputs.tiny_ind_ms }}-${{ steps.receipt.outputs.tiny_ext_ms }}-${{ steps.receipt.outputs.tiny_content_ms }}-d${{ steps.receipt.outputs.tiny_decode }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-micropack-content-selective-read.json
+          if-no-files-found: error
+          retention-days: 30

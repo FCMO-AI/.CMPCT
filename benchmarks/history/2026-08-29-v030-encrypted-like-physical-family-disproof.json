@@ -1,0 +1,50 @@
+{
+  "schema": "cmpct-v030-negative-evidence-v1",
+  "recorded_utc_date": "2026-08-30",
+  "source_candidate_sha": "45fa98d061e2e9b25fbb9c65846f732b5b13d8d0",
+  "workload": "07_incompressible_and_encrypted_like",
+  "conclusion": "The current locality-safe C25CC01 physical-data family cannot beat solid Zstd-19 by metadata/control/header reduction alone. A new physical/semantic representation is required.",
+  "physical_byte_floor": {
+    "workflow_run_id": 33280360267,
+    "r24_bytes": 10239899,
+    "wrapped_bytes": 10229825,
+    "physical_data_bytes": 10199283,
+    "fixed_header_footer_bytes": 136,
+    "current_two_copy_control_bytes": 30406,
+    "zero_control_complete_floor_bytes": 10199419,
+    "zstd19_bytes": 10199302,
+    "zero_control_floor_minus_zstd19_bytes": 117,
+    "strict_allowed_total_control_bytes": -118,
+    "required_control_reduction_bytes": 30524,
+    "max_member_read_amplification": 7.136363636363637,
+    "max_decode_unit_bytes": 1882,
+    "locality_limit": 8.0,
+    "decode_unit_limit_bytes": 8388608,
+    "experiment_valid": true
+  },
+  "salvage_preserving_header": {
+    "workflow_run_id": 33280360147,
+    "current_record_header_bytes": 16384,
+    "replacement_record_header_bytes": 12144,
+    "record_header_saving_bytes": 4240,
+    "projected_physical_bytes": 10195043,
+    "projected_complete_wrapped_bytes": 10225449,
+    "projected_complete_minus_zstd19_bytes": 26147,
+    "retains_record_magic": true,
+    "retains_codec": true,
+    "retains_flags": true,
+    "retains_uncompressed_size": true,
+    "retains_compressed_size": true,
+    "retains_meta_length": true,
+    "retains_crc32": true,
+    "retains_sha256": true,
+    "experiment_valid": true
+  },
+  "rejected_directions": [
+    "control-only byte shaving on the current physical payload",
+    "record-header-only byte shaving on the current physical payload",
+    "zero-control hypothetical for the current physical payload"
+  ],
+  "required_next_class": "Change physical payload/semantic-root ownership so mandatory recovery, locality and integrity facts are represented with less total information, or reduce actual physical payload bytes. Do not spend release engineering time on further payload-neutral metadata shaving unless new exact evidence changes this floor.",
+  "release_credit": false
+}

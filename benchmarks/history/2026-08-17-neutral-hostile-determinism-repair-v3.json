@@ -1,0 +1,99 @@
+{
+  "schema": "cmpct-neutral-hostile-v1-determinism-repair-manifest-v3",
+  "date": "2026-08-17",
+  "claim_boundary": "portable benchmark-substrate determinism repair only; historical v0.28 evidence remains immutable",
+  "normalizer": "benchmarks/neutral_hostile_determinism_repair_v1.py",
+  "requirements": {
+    "two_cross_path_regenerations_match": true,
+    "content_derived_reportlab_xobject_identity": true,
+    "candidate_and_baseline_consume_same_repaired_tree": true,
+    "historical_record_rewritten": false,
+    "broad_pdf_fixture_replacement_rejected": true
+  },
+  "accepted": true,
+  "rows": [
+    {
+      "name": "02_office_workspace",
+      "deterministic": true,
+      "regeneration_workspaces": [
+        "benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/round-1",
+        "benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/round-2"
+      ],
+      "files": 20,
+      "logical_bytes": 16063798,
+      "tree_sha256": "aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57",
+      "second_build_tree_sha256": "aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57",
+      "second_build_logical_bytes": 16063798,
+      "file_differences": [],
+      "raw_pdf_rounds": [
+        {
+          "path": "forensics/client_report-round-1-raw.pdf",
+          "bytes": 980678,
+          "sha256": "3444d4e9da45df5f3d2c52043934f00c8f49423f6eccd0769549525bb6c78625"
+        },
+        {
+          "path": "forensics/client_report-round-2-raw.pdf",
+          "bytes": 980678,
+          "sha256": "7c3e2e32570cfc8100147b42bf0845bac1bdd38f7cb465fba4728a25685941c6"
+        }
+      ],
+      "historical_tree_sha256": "6f29703d2d60dc4aa2ab281f27a35529f7d0a02727c5cb0b8c9af56a046bd412",
+      "historical_candidate_bytes": 5954952,
+      "historical_logical_bytes": 16063829,
+      "v028_candidate_bytes": 5954026,
+      "v028_selected": "entropygraph-v025-fallback",
+      "v028_graph_bytes": 15307199,
+      "v028_inherited_bytes": 5954026,
+      "repair_changes_tree": true,
+      "repair_candidate_byte_delta": -926
+    },
+    {
+      "name": "05_logs_and_telemetry",
+      "deterministic": true,
+      "regeneration_workspaces": [
+        "benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/round-1",
+        "benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/round-2"
+      ],
+      "files": 11,
+      "logical_bytes": 16994250,
+      "tree_sha256": "7356b866d7b99bfce2dd1fc6ef86d61d09c9d8a38a2ff3fec7d9a92e46020931",
+      "second_build_tree_sha256": "7356b866d7b99bfce2dd1fc6ef86d61d09c9d8a38a2ff3fec7d9a92e46020931",
+      "second_build_logical_bytes": 16994250,
+      "file_differences": [],
+      "raw_pdf_rounds": [],
+      "historical_tree_sha256": "fcd7ebb838a902c887e42da5eb4142567fe2f9ce805fabaef03fe20fd8d83417",
+      "historical_candidate_bytes": 3550611,
+      "historical_logical_bytes": 16994250,
+      "v028_candidate_bytes": 3550609,
+      "v028_selected": "entropygraph-v025-fallback",
+      "v028_graph_bytes": 4733205,
+      "v028_inherited_bytes": 3550609,
+      "repair_changes_tree": true,
+      "repair_candidate_byte_delta": -2
+    },
+    {
+      "name": "06_incremental_backups",
+      "deterministic": true,
+      "regeneration_workspaces": [
+        "benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/round-1",
+        "benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/round-2"
+      ],
+      "files": 769,
+      "logical_bytes": 14006619,
+      "tree_sha256": "a823728d98e5882542645e3ab0f777894479cfb3de4dedcec14341fedbb11a05",
+      "second_build_tree_sha256": "a823728d98e5882542645e3ab0f777894479cfb3de4dedcec14341fedbb11a05",
+      "second_build_logical_bytes": 14006619,
+      "file_differences": [],
+      "raw_pdf_rounds": [],
+      "historical_tree_sha256": "dd21498c36637c0f49b9e5c6a69d43b48a0072d217876692890835827d9d60d9",
+      "historical_candidate_bytes": 8223840,
+      "historical_logical_bytes": 14006619,
+      "v028_candidate_bytes": 8223844,
+      "v028_selected": "entropygraph-v025-fallback",
+      "v028_graph_bytes": 10073420,
+      "v028_inherited_bytes": 8223844,
+      "repair_changes_tree": true,
+      "repair_candidate_byte_delta": 4
+    }
+  ]
+}

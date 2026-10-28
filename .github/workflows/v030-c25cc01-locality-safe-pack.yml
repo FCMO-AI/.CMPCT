@@ -1,0 +1,201 @@
+# ci-lane: deep
+name: CMPCT v0.30 C25CC01 locality-safe pack oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
+      - 'benchmarks/v030_c25cc01_packmap_control_oracle.py'
+      - 'benchmarks/v030_c25cc01_stable_order_packmap_oracle.py'
+      - 'benchmarks/v030_c25cc01_implicit_packmap_v3_oracle.py'
+      - 'benchmarks/v030_c25cc01_implicit_packmap_v4_oracle.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'experiments/entropygraph_v030_release_product*.py'
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/codec.py'
+      - '.github/workflows/v030-c25cc01-locality-safe-pack.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-c25cc01-locality-safe-pack-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  locality-safe-pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus/compressor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile locality-safe pack diagnostics
+        run: |
+          python -m py_compile benchmarks/v030_c25cc01_locality_safe_pack_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_packmap_control_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_stable_order_packmap_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_implicit_packmap_v3_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_implicit_packmap_v4_oracle.py
+      - name: Run exact 15-workload locality-safe A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_c25cc01_locality_safe_pack_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-locality-safe-pack-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-locality-safe-pack.json"
+      - name: Compare locality-safe packing strategies
+        run: |
+          python benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-pack-strategy-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-pack-strategy.json"
+      - name: Measure implicit S_PACK control map
+        run: |
+          python benchmarks/v030_c25cc01_packmap_control_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-packmap-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-packmap.json"
+      - name: Measure stable-order locality pack plus implicit control
+        run: |
+          python benchmarks/v030_c25cc01_stable_order_packmap_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-stable-order-packmap-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-stable-order-packmap.json"
+      - name: Measure order-safe marker-free pack map v4
+        run: |
+          python benchmarks/v030_c25cc01_implicit_packmap_v4_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-implicit-packmap-v4-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-implicit-packmap-v4.json"
+      - name: Enforce diagnostic evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-locality-safe-pack.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-locality-safe-pack-oracle-v1'
+          c=d['contract']
+          assert c['release_credit'] is False
+          assert c['production_selector_change'] is False
+          assert c['production_encoder_change'] is False
+          assert c['format_revision_change'] is False
+          assert c['locality_ceiling']==8
+          assert len(d['all15']['rows'])==15
+          assert d['all15']['workloads']==15
+          assert d['target']['rounds']==5
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['passed'] is True
+          if d['gate']['target_strict_four_way_win']:
+              assert d['gate']['target_compact_control_eligible'] is True
+              assert d['target']['cmpct_bytes'] < d['target']['zip_bytes']
+              assert d['target']['cmpct_bytes'] < d['target']['zstd19_bytes']
+              assert d['target']['median_cmpct_complete_create_s'] < d['target']['median_zip_create_s']
+              assert d['target']['median_cmpct_complete_create_s'] < d['target']['median_zstd19_create_s']
+          p=json.loads(Path('benchmark-artifacts/v030-c25cc01-pack-strategy.json').read_text())
+          assert p['schema']=='cmpct-v030-c25cc01-locality-pack-strategy-oracle-v1'
+          assert p['contract']['release_credit'] is False
+          assert p['contract']['production_change'] is False
+          assert p['contract']['locality_ceiling']==8
+          assert len(p['strategies'])==4
+          assert p['gate']['experiment_valid'] is True
+          assert p['gate']['passed'] is True
+          m=json.loads(Path('benchmark-artifacts/v030-c25cc01-packmap.json').read_text())
+          assert m['schema']=='cmpct-v030-c25cc01-packmap-control-oracle-v2'
+          assert m['contract']['release_credit'] is False
+          assert m['contract']['production_change'] is False
+          assert m['contract']['physical_data_span_changed'] is False
+          assert m['contract']['semantic_index_roundtrip_exact'] is True
+          assert m['contract']['file_index_not_duplicated_in_size_column'] is True
+          assert m['contract']['locality_ceiling']==8
+          assert m['membership']['contiguous_pack_groups'] + m['membership']['delta_pack_groups'] > 0
+          assert m['gate']['experiment_valid'] is True
+          assert m['gate']['passed'] is True
+          s=json.loads(Path('benchmark-artifacts/v030-c25cc01-stable-order-packmap.json').read_text())
+          assert s['schema']=='cmpct-v030-c25cc01-stable-order-packmap-oracle-v1'
+          assert s['contract']['release_credit'] is False
+          assert s['contract']['production_change'] is False
+          assert s['contract']['format_revision_change'] is False
+          assert s['contract']['semantic_index_roundtrip_exact'] is True
+          assert s['contract']['locality_ceiling']==8
+          assert s['rounds']==5
+          assert s['candidate']['locality']['max_member_read_amplification'] <= 8
+          assert s['gate']['experiment_valid'] is True
+          assert s['gate']['passed'] is True
+          if s['gate']['strict_four_way_signal']:
+              x=s['competitors']
+              assert x['cmpct_projected_bytes'] < x['zip_bytes']
+              assert x['cmpct_projected_bytes'] < x['zstd19_bytes']
+              assert x['median_cmpct_complete_create_s'] < x['median_zip_create_s']
+              assert x['median_cmpct_complete_create_s'] < x['median_zstd19_create_s']
+          v4=json.loads(Path('benchmark-artifacts/v030-c25cc01-implicit-packmap-v4.json').read_text())
+          assert v4['schema']=='cmpct-v030-c25cc01-implicit-packmap-v4-oracle-v1'
+          assert v4['contract']['release_credit'] is False
+          assert v4['contract']['production_change'] is False
+          assert v4['contract']['format_revision_change'] is False
+          assert v4['contract']['physical_pack_boundaries_changed'] is False
+          assert v4['contract']['locality_ceiling']==8
+          assert v4['contract']['two_authenticated_control_copies_retained'] is True
+          assert v4['contract']['semantic_index_roundtrip_exact'] is True
+          assert v4['contract']['blob_id_order_assumption'] is False
+          assert v4['contract']['descriptor_order']=='first_file_table_member'
+          assert v4['contract']['sparse_membership_encoding']=='absolute_file_indices'
+          assert v4['rounds']==5
+          assert v4['candidate']['semantic_index_roundtrip_exact'] is True
+          assert v4['candidate']['locality']['max_member_read_amplification'] <= 8
+          assert v4['candidate']['pack_groups'] > 0 and v4['candidate']['packed_rows'] > 0
+          assert v4['candidate']['blob_id_encoding']=='absolute_authenticated_id'
+          assert v4['gate']['experiment_valid'] is True
+          assert v4['gate']['passed'] is True
+          if v4['gate']['strict_four_way_signal']:
+              x=v4['competitors']
+              assert x['cmpct_projected_bytes'] < x['zip_bytes']
+              assert x['cmpct_projected_bytes'] < x['zstd19_bytes']
+              assert x['median_cmpct_complete_create_s'] < x['median_zip_create_s']
+              assert x['median_cmpct_complete_create_s'] < x['median_zstd19_create_s']
+          PY
+      - name: Record candidate fingerprint
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-c25cc01-candidate.txt
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-locality-safe-pack.yml
+      - name: Upload locality-safe pack evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-c25cc01-locality-safe-pack-${{ steps.candidate.outputs.sha }}
+          path: |
+            benchmark-artifacts/v030-c25cc01-locality-safe-pack.json
+            benchmark-artifacts/v030-c25cc01-pack-strategy.json
+            benchmark-artifacts/v030-c25cc01-packmap.json
+            benchmark-artifacts/v030-c25cc01-stable-order-packmap.json
+            benchmark-artifacts/v030-c25cc01-implicit-packmap-v4.json
+            benchmark-artifacts/v030-c25cc01-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# This is preserved negative/research evidence for the shipping-retired C25CC01 physical family. Keep it runnable
+# when its own inputs change, but do not spend 65 minutes on unrelated synchronization churn. No release gate changes.

@@ -1,0 +1,84 @@
+name: CMPCT v0.30 Analytics frozen selective admission physical
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - benchmarks/v030_analytics_frozen_selective_admission_physical.py
+      - .github/workflows/v030-analytics-frozen-selective-admission-physical.yml
+      - benchmarks/v030_analytics_proof_directed_admission_oracle.py
+      - benchmarks/v030_v025_canonical_fs_level1_oracle.py
+      - benchmarks/v030_external_competitors.py
+      - benchmarks/v030_release_generalization.py
+      - experiments/entropygraph_v025.py
+      - experiments/entropygraph_v030_product_fs.py
+      - experiments/entropygraph_v030_release_product.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analytics-selective-physical:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile physical referee
+        run: python -m py_compile benchmarks/v030_analytics_frozen_selective_admission_physical.py
+      - name: Execute frozen physical selector
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_analytics_frozen_selective_admission_physical.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-analytics-selective-physical-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-analytics-selective-physical.json"
+      - name: Validate receipt contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-analytics-selective-physical.json').read_text())
+          assert d['schema']=='cmpct-v030-analytics-frozen-selective-admission-physical-v1'
+          assert d['experiment_valid'] is True and d['release_credit'] is False
+          assert d['rounds']==3
+          assert d['accepted_v029_bytes']==6135172
+          assert d['oracle_projected_bytes']==6134940
+          assert d['frozen_rule']=={
+              'min_size':262144,
+              'max_cheap_ratio_ppm':700000,
+              'path_blind':True,
+              'content_only':True,
+          }
+          assert d['next_decision'] in {
+              'ADVANCE_GENERIC_SELECTIVE_ADMISSION',
+              'RETIRE_DOUBLE_COMPRESSION_SELECTOR',
+          }
+          PY
+      - name: Check workflow topology
+        run: python tools/check_ci_topology.py .github/workflows/v030-analytics-frozen-selective-admission-physical.yml
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-analytics-selective-physical-${{ github.sha }}
+          path: benchmark-artifacts/v030-analytics-selective-physical.json
+          if-no-files-found: error
+          retention-days: 90

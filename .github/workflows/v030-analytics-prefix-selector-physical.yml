@@ -1,0 +1,118 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Analytics prefix selector physical referee
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_analytics_prefix_selector_physical_referee.py'
+      - '.github/workflows/v030-analytics-prefix-selector-physical.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_analytics_prefix_selector_physical_referee.py'
+      - '.github/workflows/v030-analytics-prefix-selector-physical.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-analytics-prefix-physical-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          cat /tmp/files
+          if grep -Eq '^(benchmarks/v030_analytics_prefix_selector_physical_referee\.py|\.github/workflows/v030-analytics-prefix-selector-physical\.yml)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  physical-referee:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx zstandard
+      - run: python -m py_compile benchmarks/v030_analytics_prefix_selector_physical_referee.py
+      - name: Run charged physical referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_analytics_prefix_selector_physical_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-analytics-prefix-physical-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-analytics-prefix-physical.json"
+      - name: Enforce receipt identity, not scientific victory
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-analytics-prefix-physical.json').read_text())
+          assert d['schema']=='cmpct-v030-analytics-prefix-selector-physical-referee-v1'
+          assert d['release_credit'] is False and d['product_credit'] is False
+          assert d['frozen_rule']=={
+              'min_raw_bytes':262144,
+              'prefix_bytes':4096,
+              'prefix_codec':'zstd-1',
+              'max_prefix_ratio_ppm':700000,
+          }
+          assert d['rounds']==5
+          assert d['contract']['same_process_controls'] is True
+          assert d['contract']['no_full_pack_compression_feature'] is True
+          assert d['verdict'] in {
+              'ADVANCE_PREFIX_SELECTOR_TO_COMPLETE_CREATE',
+              'RETIRE_PREFIX_SELECTOR_NO_OVERHEAD_RELIEF',
+              'PREFIX_SELECTOR_CAUSAL_GAIN_AMBIGUOUS',
+              'INVALID_IDENTITY_OR_BYTE_DRIFT',
+          }
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-analytics-prefix-selector-physical.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-analytics-prefix-physical-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-analytics-prefix-physical.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only compression-stage referee. Green means receipt integrity, not scientific success.

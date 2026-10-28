@@ -1,0 +1,55 @@
+/* CMPCT Surface 0.29.k — Quiet Provenance.
+   Footnote: this is a maker's signature, not a second brand campaign. It stays visually subordinate to
+   CMPCT, uses existing neutral tones, and introduces no benchmark, archive, or interaction semantics. */
+.fcmo-attribution {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,.055);
+  color: #65605a;
+  font: 680 .57rem/1.35 var(--mono);
+  letter-spacing: .085em;
+}
+
+.fcmo-attribution a {
+  color: #8a857c;
+  text-decoration: none;
+  text-underline-offset: .22em;
+}
+
+.fcmo-attribution a:hover,
+.fcmo-attribution a:focus-visible {
+  color: #f4f0e8;
+  text-decoration: underline;
+}
+
+.fcmo-attribution i {
+  width: 18px;
+  height: 1px;
+  background: rgba(253,82,4,.32);
+}
+
+.fcmo-attribution-group {
+  color: #514d47;
+}
+
+/* Footnote: phones stack the provenance lines rather than shrinking them below practical legibility. The
+   signature remains edge-aligned and calm so it never turns the footer into a promotional block. */
+@media (max-width: 520px) {
+  .fcmo-attribution {
+    align-items: flex-start;
+    justify-content: flex-start;
+    flex-direction: column;
+    gap: 5px;
+    letter-spacing: .065em;
+  }
+
+  .fcmo-attribution i {
+    display: none;
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "cmpct-v030-negative-evidence-v1",
+  "source_commit": "c3e3b09e60cbb87b51001c447365fe3680ce8e9d",
+  "workflow_run_id": 33347337993,
+  "artifact_digest": "sha256:37a79b29583bc57a4e176217f806f5474b27800a8378ae6f74bd211bdfedd513",
+  "target": "resemblance_hostile_v1/01_shifted_versions",
+  "hypothesis": "Reducing Zstd-19 PrefixGraph chain/hash match-table logs can materially reduce four-worker construction RSS without harming exact archive bytes or creation time.",
+  "result": "falsified_as_material_rss_fix",
+  "baseline": {
+    "archive_bytes": 1700242,
+    "archive_sha256": "8994cb83c2f62944795144ee775d9395147681bb1156892d72d4cc5d4ca417fe",
+    "median_build_s": 7.807704341999994,
+    "median_incremental_build_peak_rss_kib": 302404.0
+  },
+  "arms": {
+    "chain-m1": {
+      "archive_identity_equal": true,
+      "wall_ratio_to_baseline": 0.9913470224997467,
+      "rss_ratio_to_baseline": 0.9969180301847859
+    },
+    "chain-m2": {
+      "archive_identity_equal": true,
+      "wall_ratio_to_baseline": 0.9785870897287094,
+      "rss_ratio_to_baseline": 0.9936442639647624
+    },
+    "hash-m1": {
+      "archive_identity_equal": true,
+      "wall_ratio_to_baseline": 0.9401432552989972,
+      "rss_ratio_to_baseline": 1.4525866059972752
+    },
+    "chain-m1-hash-m1": {
+      "archive_identity_equal": true,
+      "wall_ratio_to_baseline": 0.9481118316915889,
+      "rss_ratio_to_baseline": 1.4528974484464492
+    },
+    "chain-m2-hash-m1": {
+      "archive_identity_equal": true,
+      "wall_ratio_to_baseline": 0.9688484142910438,
+      "rss_ratio_to_baseline": 1.4159799473551937
+    }
+  },
+  "conclusion": "chain_log reductions preserve exact bytes and slightly improve wall time but reduce RSS by less than one percent; reducing hash_log increases observed RSS by roughly 42-45 percent. Do not spend further release work on this match-table family as the Shifted RSS solution. The near-linear 1/2/4 worker RSS frontier instead motivates testing native allocator arena retention while keeping four-worker candidate semantics unchanged.",
+  "release_credit": false,
+  "release_thresholds_changed": false,
+  "benchmark_identity_dispatch": false
+}

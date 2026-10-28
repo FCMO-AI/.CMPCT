@@ -1,0 +1,82 @@
+{
+  "schema": "cmpct-v029-lzma2-backend-oracle-v1",
+  "claim_boundary": "detached physical-backend ceiling only; emitted archive remains exact attempt-5 bytes",
+  "source_archive": {
+    "bytes": 47147764,
+    "selected": "mosaic",
+    "records": 134,
+    "direct_records": 118,
+    "candidate_records": 118,
+    "candidate_payload_bytes": 47006600
+  },
+  "policy": {
+    "dictionary_sizes_bytes": [1048576, 4194304, 8388608],
+    "max_decoder_dictionary_bytes": 8388608,
+    "transition_metadata_charge_per_record": 16,
+    "min_net_saving_bytes": 131072,
+    "min_improved_records": 4,
+    "record_boundaries_unchanged": true,
+    "dependency_depth_unchanged": true,
+    "roundtrip_verified_per_candidate": true,
+    "thresholds_frozen_before_measurement": true
+  },
+  "best": {
+    "dictionary_bytes": 1048576,
+    "profitable_records": 1,
+    "net_saving_bytes": 152,
+    "baseline_candidate_payload_bytes": 47006600,
+    "selected_payload_fraction": 0.000991456518871818,
+    "recompress_verify_encode_s": 6.01153143199997,
+    "recompress_verify_decode_s": 2.3491304590004347,
+    "top_record_savings": [
+      {
+        "record_id": 117,
+        "logical_bytes": 524288,
+        "baseline_payload_bytes": 46605,
+        "lzma2_payload_bytes": 46437,
+        "transition_charge_bytes": 16,
+        "net_saving_bytes": 152
+      }
+    ]
+  },
+  "research_gate_pass": false,
+  "results": [
+    {
+      "dictionary_bytes": 1048576,
+      "profitable_records": 1,
+      "net_saving_bytes": 152,
+      "baseline_candidate_payload_bytes": 47006600,
+      "selected_payload_fraction": 0.000991456518871818,
+      "recompress_verify_encode_s": 6.01153143199997,
+      "recompress_verify_decode_s": 2.3491304590004347,
+      "top_record_savings": [{"record_id": 117, "logical_bytes": 524288, "baseline_payload_bytes": 46605, "lzma2_payload_bytes": 46437, "transition_charge_bytes": 16, "net_saving_bytes": 152}]
+    },
+    {
+      "dictionary_bytes": 4194304,
+      "profitable_records": 1,
+      "net_saving_bytes": 152,
+      "baseline_candidate_payload_bytes": 47006600,
+      "selected_payload_fraction": 0.000991456518871818,
+      "recompress_verify_encode_s": 6.071084222000252,
+      "recompress_verify_decode_s": 2.3483154180001975,
+      "top_record_savings": [{"record_id": 117, "logical_bytes": 524288, "baseline_payload_bytes": 46605, "lzma2_payload_bytes": 46437, "transition_charge_bytes": 16, "net_saving_bytes": 152}]
+    },
+    {
+      "dictionary_bytes": 8388608,
+      "profitable_records": 1,
+      "net_saving_bytes": 152,
+      "baseline_candidate_payload_bytes": 47006600,
+      "selected_payload_fraction": 0.000991456518871818,
+      "recompress_verify_encode_s": 6.286365794999824,
+      "recompress_verify_decode_s": 2.348616027000162,
+      "top_record_savings": [{"record_id": 117, "logical_bytes": 524288, "baseline_payload_bytes": 46605, "lzma2_payload_bytes": 46437, "transition_charge_bytes": 16, "net_saving_bytes": 152}]
+    }
+  ],
+  "oracle_wall_s": 217.052765969,
+  "workflow": {
+    "run_id": 32023150777,
+    "artifact_id": 9286240239,
+    "artifact_sha256": "d91798ee1dde5401e138e9a7adae701cfb01f58b6bd4fb8a202184111747dfb8"
+  },
+  "decision": "REJECT: independent bounded LZMA2 backend is not a viable v0.29 mechanism; best measured saving is 152 B on one record, far below the frozen 128 KiB / 4-record gate."
+}

@@ -1,0 +1,128 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 Shifted G04 graph-kernel attribution v3
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_shifted_g04_graph_kernel_attribution_v3.py'
+      - 'docs/v030-rnd/R25_SHIFTED_G04_GRAPH_KERNEL_ATTRIBUTION_V2_RESULT.md'
+      - 'docs/v030-rnd/R25_SHIFTED_G04_GRAPH_KERNEL_ATTRIBUTION_V3_PREREG.md'
+      - '.github/workflows/v030-shifted-g04-graph-kernel-attribution-v3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-shifted-g04-graph-kernel-v3-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_shifted_g04_graph_kernel_attribution_v3\.py|docs/v030-rnd/R25_SHIFTED_G04_GRAPH_KERNEL_ATTRIBUTION_V2_RESULT\.md|docs/v030-rnd/R25_SHIFTED_G04_GRAPH_KERNEL_ATTRIBUTION_V3_PREREG\.md|\.github/workflows/v030-shifted-g04-graph-kernel-attribution-v3\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  attribution:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact scientific head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic runtime dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile superseding frozen instrument
+        run: python -m py_compile benchmarks/v030_shifted_g04_graph_kernel_attribution_v3.py
+      - name: Run unchanged three-repetition graph-kernel attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shifted_g04_graph_kernel_attribution_v3.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-g04-graph-kernel-v3-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-g04-graph-kernel-v3.json"
+      - name: Enforce inherited frozen grammar and owner-only repair
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-shifted-g04-graph-kernel-v3.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-g04-graph-kernel-v3.json').read_text())
+          assert d['schema']=='cmpct-v030-shifted-g04-graph-kernel-attribution-v3'
+          assert d['supersedes']=='cmpct-v030-shifted-g04-graph-kernel-attribution-v2'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          c=d['contract']; r=d['instrument_repair']
+          assert c['repetitions']==3 and float(c['material_ratio'])==0.20
+          assert int(c['fixed_ns'])==1767225600000000000
+          assert c['expected_tree']=='d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd'
+          assert c['instrumentation_only'] is True and c['product_changed'] is False and c['release_credit'] is False
+          assert r['v3_attempt5_primitive_owner']=='accepted.BASE.P'
+          assert r['v3_pack_plan_owner']=='accepted.V028'
+          assert r['scientific_contract_changed'] is False
+          allowed={'SHIFTED_G04_DELTA_KERNEL_MATERIAL_BOTH','SHIFTED_G04_DELTA_KERNEL_MATERIAL_V028_ONLY','SHIFTED_G04_DELTA_KERNEL_MATERIAL_ATTEMPT5_ONLY','SHIFTED_G04_COMPRESSION_KERNEL_MATERIAL','SHIFTED_G04_GRAPH_CONTROL_OR_NOMINATION_DOMINATES','INVALID'}
+          assert d['decision'] in allowed
+          if d['decision'] != 'INVALID': assert not d['invalid_reasons']
+          assert d['release_credit'] is False
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-shifted-g04-graph-kernel-attribution-v3.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-g04-graph-kernel-v3-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-g04-graph-kernel-v3.json
+          if-no-files-found: error
+          retention-days: 90
+
+# D1 instrumentation only. V3 changes only Python ownership for already-preregistered timer boundaries
+# and the required preserved-receipt concurrency declaration; all scientific variables remain inherited.

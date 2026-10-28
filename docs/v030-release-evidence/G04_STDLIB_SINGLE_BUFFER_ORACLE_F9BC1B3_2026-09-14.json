@@ -1,0 +1,59 @@
+{
+  "schema": "cmpct-v030-research-evidence-v1",
+  "recorded_date": "2026-09-14",
+  "status": "PASS",
+  "evidence_class": "research-oracle-dependency-free-productization",
+  "product_release_credit": false,
+  "claim": "On neutral_hostile_v1/09_ml_artifacts, reconstructing the exact same DGO1 delimiter record into one contiguous bytearray using CPython extended-slice scatter reduces delimiter inverse wall time by 48.6% versus the canonical Python inverse, while preserving byte-for-byte output and archive integrity and adding no third-party runtime dependency.",
+  "source": {
+    "repository": "FCMO-AI/.CMPCT",
+    "branch": "agent/v030-authoritative-integration",
+    "experiment_head_sha": "f9bc1b3757c00545012a82c4a75b99181bb8f5f0",
+    "workflow_run_id": 34837327976,
+    "workflow_job_id": 103954017198,
+    "artifact_id": 10344877686,
+    "artifact_name": "v030-g04-stdlib-scatter-f9bc1b3757c00545012a82c4a75b99181bb8f5f0",
+    "artifact_sha256": "2151082abe6689a023a0ad8157dcf30d6d9e34afe61d6996a74f9346a5134f6e",
+    "engine": "v030-g04-stdlib-scatter-oracle-v1"
+  },
+  "contract": {
+    "suite": "neutral_hostile_v1",
+    "workload": "09_ml_artifacts",
+    "record_id": 18,
+    "codec": "zstd",
+    "logical_size": 1048576,
+    "encoded_bytes": 1048585,
+    "compressed_payload_bytes": 1368,
+    "delimiter": 44,
+    "segment_count": 45979,
+    "repetitions_each": 15,
+    "same_exact_encoded_bytes": true,
+    "candidate_bytes_equal_current": true,
+    "candidate_crc_sha_match_archive": true,
+    "single_contiguous_output_buffer": true,
+    "third_party_runtime_dependency_added": false,
+    "product_code_changed": false,
+    "release_thresholds_changed": false
+  },
+  "shape": {
+    "scatter_runs": 516,
+    "active_cells": 1002598,
+    "average_cells_per_scatter": 1943.0193798449613,
+    "max_segment_length": 27,
+    "unique_segment_lengths": 12
+  },
+  "measurements": {
+    "current_median_s": 0.08137724499999877,
+    "candidate_median_s": 0.04186492700000599,
+    "speedup_x": 1.943804774817525,
+    "time_reduction_fraction": 0.4855450439492437,
+    "saved_s": 0.039512317999992774
+  },
+  "decision": {
+    "result": "DEPENDENCY_FREE_PRODUCTIZATION_CANDIDATE",
+    "reason": "The exact dependency-free arm recovers nearly half of delimiter inverse wall time and does so through only 516 C-level strided scatter operations for 1,002,598 active cells. Together with the gifted-vector oracle's 85.6% reduction, this confirms that per-segment Python object/layout work is a material causal owner and that a standard-library realization captures substantial headroom without importing NumPy into the product.",
+    "promotion_boundary": "This remains one-record research evidence and grants zero release credit. Promotion requires installing the exact algorithm in the canonical release reader, proving hostile/exact transform equivalence, and rerunning complete-product runtime/RSS, reader/recovery/native/platform and release authority on one fingerprint.",
+    "next_action": "Promote the dependency-free one-buffer inverse into the canonical release-only DGO1 path, retaining the preserved historical inverse as an independent byte oracle, then measure complete-product effects before making any release claim."
+  },
+  "scope": "One-record, one-workload research oracle. It establishes a practical implementation candidate, not complete-product performance."
+}

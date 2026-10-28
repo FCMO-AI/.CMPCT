@@ -1,0 +1,96 @@
+{
+  "schema": "cmpct-v030-geometry-seed-preci-v1",
+  "date": "2026-08-17",
+  "status": "RESEARCH_SEED_PRE_PROMOTION",
+  "claim_boundary": "Exact public-tree mechanism evidence. Not a v0.30 release record, not canonical r24 behavior, and not a substitute for the full 15-workload CI/direct-base promotion gates.",
+  "source_commit": "351df7f7a04d8eb2df06289f2edcb1c0bb4eb95e",
+  "research_branch": "agent/lattice-v030-breakthrough",
+  "research_engine": "Geometry Compiler / CMPNX13",
+  "canonical_format_revision": 24,
+  "direct_base": {
+    "identity": "accepted CMPCT v0.29 attempt-5 portfolio",
+    "project_version": "0.29.0",
+    "ml_archive_bytes": 13836439
+  },
+  "workload": {
+    "suite": "neutral_hostile_v1 portable repair-v5 identity",
+    "name": "09_ml_artifacts",
+    "logical_bytes": 18172774,
+    "tree_sha256": "efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d"
+  },
+  "environment": {
+    "zstd_cli_version": "1.5.7",
+    "compression_level": 19,
+    "note": "Local exact-tree mechanism reproduction used the public deterministic generator bytes and system libzstd/Zstd CLI 1.5.7. Independent GitHub-hosted generalization is a separate pending evidence layer."
+  },
+  "complete_artifact": {
+    "baseline_v029_bytes": 13836439,
+    "geometry_bytes": 13394449,
+    "saving_bytes": 441990,
+    "smaller_than_v029_pct": 3.194391273650684,
+    "accounting": [
+      "complete serialized research archive",
+      "physical record headers",
+      "CRC32 and SHA-256 physical/logical integrity",
+      "Merkle payload leaves",
+      "duplicated compressed metadata",
+      "transform descriptors"
+    ],
+    "dependency_depth": 0,
+    "node_read_amplification": 1.0,
+    "logical_node_ceiling_bytes": 524288
+  },
+  "mechanism_spotlight": {
+    "file": "tokenizer.json",
+    "logical_bytes": 2810845,
+    "direct_zstd19_bytes": 166909,
+    "fixed_width_lane_best_bytes": 51634,
+    "delimiter_geometry_bytes": 2782,
+    "direct_zstd_to_geometry_ratio": 59.9960460100647,
+    "lane_to_geometry_ratio": 18.56002875629044,
+    "semantic_parser_used": false,
+    "extension_or_mime_admission_used": false,
+    "inverse": "byte-exact",
+    "note": "Delimiter byte is nominated from measured recurring-byte gap regularity; complete compressed bytes decide admission. The transform stores exact segment lengths and column-major segment bytes."
+  },
+  "external_category_context": {
+    "solid_zstd19_exact_tree_bytes": 13702829,
+    "accepted_v029_vs_solid_zstd": "v0.29 larger",
+    "geometry_vs_solid_zstd_saving_bytes": 308380,
+    "geometry_smaller_than_solid_zstd_pct": 2.250484188338043,
+    "qualification": "The solid-Zstd value comes from the committed exact-tree v0.29 category evidence. Geometry has not yet rerun the entire external category matrix."
+  },
+  "frozen_seed_gate": {
+    "minimum_single_workload_saving_bytes": 262144,
+    "minimum_aggregate_saving_bytes": 262144,
+    "archive_size_regression_tolerance_bytes": 0,
+    "expected_workloads": 15,
+    "complete_artifact_ml_row_passes_local_mechanism_threshold": true
+  },
+  "hardening": {
+    "lane_widths": [2, 4, 8, 16],
+    "max_delimiter_candidates": 4,
+    "max_delimiter_segments": 65536,
+    "max_delimiter_cell_scans": 4194304,
+    "writer_over_budget_behavior": "reject transform candidate and retain fallback",
+    "reader_over_budget_behavior": "fail closed before row allocation/transpose loop",
+    "path_traversal_policy": "absolute, dot-dot, Windows-separator, empty and NUL-bearing paths rejected"
+  },
+  "negative_evidence": [
+    "Current Geometry implementation is a parallel whole-artifact candidate, so duplicate audition CPU is open regression debt.",
+    "A deterministic exact logs/telemetry probe found no lane/delimiter payload win on the six raw log streams under the current regularity nomination rule; Geometry must not be described as universally improving structured text.",
+    "Multi-View HyperPack produced 0 B complete-artifact saving versus accepted v0.29 on the fixed hostile aggregate and was rejected as the primary size breakthrough.",
+    "Numeric v0.30 promotion remains blocked until independent full generalization, timing rehabilitation, hostile-input/native/portability work and the ordinary direct-base release gate are complete."
+  ],
+  "reproduction": {
+    "generator": "benchmarks/neutral_hostile_corpus_v1.py plus benchmarks/neutral_hostile_determinism_repair_v5.py",
+    "engine": "experiments/entropygraph_v030_geometry.py with experiments/entropygraph_v030_geometry_safe.py",
+    "focused_tests": [
+      "tests/test_v030_lattice.py",
+      "tests/test_v030_geometry.py",
+      "tests/test_v030_geometry_safe.py"
+    ],
+    "generalization_harness": "benchmarks/geometry_v030_generalization_bench.py via benchmarks/geometry_v030_safe_entrypoint.py",
+    "workflow": ".github/workflows/geometry-v030-breakthrough.yml"
+  }
+}

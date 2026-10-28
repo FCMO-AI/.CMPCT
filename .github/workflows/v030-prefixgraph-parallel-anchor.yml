@@ -1,0 +1,176 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 PrefixGraph parallel anchor oracle
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle.py'
+      - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle_v2.py'
+      - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle_v3.py'
+      - 'benchmarks/v030_prefixgraph_hash_cache_oracle.py'
+      - 'benchmarks/v030_prefixgraph_terminal_parity_oracle.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'tests/test_v030_prefixgraph_parallel_release.py'
+      - '.github/workflows/v030-prefixgraph-parallel-anchor.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-prefixgraph-parallel-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_prefixgraph_(parallel_anchor_oracle(_v[23])?|hash_cache_oracle|terminal_parity_oracle)\.py|experiments/entropygraph_v030_(prefixgraph|prefixgraph_parallel|release_candidate)\.py|tests/test_v030_prefixgraph_parallel_release\.py|\.github/workflows/v030-prefixgraph-parallel-anchor\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect the PrefixGraph parallel authority; skipping the deep replay.'
+          fi
+
+  prefixgraph-parallel-anchor:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile PrefixGraph scheduler and proofs
+        run: |
+          python -m py_compile experiments/entropygraph_v030_prefixgraph_parallel.py
+          python -m py_compile experiments/entropygraph_v030_release_candidate.py
+          python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle.py
+          python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle_v2.py
+          python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle_v3.py
+          python -m py_compile benchmarks/v030_prefixgraph_hash_cache_oracle.py
+      - name: Run focused release binding regression
+        run: python -m pytest -q tests/test_v030_prefixgraph_parallel_release.py
+      - name: Run exact-byte serial vs promoted PrefixGraph proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_prefixgraph_parallel_anchor_oracle_v3 \
+            --work-root benchmark-artifacts/v030-prefixgraph-parallel-work \
+            --output benchmark-artifacts/v030-prefixgraph-parallel.json
+      - name: Run invariant hash-cache causal A/B
+        run: |
+          EVIDENCE_HEAD="$EVIDENCE_HEAD" python -m benchmarks.v030_prefixgraph_hash_cache_oracle \
+            --work-root benchmark-artifacts/v030-prefixgraph-hash-cache-work \
+            --output benchmark-artifacts/v030-prefixgraph-hash-cache.json
+      - name: Independently enforce shipping exactness and research boundaries
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-prefixgraph-parallel.json')
+          assert p.exists(), 'PrefixGraph parallel evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-parallel-anchor-v3'
+          assert d['target_discovery']['type']=='logical-name-normalization-only'
+          assert d['target_discovery']['builder_or_tournament_changed'] is False
+          ship=d['shipping_regression']; s=d['scheduling_change']; g=d['gate']; rows=d['rows']
+          assert ship['builder']=='experiments.entropygraph_v030_prefixgraph_parallel.build'
+          assert ship['prototype_builder_used'] is False
+          assert ship['release_candidate_imports_shipping_builder'] is True
+          assert ship['candidate_set_unchanged'] is True
+          assert ship['complete_byte_tournament_unchanged'] is True
+          assert ship['direct_payload_floor_unchanged'] is True
+          assert s['candidate_set_unchanged'] is True
+          assert s['complete_byte_tournament_unchanged'] is True
+          assert s['direct_payload_floor_unchanged'] is True
+          assert len(rows)==2
+          assert all(row['exact_archive_identity'] for row in rows)
+          assert all(row['exact_tree_identity'] for row in rows)
+          assert all(row['within_release_locality'] for row in rows)
+          assert all(row['material_speedup'] for row in rows)
+          assert all(row['relative_improvement'] >= 0.20 for row in rows)
+          assert all(row['absolute_saving_s'] >= 1.0 for row in rows)
+          assert g['exact_target_count'] is True
+          assert g['exact_archive_identity_all'] is True
+          assert g['exact_tree_identity_all'] is True
+          assert g['locality_green_all'] is True
+          assert g['material_speedup_all'] is True
+          assert g['passed'] is True
+
+          h_path=Path('benchmark-artifacts/v030-prefixgraph-hash-cache.json')
+          assert h_path.exists(), 'PrefixGraph hash-cache evidence missing'
+          h=json.loads(h_path.read_text())
+          assert h['schema']=='cmpct-v030-prefixgraph-invariant-hash-cache-v1'
+          assert h['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert h['rounds']==3
+          assert h['contract']['release_credit'] is False
+          assert h['contract']['production_change'] is False
+          assert h['contract']['candidate_set_changed'] is False
+          assert h['contract']['anchor_nomination_changed'] is False
+          assert h['contract']['complete_byte_tournament_changed'] is False
+          assert h['contract']['archive_grammar_changed'] is False
+          assert h['contract']['hash_algorithm_changed'] is False
+          assert h['gate']['experiment_valid'] is True
+          assert h['gate']['passed'] is True
+          assert len(h['pairs'])==3
+          for pair in h['pairs']:
+              assert pair['baseline']['bytes']==pair['cached']['bytes']==h['archive_bytes']
+              assert pair['baseline']['sha256']==pair['cached']['sha256']==h['archive_sha256']
+          PY
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/v030-prefixgraph-candidate.txt
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-parallel-anchor.yml
+      - name: Upload PrefixGraph evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-parallel-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-prefixgraph-parallel.json
+            benchmark-artifacts/v030-prefixgraph-hash-cache.json
+            benchmark-artifacts/v030-prefixgraph-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90

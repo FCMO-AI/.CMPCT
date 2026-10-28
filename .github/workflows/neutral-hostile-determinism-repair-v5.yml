@@ -1,0 +1,33 @@
+name: CMPCT neutral-hostile determinism repair v5 (accepted)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-pointer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Verify accepted two-runner repair-v5 evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json')
+          r=json.loads(p.read_text())
+          assert r['schema'] == 'cmpct-neutral-hostile-v1-determinism-repair-v5-accepted-v1'
+          assert r['accepted'] is True
+          assert r['cross_run']['independent_runner_match'] is True
+          assert r['cross_run']['per_file_manifest_match'] is True
+          assert r['cross_run']['exact_v028_measurement_match'] is True
+          print(json.dumps(r, indent=2))
+          PY
+
+# Footnote: repair-v5 already passed two independent hosted runners, including different AMD EPYC CPU
+# models.  The costly two-runner proof is retired from automatic PR execution after its exact artifact
+# digests and portable source identity are committed; dependent benchmarks now consume that identity.

@@ -1,0 +1,104 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 Office 4KiB stream slab gate
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_page_slab_stream_store.py'
+      - '.github/workflows/v030-r4-office-page-slab-stream-store.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-office-slab4-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_office_page_slab_stream_store\.py|\.github/workflows/v030-r4-office-page-slab-stream-store\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  office-slab4:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and codec dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack
+      - name: Compile referee
+        run: python -m py_compile benchmarks/v030_r4_office_page_slab_stream_store.py
+      - name: Run fixed 4KiB stream slab gate
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_page_slab_stream_store.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-slab4-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-slab4.json"
+          python - <<'PY'
+          import json, os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-slab4.json'))
+          assert d['schema']=='cmpct-v030-r4-office-page-slab-stream-store-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['summary']['requests']==1800
+          assert d['contract']['fixed_slab_bytes']==4096 and d['contract']['fixed_limit_bytes']==32768
+          assert d['contract']['no_parameter_sweep'] and not d['contract']['selector_changed'] and not d['contract']['format_changed']
+          assert not d['contract']['reader_source_contains_original_deflate_bytes'] and d['contract']['slab_integrity_checked']
+          assert d['stream_store']['all_member_raw_stream_bytes']==5658164
+          print(json.dumps({'summary':d['summary'],'stream_store':d['stream_store'],'economics':d['economics'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-page-slab-stream-store.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-slab4-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-slab4.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green means the fixed experiment executed and produced an exact-head receipt; JSON owns the scientific verdict.

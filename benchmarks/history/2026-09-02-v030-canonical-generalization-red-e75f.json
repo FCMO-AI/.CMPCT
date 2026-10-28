@@ -1,0 +1,47 @@
+{
+  "schema": "cmpct-v030-canonical-generalization-negative-evidence-v1",
+  "status": "FAILED_ALL15_GENERALIZATION_GATE",
+  "claim_boundary": "Durable negative evidence from canonical-generalization job 100086983938; diagnostic only, zero release credit.",
+  "source_commit": "e75f3d3e2d7a774836c35c0dd50cc130a07a02c6",
+  "workflow_run_id": 33578285446,
+  "workflow_job_id": 100086983938,
+  "source_artifact_sha256": "17a46e41c92b5bb04dbf4580414e70476585b4df9a65f130972229bd9572a0da",
+  "source_artifact_file": "canonical-generalization.json",
+  "totals": {
+    "target_count": 15,
+    "accepted_v029_bytes": 137499525,
+    "candidate_bytes": 150060401,
+    "saving_bytes": -12560876,
+    "improved": 9,
+    "regressed": 6,
+    "ties": 0,
+    "passed": false
+  },
+  "rows": [
+    {"suite":"resemblance_hostile_v1","name":"01_shifted_versions","accepted_v029_bytes":1723056,"candidate_bytes":1700603,"saving_bytes":22453},
+    {"suite":"resemblance_hostile_v1","name":"02_false_neighbors","accepted_v029_bytes":14743839,"candidate_bytes":14628265,"saving_bytes":115574},
+    {"suite":"resemblance_hostile_v1","name":"03_boundary_churn","accepted_v029_bytes":55469,"candidate_bytes":55306,"saving_bytes":163},
+    {"suite":"resemblance_hostile_v1","name":"04_deflate_family","accepted_v029_bytes":15136614,"candidate_bytes":15139857,"saving_bytes":-3243},
+    {"suite":"resemblance_hostile_v1","name":"05_incompressible","accepted_v029_bytes":15446438,"candidate_bytes":15472974,"saving_bytes":-26536},
+    {"suite":"neutral_hostile_v1","name":"01_developer","accepted_v029_bytes":746077,"candidate_bytes":872523,"saving_bytes":-126446},
+    {"suite":"neutral_hostile_v1","name":"02_office","accepted_v029_bytes":12120796,"candidate_bytes":21607661,"saving_bytes":-9486865},
+    {"suite":"neutral_hostile_v1","name":"03_media","accepted_v029_bytes":8827796,"candidate_bytes":8825594,"saving_bytes":2202},
+    {"suite":"neutral_hostile_v1","name":"04_analytics","accepted_v029_bytes":13207367,"candidate_bytes":17465839,"saving_bytes":-4258472},
+    {"suite":"neutral_hostile_v1","name":"05_logs_and_telemetry","accepted_v029_bytes":3550609,"candidate_bytes":3550340,"saving_bytes":269},
+    {"suite":"neutral_hostile_v1","name":"06_backups_and_versions","accepted_v029_bytes":11969887,"candidate_bytes":11687335,"saving_bytes":282552},
+    {"suite":"neutral_hostile_v1","name":"07_incompressible_control","accepted_v029_bytes":6296218,"candidate_bytes":6189938,"saving_bytes":106280},
+    {"suite":"neutral_hostile_v1","name":"08_tiny_files","accepted_v029_bytes":4886105,"candidate_bytes":5191605,"saving_bytes":-305500},
+    {"suite":"neutral_hostile_v1","name":"09_ml_artifacts","accepted_v029_bytes":13836439,"candidate_bytes":13674821,"saving_bytes":161618},
+    {"suite":"neutral_hostile_v1","name":"10_large_binary","accepted_v029_bytes":14952415,"candidate_bytes":13997740,"saving_bytes":954675}
+  ],
+  "regression_mass": {
+    "total_regression_bytes": 14207062,
+    "office_bytes": 9486865,
+    "analytics_bytes": 4258472,
+    "office_share": 0.667756909398167,
+    "analytics_share": 0.299739120459662,
+    "office_plus_analytics_share": 0.967496029857829
+  },
+  "causal_interpretation": "The failure is not aggregate noise or benchmark identity drift: 6/15 rows are genuine accepted-v0.29 product-floor regressions. Office and Analytics account for 96.75% of lost bytes, making their already-evidenced federated D5 productization lane the dominant compression convergence target. The remaining four regressions stay independently blocking under the zero-regression law.",
+  "next_action": "Consume the existing path-invariant federated Office/Analytics productization evidence and integrate only if its strict accepted-v0.29+r24+ZIP+Zstd, exactness, locality, recovery and portability gates are satisfied; otherwise preserve its exact failure and diagnose the next lowest-sufficient intervention."
+}

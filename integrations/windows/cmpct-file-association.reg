@@ -1,0 +1,36 @@
+Windows Registry Editor Version 5.00
+
+; Revision-24 association source for the packaged CMPCT browser.
+; The installer MUST replace @CMPCT_BROWSER_EXE@ with the absolute native
+; browser path. Association registration advertises capability without silently
+; hijacking an existing user default; Windows remains responsible for the
+; user's chosen default application.
+
+[HKEY_CURRENT_USER\Software\Classes\.cmpct]
+"Content Type"="application/vnd.fcmo.cmpct"
+"PerceivedType"="compressed"
+
+[HKEY_CURRENT_USER\Software\Classes\.cmpct\OpenWithProgids]
+"FCMO.CMPCT.Archive"=hex(0):
+
+[HKEY_CURRENT_USER\Software\Classes\FCMO.CMPCT.Archive]
+@="CMPCT Archive"
+
+[HKEY_CURRENT_USER\Software\Classes\FCMO.CMPCT.Archive\DefaultIcon]
+@="\"@CMPCT_BROWSER_EXE@\",0"
+
+[HKEY_CURRENT_USER\Software\Classes\FCMO.CMPCT.Archive\shell]
+@="open"
+
+[HKEY_CURRENT_USER\Software\Classes\FCMO.CMPCT.Archive\shell\open\command]
+@="\"@CMPCT_BROWSER_EXE@\" \"%1\""
+
+[HKEY_CURRENT_USER\Software\FCMO\CMPCT\Capabilities]
+"ApplicationName"="CMPCT"
+"ApplicationDescription"="Browse and extract CMPCT lossless archives"
+
+[HKEY_CURRENT_USER\Software\FCMO\CMPCT\Capabilities\FileAssociations]
+".cmpct"="FCMO.CMPCT.Archive"
+
+[HKEY_CURRENT_USER\Software\RegisteredApplications]
+"CMPCT"="Software\\FCMO\\CMPCT\\Capabilities"

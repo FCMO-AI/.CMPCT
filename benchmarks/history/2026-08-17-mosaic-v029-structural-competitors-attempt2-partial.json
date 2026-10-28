@@ -1,0 +1,59 @@
+{
+  "schema": "cmpct-v029-structural-competitors-partial-v1",
+  "campaign_status": "research only; no v0.29.0 or canonical grammar claim",
+  "source_commit": "091f4ab3c5a6c5d2bcadbca0c1c0cb2a4031365c",
+  "workflow_run": 31996276754,
+  "artifact": {
+    "id": 9277580704,
+    "digest": "sha256:c8b7fd5d219b536bb3904a857a5a5645edac31fbd6058f59a1f48f4516e9e3bf"
+  },
+  "workflow_conclusion": "success",
+  "cmpct_evidence": {
+    "neutral_hostile_v1_aggregate": {
+      "v028_bytes": 90418710,
+      "candidate_bytes": 90418710,
+      "saving_bytes": 0,
+      "selected": "v028-fallback"
+    },
+    "resemblance_hostile_v1_aggregate": {
+      "v028_bytes": 47197165,
+      "candidate_bytes": 47147764,
+      "saving_bytes": 49401,
+      "saving_pct": 0.10466942241128255,
+      "selected": "mosaic",
+      "residual_pack_records": 12,
+      "residual_packed_delta_nodes": 186
+    },
+    "regressed_suites": 0
+  },
+  "valid_competitor_rows": {
+    "neutral_hostile_v1_aggregate": {
+      "zip_deflate9_bytes": 111815134,
+      "tar_zstd19_solid_bytes": 96854726
+    },
+    "resemblance_hostile_v1_aggregate": {
+      "zip_deflate9_bytes": 76690799,
+      "tar_zstd19_solid_bytes": 47065652
+    }
+  },
+  "invalid_optional_measurements": {
+    "seven_zip_lzma2": "tool invocation used a relative output path while cwd was changed to the corpus root; successful output could be written somewhere other than the path Python checked",
+    "zpaq_m5": "tool invocation used a relative output path while cwd was changed to the corpus root; stdout reported all OK but Python checked a different path",
+    "borg": "repository path was relative while cwd was changed; Borg created a repository relative to the corpus root while Python measured the runner-relative path"
+  },
+  "diagnosis": {
+    "root_cause": "external competitor outputs and Borg repository were not normalized to absolute paths before subprocess cwd changed",
+    "cmpct_candidate_failure": false,
+    "competitor_algorithm_failure": false,
+    "measurement_harness_failure": true,
+    "threshold_changes": false,
+    "corpus_changes": false,
+    "cmpct_algorithm_changes": false
+  },
+  "evidence_policy": {
+    "cmpct_rows_are_valid": true,
+    "zip_and_tar_zstd_rows_are_valid": true,
+    "seven_zip_zpaq_borg_rows_must_be_remeasured": true,
+    "partial_run_must_not_be_presented_as_complete_structural_comparison": true
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "schema": "cmpct-v030-research-evidence-v1",
+  "recorded_date": "2026-09-14",
+  "status": "PASS",
+  "evidence_class": "research-oracle-gifted-vector-engine",
+  "product_release_credit": false,
+  "claim": "On neutral_hostile_v1/09_ml_artifacts, reconstructing the exact same DGO1 delimiter record into one contiguous logical output buffer with gifted NumPy vector scatter reduces delimiter inverse wall time by 85.6% versus the canonical Python inverse, while preserving byte-for-byte output and archive integrity.",
+  "source": {
+    "repository": "FCMO-AI/.CMPCT",
+    "branch": "agent/v030-authoritative-integration",
+    "experiment_head_sha": "0f5bfe121b7ab3b447c85e425f47dc8bb176669d",
+    "workflow_run_id": 34836984494,
+    "workflow_job_id": 103952924858,
+    "artifact_id": 10344077303,
+    "artifact_name": "v030-g04-numpy-scatter-0f5bfe121b7ab3b447c85e425f47dc8bb176669d",
+    "artifact_sha256": "a04a4b793f512c53e266396a02c21d1b692f4481b0d4c8ac553f01d7341c59e1",
+    "engine": "v030-g04-numpy-scatter-oracle-v1"
+  },
+  "contract": {
+    "suite": "neutral_hostile_v1",
+    "workload": "09_ml_artifacts",
+    "record_id": 18,
+    "codec": "zstd",
+    "logical_size": 1048576,
+    "encoded_bytes": 1048585,
+    "compressed_payload_bytes": 1368,
+    "delimiter": 44,
+    "segment_count": 45979,
+    "repetitions_each": 15,
+    "same_exact_encoded_bytes": true,
+    "candidate_bytes_equal_current": true,
+    "candidate_crc_sha_match_archive": true,
+    "single_contiguous_output_buffer": true,
+    "gifted_numpy_vector_scatter": true,
+    "product_code_changed": false,
+    "release_thresholds_changed": false
+  },
+  "measurements": {
+    "current_median_s": 0.14458271500001274,
+    "candidate_median_s": 0.020806493999998565,
+    "speedup_x": 6.9489225335139455,
+    "time_reduction_fraction": 0.8560927978147544,
+    "saved_s": 0.12377622100001417
+  },
+  "decision": {
+    "result": "MATERIAL_HEADROOM_REOPEN_PRODUCTIZATION",
+    "reason": "The predecessor block/strided-slice oracle retained 45,979 per-segment Python buffers and recovered only ~5.2%. Eliminating that ownership layout and scattering directly into one contiguous output recovers ~85.6% of inverse wall time. This is strong causal evidence that Python object/layout work, not the DGO1 grammar or Zstd payload itself, owns most of the remaining delimiter inverse cost on this substrate.",
+    "promotion_boundary": "NumPy is gifted only as an oracle engine and is not a CMPCT core dependency. This result grants no product or release credit. Productization requires a dependency-appropriate implementation (preferably native/shared or a standard-library exact fast path), then complete-product runtime, memory, integrity, recovery, native/platform and release gates on one exact candidate.",
+    "next_question": "Can a dependency-free standard-library strided scatter, or the shared native core, realize a material fraction of this single-buffer headroom without adding global carrying cost?"
+  },
+  "scope": "One-record, one-workload research oracle. It proves addressable implementation headroom, not product runtime or release readiness."
+}

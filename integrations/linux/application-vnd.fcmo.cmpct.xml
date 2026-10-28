@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/vnd.fcmo.cmpct">
+    <comment>CMPCT lossless archive</comment>
+    <glob pattern="*.cmpct" weight="80"/>
+    <magic priority="90">
+      <match type="string" offset="0" value="CMPCT24\0"/>
+    </magic>
+  </mime-type>
+</mime-info>
+
+<!--
+  Footnote: extension matching makes ordinary desktop file managers useful, while the magic rule
+  prevents a renamed random file from being confidently identified as CMPCT. The MIME identifier is
+  provisional until a public registration exists; the file format itself remains identified by magic
+  and revision, not by this desktop label.
+-->
