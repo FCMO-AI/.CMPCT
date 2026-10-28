@@ -52,6 +52,7 @@ jobs:
           test "$(git -C released hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
           test "$(git -C strict hash-object src/cmpct/reader.py)" = "b37b786966ac1506a0439567d4a58eea472d85f8"
           test "$(git -C candidate hash-object src/cmpct/reader.py)" = "9bca5d1047f9c78984b945d7ca90e3149fe429ab"
+          test "$(git -C candidate hash-object tests/test_o215_fixed_chunk_admission.py)" = "a8efaebd9fff8b3203cfd55304d365c309ff394b"
           python -m py_compile candidate/research/j24c12_released_reader_triplet.py candidate/research/j24c12_released_reader_referee.py
           mkdir -p receipts
           printf '%s\n' "$EVIDENCE_SHA" > receipts/experimental-head.txt
