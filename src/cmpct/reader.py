@@ -21,29 +21,36 @@ def _safe_output_path(dest:Path,rel:str)->Path:
     if pp.is_absolute() or any(x in ('..','') for x in pp.parts):raise IOError(f'unsafe archive path: {rel!r}')
     return dest/pp
 
-def _linux_link_owner_fd(source_fd:int, alias_full:str):
-    """Link the already-open owner inode, not an attacker-replaceable owner pathname.
+_LINUX_LINKAT=None
 
-    Linux-only fail-closed primitive. The source descriptor is retained from the
-    original materialization syscall until all its aliases have been published.
-    Opening the *alias parent* with O_NOFOLLOW protects its leaf component but
-    does not establish a guarantee against arbitrary ancestor/destination races.
+def _linux_link_owner_fd(source_fd:int, alias_full:str, *, parent_fd=None):
+    """Link the original owner inode, not an attacker-replaceable pathname.
+
+    A parent directory fd can be retained over several sibling aliases. That
+    avoids exporting a per-hardlink open/close cost and anchors the destination
+    leaf in a single directory inode for this group. Untrusted ancestors and
+    post-return destination modification remain outside this scoped guarantee.
     """
     if sys.platform != 'linux':
         raise NotImplementedError('Linux descriptor-owned hardlink required')
-    linkat=ctypes.CDLL(None,use_errno=True).linkat
-    linkat.argtypes=[ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_int]
-    linkat.restype=ctypes.c_int
-    parent=os.path.dirname(alias_full) or '.'
-    parent_fd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    global _LINUX_LINKAT
+    if _LINUX_LINKAT is None:
+        linkat=ctypes.CDLL(None,use_errno=True).linkat
+        linkat.argtypes=[ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_int]
+        linkat.restype=ctypes.c_int
+        _LINUX_LINKAT=linkat
+    owns_parent=parent_fd is None
+    if owns_parent:
+        parent=os.path.dirname(alias_full) or '.'
+        parent_fd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
     try:
-        if linkat(source_fd,b'',parent_fd,os.fsencode(os.path.basename(alias_full)),0x1000)!=0:
+        if _LINUX_LINKAT(source_fd,b'',parent_fd,os.fsencode(os.path.basename(alias_full)),0x1000)!=0:
             code=ctypes.get_errno()
-            # ENOENT can mean the source inode lost its final link; NEVER reopen a
-            # pathname or silently fall back to os.link(source_name,...).
+            # An unlinked last-owner inode cannot be safely resurrected. Never
+            # fall back to source-path os.link on ENOENT/unsupported filesystems.
             raise OSError(code,os.strerror(code),alias_full)
     finally:
-        os.close(parent_fd)
+        if owns_parent:os.close(parent_fd)
 
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
@@ -498,12 +505,23 @@ class CMPCT:
                     if stat.S_IMODE(os.fstat(fd).st_mode)!=mode:os.fchmod(fd,mode)
                     os.utime(fd,ns=(mt,mt))
                 except OSError:pass
-            for alias_full in aliases_by_owner[owner_name]:
-                parent=os.path.dirname(alias_full)
-                if parent and not os.path.isdir(parent):os.makedirs(parent,exist_ok=True)
-                try:os.unlink(alias_full)
-                except FileNotFoundError:pass
-                _linux_link_owner_fd(fd,alias_full)
+            # Only the current alias-parent fd is retained. An unbounded cache
+            # of fd per directory would exhaust the process limit on wide trees.
+            current_parent=None;parent_fd=None
+            try:
+                for alias_full in aliases_by_owner[owner_name]:
+                    parent=os.path.dirname(alias_full) or '.'
+                    if parent!=current_parent:
+                        if parent_fd is not None:os.close(parent_fd);parent_fd=None
+                        if not os.path.isdir(parent):os.makedirs(parent,exist_ok=True)
+                        parent_fd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+                        current_parent=parent
+                    leaf=os.path.basename(alias_full)
+                    try:os.unlink(leaf,dir_fd=parent_fd)
+                    except FileNotFoundError:pass
+                    _linux_link_owner_fd(fd,alias_full,parent_fd=parent_fd)
+            finally:
+                if parent_fd is not None:os.close(parent_fd)
             # The alias is source-fd-owned, but the public owner pathname must
             # also still identify that same inode. A late substitution detected
             # here must fail the extraction rather than report a complete tree.
