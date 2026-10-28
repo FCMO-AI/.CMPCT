@@ -93,9 +93,13 @@ def audit(receipt, folder, check_physical=True):
             assert row["budget_mode"] == cell["budget_mode"]
             assert row["output_files"] == n
             assert row["output_sha256"] == expected_hash[n]
-            for metric in ("open_wall_ns", "open_cpu_ns",
-                           "extract_wall_ns", "extract_cpu_ns"):
+            # Win32 process_time_ns is legitimately quantized: a fast Reader
+            # constructor can consume a positive wall interval but report zero
+            # CPU ticks. Preserve zeros as evidence, not missing/invalid samples.
+            for metric in ("open_wall_ns", "extract_wall_ns"):
                 assert type(row[metric]) is int and row[metric] > 0
+            for metric in ("open_cpu_ns", "extract_cpu_ns"):
+                assert type(row[metric]) is int and row[metric] >= 0
         for arm in ("base", "candidate"):
             sub = [r for r in raw if r["arm"] == arm]
             assert len(sub) == 8
