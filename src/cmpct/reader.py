@@ -57,7 +57,7 @@ class CMPCT:
         except Exception:return None
         if len(payload)!=us or sha(payload)!=ph:return None
         return kind,payload,prev
-    def _index_from_footer(self,footer_pos:int,known_bad:set[int]|None=None):
+    def _index_from_footer(self,footer_pos:int,known_bad:set[int]|None=None,known_bad_runs:list[tuple[int,int,int]]|None=None):
         chain=[];pos=footer_pos;depth=0;seen=set()
         while pos and pos not in seen:
             # An earlier candidate can have proved this same ancestral footer invalid.
@@ -86,15 +86,24 @@ class CMPCT:
             chain.append(msgpack.unpackb(payload,raw=False));depth+=1;pos=prev
         # A failed chain cannot become a valid checkpoint by starting at one of
         # its ancestors. Cache the proof, not a decoded object or successful index.
-        # Cap the supplemental set; overflow preserves the old full replay.
-        if known_bad is not None and len(seen)>1 and len(known_bad)+len(seen)<=16384:
-            known_bad.update(seen)
+        # Preserve the inexpensive short-chain set. Above its capacity, compress
+        # *only exact* authenticated/visited offsets forming an arithmetic run.
+        # Min/max alone is unsafe: an unrelated valid footer might lie in a gap.
+        if known_bad is not None and len(seen)>1:
+            if len(known_bad)+len(seen)<=16384:
+                known_bad.update(seen)
+            elif known_bad_runs is not None and len(known_bad_runs)<32 and len(seen)>=3:
+                ordered=sorted(seen)
+                step=ordered[1]-ordered[0]
+                if step>0 and all(p==ordered[0]+i*step for i,p in enumerate(ordered)):
+                    known_bad_runs.append((ordered[0],ordered[-1],step))
         return None
     def _latest_generation(self):
         # Scan backward for the newest valid commit footer. A partial append after an older footer
         # is harmless: the older footer remains discoverable and its hash/parent chain still validates.
         self.f.seek(0,2);size=self.f.tell();block=1024*1024;pos=size;carry=b'';magic=FMAGIC
         known_bad=set()  # transient: no global Reader cache or persistent evidence
+        known_bad_runs=[]  # bounded, exact progressions of already-proved invalid positions
         while pos>0:
             n=min(block,pos);pos-=n;self.f.seek(pos);chunk=self.f.read(n)+carry;search=len(chunk)
             while True:
@@ -102,8 +111,13 @@ class CMPCT:
                 if i<0:break
                 fp=pos+i
                 if fp+FTR.size<=size:
-                    got=self._index_from_footer(fp,known_bad)
-                    if got is not None:return got[0],fp,got[1]
+                    # A certificate may skip *only* its exact step-aligned members.
+                    # It cannot infer badness for positions between known members.
+                    in_bad_run=any(lo<=fp<=hi and (fp-lo)%step==0
+                                   for lo,hi,step in known_bad_runs)
+                    if not in_bad_run:
+                        got=self._index_from_footer(fp,known_bad,known_bad_runs)
+                        if got is not None:return got[0],fp,got[1]
                 search=i
             carry=chunk[:len(magic)-1]
         return None

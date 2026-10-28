@@ -1,0 +1,92 @@
+# ci-lane: fast
+name: CMPCT J24G09 exact invalid-ancestry AP certificates
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24g09_invalid_ancestry_ap_court.py'
+      - 'docs/v031-research/2026-10-28-j24g09-*'
+      - '.github/workflows/v031-j24g09-invalid-ap-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-exact-installed-reader:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G09_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G09_ARTIFACTS: j24g09-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G09_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify exact original source and preregistration ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g09-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G09_HEAD"
+          git merge-base --is-ancestor 38e6186f1a601d3c554f46fa279fd9e81ea0d6a9 HEAD
+          git merge-base --is-ancestor 10a6bc150cfa0ceb8608ee826dc09650ca3f4e3d HEAD
+          test "$(git rev-parse 10a6bc150cfa0ceb8608ee826dc09650ca3f4e3d:src/cmpct/reader.py)" = "bead2ea6a09a6daaadc3ec2389cfb8853e3dd172"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "ec0335268d0486e41b460f14b1a3543b7cb1a589"
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          paths=["src/cmpct/reader.py","research/j24g09_invalid_ancestry_ap_court.py"]
+          files={}
+          for p in paths:
+              source=subprocess.check_output(["git","show","HEAD:"+p])
+              assert pathlib.Path(p).read_bytes()==source
+              files[p]={"blob":subprocess.check_output(["git","rev-parse","HEAD:"+p],text=True).strip(),
+                        "sha256":hashlib.sha256(source).hexdigest()}
+          pathlib.Path("j24g09-artifacts/source.json").write_text(
+              json.dumps({"head":os.environ["J24G09_HEAD"],"files":files},indent=2)+"\n")
+          PY
+      - name: Install genuine candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python - <<'PY'
+          import subprocess,cmpct.reader
+          from pathlib import Path
+          installed=Path(cmpct.reader.__file__).resolve()
+          assert "site-packages" in str(installed), installed
+          assert installed.read_bytes()==subprocess.check_output(["git","show","HEAD:src/cmpct/reader.py"])
+          print("J24G09_INSTALLED_SOURCE_IDENTITY=PASS")
+          PY
+      - name: Original vs candidate same-archive hostile tail and valid-controls court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g09_invalid_ancestry_ap_court.py 2>&1 | tee j24g09-artifacts/court.log
+          python - <<'PY'
+          import json,pathlib
+          receipt=json.loads(pathlib.Path("j24g09-artifacts/court.json").read_text())
+          assert receipt["status"]=="J24G09_CANDIDATE_AP_COURT_PASSED_WITHIN_SCOPE"
+          assert receipt["candidate_reader_blob"]=="ec0335268d0486e41b460f14b1a3543b7cb1a589"
+          assert receipt["original_reader_blob"]=="bead2ea6a09a6daaadc3ec2389cfb8853e3dd172"
+          a,b,c=receipt["cases"]
+          assert b["paired"]["historical"][0]["decoder_calls"]==278665
+          assert b["paired"]["candidate"][0]["decoder_calls"]==16401
+          assert all(x["decoder_calls"]==32769 for x in c["candidate_only"])
+          assert receipt["release_credit"]==0
+          print("J24G09_REFEREE=PASS")
+          PY
+      - name: Retain original source receipt and negative artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g09-ap-${{ github.sha }}
+          path: j24g09-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
