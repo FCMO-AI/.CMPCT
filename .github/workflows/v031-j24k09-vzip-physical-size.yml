@@ -102,6 +102,34 @@ jobs:
             test_j24k06_mode2_prefix_projection.py \
             test_j24c07c_signed_mode2_regeneration.py \
             2>&1 | tee "$GITHUB_WORKSPACE/j24k09-evidence/court.txt"
+      - name: Measure bounded component-level VZIP suffix size-witness costs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k09_physical_witness_economics.py \
+            2>&1 | tee j24k09-evidence/micro.txt
+      - name: Audit component observation provenance and raw sample counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          lines = Path("j24k09-evidence/micro.txt").read_text().splitlines()
+          rows = [json.loads(l.split("J24K09_MICRO=",1)[1])
+                  for l in lines if "J24K09_MICRO=" in l]
+          assert {r["streams"] for r in rows} == {64,512,4096}
+          for r in rows:
+              assert r["class"] == "component_oracle_not_product"
+              assert r["unsafe_control_not_valid_product"]
+              assert r["optimistic_control_predecoded"]
+              assert set(r["raw"]) == {
+                  "unsafe_no_witness","optimistic_predecoded_control","physical_bhdr_witness"}
+              assert all(len(v) == 12 for v in r["raw"].values())
+              assert all(x["wall_ns"] >= 0 and x["cpu_ns"] >= 0
+                         for values in r["raw"].values() for x in values)
+          print("J24K09_COMPONENT_RAW_SAMPLE_AUDIT_PASS")
+          PY
       - name: Audit six frozen signed mutation transfers
         shell: bash
         run: |
