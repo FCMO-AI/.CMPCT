@@ -63,6 +63,21 @@ jobs:
           python -m pip install --upgrade pip build wheel
           python -m pip wheel --no-deps . -w dist
           ls -l dist/
+          # A checkout-only wheel is insufficient; the sdist must retain
+          # the stable-ABI C source and the original locked Rust build graph.
+          python -m build --sdist --outdir sdist
+          python - <<'PY'
+          import glob, tarfile
+          source = glob.glob('sdist/*.tar.gz')
+          assert len(source) == 1, source
+          with tarfile.open(source[0]) as t:
+              names = t.getnames()
+          required = ('src/cmpct/_fastscan_abi3.c', 'setup.py',
+                      'pyproject.toml', 'native/cmpct-core/Cargo.lock')
+          for needed in required:
+              assert any(x.endswith('/' + needed) for x in names), (needed, source[0])
+          print('J24C08_SDIST_C_SOURCE_AND_LOCKED_RUST_PASS', len(names))
+          PY
       - name: Install and test on Python 3.11
         shell: bash
         env:
@@ -121,6 +136,7 @@ jobs:
           path: |
             receipts/
             dist/
+            sdist/
           if-no-files-found: warn
 
   python310-fallback:
