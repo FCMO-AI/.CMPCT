@@ -1,0 +1,62 @@
+# ci-lane: fast
+name: v0.31 J24B06 signed extraction-budget falsifier
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/v031-j24b06-signed-budget.yml'
+      - 'research/j24b06_*'
+      - 'docs/v031-research/2026-10-28-j24b06-*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signed-budget-science:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    env:
+      J24B06_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout actual PR head, not synthetic merge
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify source and Python
+        shell: bash
+        run: |
+          git rev-parse HEAD | tee source-head.txt
+          test "$(git rev-parse HEAD)" = "$J24B06_HEAD"
+          git status --short
+          python3 --version
+      - name: Prepare Python and Zstandard independent referee
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install native CMPCT Reader and independent Zstd CLI
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip setuptools wheel setuptools-rust
+          python -m pip install .
+      - name: Run real installed Reader signed-index budget falsifier
+        run: python research/j24b06_signed_budget_court.py --artifact-dir j24b06-artifacts
+      - name: Independently verify complete signed bytes and adversarial receipts
+        run: python research/j24b06_independent_referee.py j24b06-artifacts
+      - name: Publish all evidence, including negative/refusal outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24b06-${{ matrix.os }}-${{ github.run_id }}
+          path: |
+            source-head.txt
+            j24b06-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
