@@ -47,3 +47,31 @@ Importantly the public Reader's `self.blobs` and other decoded metadata remain m
 Obtain an **exact same-host, same-input original #662 vs sealed #676** installed-Reader cold-open and Q1/Q6/Q64/RSS cost court; bring the genuinely released v0.30.0 control too, with existing #669 heterogeneous/RAW-Zstd and large owner regimes. Then either (a) productize with an explicit immutable-index API contract and independent native Rust reader/portability/recovery gates, or (b) revert/narrow if verified Q1 compatibility/cost losses overwhelm Q6/Q64. Unresolved blob-table ownership deserves a separate bounded, explicitly preregistered mechanism/falsifier rather than general security claims.
 
 No discovery policy or `STATE.json` mutation; #574 owns stale-state reconciliation. Existing #672 replication remains the negative parent evidence and must not be overwritten.
+
+
+## J24C17 historical owner-to-sealed direct cost — decisive subsequent negative (2026-10-28 13:00 UTC)
+
+After the initial hosted court, an independent **exact-source old-owner #662 vs sealed J24C17** control was added. Distinct noneditable Python3.11 wheels and virtual environments executed the exact *same* signed files, same independent expected hashes and Q1/Q6/Q32 queries, each in an independent subprocess. A first instrumentation attempt incorrectly called `Path.resolve()` on both venv Python executables and conflated two distinct envs sharing one Python symlink; that error was corrected without touching product/evaluator thresholds. Its failed runs remain available and are **not** counted as evidence.
+
+Two source-exact hosted runs on head **`b1a25d2696eda88c9ad7ca8f3718ae5cf435b9b3`**, [#40692132713](https://github.com/FCMO-AI/.CMPCT/actions/runs/40692132713) and independent [#40692140648](https://github.com/FCMO-AI/.CMPCT/actions/runs/40692140648), then each finished **SUCCESS**; the unchanged prospective second-root judge recomputed all 84 summary cells from each run's **96 fresh-process raw measurements** and rejected seven forged receipts. Their *successful CI means authentic comparable evidence, not a performance win*.
+
+Crucially, **all twelve scenarios measured the sealed candidate slower than original unsealed owner #662**, consistent with the O(N) tuple replacement charged at constructor rather than a faster range-read algorithm. Same-source wall medians:
+
+| Scenario | Run #40692132713 (sealed/owner, >1 means regression) | Independent run #40692140648 |
+| --- | ---: | ---: |
+| 65,536 RAW 1-owner, Q1 early | 1.159x | 1.208x |
+| 65,536 RAW 1-owner, Q6 | 1.127x | 1.209x |
+| 65,536 hetero, Q1 early | 1.150x | 1.158x |
+| 65,536 hetero, Q6 | 1.131x | 1.130x |
+| 262,144 RAW 1-owner, Q1 early | 1.157x | 1.230x |
+| 262,144 RAW 1-owner, Q6 | 1.147x | 1.236x |
+| 262,144 hetero, Q1 early | 1.157x | 1.136x |
+| 262,144 hetero, Q6 | 1.153x | 1.144x |
+
+Q32 mixed also regressed in both runs; their raw per-run values remain in original artifacts. Source-exact provenance: original #662 `a66fd593`, sealed `b1a25d26`, Python3.11 installed `site-packages` per venv. Artifacts GitHub IDs:
+- Run 40692132713: `12817956441`, provider `sha256:5e228da58e268b7a49ef8503f819f6b726091ba19c2fb00391a044c3783dd6ac`.
+- Run 40692140648: `12817861864`, provider `sha256:362f97bd91211061c11c54c43f96985fa556bac8bc93e8026e88a636b82683f3`.
+
+The direct side-by-side instrument separates open/read CPU/wall and RSS and preserves all raw rows. This narrative quotes **wall** data only; an independent download/third-root physical ZIP SHA audit and full CPU/RSS interpretation are not claimed here beyond the hosted judge. The comparisons are versus the **original experimental #662**, **not** the published v0.30.0 Reader.
+
+**Decision: preserve as an exactness-repair seed, but NO product-performance promotion.** The fix does contain the proven deliberate in-memory ref mutation on installed wheels, yet imposes a reproducible ~13–24% end-to-end relative slowdown against the already-performing fusion in these tiny synthetic archived reference workloads. Against the published Reader the original early Q1 regression was already unacceptable; adding this overhead compounds rather than retires that loss. Future work should investigate an authenticated immutable ownership boundary with lower admission copy cost (e.g. preventing public mutation at construction rather than copy-after-scan, or a typed compact native proof/ref representation), fully charge its memory and compatibility, then rerun original #662 + released v0.30.0 comparisons. Do not 'pass' J24C17 by weakening the frozen Q1 gate, hiding the native copy cost, treating correctness as performance evidence, or silently merging this draft.
