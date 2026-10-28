@@ -21,6 +21,37 @@ def _safe_output_path(dest:Path,rel:str)->Path:
     if pp.is_absolute() or any(x in ('..','') for x in pp.parts):raise IOError(f'unsafe archive path: {rel!r}')
     return dest/pp
 
+_LINUX_LINKAT=None
+
+def _linux_link_owner_fd(source_fd:int, alias_full:str, *, parent_fd=None):
+    """Link the original owner inode, not an attacker-replaceable pathname.
+
+    A parent directory fd can be retained over several sibling aliases. That
+    avoids exporting a per-hardlink open/close cost and anchors the destination
+    leaf in a single directory inode for this group. Untrusted ancestors and
+    post-return destination modification remain outside this scoped guarantee.
+    """
+    if sys.platform != 'linux':
+        raise NotImplementedError('Linux descriptor-owned hardlink required')
+    global _LINUX_LINKAT
+    if _LINUX_LINKAT is None:
+        linkat=ctypes.CDLL(None,use_errno=True).linkat
+        linkat.argtypes=[ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_int]
+        linkat.restype=ctypes.c_int
+        _LINUX_LINKAT=linkat
+    owns_parent=parent_fd is None
+    if owns_parent:
+        parent=os.path.dirname(alias_full) or '.'
+        parent_fd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        if _LINUX_LINKAT(source_fd,b'',parent_fd,os.fsencode(os.path.basename(alias_full)),0x1000)!=0:
+            code=ctypes.get_errno()
+            # An unlinked last-owner inode cannot be safely resurrected. Never
+            # fall back to source-path os.link on ENOENT/unsupported filesystems.
+            raise OSError(code,os.strerror(code),alias_full)
+    finally:
+        if owns_parent:os.close(parent_fd)
+
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
     def __init__(self,path:Path):
@@ -292,7 +323,7 @@ class CMPCT:
         if start<0 or end>len(self.mm):raise IOError('RAW blob payload outside archive')
         return memoryview(self.mm)[start:end]
 
-    def _extract_chunked_verified(self,row,full:str):
+    def _extract_chunked_verified(self,row,full:str,*,before_close=None):
         """Stream a chunked logical file to disk and commit it only after whole-file verification.
 
         Footnote: ``read()`` deliberately returns one contiguous ``bytes`` object for API callers, but
@@ -348,8 +379,14 @@ class CMPCT:
                     if raw_direct and isinstance(b,memoryview):b.release()
             if written!=size or h is None or digest.digest()!=bytes(h):
                 raise IOError(f'file integrity failure: {rel}')
-            os.close(fd);fd=-1
-            os.replace(tmp,full);committed=True
+            if before_close is None:
+                os.close(fd);fd=-1
+                os.replace(tmp,full);committed=True
+            else:
+                # Keep the original verified temporary inode open through publication.
+                # A later owner pathname lookup cannot rebind the alias source.
+                os.replace(tmp,full);committed=True
+                before_close(fd)
         finally:
             if fd>=0:
                 try:os.close(fd)
@@ -440,11 +477,68 @@ class CMPCT:
                 deferred_hardlinks[row[0]]=(row,parts,full)
             else:
                 materialized[row[0]]=(row,parts,full)
+        # Resolve alias groups before writing so each owner can publish its aliases
+        # while the original write descriptor is still open. Holding all owners
+        # until a global second pass would exhaust RLIMIT_NOFILE on broad trees.
+        linux_fd_links=sys.platform=='linux' and bool(deferred_hardlinks)
+        aliases_by_owner={}
+        if linux_fd_links:
+            cache={}
+            for alias in deferred_hardlinks:
+                node=alias;chain=[];seen_nodes=set()
+                while node in deferred_hardlinks and node not in cache:
+                    if node in seen_nodes:raise IOError(f'cyclic hardlink target: {node}')
+                    seen_nodes.add(node);chain.append(node)
+                    node=deferred_hardlinks[node][0][6][0]
+                owner=cache.get(node,node)
+                source=materialized.get(owner)
+                if source is None or source[0][1]!=K_FILE:
+                    raise IOError(f'hardlink has no materialized regular owner: {alias!r} -> {owner!r}')
+                for n in chain:cache[n]=owner
+                aliases_by_owner.setdefault(owner,[]).append(deferred_hardlinks[alias][2])
+
+        def link_owner_aliases(fd,owner_name,mode,mt):
+            # Metadata belongs to the same captured inode, never an owner path
+            # that might have been swapped while an attacker controls the root.
+            if metadata:
+                try:
+                    if stat.S_IMODE(os.fstat(fd).st_mode)!=mode:os.fchmod(fd,mode)
+                    os.utime(fd,ns=(mt,mt))
+                except OSError:pass
+            # Only the current alias-parent fd is retained. An unbounded cache
+            # of fd per directory would exhaust the process limit on wide trees.
+            current_parent=None;parent_fd=None
+            try:
+                for alias_full in aliases_by_owner[owner_name]:
+                    parent=os.path.dirname(alias_full) or '.'
+                    if parent!=current_parent:
+                        if parent_fd is not None:os.close(parent_fd);parent_fd=None
+                        if not os.path.isdir(parent):os.makedirs(parent,exist_ok=True)
+                        parent_fd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+                        current_parent=parent
+                    leaf=os.path.basename(alias_full)
+                    try:os.unlink(leaf,dir_fd=parent_fd)
+                    except FileNotFoundError:pass
+                    _linux_link_owner_fd(fd,alias_full,parent_fd=parent_fd)
+            finally:
+                if parent_fd is not None:os.close(parent_fd)
+            # The alias is source-fd-owned, but the public owner pathname must
+            # also still identify that same inode. A late substitution detected
+            # here must fail the extraction rather than report a complete tree.
+            # This does NOT guarantee stability after return in a hostile root.
+            bound=os.fstat(fd)
+            owner_full=materialized[owner_name][2]
+            try:visible=os.stat(owner_full,follow_symlinks=False)
+            except FileNotFoundError as exc:
+                raise IOError(f'hardlink owner disappeared during materialization: {owner_name!r}') from exc
+            if (bound.st_dev,bound.st_ino)!=(visible.st_dev,visible.st_ino) or not stat.S_ISREG(visible.st_mode):
+                raise IOError(f'hardlink owner path rebound during materialization: {owner_name!r}')
         for row,parts,full in clean:
             rel,k,mode,mt,size,h,storage=row
             if k in (K_DIR,K_HARDLINK):continue
             parent=os.path.dirname(full)
             if parent and not os.path.isdir(parent):os.makedirs(parent,exist_ok=True)
+            alias_cb=(lambda fd, name=rel, m=mode, t=mt: link_owner_aliases(fd,name,m,t)) if rel in aliases_by_owner else None
             if k==K_SYMLINK:
                 target=self.read(rel).decode('utf-8','surrogateescape')
                 if safe_symlinks:
@@ -458,7 +552,7 @@ class CMPCT:
                     except (OSError, NotImplementedError):pass
                 continue
             if storage and storage[0] in (S_CHUNKS,S_CDC):
-                self._extract_chunked_verified(row,full)
+                self._extract_chunked_verified(row,full,before_close=alias_cb)
             elif storage and storage[0]==S_SPARSE:
                 # Create the logical length first, then write only allocated data extents. The gaps
                 # remain filesystem holes instead of consuming disk blocks full of zeros.
@@ -475,6 +569,7 @@ class CMPCT:
                                 else:
                                     os.lseek(fd,q,os.SEEK_SET);n=os.write(fd,view)
                                 view=view[n:];q+=n
+                    if alias_cb:alias_cb(fd)
                 finally:os.close(fd)
             else:
                 raw=self.read(rel)
@@ -483,8 +578,9 @@ class CMPCT:
                     view=memoryview(raw)
                     while view:
                         n=os.write(fd,view);view=view[n:]
+                    if alias_cb:alias_cb(fd)
                 finally:os.close(fd)
-            if metadata:
+            if metadata and not alias_cb:
                 try:
                     # os.open created the requested mode on new files; chmod is needed only when an
                     # existing destination had a different mode (or umask masked creation bits).
@@ -494,24 +590,25 @@ class CMPCT:
         # Resolve each link through its in-archive dependency graph. Explicit iterative resolution
         # avoids recursion limits and quadratic retry loops on long alias chains. Hardlinks may only
         # terminate at real regular files, never directories or symlinks.
-        owner_cache={}
-        for alias,(row,parts,full) in deferred_hardlinks.items():
-            node=alias;chain=[];active=set()
-            while node in deferred_hardlinks and node not in owner_cache:
-                if node in active:raise IOError(f'cyclic hardlink target: {node}')
-                active.add(node);chain.append(node)
-                node=deferred_hardlinks[node][0][6][0]
-            owner=owner_cache.get(node,node)
-            source=materialized.get(owner)
-            if source is None or source[0][1]!=K_FILE:
-                raise IOError(f'hardlink has no materialized regular owner: {alias!r} -> {owner!r}')
-            for name in chain:owner_cache[name]=owner
-            target=source[2]
-            if not os.path.isfile(target) or os.path.islink(target):
-                raise IOError(f'hardlink owner not materialized safely: {owner!r}')
-            try:os.unlink(full)
-            except FileNotFoundError:pass
-            os.link(target,full)
+        if not linux_fd_links:
+            owner_cache={}
+            for alias,(row,parts,full) in deferred_hardlinks.items():
+                node=alias;chain=[];active=set()
+                while node in deferred_hardlinks and node not in owner_cache:
+                    if node in active:raise IOError(f'cyclic hardlink target: {node}')
+                    active.add(node);chain.append(node)
+                    node=deferred_hardlinks[node][0][6][0]
+                owner=owner_cache.get(node,node)
+                source=materialized.get(owner)
+                if source is None or source[0][1]!=K_FILE:
+                    raise IOError(f'hardlink has no materialized regular owner: {alias!r} -> {owner!r}')
+                for name in chain:owner_cache[name]=owner
+                target=source[2]
+                if not os.path.isfile(target) or os.path.islink(target):
+                    raise IOError(f'hardlink owner not materialized safely: {owner!r}')
+                try:os.unlink(full)
+                except FileNotFoundError:pass
+                os.link(target,full)
         if metadata:
             self._restore_extra_metadata(clean)
             for full,mode,mt in sorted(dirs,key=lambda x:x[0].count(os.sep),reverse=True):

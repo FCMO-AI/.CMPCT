@@ -1,0 +1,108 @@
+# ci-lane: fast
+name: CMPCT J24H07 Linux fd-owned hardlink source and fail-close court
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24h07_linux_owner_fd_court.py'
+      - 'research/j24h07b_linux_multi_owner_court.py'
+      - '.github/workflows/v031-j24h07-linux-owner-fd.yml'
+      - 'docs/v031-research/2026-10-28-j24h07-*'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  linux-source-owned-hardlinks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24H07_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24H07_ARTIFACTS: j24h07-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24H07_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify exact source and preserve script/provenance receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24h07-artifacts
+          test "$(git rev-parse HEAD)" = "$J24H07_HEAD"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "fe0706ce00a425edb6572ff6cd2032f9be413468"
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
+          python - <<'PY'
+          import hashlib,json,pathlib,subprocess
+          rows={}
+          for name in ("src/cmpct/reader.py","src/cmpct/builder.py","research/j24h07_linux_owner_fd_court.py"):
+              raw=subprocess.check_output(["git","show","HEAD:"+name])
+              disk=pathlib.Path(name).read_bytes()
+              assert raw.replace(b"\r\n",b"\n")==disk.replace(b"\r\n",b"\n"),name
+              rows[name]={"git_blob":subprocess.check_output(["git","rev-parse","HEAD:"+name],text=True).strip(),
+                          "sha256":hashlib.sha256(raw).hexdigest()}
+          pathlib.Path("j24h07-artifacts/source-custody.json").write_text(json.dumps(rows,sort_keys=True,indent=2)+"\n")
+          print("J24H07_SOURCE_CUSTODY="+json.dumps(rows,sort_keys=True))
+          PY
+      - name: Execute authentic installed CMPCT Builder Writer Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct,cmpct.reader
+          installed=Path(cmpct.__file__).resolve().parent
+          assert "site-packages" in str(installed),installed
+          import subprocess
+          actual=Path(cmpct.reader.__file__).read_bytes()
+          source=subprocess.check_output(["git","show","HEAD:src/cmpct/reader.py"])
+          assert actual==source, "Installed Reader differs from Git source"
+          print("J24H07_INSTALLED_READER="+str(installed))
+          PY
+          python research/j24h07_linux_owner_fd_court.py 2>&1 | tee j24h07-artifacts/court.log
+          python research/j24h07b_linux_multi_owner_court.py 2>&1 | tee j24h07-artifacts/portfolio.log
+      - name: Independently referee claimed inode binding and fail-closed result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,pathlib
+          j=json.loads(pathlib.Path("j24h07-artifacts/court.json").read_text())
+          c=j["control"]; x=j["injection"]; a=x["alias"]; d=x["original_owner_displaced"]
+          assert j["hypothesis"]=="J24H07-LINUX-FD-OWNER"
+          assert j["result"]=="BOUND_SOURCE_AND_FAIL_CLOSED"
+          assert c["verified_members"]==2 and c["metadata"] is True
+          assert c["same_inode"] and c["owner"]["sha256"]==c["alias"]["sha256"]==j["signed_payload_sha256"]
+          assert x["calls"][0]["owner_swapped"] is True and len(x["calls"])==1
+          assert x["calls"][0]["source_fd_inode"]==d["stat_ino"]
+          assert a["sha256"]==j["signed_payload_sha256"] and a["regular_nofollow"]
+          assert (a["stat_dev"],a["stat_ino"])==(d["stat_dev"],d["stat_ino"])
+          assert x["swapped_owner"]["symlink"] is True
+          assert j["accepted_without_postextract_validation"] is False
+          assert "rebound" in x["extract_exception"]
+          assert j["external_initial_sha256"]==j["external_final_sha256"]
+          print("J24H07_INDEPENDENT_REFEREE=BOUND_SOURCE_AND_FAIL_CLOSED")
+          p=json.loads(pathlib.Path("j24h07-artifacts/portfolio.json").read_text())
+          assert p["hypothesis"]=="J24H07B-MULTI-OWNER" and p["result"]=="PASS_WITHIN_HOST_SCOPE"
+          assert p["CDC_storage_true"] is True and p["physical_hardlink_pairs"]==26
+          assert p["actual_kernel_link_calls"]==26 and len(p["cases"])==26
+          assert p["fd_amplification"]<=16
+          assert all(x["same_inode"] and x["bytes"]>0 for x in p["cases"])
+          assert p["create_wall_seconds"]>0 and p["extract_wall_seconds"]>0
+          print("J24H07B_INDEPENDENT_REFEREE=MULTI_STORAGE_AND_FD_BOUND_PASS")
+          PY
+      - name: Preserve original receipt even on failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24h07-linux-source-bound-${{ github.sha }}
+          path: j24h07-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
