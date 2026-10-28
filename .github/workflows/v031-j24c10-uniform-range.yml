@@ -33,6 +33,7 @@ jobs:
         os: [ubuntu-24.04, macos-14, windows-2022]
     env:
       CMPCT_J24C10_EXPECT_NATIVE: '1'
+      CMPCT_J24C08_EXPECT_NATIVE: '1'
       EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
@@ -95,6 +96,7 @@ jobs:
     timeout-minutes: 35
     env:
       CMPCT_J24C10_EXPECT_NATIVE: '0'
+      CMPCT_J24C08_EXPECT_NATIVE: '0'
     steps:
       - uses: actions/checkout@v6
         with:
