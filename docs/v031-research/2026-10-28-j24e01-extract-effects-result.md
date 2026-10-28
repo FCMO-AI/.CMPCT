@@ -29,6 +29,20 @@ A source audit of `_validate_recipe` and the already filed #623 issue could have
 
 **Next unclaimed decisive work** after source-exact hosted result: a focused owner-controlled integration experiment using the already authenticated effective index, with actual r24 signed hardlink/symlink/sparse/VZIP files, pre-mutation destination proof, and CPU/RSS costs. Existing physical-size and staged-publication owners #609/#615/#569/#573/#690 retain product implementation claims; do not duplicate them.
 
-## Exact-head final evidence
+## Exact-head scientific decision and direct measurements
 
-**PENDING** until final source/court and current GitHub CI are reconciled. Earlier **three-host green** on research-head `720b35df74c0a616d5114928d029fa55cb51a0c7` is not retroactive credit for the later revised physical-recipe-oracle and telemetry files. No merge or release.
+**Source HEAD `5f56c43e8a2f47fc3f22cff0b6a7bccaf8e4b798`** — [hosted three-host scientific court #40785985479](https://github.com/FCMO-AI/.CMPCT/actions/runs/40785985479) completed **SUCCESS** Ubuntu 24.04, macOS 14 and Windows 2022. All 7 unittest methods per host passed; these cover 2,000 seeded graphs, four known signed-index quota antagonists, independent per-storage geometry mutations, alias-of-alias and nonregular owner controls, and a 50,000-forward-hardlink chain. The deterministic seed/sample split was **835 certifiable structural graphs / 1,165 valid but VZIP-uncertifiable graphs out of 2,000** on each host (not 2,000 certified successes). Uncertifiable means a valid representation class requiring missing proof, not a bad archive or a failed test.
+
+| Hosted OS | 50,000-alias wall | 50,000-alias CPU | Entire unittest wall |
+| --- | ---: | ---: | ---: |
+| Ubuntu 24.04 | 0.053484 s | 0.053477 s | 0.590 s |
+| macOS 14 | 0.036709 s | 0.036689 s | 0.277 s |
+| Windows 2022 | 0.069371 s | 0.078125 s | 0.652 s |
+
+The last Windows CPU difference is subject to coarse CPU clock quantization. These are isolated metadata-model observations, *not* end-to-end Reader/create/extract time or RSS. No process-architecture credit is earned by a fast Python test.
+
+**First-hosted RED preserved:** [#40784919546](https://github.com/FCMO-AI/.CMPCT/actions/runs/40784919546) initial 131 valid alias-of-alias errors and 200 invalid-test mutants on Ubuntu; preregistered causal repairs are linked above. The later green does not erase these negative stages.
+
+On this code HEAD, Engineering Evidence and Version Discipline are SUCCESS; General CMPCT Tests and CI Topology were still pending at the first result audit. **The PR remains Draft**. Its documentary HEAD may advance independently of the code HEAD; do not claim CI for a SHA that has not executed.
+
+**Decision:** H1 universal/cross-kind exact-effect proof **FALSIFIED** by already-independent physical VZIP evidence. Conditional metadata-geometry subset **REPRODUCED** on 3 hosts for 835 deterministic graphs and all distinct hostile shapes in this synthetic court. Prior structural preflight covers most of the same constraints, so additional 161-line model is an optional separate oracle, **not a product feature**. Any real use requires the existing Reader owners to integrate authenticated physical/provenance proof and pre-mutation publication semantics without breaking VZIP. Product code 0 changes; no merge, format revision, version or release change.
