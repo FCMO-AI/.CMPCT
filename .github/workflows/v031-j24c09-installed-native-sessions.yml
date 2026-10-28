@@ -2,9 +2,6 @@
 # J24C09 scientific court. The Reader, ABI3 predicate and original controls are unchanged.
 name: CMPCT v031 J24C09 installed native selective session
 on:
-  push:
-    branches:
-      - agent/phased3-v031-j24c09-native-session-economics-20261028
   pull_request:
     paths:
       - 'research/j24c09_installed_session_*.py'
