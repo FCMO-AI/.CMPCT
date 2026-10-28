@@ -1,0 +1,74 @@
+# ci-lane: fast
+name: v0.31 J24B09 signed symlink quota scientific court
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'research/j24b09_*'
+      - '.github/workflows/v031-j24b09-symlink-quota.yml'
+      - 'docs/v031-research/2026-10-28-j24b09-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24b09-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  J24B09_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  signed-symlink-quota:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, macos-14]
+    steps:
+      - name: Checkout exact experimental source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.J24B09_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert exact branch HEAD, not synthetic PR merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$J24B09_HEAD"
+          git status --short
+          printf '%s\n' "$actual" > j24b09-head.txt
+      - name: Install Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install candidate package and detached decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip setuptools setuptools-rust wheel
+          python -m pip install . zstandard msgpack
+      - name: Run physical signed-archive candidate court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24b09_symlink_size_quota_court.py --artifact-dir j24b09-artifacts
+      - name: Detached wire and forged-receipt referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24b09_symlink_size_quota_referee.py --artifact-dir j24b09-artifacts
+      - name: Preserve exact files and every available receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24b09-${{ matrix.os }}-${{ github.run_id }}
+          path: |
+            j24b09-head.txt
+            j24b09-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
