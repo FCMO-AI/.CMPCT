@@ -1,0 +1,79 @@
+# ci-lane: fast
+name: CMPCT J24G10 exact non-AP proof spill installed court
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24g10_exact_spill_court.py'
+      - 'docs/v031-research/2026-10-28-j24g10-*'
+      - '.github/workflows/v031-j24g10-exact-spill-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  installed-source-exact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G10_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G10_ARTIFACTS: j24g10-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G10_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind exact current source and frozen preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g10-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G10_HEAD"
+          git merge-base --is-ancestor ff9dfe31ac15e15ce6eef80441d430f5f5e0df48 HEAD
+          git merge-base --is-ancestor 11963e53947829ce141e9910fdd4adf0d866fb5f HEAD
+          test "$(git rev-parse 11963e53947829ce141e9910fdd4adf0d866fb5f:src/cmpct/reader.py)" = ec0335268d0486e41b460f14b1a3543b7cb1a589
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 690ab86564c9f2989ed4af0879167d8394140dd0
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          paths=['src/cmpct/reader.py','research/j24g10_exact_spill_court.py']
+          files={}
+          for p in paths:
+              src=subprocess.check_output(['git','show','HEAD:'+p])
+              assert pathlib.Path(p).read_bytes()==src,p
+              files[p]={'blob':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip(),
+                        'sha256':hashlib.sha256(src).hexdigest()}
+          pathlib.Path('j24g10-artifacts/source.json').write_text(
+              json.dumps({'head':os.environ['J24G10_HEAD'],'files':files},indent=2)+'\n')
+          PY
+      - name: Install actual candidate and run three-arm recovery court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python research/j24g10_exact_spill_court.py 2>&1 | tee j24g10-artifacts/court.log
+          python - <<'PY'
+          import json,pathlib
+          r=json.loads(pathlib.Path('j24g10-artifacts/court.json').read_text())
+          assert r['release_credit']==0
+          assert r['candidate_reader_blob']=='690ab86564c9f2989ed4af0879167d8394140dd0'
+          assert r['parent_reader_blob']=='ec0335268d0486e41b460f14b1a3543b7cb1a589'
+          assert not r['full_RSS_bounded']
+          for case in ('alternating-16400','random-16400'):
+              assert r['cases'][case]['rows']['parent'][0]['decoder_calls']==278665
+              assert r['cases'][case]['rows']['candidate'][0]['decoder_calls']==16401
+          print('J24G10_EXACT_REFEREE=PASS')
+          PY
+      - name: Preserve raw same-head evidence and negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g10-exact-spill-${{ github.sha }}
+          path: j24g10-artifacts/
+          retention-days: 30
+          if-no-files-found: warn
