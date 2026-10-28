@@ -86,7 +86,7 @@ def audit(receipt, folder, check_physical=True):
             assert [r["step"] for r in ordered] == [0, 1, 2, 3]
             expected_order = (["base","candidate","candidate","base"]
                               if turn % 2 == 0
-                              else ["base","candidate","candidate","base"][::-1])
+                              else ["candidate","base","base","candidate"])
             assert [r["arm"] for r in ordered] == expected_order
         for row in raw:
             assert row["arm"] in ("base", "candidate")
