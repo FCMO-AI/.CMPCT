@@ -11,7 +11,7 @@ from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
 from .path_policy import canonical_logical_path
-from ._chunk_admission import native_chunk_ok
+from ._chunk_admission import native_chunk_ok, native_uniform_stride
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -107,7 +107,7 @@ class CMPCT:
         except BaseException:
             self.f.close()
             raise
-        self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
+        self._chunk_stride_cache={};self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
     def close(self):
         if getattr(self,'mm',None):self.mm.close();self.mm=None
         if self._zdict_decoder:self._zdict_decoder.close();self._zdict_decoder=None
@@ -324,8 +324,33 @@ class CMPCT:
             # Compressed small members remain one independent frame, preserving ZIP-like granularity.
             return self._blob(idx)[start:end]
         if storage[0]==S_CHUNKS:
+            ids=storage[1]
+            # J24C10: a constant-stride witness is NOT an admission shortcut.
+            # Full native proof uses the SAME already-admitted authenticated index,
+            # only for late requests; missing/failed proof keeps the original scan.
+            # At most one integer per queried member is cached per Reader.
+            stride=self._chunk_stride_cache.get(name)
+            if stride is None and length and start*2>=size and len(ids)>1:
+                # Cheap necessary condition avoids a full C pass for plainly
+                # irregular interior lengths; C still proves EVERY reference.
+                a=self.blobs[ids[0]][1]
+                mid=self.blobs[ids[len(ids)//2]][1]
+                prelast=self.blobs[ids[-2]][1]
+                stride=(native_uniform_stride(storage,self.blobs,size)
+                        if a>0 and a==mid==prelast else 0)
+                self._chunk_stride_cache[name]=stride
+            if stride:
+                out=[];first=start//stride;p=first*stride
+                for j in range(first,len(ids)):
+                    idx=ids[j];bsize=self.blobs[idx][1]
+                    if p+bsize>start and p<end:
+                        b=self._blob(idx);lo=max(start,p)-p;hi=min(end,p+bsize)-p
+                        out.append(b[lo:hi])
+                    p+=bsize
+                    if p>=end:break
+                return b''.join(out)
             out=[];p=0
-            for idx in storage[1]:
+            for idx in ids:
                 bsize=self.blobs[idx][1]
                 if p+bsize>start and p<end:
                     b=self._blob(idx);a=max(start,p)-p;z=min(end,p+bsize)-p;out.append(b[a:z])
