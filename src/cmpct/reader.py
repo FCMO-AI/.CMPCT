@@ -76,6 +76,11 @@ class _FooterInvalidProof:
             self.hot.clear()
         self._db.executemany('INSERT OR IGNORE INTO bad(p) VALUES (?)',
                              ((self._key(p),) for p in positions))
+        # The proof is intentionally disk-backed: an open uncommitted SQLite
+        # transaction can leave pages in RAM and report a misleadingly tiny
+        # physical file. Materialize each completed failed ancestry before the
+        # next candidate lookup, and fail closed if the write cannot complete.
+        self._db.commit()
         # A counting query is not required for decisions; used only by the cap
         # predicate for subsequent chains and never to determine validity.
         self._count = self._db.execute('SELECT count(*) FROM bad').fetchone()[0]
