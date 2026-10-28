@@ -48,14 +48,16 @@ def main() -> None:
     ap.add_argument("--parent", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
-    base = (a.parent / "src/cmpct/codec.py").read_bytes()
-    now = (a.candidate / "src/cmpct/codec.py").read_bytes()
+    # Windows Git checkouts can choose CRLF; compare canonical text, not checkout EOL.
+    norm = lambda b: b.replace(b"\\r\\n", b"\\n")
+    base = norm((a.parent / "src/cmpct/codec.py").read_bytes())
+    now = norm((a.candidate / "src/cmpct/codec.py").read_bytes())
     old, new = OLD.encode(), NEW.encode()
     assert base.count(old) == 1, "frozen parent has unexpected codec source"
     assert now == base.replace(old, new), "candidate codec differs beyond preregistered patch"
     hashes = {}
     for name in PRESERVED:
-        lhs, rhs = (a.parent / name).read_bytes(), (a.candidate / name).read_bytes()
+        lhs, rhs = norm((a.parent / name).read_bytes()), norm((a.candidate / name).read_bytes())
         assert lhs == rhs, f"unexpected inherited change to {name}"
         hashes[name] = hashlib.sha256(rhs).hexdigest()
     receipt = {
