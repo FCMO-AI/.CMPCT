@@ -8,6 +8,7 @@ on:
       - 'src/cmpct/codec.py'
       - 'src/cmpct/reader.py'
       - 'tests/test_j24k09_*'
+      - 'research/j24k09_source_guard.py'
       - 'docs/v031-research/2026-10-28-j24k09-*'
       - '.github/workflows/v031-j24k09-vzip-physical-size.yml'
   workflow_dispatch:
@@ -35,6 +36,7 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -52,6 +54,9 @@ jobs:
           mkdir -p j24k09-evidence
           git rev-parse HEAD > j24k09-evidence/head.txt
           git ls-tree HEAD src/cmpct/codec.py src/cmpct/reader.py src/cmpct/validation.py > j24k09-evidence/source-blobs.txt
+      - name: Check bounded source changes versus exact historical parent
+        shell: bash
+        run: python research/j24k09_source_guard.py
       - name: Install real wheel
         shell: bash
         run: python -m pip install . pytest
