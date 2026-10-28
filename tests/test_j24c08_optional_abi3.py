@@ -7,6 +7,7 @@ ordinary native engagement is exercised through unmodified CMPCT(path).
 from __future__ import annotations
 
 import os
+import random
 from pathlib import Path
 import tempfile
 import unittest
@@ -133,6 +134,25 @@ class InstalledOptionalAbi3(unittest.TestCase):
         self.assertFalse(admission.native_chunk_ok([S_CHUNKS, [0], "extra"], blobs, 4))
         self.assertFalse(admission.native_chunk_ok([S_CHUNKS, {"0": 0}], blobs, 4))
         self.assertFalse(admission.native_chunk_ok((S_CHUNKS, [0]), blobs, 4))
+
+    def test_1000_held_out_strict_predicate_nonacceptance(self):
+        # Property-level independent control: a native True must be a subset
+        # of the inherited strict validator's accepted S_CHUNKS inputs.
+        # No forged malformed-index input is promoted to whole-archive credit.
+        rng = random.Random(2408)
+        blobs = [[0, 4, 4, 0, 0], [0, 7, 7, 0, 0]]
+        pool = [0, 1, 2, -1, True, False, 0.0, None, "0", 2 ** 63, [0], {}]
+        for i in range(1000):
+            refs = [rng.choice(pool) for _ in range(rng.randrange(0, 12))]
+            size = rng.choice([0, 4, 7, 8, 11, 15, 2 ** 63, True])
+            try:
+                _validate_storage("fixed.bin", K_FILE, size,
+                                  [S_CHUNKS, refs], blobs, [])
+                strict_accept = True
+            except (ValidationError, TypeError, IndexError, OverflowError):
+                strict_accept = False
+            self.assertFalse(admission.native_chunk_ok([S_CHUNKS, refs], blobs, size)
+                             and not strict_accept, f"native accepted strict-invalid case {i}")
 
     def test_original_strict_validator_is_never_rewritten(self):
         blobs = [[0, 4, 4, 0, 0]]
