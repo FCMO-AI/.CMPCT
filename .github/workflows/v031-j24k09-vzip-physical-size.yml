@@ -1,0 +1,206 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT v031 J24K09 VZIP physical-size witness court
+
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/codec.py'
+      - 'src/cmpct/reader.py'
+      - 'tests/test_j24k09_*'
+      - 'research/j24k09_source_guard.py'
+      - 'research/j24k09_*'
+      - 'docs/v031-research/2026-10-28-j24k09-*'
+      - '.github/workflows/v031-j24k09-vzip-physical-size.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24k09-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  three-host-signed-vzip-size-witness:
+    name: J24K09 same-mmap signed stream geometry - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prove source and frozen fixture provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = "0614723549403f398a43552a7c5ad3f00fbec688"
+          test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip.json)" = "1f199cafb40ca487263ed421e0d0908402ae6c3f"
+          test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip-deflate-mode1.json)" = "06381fab57609252bfb9b887e33c2bdd480de681"
+          test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip-deflate-mode0.json)" = "663b9fdb4df560fb9572fa14bf003928a2379e5e"
+          test -s docs/v031-research/2026-10-28-j24k09-lazy-physical-stream-prereg.md
+          python -m py_compile src/cmpct/codec.py src/cmpct/reader.py tests/test_j24k09_signed_stream_guard.py tests/test_j24k09_stream_size_oracle.py tests/test_j24k09_heldout_mixed_geometry.py
+          mkdir -p j24k09-evidence
+          git rev-parse HEAD > j24k09-evidence/head.txt
+          git ls-tree HEAD src/cmpct/codec.py src/cmpct/reader.py src/cmpct/validation.py > j24k09-evidence/source-blobs.txt
+      - name: Check bounded source changes versus exact historical parent
+        shell: bash
+        run: python research/j24k09_source_guard.py
+      - name: Install real wheel
+        shell: bash
+        run: python -m pip install . pytest
+      - name: Check installed source equals exact Git HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import inspect, os, subprocess
+          from pathlib import Path
+          import cmpct.codec as codec
+          import cmpct.reader as reader
+          import cmpct.validation as validation
+          root = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for mod, rel in ((codec, "src/cmpct/codec.py"), (reader, "src/cmpct/reader.py"), (validation, "src/cmpct/validation.py")):
+              path = Path(inspect.getfile(mod)).resolve()
+              assert not path.is_relative_to(root), (rel, "editable install")
+              committed = subprocess.check_output(["git", "show", "HEAD:"+rel], cwd=root)
+              normalize = lambda b: b.replace(b"\r\n", b"\n")
+              assert normalize(path.read_bytes()) == normalize(committed), (rel, "installed source mismatch")
+              print("J24K09_INSTALLED_SOURCE="+rel, flush=True)
+          PY
+      - name: Run signed attack transfers, unit and inherited mode2 controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_HOME="$RUNNER_TEMP/j24k09-tests"
+          mkdir -p "$TEST_HOME/conformance"
+          cp tests/test_j24k09_signed_stream_guard.py "$TEST_HOME/"
+          cp tests/test_j24k09_stream_size_oracle.py "$TEST_HOME/"
+          cp tests/test_j24k09_heldout_mixed_geometry.py "$TEST_HOME/"
+          cp tests/test_j24k06_mode2_prefix_projection.py "$TEST_HOME/"
+          cp tests/test_j24c07c_signed_mode2_regeneration.py "$TEST_HOME/"
+          cp tests/conformance/v24-virtual-zip.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-virtual-zip-deflate-mode1.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-virtual-zip-deflate-mode0.json "$TEST_HOME/conformance/"
+          cd "$TEST_HOME"
+          python -m pytest --noconftest -q -s \
+            test_j24k09_signed_stream_guard.py \
+            test_j24k09_stream_size_oracle.py \
+            test_j24k09_heldout_mixed_geometry.py \
+            test_j24k06_mode2_prefix_projection.py \
+            test_j24c07c_signed_mode2_regeneration.py \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24k09-evidence/court.txt"
+      - name: Measure bounded component-level VZIP suffix size-witness costs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k09_physical_witness_economics.py \
+            2>&1 | tee j24k09-evidence/micro.txt
+      - name: Audit component observation provenance and raw sample counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          lines = Path("j24k09-evidence/micro.txt").read_text().splitlines()
+          rows = [json.loads(l.split("J24K09_MICRO=",1)[1])
+                  for l in lines if "J24K09_MICRO=" in l]
+          assert {r["streams"] for r in rows} == {64,512,4096}
+          for r in rows:
+              assert r["class"] == "component_oracle_not_product"
+              assert r["unsafe_control_not_valid_product"]
+              assert r["optimistic_control_predecoded"]
+              assert set(r["raw"]) == {
+                  "unsafe_no_witness","optimistic_predecoded_control","physical_bhdr_witness"}
+              assert all(len(v) == 12 for v in r["raw"].values())
+              assert all(x["wall_ns"] >= 0 and x["cpu_ns"] >= 0
+                         for values in r["raw"].values() for x in values)
+          print("J24K09_COMPONENT_RAW_SAMPLE_AUDIT_PASS")
+          PY
+      - name: Compare fully charged immutable-snapshot proof ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k09_session_economics.py \
+            2>&1 | tee j24k09-evidence/session.txt
+      - name: Audit prospective session cost matrix and cache charge
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = [json.loads(line.split("J24K09B_SESSION=",1)[1])
+                  for line in Path("j24k09-evidence/session.txt").read_text().splitlines()
+                  if "J24K09B_SESSION={" in line]
+          assert {(r["streams"],r["queries"]) for r in rows} == {
+              (n,q) for n in (64,512,4096) for q in (1,8,64)}
+          for r in rows:
+              assert r["class"] == "immovable_source_snapshot_oracle_not_product"
+              assert r["physically_charged_prevalidation"]
+              assert r["concurrent_same_inode_cache_invalidity_unresolved"]
+              assert set(r["raw"]) == {
+                  "per_query_physical","per_session_verified","unsafe_no_witness"}
+              assert len(r["raw"]["per_query_physical"]) == 10
+              assert len(r["raw"]["per_session_verified"]) == 10
+              assert len(r["raw"]["unsafe_no_witness"]) == 5
+              for strategy, samples in r["raw"].items():
+                  for sample in samples:
+                      assert sample["wall_ns"] >= 0 and sample["cpu_ns"] >= 0
+                      if strategy == "per_session_verified":
+                          assert sample["extra_cache_bytes"] > 0
+                      else:
+                          assert sample["extra_cache_bytes"] == 0
+          print("J24K09B_FULLY_CHARGED_SESSION_MATRIX_PASS")
+          PY
+      - name: Audit six frozen signed mutation transfers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("j24k09-evidence")
+          out = root.joinpath("court.txt").read_text(encoding="utf-8")
+          rows = [json.loads(line.split("J24K09_RECEIPT=",1)[1])
+                  for line in out.splitlines() if "J24K09_RECEIPT=" in line]
+          assert len(rows) == 6, len(rows)
+          assert {(r["case"],r["delta"]) for r in rows} == {
+              (c,d) for c in ("stored","retained","canonical") for d in (-1,1)}
+          sha = root.joinpath("head.txt").read_text().strip()
+          for r in rows:
+              assert r["source_sha"] == sha
+              assert r["opened"] and r["preflight"] == "REJECT"
+              assert r["full_read"] == "REJECT" and r["verify"] == "REJECT"
+              assert r["wrong_byte_count"] == 0
+              assert r["probe_count"] > 0 and r["rejected_probes"] == r["probe_count"]
+              assert r["truncated_probes"] == 0
+          root.joinpath("receipts.json").write_text(json.dumps(rows,indent=2,sort_keys=True)+"\n")
+          print("J24K09_SIX_SIGNED_MUTATION_CELLS_REJECTED")
+          PY
+      - name: Check CI topology
+        if: runner.os == 'Linux'
+        shell: bash
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24k09-vzip-physical-size.yml
+      - name: Preserve evidence, including falsifiers on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24k09-${{ matrix.os }}-${{ env.SOURCE_SHA }}
+          path: j24k09-evidence/
+          retention-days: 30
+          if-no-files-found: warn

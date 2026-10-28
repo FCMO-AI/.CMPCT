@@ -225,6 +225,37 @@ class CMPCT:
         if m!=BMAGIC or c!=CODEC_DEFLATE:return b''
         return self.mm[p:p+rcs]
 
+    def _vzip_physical_stream_size(self,method:int,mode:int,rawref:int,streamref:int)->int:
+        """Length of a physical VZIP stream from this Reader's signed index and mapped record.
+
+        Unlike _stream(), this does not inflate/decode earlier stored streams.
+        A signed blob descriptor alone is not enough: compare it to the physical
+        BHDR within the same mmap before using its sizes as logical coordinates.
+        Regenerated mode2 is deliberately excluded and still needs recompression.
+        """
+        if method==zipfile.ZIP_STORED:
+            idx=rawref;uses_compressed=False
+        elif method==zipfile.ZIP_DEFLATED and mode in (0,1):
+            idx=streamref;uses_compressed=(mode==0)
+        else:
+            raise IOError('unsupported virtual ZIP physical size witness')
+        if type(idx) is not int or idx<0 or idx>=len(self.blobs):
+            raise IOError('virtual ZIP physical owner index outside blobs')
+        off,us,cs,codec,ml=self.blobs[idx]
+        if not all(type(x) is int and x>=0 for x in (off,us,cs,codec,ml)):
+            raise IOError('virtual ZIP invalid physical owner descriptor')
+        pos=self.record_base+off
+        if pos<self.record_base or pos+BHDR.size>len(self.mm):
+            raise IOError('virtual ZIP physical owner header outside archive')
+        m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+        if (m!=BMAGIC or c!=codec or flags or res
+                or rus!=us or rcs!=cs or rml!=ml
+                or pos+BHDR.size+rml+rcs>len(self.mm)):
+            raise IOError('virtual ZIP physical owner/header mismatch')
+        if uses_compressed and codec!=CODEC_DEFLATE:
+            raise IOError('virtual ZIP canonical Deflate physical codec mismatch')
+        return rcs if uses_compressed else rus
+
     def file_sha256(self,name:str)->bytes:
         row=self.by[name];storage=row[6]
         if row[1]==K_HARDLINK:return self.file_sha256(storage[0])
@@ -348,7 +379,7 @@ class CMPCT:
                     q=chunk_end
                     if q>=end:break
             return bytes(out)
-        if storage[0]==S_VZIP:return range_vzip(self.recipes[storage[1]],self._blob,self._stream,start,length)
+        if storage[0]==S_VZIP:return range_vzip(self.recipes[storage[1]],self._blob,self._stream,start,length,self._vzip_physical_stream_size)
         return self.read(name)[start:end]
 
     def _raw_blob_view_for_extract(self,idx:int):
