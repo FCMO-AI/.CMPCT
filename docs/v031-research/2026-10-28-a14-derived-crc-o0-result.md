@@ -56,6 +56,10 @@ Compared alternatives: (1) continue saturated VZIP per-call loop optimization (m
 
 **Counterfactual:** the maximal removable data fraction for random records with a 4-byte derived field is ~`4 / width`, less header cost; thus 132-byte random records cannot plausibly reach a 5% raw-byte saving through deletion alone. This is a prospective, low-cost kill for the *high-entropy long-record* regime. Record locally; it does not justify self-modifying Discovery policy from one oracle.
 
+## quality-ratchet and falsifiability boundary
+
+The original released CMPCT r24 Reader/Builder, exact filesystem metadata, integrity/authentication, hostile input/recovery, portability and all release parity controls remain untouched. O0 reduces uncertainty about one exact information relation, O1a lowers confidence in broad applicability; neither is a product-size win. Any independent decoded-byte mismatch, source SHA contradiction, hidden decoder parameter or hard control that defeats the frozen claim must retain the negative without lowering thresholds. New CI product-credit claims require separate same-input verified Builder/Reader measurements and safety/portability evidence.
+
 ## Handoff
 - Product: **unchanged**.
 - Scientific result: positive under frozen synthetic scope; 132-byte materiality negative; external validity and product economics unresolved.
