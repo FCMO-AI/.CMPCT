@@ -7,6 +7,7 @@ from a skeleton and raw zlib Deflate bytes.
 from __future__ import annotations
 
 import copy
+import random
 import zlib
 import zipfile
 
@@ -110,3 +111,58 @@ def test_unrelated_retained_deflate_and_stored_streams_remain_selective():
     assert range_vzip(recipe, get_content, get_stream, len(reconstructed)-1, 1) == b"L"
     # Skipped retained/STORED data does not require regeneration.
     assert calls == []
+
+
+def test_seeded_heldout_mixed_recipe_offsets_and_mode2_size_lies():
+    """Exercise structural generality, not a memorized frozen-archive identity."""
+    rng = random.Random(20261028)
+    for trial in range(96):
+        count = rng.randrange(1, 7)
+        literals = [rng.randbytes(rng.randrange(0, 14)) for _ in range(count)]
+        literals.append(rng.randbytes(rng.randrange(1, 14)))  # suffix always exists
+        blobs = {0: b"".join(literals)}
+        streams = {}
+        payloads = []
+        out = []
+        for i in range(count):
+            raw = rng.randbytes(rng.randrange(0, 90))
+            idx = i + 1
+            blobs[idx] = raw
+            mode = rng.choice((0, 1, 2))
+            if mode == 0:
+                method, cp = zipfile.ZIP_STORED, raw
+            else:
+                method, cp = zipfile.ZIP_DEFLATED, _deflate(raw)
+            streams[idx] = cp
+            payloads.append([idx, method, mode, idx, len(cp), 6])
+            out += [literals[i], cp]
+        out.append(literals[-1])
+        truth = b"".join(out)
+        recipe = [0, [len(x) for x in literals], payloads, b"\0" * 32, len(truth), 0]
+        calls = []
+
+        def content(idx):
+            return blobs[idx]
+
+        def stream(mode, idx, level):
+            calls.append(idx)
+            return _deflate(blobs[idx], level) if mode == 2 else streams[idx]
+
+        for _ in range(12):
+            start = rng.randrange(0, len(truth) + 1)
+            length = rng.randrange(0, len(truth) - start + 1)
+            assert range_vzip(recipe, content, stream, start, length) == truth[start:start+length], trial
+        # Independent csize mutation on one discoverable regenerated stream.
+        regenerated = [i for i, p in enumerate(payloads) if p[2] == 2]
+        if regenerated:
+            i = rng.choice(regenerated)
+            for delta in (-1, 1):
+                lie = copy.deepcopy(recipe)
+                lie[2][i][4] += delta
+                lie[4] += delta
+                # Test the last reconstructed literal: the mismatched mode2
+                # stream lies strictly before this selected range.
+                calls.clear()
+                with pytest.raises(IOError, match="virtual ZIP selective reconstruction length mismatch"):
+                    range_vzip(lie, content, stream, len(truth) - 1, 1)
+                assert i + 1 in calls
