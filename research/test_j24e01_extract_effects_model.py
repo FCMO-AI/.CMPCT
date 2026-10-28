@@ -141,6 +141,37 @@ class ModelCourt(unittest.TestCase):
                 with self.assertRaises(UnprovedEffect):
                     planned_logical_bytes(index)
 
+    def test_cross_kind_physical_geometry_hostiles(self):
+        """Each invalid mode must independently fail on the matching proof."""
+        obj = empty()
+        row(obj, "pack", K_FILE, 4, [S_PACK, blob(obj, 5), 1, 4])
+        row(obj, "chunks", K_FILE, 3, [S_CHUNKS, [blob(obj, 1), blob(obj, 2)]])
+        row(obj, "cdc", K_FILE, 3, [S_CDC, [[3, blob(obj, 3)]]])
+        row(obj, "sparse", K_FILE, 10,
+            [S_SPARSE, [[1, 3, [blob(obj, 3)]]]])
+        self.assertEqual(planned_logical_bytes(obj), 20)
+        hostiles = [
+            ("pack", "pack geometry"),
+            ("chunks", "chunk geometry"),
+            ("cdc", "cdc geometry"),
+            ("sparse", "sparse physical write exceeds extent"),
+        ]
+        for name, cause in hostiles:
+            with self.subTest(name=name):
+                bad = copy.deepcopy(obj)
+                row_by_name = {x[0]: x for x in bad["files"]}
+                if name == "pack":
+                    row_by_name[name][6][2] += 1
+                elif name == "chunks":
+                    first_ref = row_by_name[name][6][1][0]
+                    bad["blobs"][first_ref][1] += 1
+                elif name == "cdc":
+                    row_by_name[name][6][1][0][0] -= 1
+                else:
+                    row_by_name[name][6][1][0][1] -= 1
+                with self.assertRaisesRegex(UnprovedEffect, cause):
+                    planned_logical_bytes(bad)
+
     def test_held_out_2000_valid_graphs_with_mutants(self):
         certified = uncertified_vzip = 0
         for seed in range(20261028, 20263028):
