@@ -82,6 +82,10 @@ def run(output: Path):
     with tempfile.TemporaryDirectory(prefix="cmpct-o218c-") as temp:
         root = Path(temp)
         native, binary, build = build_unmodified_extension(root)
+        import shutil
+        preserved_binary = output.parent / binary.name
+        shutil.copy2(binary, preserved_binary)
+        build["artifact"] = preserved_binary.name
         semantics = inherited.semantics(native)  # Original O215 + 24 named + 2500 fuzz
         if semantics["inherited_cases"] < 19 or len(semantics["named_cases"]) != 24:
             raise AssertionError("inherited semantic controls missing")
