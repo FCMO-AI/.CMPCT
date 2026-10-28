@@ -56,6 +56,9 @@ jobs:
         run: |
           set -euo pipefail
           python -m pytest --noconftest -q tests/test_o215_fixed_chunk_admission.py tests/test_j24c13_fused_native_checkpoints.py -k 'high_reference_count_preserves_exact_selective_ranges or signed_heterogeneous_with_empty_blob_and_reused_owners' 2>&1 | tee receipts/inherited-court.log
+      - name: Run no-CMPCT structural precheck
+        shell: bash
+        run: python research/j24c16_stale_prefix_math.py
       - name: Execute mutation falsifier and independent refusal auditor
         shell: bash
         run: |
