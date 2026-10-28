@@ -1,0 +1,77 @@
+# ci-lane: fast
+name: CMPCT v031 J24G21 signed first-party Writer transfer
+on:
+  pull_request:
+    paths:
+      - 'research/j24g21_*'
+      - 'docs/v031-research/2026-10-28-j24g21-*'
+      - '.github/workflows/v031-j24g21-writer-transfer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  exact-writer-transfer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    env:
+      COURT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.COURT_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind source identity and preregistration
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$COURT_SHA"
+          git merge-base --is-ancestor f918be061af16c1dbea8b6ad5888932676f2d53f HEAD
+          git merge-base --is-ancestor e24f9b1ed58ba6208b53bdd8d92aacb48e7442ed HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          mkdir -p j24g21-artifacts
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          paths=['research/j24g21_writer_transfer_court.py','research/j24g19_certified_projection.py',
+                 'research/j24g19_certified_subset.c','src/cmpct/transactions.py','src/cmpct/reader.py']
+          hashes={}
+          for path in paths:
+              raw=pathlib.Path(path).read_bytes()
+              assert raw==subprocess.check_output(['git','show','HEAD:'+path])
+              hashes[path]=hashlib.sha256(raw).hexdigest()
+          pathlib.Path('j24g21-artifacts/source.json').write_text(
+              json.dumps({'head':os.environ['COURT_SHA'],'files_sha256':hashes},indent=2)+'\n')
+          PY
+      - name: Compile exact native certifier and install CMPCT
+        run: |
+          set -euo pipefail
+          cc -O3 -std=c11 -Wall -Wextra -Werror -fPIC -shared research/j24g19_certified_subset.c -o research/j24g19_certified_subset.so
+          python -m pip install .
+          python -m pip install msgpack==1.1.2
+          python - <<'PY'
+          import cmpct.reader,msgpack,pathlib,subprocess
+          p=pathlib.Path(cmpct.reader.__file__).resolve()
+          assert 'site-packages' in str(p)
+          assert p.read_bytes()==subprocess.check_output(['git','show','HEAD:src/cmpct/reader.py'])
+          assert msgpack.version==(1,1,2)
+          PY
+          python -m py_compile research/j24g21_writer_transfer_court.py
+          sha256sum research/j24g19_certified_subset.so > j24g21-artifacts/native-build-sha256.txt
+      - name: Real first-party Builder Writer and Reader A/B
+        run: |
+          set -euo pipefail
+          python research/j24g21_writer_transfer_court.py --out j24g21-artifacts --repeats 5 | tee j24g21-artifacts/court.log
+      - name: Preserve raw source identity and physical files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g21-writer-transfer-${{ env.COURT_SHA }}
+          path: j24g21-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
