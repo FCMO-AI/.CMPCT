@@ -23,7 +23,7 @@
 
 Each product court additionally requires installed `reader.py`/`codec.py` source equality, correct imported location outside checkout, complete `read()`, selected `read_range()`, `verify()`, `extractall(metadata=False)`, refusal of physically corrupted PACK bytes and `preflight_archive()` refusal of an index-rehashed malformed PACK slice.
 
-**Scope:** two archives, eight member-reconstruction cases *per host*, two codecs, three platforms. Three fake receipts in total (one per host) rejected. No independent re-download of ZIP bytes outside GitHub Actions was performed in this activation; result uses original job logs, artifact digests and the separately executed detached wire referee on each host.
+**Scope:** two archives, eight member-reconstruction cases *per host*, two codecs, three platforms. Three fake receipts in total (one per host) rejected. In a subsequent independent off-host audit, all **three original GitHub artifact ZIPs were downloaded**, their complete ZIP bytes SHA-256 matched GitHub's published digest, every entry passed ZIP CRC, and their recorded frozen archive SHAs, all eight logical member identities, exact Git source blob identifiers and installed module hashes agreed across all hosts. The detached referee had already run independently in each job; the off-host audit compared **original evidence** without importing the CMPCT product. One local off-host audit-script assertion initially checked dictionary keys rather than digest values; corrected without changing source artifacts, invariants or accepted results.
 
 ## Honest negative and unsupported claims
 
@@ -39,3 +39,14 @@ Existing #307 Linux proof could not prospectively establish real Windows/macOS i
 Transfer the conformance result to #307, keep #314/#598/#601 owner boundaries intact. The next true product frontier is integrating the existing malformed PACK selective-range fail-close code with current Reader and generalized source-fingerprint/CI under unchanged parity, not adding a redundant S_PACK parser in this research branch.
 
 **Conclusion:** source-exact installed Python frozen-wire cross-platform **PASS 3/3** at `71d1cedb`, strictly bounded to original RAW/Zstd shared PACK semantics. **NO MERGE / RELEASE / VERSION PROMOTION.**
+
+
+## Subsequent off-host original-artifact custody audit — 2026-10-28 UTC
+
+Three uploaded **original** GitHub artifacts were retrieved as unchanged ZIP files and audited independently in a separate Python environment with standard `zipfile`, `hashlib` and `json`, no CMPCT import. `ZipFile.testzip()` returned no corrupt entry in any artifact. Recomputed full original ZIP SHA-256 values exactly matched GitHub metadata: Ubuntu `35fedba2b86ade70d2fc67314c5ac66ff880b39ce5fb1b032009a93d6c5edbf7`; macOS `7d5ea9bcecd7d52ec3a8fbec6aff17fb649ce6e668d7f03e72f77f63838b47e2`; Windows `d5b9bbd64223f3f7481244bfdf3e3f5fec34f2df547a1e7c081560c10c0c3461`.
+
+For each ZIP the `head.txt` is `71d1cedb9007f0f4f866b6fe22a9146614bf3d8b`; both fixed archive SHA-256 values agree across all three platforms: RAW 777 B `bd2557edc2c5db84ba125c6ba33627ddc72dd740c38a5c4744c0686c48c441cf` and Zstd 764 B `ced012e93917ac3c1e011aa503a601ff448237db88b4c4e920454a3cf3e6425c`. All eight logical member SHA-256 observations agree host-to-host, as do source `reader.py`, `codec.py`, immutable original manifest Git blob ID, tool Git blob IDs, and each recorded adversarial/referee PASS. `referee.json` in each ZIP has exactly `forged_receipts_rejected=1`.
+
+**One interesting difference:** original manifest *text-file* SHA-256 is `c43802d1...` on Ubuntu/macOS but `f821bcc3...` on Windows. This is consistent with platform checkout CRLF translation, **not an observed difference in embedded original CMPCT archive bytes** (whose exact SHA is invariant). No claim of proven CRLF causation is made without independent raw-manifest inspection. The executable tests passed under their respective installed Python 3.12 versions.
+
+Original ZIP bytes and a reproducible independent audit script/output were preserved in the activation evidence bundle; off-host receipt JSON SHA-256 `9ef9c98fe4c26f7b463684980e36325be489b0fc51b47816f00087fe7a075dfc`. The audit's first draft had an instrumentation-only typo testing `dict` keys rather than member SHA values; it failed locally before evidence publication, was corrected to test `.values()`, and then all hosts passed. This local typo did not change the GitHub-hosted experiment or any original receipt.
