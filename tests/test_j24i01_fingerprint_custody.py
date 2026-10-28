@@ -26,10 +26,22 @@ def git_blob_id(data: bytes) -> str:
     return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
 
 
+def assert_exact_tracked_blob(path: Path, expected_sha: str) -> None:
+    raw = path.read_bytes()
+    if git_blob_id(raw) == expected_sha:
+        return
+    # Windows checkout may map LF to CRLF. This acceptance is conditioned on
+    # recovering the *exact* known Git blob byte-for-byte by that one mapping,
+    # never on weaker semantic equivalence or an unpinned normalized digest.
+    assert b"\\r\\n" in raw, ("unrecognized tracked source drift", path)
+    canonical = raw.replace(b"\\r\\n", b"\\n")
+    assert git_blob_id(canonical) == expected_sha, ("tracked Git blob drift", path)
+
+
 def test_b06_exact_source_and_immutable_released_lock():
-    assert git_blob_id((ROOT / "docs/V030_RELEASE_LOCK.json").read_bytes()) == RELEASE_LOCK_BLOB
+    assert_exact_tracked_blob(ROOT / "docs/V030_RELEASE_LOCK.json", RELEASE_LOCK_BLOB)
     for path, expected_sha in B06_SOURCE_BLOBS.items():
-        assert git_blob_id((ROOT / path).read_bytes()) == expected_sha, path
+        assert_exact_tracked_blob(ROOT / path, expected_sha)
 
 
 def test_prospective_candidate_identity_includes_b06_code_and_test():
