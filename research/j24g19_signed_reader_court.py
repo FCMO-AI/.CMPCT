@@ -16,13 +16,14 @@ PUBLISHED_BLOB = 'e716233403dabd0966863c45635e18fa5ac6afb8'
 def digest(b): return hashlib.sha256(b).hexdigest()
 
 class ProjectedReader(CMPCT):
-    def _index_from_footer(self, footer_pos):
-        # Research override reproduces the inherited traversal exactly, except
-        # for the kind-1 projection of ignored fields after signed payload SHA.
+    def _index_from_footer(self,footer_pos:int,known_bad:set[int]|None=None,known_bad_runs:list[tuple[int,int,int]]|None=None):
         chain=[];pos=footer_pos;depth=0;seen=set()
         while pos and pos not in seen:
+            # An earlier candidate can have proved this same ancestral footer invalid.
+            # This set is scoped to one scan on this one open archive descriptor.
+            if known_bad is not None and pos in known_bad:break
             seen.add(pos);g=self._decode_generation_payload(pos)
-            if g is None:return None
+            if g is None:break
             kind,payload,prev=g
             if kind==0:
                 idx=msgpack.unpackb(payload,raw=False)
@@ -40,9 +41,30 @@ class ProjectedReader(CMPCT):
                                 if x[0]==op[1]:x[0]=op[2];break
                     idx['files'].sort(key=lambda x:x[0])
                 return idx,depth
-            if kind!=1:return None
+            if kind!=1:break
             chain.append(projected(payload));depth+=1;pos=prev
+        # A failed chain cannot become a valid checkpoint by starting at one of
+        # its ancestors. Cache the proof, not a decoded object or successful index.
+        # Preserve the inexpensive short-chain set. Above its capacity, compress
+        # *only exact* authenticated/visited offsets forming an arithmetic run.
+        # Min/max alone is unsafe: an unrelated valid footer might lie in a gap.
+        if known_bad is not None and len(seen)>1:
+            if len(known_bad)+len(seen)<=16384:
+                known_bad.update(seen)
+            else:
+                # Preserve the existing cheap AP seed when it can prove the
+                # whole chain. Non-AP paths need exact external membership.
+                certified=False
+                if known_bad_runs is not None and len(known_bad_runs)<32 and len(seen)>=3:
+                    ordered=sorted(seen)
+                    step=ordered[1]-ordered[0]
+                    if step>0 and all(p==ordered[0]+i*step for i,p in enumerate(ordered)):
+                        known_bad_runs.append((ordered[0],ordered[-1],step))
+                        certified=True
+                if not certified:
+                    known_bad.update(seen)
         return None
+
 
 READERS={'parent':CMPCT,'projected':ProjectedReader,'published':None}
 
