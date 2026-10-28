@@ -1,0 +1,71 @@
+# ci-lane: fast
+name: CMPCT v031 J24G14 adaptive ancestry ownership court
+on:
+  pull_request:
+    paths:
+      - 'research/j24g14_*'
+      - 'docs/v031-research/2026-10-28-j24g14-*'
+      - '.github/workflows/v031-j24g14-adaptive-ancestry-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  original-source-three-arm-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G14_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G14_ARTIFACTS: j24g14-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G14_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Prove source-exact ancestry and unchanged installed Reader source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g14-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G14_HEAD"
+          git merge-base --is-ancestor 0684f5d694afc1abccc397ced3bcd1ef3356cb81 HEAD
+          git merge-base --is-ancestor 8bb541f3746ca1c766b86d559488c4de726c15be HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          paths=['src/cmpct/reader.py','research/j24g12_lazy_ancestry_court.py',
+                 'research/j24g14_adaptive_ancestry_court.py',
+                 'research/j24g14_independent_receipt_audit.py',
+                 'docs/v031-research/2026-10-28-j24g14-adaptive-ownership-prereg.md']
+          out={}
+          for p in paths:
+              raw=subprocess.check_output(['git','show','HEAD:'+p])
+              assert pathlib.Path(p).read_bytes()==raw
+              out[p]={'sha256':hashlib.sha256(raw).hexdigest(),
+                      'git_blob':subprocess.check_output(['git','rev-parse','HEAD:'+p],
+                                                          text=True).strip()}
+          pathlib.Path('j24g14-artifacts/source.json').write_text(
+              json.dumps({'head':os.environ['J24G14_HEAD'],'files':out},indent=2)+'\n')
+          PY
+      - name: Execute unchanged eager and guarded controls against bounded-raw adaptive oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24g14_adaptive_ancestry_court.py research/j24g14_independent_receipt_audit.py
+          python -m pip install .
+          python research/j24g14_adaptive_ancestry_court.py 2>&1 | tee j24g14-artifacts/court.log
+          python research/j24g14_independent_receipt_audit.py 2>&1 | tee j24g14-artifacts/audit.log
+      - name: Preserve raw negative and positive evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g14-adaptive-ancestry-${{ github.sha }}
+          path: j24g14-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
