@@ -57,6 +57,52 @@ jobs:
           assert all("/target/" not in p for p in j["paths"] if p.startswith("native/"))
           print("J24G03_CANDIDATE_SOURCE_HEAD_BOUND=PASS",j["files"],j["fingerprint"])
           PY
+      - name: Diagnose cross-platform Git blob versus checked-out source bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,pathlib,subprocess
+          names = [
+              "README.md",
+              "pyproject.toml",
+              "docs/V031_CANDIDATE_FINGERPRINT.json",
+              "tools/check_v031_candidate_fingerprint.py",
+              "tests/test_v031_head_worktree_custody.py",
+              ".github/workflows/v031-j24g03-git-head-custody.yml",
+          ]
+          rows = []
+          for name in names:
+              git_bytes = subprocess.check_output(["git", "show", "HEAD:" + name])
+              checkout = pathlib.Path(name).read_bytes()
+              rows.append({
+                  "path": name,
+                  "git_sha256": hashlib.sha256(git_bytes).hexdigest(),
+                  "worktree_sha256": hashlib.sha256(checkout).hexdigest(),
+                  "equal": git_bytes == checkout,
+                  "crlf_only": git_bytes != checkout and (
+                      git_bytes.replace(b"\\r\\n", b"\\n") ==
+                      checkout.replace(b"\\r\\n", b"\\n")
+                  ),
+                  "git_size": len(git_bytes),
+                  "worktree_size": len(checkout),
+              })
+          autocrlf = subprocess.run(
+              ["git", "config", "--get", "core.autocrlf"],
+              capture_output=True, text=True,
+          )
+          output = {
+              "source_head": subprocess.check_output(
+                  ["git", "rev-parse", "HEAD"], text=True,
+              ).strip(),
+              "git_core_autocrlf": autocrlf.stdout.strip() or None,
+              "samples": rows,
+          }
+          pathlib.Path("j24g03-artifacts/git-vs-worktree-samples.json").write_text(
+              json.dumps(output, indent=2) + "\\n"
+          )
+          print("J24G03D_GIT_VS_WORKTREE=", json.dumps(output, sort_keys=True))
+          PY
       - name: Preserve source-custody receipts on failures
         if: always()
         uses: actions/upload-artifact@v4
