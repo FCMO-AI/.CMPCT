@@ -164,5 +164,5 @@ def test_seeded_heldout_mixed_recipe_offsets_and_mode2_size_lies():
                 # stream lies strictly before this selected range.
                 calls.clear()
                 with pytest.raises(IOError, match="virtual ZIP selective reconstruction length mismatch"):
-                    range_vzip(lie, content, stream, len(truth) - 1, 1)
+                    range_vzip(lie, content, stream, len(truth) - 2, 1)
                 assert i + 1 in calls
