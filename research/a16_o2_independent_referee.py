@@ -129,16 +129,20 @@ def assess(root,receipt):
         if not equal(row['ratio_positional_over_fixed'],sizes['positional_coowner']/sizes['chunkref']):
             raise ValueError('wrong ratio')
         for arm,v in row['read_wall_ms'].items():
-            if len(v['q1_ms'])!=7 or len(v['whole_ms'])!=7:
-                raise ValueError('raw samples')
-            if not equal(v['median_q1_ms'],statistics.median(v['q1_ms'])):
-                raise ValueError('Q1 median')
-            if not equal(v['median_whole_ms'],statistics.median(v['whole_ms'])):
-                raise ValueError('full median')
+            for samples,median in (('q1_ms','median_q1_ms'),('whole_ms','median_whole_ms'),
+                                   ('q1_cpu_ms','median_q1_cpu_ms'),('whole_cpu_ms','median_whole_cpu_ms')):
+                if len(v[samples])!=7 or not all(x>=0 for x in v[samples]):
+                    raise ValueError('raw samples')
+                if not equal(v[median],statistics.median(v[samples])):
+                    raise ValueError('median')
         if not equal(row['read_speedup_fixed_over_positional'],
                      row['read_wall_ms']['chunkref']['median_whole_ms']/
                      row['read_wall_ms']['positional_coowner']['median_whole_ms']):
-            raise ValueError('speedup')
+            raise ValueError('wall speedup')
+        if not equal(row['cpu_speedup_fixed_over_positional'],
+                     row['read_wall_ms']['chunkref']['median_whole_cpu_ms']/
+                     row['read_wall_ms']['positional_coowner']['median_whole_cpu_ms']):
+            raise ValueError('CPU speedup')
     if seen!=EXPECTED:raise ValueError('coverage')
     hostile=all(x['ratio_positional_over_fixed']<=1.01 and
                 x['geometry']['positional_coowner']['units']==[16]*N
@@ -148,6 +152,7 @@ def assess(root,receipt):
                  for x in rows if x['regime'] in ('prefix12','suffix12'))
     joint=all(x['ratio_positional_over_fixed']<=.99 and
               x['read_speedup_fixed_over_positional']>=1.5
+              and x['cpu_speedup_fixed_over_positional']>=1.5
               for x in rows if x['regime'] in ('prefix12','suffix12'))
     if receipt['hostile_containment']!=hostile or receipt['positive_transfer']!=transfer or receipt['inherited_joint_byte_wall_pass']!=joint:
         raise ValueError('altered decision')
