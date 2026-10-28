@@ -70,12 +70,15 @@ def measure_actual_reader(path: Path, member: str, expected: bytes) -> dict:
             assert archive.read(member) == expected, "primary-index fallback changed file"
             assert archive.read_range(member, 1, 11) == expected[1:12]
             archive.verify()
-            assert archive.latest_footer_pos == (0 if member == "owner.bin" else archive.latest_footer_pos)
+            selected_footer_pos = archive.latest_footer_pos
+            delta_depth = archive.delta_depth
     wall = time.perf_counter() - t_wall
     cpu = time.process_time() - t_cpu
     return {
         "calls": len(calls),
         "unique_footer_positions": len(set(calls)),
+        "selected_footer_pos": selected_footer_pos,
+        "delta_depth": delta_depth,
         "wall_s": wall,
         "cpu_s": cpu,
     }
@@ -95,7 +98,14 @@ def main() -> None:
 
         # Negative control: the clean Builder index needs no journal traversal.
         baseline = [measure_actual_reader(pristine, "owner.bin", PAYLOAD) for _ in range(REPETITIONS)]
-        assert all(x["calls"] == 0 for x in baseline), baseline
+        assert len(set(x["calls"] for x in baseline)) == 1, baseline
+        base_calls = baseline[0]["calls"]
+        assert base_calls == 1, ("Builder must include authentic tail checkpoint", baseline)
+        base_footer_pos = baseline[0]["selected_footer_pos"]
+        assert base_footer_pos > 0 and all(
+            x["selected_footer_pos"] == base_footer_pos and x["delta_depth"] == 0
+            for x in baseline
+        ), baseline
 
         # Real first-party committed transaction: validate the scanner's success case.
         valid = td / "valid-rename.cmpct"
@@ -105,7 +115,12 @@ def main() -> None:
             measure_actual_reader(valid, "renamed.bin", PAYLOAD)
             for _ in range(REPETITIONS)
         ]
-        assert all(x["calls"] >= 1 for x in valid_reads), valid_reads
+        assert all(
+            x["calls"] == base_calls + 1
+            and x["selected_footer_pos"] > base_footer_pos
+            and x["delta_depth"] == 1
+            for x in valid_reads
+        ), valid_reads
 
         cases = []
         for n in N_CASES:
@@ -116,17 +131,26 @@ def main() -> None:
                 measure_actual_reader(fake, "owner.bin", PAYLOAD)
                 for _ in range(REPETITIONS)
             ]
-            expected_calls = n * (n + 1) // 2
+            expected_incremental_calls = n * (n + 1) // 2
+            expected_calls = base_calls + expected_incremental_calls
             assert all(row["calls"] == expected_calls for row in got), (
                 n, expected_calls, got
             )
-            assert all(row["unique_footer_positions"] == n for row in got), (
+            assert all(row["unique_footer_positions"] == n + base_calls for row in got), (
+                n, got
+            )
+            assert all(
+                row["selected_footer_pos"] == base_footer_pos
+                and row["delta_depth"] == 0
+                for row in got
+            ), (
                 n, got
             )
             cases.append({
                 "n": n,
                 "archive_size": len(fake_bytes),
                 "archive_sha256": digest(fake_bytes),
+                "expected_incremental_decoder_calls": expected_incremental_calls,
                 "expected_decoder_calls": expected_calls,
                 "observed": got,
                 "median_wall_s": statistics.median(x["wall_s"] for x in got),
@@ -144,16 +168,25 @@ def main() -> None:
             for _ in range(REPETITIONS)
         ]
         assert neutral.stat().st_size == len(biggest)
-        assert all(row["calls"] == 0 for row in control), control
+        assert all(
+            row["calls"] == base_calls
+            and row["selected_footer_pos"] == base_footer_pos
+            and row["delta_depth"] == 0
+            for row in control
+        ), control
 
         result = {
             "question": "J24G04-orphaned-signed-footer-candidate-scan",
-            "status": "TRIANGULAR_SOURCE_DECODER_REVISITS_CONFIRMED",
+            "status": "TRIANGULAR_INCREMENTAL_DECODER_REVISITS_CONFIRMED",
             "scope": "real-installed-builder-reader; signed primary index; invalid appended delta chain",
             "primary_sha256": digest(base),
             "primary_bytes": len(base),
             "logical_sha256": digest(PAYLOAD),
             "repeat_count": REPETITIONS,
+            "baseline_decoder_calls": base_calls,
+            "baseline_selected_footer_pos": base_footer_pos,
+            "first_run_instrument_negative": "40638195302: mistaken assumption Builder tail footer absent",
+            "j24g04b_prereg_commit": "50d416f88c008f5a70375eb23fcbb639a37fb57a",
             "valid_transaction_archive_sha256": digest(valid.read_bytes()),
             "valid_transaction_calls": valid_reads,
             "baseline": baseline,
@@ -169,7 +202,7 @@ def main() -> None:
         out = out_dir / "court.json"
         out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
         print("J24G04_SOURCE_EXACT_RECOVERY_COURT=" + json.dumps(result, sort_keys=True))
-        print("J24G04_DECISION=TRIANGULAR_SOURCE_DECODER_REVISITS_CONFIRMED")
+        print("J24G04_DECISION=TRIANGULAR_INCREMENTAL_DECODER_REVISITS_CONFIRMED")
 
 
 if __name__ == "__main__":
