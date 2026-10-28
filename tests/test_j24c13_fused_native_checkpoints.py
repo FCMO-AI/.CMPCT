@@ -143,6 +143,21 @@ class FusedNativeCheckpointCourt(unittest.TestCase):
                     prefix += blobs[ref][1]
                 self.assertEqual(prefix, declared)
 
+    def test_global_checkpoint_metadata_cap_preserves_reader_semantics(self):
+        # The global budget must not scale without bound with the number of
+        # signed large members; a valid over-budget file uses original search.
+        import cmpct.reader as reader_module
+        p, expected = self._path("budget", [0] * 1024, [b"ABC"])
+        old_budget = reader_module._MAX_CHUNK_RANGE_HINTS
+        self.addCleanup(lambda: setattr(reader_module, "_MAX_CHUNK_RANGE_HINTS",old_budget))
+        reader_module._MAX_CHUNK_RANGE_HINTS=1
+        with CMPCT(p) as rd:
+            self.assertFalse(rd._chunk_range_marks)
+            self.assertEqual(rd._chunk_range_hint_count,0)
+            self.assertEqual(rd.read_range("fixed.bin",len(expected)-27,19),
+                             expected[-27:-8])
+            self.assertEqual(rd.verify(),1)
+
     def test_malformed_optional_checkpoint_tuple_fails_closed(self):
         p, expected = self._path("malformed-hint", [0] * 1024, [b"ABC"])
         # Native code is treated as an optimization, not the sole safety gate.
