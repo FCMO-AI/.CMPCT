@@ -1,0 +1,45 @@
+name: v0.31 A16-O2 positional co-owner scientific court
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/v031-a16-o2-positional-coowner.yml'
+      - 'research/a16_o2_positional_coowner_court.py'
+      - 'research/a16_o2_independent_referee.py'
+      - 'docs/v031-research/2026-10-28-a16-o2-*'
+
+jobs:
+  exact-source-science:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    steps:
+      - name: Checkout actual PR head, not synthetic merge
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record exact source identity
+        shell: bash
+        run: |
+          git rev-parse HEAD | tee source-head.txt
+          python --version
+          git status --short
+      - name: Install independent Zstd CLI and native library
+        run: sudo apt-get update -qq && sudo apt-get install -y zstd libzstd1
+      - name: Run preregistered positional structural and cost court
+        run: python3 research/a16_o2_positional_coowner_court.py --out a16-o2-artifacts
+      - name: Independently reconstruct and attack hostile receipts
+        run: python3 research/a16_o2_independent_referee.py --root a16-o2-artifacts
+      - name: Upload raw evidence even when hypothesis is negative
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a16-o2-${{ matrix.os }}-${{ github.run_id }}
+          path: |
+            source-head.txt
+            a16-o2-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
