@@ -23,7 +23,31 @@ def sha(data):
 
 def _rss_mib():
     if os.name=="nt":
-        return None  # Windows RSS needs a separate native witness, never call it zero.
+        # Win32 PROCESS_MEMORY_COUNTERS_EX.PeakWorkingSetSize: real peak resident
+        # pages, not a synthetic Linux ru_maxrss or an invented zero.
+        try:
+            import ctypes
+            from ctypes import wintypes
+            class Counters(ctypes.Structure):
+                _fields_ = [
+                    ("cb",wintypes.DWORD),("PageFaultCount",wintypes.DWORD),
+                    ("PeakWorkingSetSize",ctypes.c_size_t),
+                    ("WorkingSetSize",ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage",ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage",ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage",ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage",ctypes.c_size_t),
+                    ("PagefileUsage",ctypes.c_size_t),
+                    ("PeakPagefileUsage",ctypes.c_size_t),
+                    ("PrivateUsage",ctypes.c_size_t),
+                ]
+            counter=Counters()
+            counter.cb=ctypes.sizeof(Counters)
+            handle=ctypes.windll.kernel32.GetCurrentProcess()
+            ok=ctypes.windll.psapi.GetProcessMemoryInfo(handle,ctypes.byref(counter),counter.cb)
+            return counter.PeakWorkingSetSize/1048576 if ok else None
+        except (AttributeError,OSError,ValueError):
+            return None  # Explicitly unavailable; never claim zero resident.
     import resource
     peak=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return peak/1048576 if sys.platform=="darwin" else peak/1024
