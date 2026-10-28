@@ -94,7 +94,7 @@ def execute(root: Path) -> dict:
         real_link = _linux_link_owner_fd
         seen = []
 
-        def swap_at_link(source_fd, alias_full):
+        def swap_at_link(source_fd, alias_full, *, parent_fd=None):
             # This is the first and only kernel linkat for this signed owner.
             assert os.path.abspath(alias_full) == expected_alias, (alias_full, expected_alias)
             assert not seen, 'unexpected second hardlink operation'
@@ -108,7 +108,7 @@ def execute(root: Path) -> dict:
             seen.append({'owner_swapped':True,'source_fd_inode':before.st_ino,
                          'replacement':'symlink to external'})
             # Invoke the genuine Linux syscall via production helper, not a mocked success.
-            return real_link(source_fd, alias_full)
+            return real_link(source_fd, alias_full, parent_fd=parent_fd)
 
         thrown = None
         with mock.patch("cmpct.reader._linux_link_owner_fd", side_effect=swap_at_link):
