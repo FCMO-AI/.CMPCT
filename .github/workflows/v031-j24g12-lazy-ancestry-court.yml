@@ -1,0 +1,68 @@
+# ci-lane: fast
+name: CMPCT v031 J24G12 lazy ancestry execution court
+on:
+  pull_request:
+    paths:
+      - 'research/j24g12_lazy_ancestry_court.py'
+      - 'docs/v031-research/2026-10-28-j24g12-*'
+      - '.github/workflows/v031-j24g12-lazy-ancestry-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-exact-lazy-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G12_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G12_ARTIFACTS: j24g12-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G12_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Freeze Git source, prospectively committed prediction, research instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g12-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G12_HEAD"
+          git merge-base --is-ancestor 991ddfa2a42bddaa8d76efdd3524a71c9de52b27 HEAD
+          git merge-base --is-ancestor 698f576a13ae1d14f248271185de3503ed839ee7 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          paths=["src/cmpct/reader.py","research/j24g12_lazy_ancestry_court.py",
+                 "docs/v031-research/2026-10-28-j24g12-lazy-ancestry-prereg.md"]
+          files={}
+          for p in paths:
+              b=subprocess.check_output(["git","show","HEAD:"+p])
+              assert pathlib.Path(p).read_bytes()==b
+              files[p]={"sha256":hashlib.sha256(b).hexdigest(),
+                        "git_blob":subprocess.check_output(
+                            ["git","rev-parse","HEAD:"+p],text=True).strip()}
+          pathlib.Path("j24g12-artifacts/source.json").write_text(
+              json.dumps({"head":os.environ["J24G12_HEAD"],"files":files},indent=2)+"\n")
+          PY
+      - name: Execute genuine installed r24 Reader versus two lazy execution models
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24g12_lazy_ancestry_court.py
+          python -m pip install .
+          python research/j24g12_lazy_ancestry_court.py 2>&1 | tee j24g12-artifacts/court.log
+      - name: Preserve raw outcome even on negative or infrastructure failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g12-lazy-ancestry-${{ github.sha }}
+          path: j24g12-artifacts/
+          retention-days: 30
+          if-no-files-found: warn
