@@ -149,6 +149,7 @@ jobs:
           shutil.copy2(src,dst)
           sha = lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
           if sha(src) != sha(dst):raise SystemExit('native payload copy drift')
+          shutil.copy2(src, Path('j24i04-artifacts/native-source-cmpct-core.so'))
           Path('j24i04-artifacts/native-identity.json').write_text(json.dumps({
               'source':str(src),'copy':str(dst),'source_sha256':sha(src),
               'copy_sha256':sha(dst),'bytes':src.stat().st_size},indent=2)+'\n')
@@ -196,3 +197,4 @@ jobs:
             j24i04-artifacts/*.txt
             j24i04-artifacts/*.md
             j24i04-artifacts/*.cmpct
+            j24i04-artifacts/*.so
