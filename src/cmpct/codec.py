@@ -220,21 +220,20 @@ def range_vzip(recipe,get_content,get_stream,start:int,length:int,stream_size=No
             if len(seg)!=csize:
                 raise IOError('virtual ZIP selective reconstruction length mismatch')
             a=max(start,outpos)-outpos;b=min(end,outpos+csize)-outpos;out.append(seg[a:b])
-        elif outpos<end:
+        elif outpos<end and (stream_size is not None or
+                             (method==zipfile.ZIP_DEFLATED and stream_mode==2)):
             # A skipped physical stream determines every later logical offset.
             # Checking only selected payloads lets a valid-length read return a
             # wrong suffix byte when signed csize differs from physical size.
-            # The installed Reader supplies a metadata/header size witness;
-            # stand-alone callers retain the safe, more expensive decode control.
+            # The installed Reader supplies a metadata/header size witness.
+            # A bare internal helper call without that witness retains historical
+            # lazy nonmode2 behavior; only the Reader's public API is hardened here.
             if method==zipfile.ZIP_DEFLATED and stream_mode==2:
                 # Regenerated Deflate has no physical compressed-size oracle.
                 # Retain the exact preceding-stream recompression proof.
                 physical_size=len(get_stream(stream_mode,streamref,level))
-            elif stream_size is not None:
-                physical_size=stream_size(method,stream_mode,rawref,streamref)
             else:
-                physical_size=len(get_content(rawref) if method==zipfile.ZIP_STORED
-                                  else get_stream(stream_mode,streamref,level))
+                physical_size=stream_size(method,stream_mode,rawref,streamref)
             if physical_size!=csize:
                 raise IOError('virtual ZIP selective reconstruction length mismatch')
         outpos+=csize
