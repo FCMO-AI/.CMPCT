@@ -8,6 +8,7 @@ import argparse
 from collections import defaultdict
 import copy
 import json
+import os
 import statistics
 from pathlib import Path
 
@@ -18,6 +19,7 @@ def audit(d):
     assert d["schema"]=="j24c17-owner-vs-sealed-v1"
     assert d["owner_source"]=="a66fd593a83cc4c71556d3d86d835c51abd20a96"
     assert len(d["source_head"])==40 and all(c in "0123456789abcdef" for c in d["source_head"])
+    assert d["source_head"]==os.environ["EVIDENCE_SHA"], "missing or mismatched immutable checkout custody"
     reps=d["repetitions"]
     assert reps>=3
     raw=d["raw"]
