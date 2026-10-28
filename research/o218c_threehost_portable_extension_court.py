@@ -38,7 +38,7 @@ def _command(*args: str, cwd: Path, timeout: int = 300):
                             capture_output=True, text=True, timeout=timeout)
     return result, time.perf_counter_ns() - begin
 
-def build_unmodified_extension(root: Path):
+def build_unmodified_extension(root: Path, evidence_dir: Path):
     """Use CPython's supported platform-specific compiler via setuptools."""
     from setuptools import Extension, setup  # noqa: F401 -- package capability check
     from setuptools.dist import Distribution
@@ -50,7 +50,8 @@ def build_unmodified_extension(root: Path):
     distribution = Distribution({"name": "cmpct-o218c-research",
                                  "ext_modules": [ext]})
     command = build_ext(distribution)
-    command.build_lib = str(root / "lib")
+    # A loaded .pyd cannot be deleted on Windows: compile into retained evidence.
+    command.build_lib = str(evidence_dir)
     command.build_temp = str(root / "obj")
     command.inplace = False
     command.force = True
@@ -58,7 +59,7 @@ def build_unmodified_extension(root: Path):
     start = time.perf_counter_ns()
     command.run()
     wall_ns = time.perf_counter_ns() - start
-    candidates = list((root / "lib").rglob("_o218_fastscan*"))
+    candidates = list(evidence_dir.rglob("_o218_fastscan*"))
     suffix = sysconfig.get_config_var("EXT_SUFFIX")
     matched = [p for p in candidates if p.is_file() and p.name.endswith(suffix)]
     if len(matched) != 1:
@@ -81,11 +82,9 @@ def run(output: Path):
     source = inherited.source_identity()  # Reader, validator and C from actual installed source
     with tempfile.TemporaryDirectory(prefix="cmpct-o218c-") as temp:
         root = Path(temp)
-        native, binary, build = build_unmodified_extension(root)
-        import shutil
-        preserved_binary = output.parent / binary.name
-        shutil.copy2(binary, preserved_binary)
-        build["artifact"] = preserved_binary.name
+        native, binary, build = build_unmodified_extension(root, output.parent)
+        # Host binary remains on disk for the referee and for Windows DLL lifetime.
+        build["artifact"] = binary.name
         semantics = inherited.semantics(native)  # Original O215 + 24 named + 2500 fuzz
         if semantics["inherited_cases"] < 19 or len(semantics["named_cases"]) != 24:
             raise AssertionError("inherited semantic controls missing")
