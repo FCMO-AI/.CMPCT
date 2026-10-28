@@ -14,6 +14,7 @@ import statistics
 import subprocess
 import tempfile
 import time
+import tracemalloc
 import types
 from pathlib import Path
 from unittest.mock import patch
@@ -57,6 +58,28 @@ def orphan_tail(base: bytes, n: int, chained: bool) -> bytes:
                             prev if chained else 0, sha(payload)))
         prev = pos
     assert len(raw) == len(base) + 81 * n
+    return bytes(raw)
+
+
+def variant_orphan_tail(base: bytes, n: int, variant: str) -> bytes:
+    """Structural held-outs: generic stride, embedded magic, non-AP spacing."""
+    assert variant in ("uniform", "embedded-magic", "alternating")
+    raw = bytearray(base)
+    prev = 0
+    for i in range(n):
+        delta = {"blobs": [], "ops": []}
+        if variant == "uniform":
+            delta["pad"] = b"1234567"
+        elif variant == "embedded-magic":
+            delta["pad"] = b"before" + FMAGIC + b"after"
+        else:
+            delta["pad"] = b"X" if i % 2 else b""
+        payload = msgpack.packb(delta, use_bin_type=True)
+        pos = len(raw) + len(payload)
+        raw.extend(payload)
+        raw.extend(FTR.pack(FMAGIC, 1, 0, 0, 0,
+                            len(payload), len(payload), prev, sha(payload)))
+        prev = pos
     return bytes(raw)
 
 
@@ -183,6 +206,40 @@ def main():
         assert all(x["depth"] == 1 for x in
                    valid_pair["historical"] + valid_pair["candidate"])
 
+        held_out = {}
+        for variant in ("uniform", "embedded-magic", "alternating"):
+            generated = variant_orphan_tail(base, 16_400, variant)
+            p = root / f"{variant}.cmpct"
+            p.write_bytes(generated)
+            measured = measure(Candidate, p, checkpoint)
+            if variant == "uniform":
+                assert measured["decoder_calls"] == 16_401, measured
+                assert measured["index_attempts"] <= 3, measured
+            elif variant == "embedded-magic":
+                # Every nested magic offset must be individually examined,
+                # not mistaken for one of the exact authenticated AP members.
+                assert measured["decoder_calls"] == 32_801, measured
+                assert measured["index_attempts"] == 16_402, measured
+            else:
+                # No arithmetic certificate may accept alternating spacings.
+                # This is a deliberately retained negative performance result.
+                assert measured["decoder_calls"] == 278_665, measured
+                assert measured["index_attempts"] == 16_401, measured
+            held_out[variant] = {
+                "physical_bytes": len(generated),
+                "archive_sha256": digest(generated),
+                "measured": measured,
+            }
+            print("J24G09_STRUCTURAL_HELD_OUT=" +
+                  json.dumps({"type": variant, **held_out[variant]}, sort_keys=True),
+                  flush=True)
+
+        # Python-traced allocation is a diagnostic, NOT whole-process peak RSS.
+        tracemalloc.start()
+        memory_check = measure(Candidate, root / "linked-32768.cmpct", checkpoint)
+        _, traced_peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        assert memory_check["decoder_calls"] == 32_769
         result = {
             "status": "J24G09_CANDIDATE_AP_COURT_PASSED_WITHIN_SCOPE",
             "original_reader_blob": ORIGINAL_BLOB,
@@ -194,6 +251,8 @@ def main():
             "logical_sha256": digest(PAYLOAD),
             "repeats": REPEATS,
             "cases": cases,
+            "held_out_structures": held_out,
+            "tracemalloc_peak_bytes_on_repeated_n32768": traced_peak,
             "flat_control": {"archive_sha256": digest(flat), "paired": flat_pair},
             "neutral_control": {"archive_sha256": digest(neutral), "paired": neutral_pair},
             "committed_control": {"archive_sha256": digest(valid_p.read_bytes()),
