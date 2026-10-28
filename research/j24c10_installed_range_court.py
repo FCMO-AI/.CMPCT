@@ -186,7 +186,7 @@ def main():
     rss_measured=all(summary[k]["peak_rss_delta_mib"] is not None for k in summary)
     rss_gate=rss_measured and all(summary[k]["peak_rss_delta_mib"]<=8.0 for k in summary)
     decision=wall_gate and cpu_direction and no_early_or_ragged_debt and rss_gate
-    payload={"schema":"j24c10-installed-range-v1",
+    payload={"schema":"j24c10-installed-range-v1","host":host,
              "utc_created":__import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
              "source_head":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
              "reader_sha256":sha(path.read_bytes()),"python":sys.version,
