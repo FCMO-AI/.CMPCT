@@ -29,6 +29,24 @@ Each host observed the same four mutated archive hashes, same first wrong bytes,
 
 Hosted artifact IDs: Ubuntu [12793536383](https://github.com/FCMO-AI/.CMPCT/actions/runs/40635350564/artifacts/12793536383), macOS [12793880376](https://github.com/FCMO-AI/.CMPCT/actions/runs/40635350564/artifacts/12793880376), Windows [12793655990](https://github.com/FCMO-AI/.CMPCT/actions/runs/40635350564/artifacts/12793655990). Original fixture/source SHA and test stdout are present in each artifact.
 
+
+## Held-out third mode0 source: J24K07b (independently preregistered after initial observation)
+
+Prospective held-out experiment was frozen at commit `76e61ed9d52df20d5a1e8c0afa4201ba36c850d3` **before** the new independent canonical-mode0 test. It used the already immutable `v24-virtual-zip-deflate-mode0.json` SHA `9fa44e064af01a2fdc7402881bb89d9449cbc5de6a26563d05f71b812af0c224`, and a source-exact canonical `CODEC_DEFLATE` owner instead of STORED or retained mode1. No original outcome/corpus/test was rewritten.
+
+[Second 3-host scientific run #40635939312](https://github.com/FCMO-AI/.CMPCT/actions/runs/40635939312) finished **SUCCESS on Ubuntu, macOS, Windows**, each with **17/17 pytest PASS** (51/51 total), exact source head `7a14cd023543c4dbf1587e6b4465afde36d43cf3`. The canonical-mode0 signed mutations were:
+
+| Canonical Deflate mode0 mutant | Original length | Claimed length | Wrong-byte suffix queries | First incorrect coordinate | SHA-256 signed archive |
+|---|---:|---:|---:|---:|---|
+| `csize -1` | 130 | 129 | **41/75** | offset 54; `01` instead of `4b` | `2ae514672fbb3a11090067b043e4e5ae61f7f7677344612881a5b5c2865b3557` |
+| `csize +1` | 130 | 131 | **42/76** | offset 54; `50` instead of `4b` | `7e6338f53362546e805d816207fe4ffc4d1233579165e0221a9f2d25c1bd4d10` |
+
+Existing strict preflight rejected each *specifically* with `recipe 0 canonical Deflate stream 0 size/codec mismatch`. Whole read and verify rejected, but each queried suffix produced exactly one byte with 41–42 mismatches. The two source-original J24K07 modes also passed with **precisely named** `stored payload` or `retained stream` physical disagreement rather than an unrelated parse failure. On all three hosts, **six distinct mutants** had identical hashes and same errors: **245/453** one-byte suffix positions returned wrong bytes with no rejection or truncation **per host**. Across platforms those are 18 observations, not 18 independent mutations.
+
+Independent artifact-level Python-standard-library audit downloaded the three original ZIP artifacts and recomputed all six receipts, checked source SHA and actual pytest output, found exactly the six preregistered case×delta combinations, and confirmed identical normalized JSON across all hosts. Audit receipt SHA-256 `9c9cd038ff1f2ebc5a49e23231aaa651fcc8cd457ec226ff554c9dc4731c3a01` (available as supporting run artifact in conversation; raw hosted source artifacts are under run #40635939312). This audit corroborates raw receipts, not an alternate Reader or decoder.
+
+**Updated conclusion:** All three non-mode2 VZIP payload classes (STORED/mode0 method, canonical Deflate stream mode0, retained Deflate mode1) have the same skipped-`csize` coordinate-owner gap in ordinary `read_range()`. The strongest bounded product solution remains to reuse the existing `_validate_recipe` geometry against the same effective authenticated index **once per recipe** at Reader admission or first VZIP range, with explicit lazy/eager CPU/RSS/cold-open comparison. Do not conflate this with regenerated mode2 compression proof (#642) or whole-content SHA authentication.
+
 ## Causal diagnosis and strongest simpler control
 
 `range_vzip()` checks physical lengths of **overlapping** streams and of **skipped mode2 regenerated** streams, but trusts the signed `csize` of skipped STORED/mode0 and retained Deflate/mode1 streams to advance the logical position. That can choose the wrong suffix byte even when the result length is exactly one and the index checksum is valid.
