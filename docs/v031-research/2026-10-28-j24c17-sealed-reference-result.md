@@ -19,7 +19,7 @@ This is **engineering research evidence, NOT a product/security guarantee**. It 
 | Windows 2022 / CPython 3.11 | 52 passed, 1 skipped, 11 subtests | 120 real processes, original referee PASS | 6.73–8.28x |
 | Ubuntu 24.04 / CPython 3.10 | 33 passed, 11 subtests, confirmed ABI3 unavailable | No A/B performed | Strict Python fallback PASS |
 
-Total targeted passed = 189 (plus 33 subtests across four hosts? Actual per-host subtests: 11 each, total 44). Native A/B = 360 independent subprocess measurements from original J24C13 harness, with untouched original negative/positive scientific judge. Referee reported `J24C13_SOURCE_EXACT_RECEIPT_AUDIT_PASS_RESEARCH_ONLY` on all native hosts. It reported no preregistered **material** Q1 loss versus native-original by its joint relative+absolute criterion, but Q1 early generally **got slower**; macOS fixed-65k Q1 early fused ~2.605ms versus native ~1.342ms (nearly 1.94x time). Avoid describing this as Q1 improvement.
+Total targeted passed = **189**, with **44 subtests** across four jobs (11 per job), and three targeted skips on native hosts. Subtests are distinct from the pytest test count. Native A/B = 360 independent subprocess measurements from original J24C13 harness, with untouched original negative/positive scientific judge. Referee reported `J24C13_SOURCE_EXACT_RECEIPT_AUDIT_PASS_RESEARCH_ONLY` on all native hosts. It reported no preregistered **material** Q1 loss versus native-original by its joint relative+absolute criterion, but Q1 early generally **got slower**; macOS fixed-65k Q1 early fused ~2.605ms versus native ~1.342ms (nearly 1.94x time). Avoid describing this as Q1 improvement.
 
 Original GitHub artifact IDs / provider SHA-256 digests:
 
