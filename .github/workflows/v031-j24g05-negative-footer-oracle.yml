@@ -1,0 +1,108 @@
+# ci-lane: fast
+name: CMPCT J24G05 negative-footer-ancestry original-Reader cache oracle
+on:
+  pull_request:
+    paths:
+      - 'research/j24g05_negative_ancestry_oracle.py'
+      - 'docs/v031-research/2026-10-28-j24g05-*'
+      - '.github/workflows/v031-j24g05-negative-footer-oracle.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  bound-original-reader:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G05_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G05_ARTIFACTS: j24g05-artifacts
+    steps:
+      - name: Checkout exact scientific head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G05_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify original source, independent episode, and preregistered ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g05-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G05_HEAD"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          git merge-base --is-ancestor "c1c176e1e6a6273779dbc6a41d23f7f5b5ccdf32" HEAD
+          git merge-base --is-ancestor "d6930bad7cc3831a86fb59d04dfe918c75f030d9" HEAD
+          python - <<'PY'
+          import hashlib,json,pathlib,subprocess,os
+          files=("src/cmpct/reader.py","src/cmpct/codec.py",
+                 "research/j24g04_false_footer_recovery_court.py",
+                 "research/j24g05_negative_ancestry_oracle.py")
+          rec={"head":os.environ["J24G05_HEAD"],"files":{}}
+          for p in files:
+              from_git=subprocess.check_output(["git","show","HEAD:"+p])
+              assert pathlib.Path(p).read_bytes()==from_git,p
+              rec["files"][p]={"sha256":hashlib.sha256(from_git).hexdigest(),
+                               "git_blob":subprocess.check_output(
+                                   ["git","rev-parse","HEAD:"+p],text=True).strip()}
+          pathlib.Path("j24g05-artifacts/source.json").write_text(json.dumps(rec,sort_keys=True,indent=2)+"\n")
+          print("J24G05_SOURCE_HEAD_BOUND="+json.dumps(rec,sort_keys=True))
+          PY
+      - name: Install exact unchanged released CMPCT package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader,subprocess
+          installed=Path(cmpct.reader.__file__).resolve()
+          expected=subprocess.check_output(["git","show","HEAD:src/cmpct/reader.py"])
+          assert "site-packages" in str(installed)
+          assert installed.read_bytes()==expected
+          print("J24G05_AUTHENTIC_RELEASED_READER_UNCHANGED=PASS")
+          PY
+      - name: Execute original-versus-scientific-oracle and independent referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g05_negative_ancestry_oracle.py             2>&1 | tee j24g05-artifacts/oracle.log
+          python - <<'PY'
+          import json,pathlib
+          j=json.loads(pathlib.Path("j24g05-artifacts/oracle.json").read_text())
+          assert j["status"]=="FAILED_ANCESTRY_MEMOIZATION_ORACLE_PASSED_WITHIN_SCOPED_INPUTS"
+          assert j["published_reader_unmodified"] is True and j["product_release_credit"]==0
+          assert j["comparison_rounds"]==3 and len(j["orphaned_cases"])==3
+          for i,n in enumerate((32,128,256)):
+              c=j["orphaned_cases"][i]
+              assert c["n"]==n and c["same_full_physical_bytes"] is True
+              assert c["physical_bytes"]==j["source_primary_bytes"]+n*81
+              for key,orig_calls,oracle_calls in (
+                  ("nested",1+n*(n+1)//2,1+n),("flat",1+n,1+n),
+              ):
+                  r=c[key]
+                  assert len(r["original"])==len(r["oracle"])==3
+                  assert all(q["decoder_calls"]==orig_calls for q in r["original"])
+                  assert all(q["decoder_calls"]==oracle_calls for q in r["oracle"])
+                  assert all(q["selected_footer_pos"]==j["original_builder_footer_pos"]
+                             and q["delta_depth"]==0 for q in r["original"]+r["oracle"])
+          assert j["orphaned_cases"][-1]["nested"]["median_wall_ratio_original_over_oracle"]>=2
+          for k in ("valid_baseline","valid_committed_rename"):
+              assert all(q["decoder_calls"]==1 if k=="valid_baseline" else q["decoder_calls"]==2
+                         for q in j[k]["original"]+j[k]["oracle"])
+          print("J24G05_INDEPENDENT_SOURCE_ORACLE_REFEREE=PASS")
+          PY
+      - name: Preserve original receipts even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g05-negative-footer-oracle-${{ github.sha }}
+          path: j24g05-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
