@@ -42,6 +42,16 @@ def native_uniform_stride(storage, blobs, size) -> int:
         return 0
     try:
         witness = proof(storage[1], blobs, size)
-        return witness if type(witness) is int and 0 < witness <= size else 0
+        if type(witness) is not int or witness <= 0 or witness > size:
+            return 0
+        refs = storage[1]
+        if not refs or type(refs[-1]) is not int:
+            return 0
+        last = blobs[refs[-1]][1]
+        # Independent constant-time arithmetic check on a positive C witness.
+        if (type(last) is not int or last <= 0 or last > witness
+                or witness * (len(refs) - 1) + last != size):
+            return 0
+        return witness
     except Exception:
         return 0
