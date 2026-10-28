@@ -140,6 +140,14 @@ def test_authenticated_hardlink_negative_length_cannot_cancel_budget(tmp_path, b
     index = msgpack.unpackb(old_raw_index, raw=False)
     rows = [row for row in index["files"] if row[0] == "zz-alias.bin"]
     assert len(rows) == 1
+    # Published Windows Builder can encode a genuine Win32 hardlink as a
+    # second K_FILE (existing O47 portability debt; not repaired by J24B06).
+    # Construct a valid, SHA-consistent K_HARDLINK descriptor independently
+    # there, rather than treating that unrelated Builder defect as quota proof.
+    if rows[0][1] != K_HARDLINK:
+        assert os.name == "nt" and rows[0][1] == 0
+        rows[0][1] = K_HARDLINK
+        rows[0][6] = ["payload.bin"]
     assert rows[0][1] == K_HARDLINK
     assert rows[0][4] == 8192
     rows[0][4] = bad_size
