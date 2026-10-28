@@ -63,13 +63,13 @@ def execute(root):
         original=reader_mod._linux_link_owner_fd
         max_fd=fd_count()
         invocations=0
-        def record_link(fd,alias):
+        def record_link(fd,alias, *, parent_fd=None):
             nonlocal max_fd,invocations
             invocations+=1
             st=os.fstat(fd)
             assert st.st_nlink>=1
             max_fd=max(max_fd,fd_count())
-            return original(fd,alias)
+            return original(fd,alias,parent_fd=parent_fd)
         out=root/"out"
         fd_baseline=fd_count()
         t1=time.perf_counter()
