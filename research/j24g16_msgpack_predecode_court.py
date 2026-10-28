@@ -223,7 +223,18 @@ def worker(file, method):
 def court(repeats, dest):
     dest.mkdir(parents=True, exist_ok=True)
     identity = selftest()
-    sources = create_vectors(dest)
+    # J24G16b: keep hostile payload construction in a short-lived process.
+    # Otherwise fork/exec workers may inherit generation's peak RSS highwater
+    # and falsely show identical RSS across direct and preflight arms.
+    subprocess.run([sys.executable, __file__, "--generate", str(dest)],
+                   capture_output=True, text=True, check=True)
+    sources = {}
+    for label in ("tiny_maps_200k", "flat_nil_200k", "nested_4000x50",
+                  "ordinary_10k", "ordinary_1k", "opaque_same_bytes"):
+        p = dest / (label + ".mpk")
+        b = p.read_bytes()
+        sources[label] = {"bytes": len(b), "sha256": hashlib.sha256(b).hexdigest(),
+                          "path": str(p)}
     samples = []
     for name, source in sources.items():
         for round_no in range(repeats):
@@ -243,6 +254,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--worker", nargs=2)
     p.add_argument("--court", type=Path)
+    p.add_argument("--generate", type=Path)
     p.add_argument("--repeats", type=int, default=3)
     p.add_argument("--selftest", action="store_true")
     a = p.parse_args()
@@ -250,6 +262,9 @@ def main():
         print(json.dumps(selftest()))
     elif a.worker:
         print(json.dumps(worker(*a.worker)))
+    elif a.generate:
+        a.generate.mkdir(parents=True, exist_ok=True)
+        create_vectors(a.generate)
     elif a.court:
         print("samples:", court(a.repeats, a.court))
     else:
