@@ -47,3 +47,19 @@ Engineering Evidence initially failed solely because the PR description omitted 
 This is **conformance/evidence enablement**, not a new codec, format, compression gain, generalized hostile-input seal, native/Rust ABI guarantee, or release candidate. Because the fixture places owner before hardlink alias, it does not resolve the separately owned forward-hardlink ordering defect (#262/#621). It also does not resolve known signed hardlink-size contradictions (#610/#693), quota bypass (#690/#697/#700), sparse publication (#255/#573), unsafe targets, race-resistant extraction, xattrs, ACLs, Unix raw byte pathnames or transaction recovery. No native link topology conformance was run; the native Reader currently parses kinds but its hardlink storage is `Unsupported` by source inspection, **not** a measured failure on these new goldens.
 
 The next cheapest decision-changing action, if not already claimed, is a *source-bound* native C ABI conformance test reusing these exact bytes with an explicit expected unsupported hardlink result (not silently weakening successful Python semantics). Product promotion still requires general exact-head tests, portability, semantic safety and official parity/release law. No merge/version/format change is claimed. Discovery Engine `STATE.json` was intentionally untouched under #574 ownership.
+
+
+## Detached original-hosted ZIP audit: three-root custody confirmation
+
+After the hosted green decision, all three **original GitHub Actions artifact ZIPs** listed above were downloaded (not recreated from logs) and independently read by an offline stdlib ZIP/JSON/hash auditor. Every ZIP passed its entry CRC; each carried the *same exact* source HEAD `fcbe50c67b90ae1fabbbe5a7dd1be1768076082f`, Reader Git blob `e716233403dabd0966863c45635e18fa5ac6afb8` and frozen-wire Git blob `7b0743274987b904d695d9e280883ed66b930519`. Their parsed referee JSONs were exactly equal semantically, each with two correct physical archive identities and two decoded logical byte identities, and each native pytest log contained 8 `PASSED`, zero `SKIPPED`.
+
+| Artifact | Downloaded ZIP SHA-256 | Local checkout manifest SHA-256 |
+|---|---|---|
+| Ubuntu #12856230552 | `1919aeead4d0d7a6ad882dd81277ac41cdfa8f0ce02609769e0adc5be60856d2` | `736dd65237a4bfccae3aea387fb0e31b56dfd48e734a0b5789ca5d1be7c7ae5b` |
+| macOS #12856221469 | `de2768dda70301db87fc201a69075dddf933673145533bf7441de69bc29ed422` | `736dd65237a4bfccae3aea387fb0e31b56dfd48e734a0b5789ca5d1be7c7ae5b` |
+| Windows #12855073589 | `393c1549603fb4a27f6db65eb4ebb8c735a7d5e3208acaf3dbd128da53c56ea2` | `f93ad8c7e8fa96a764c516dfee8ff7ce6517fb2e3414b5b761c60691db55f919` |
+
+**A genuine intermediate negative was preserved:** the first offline audit incorrectly demanded byte-identical on-disk manifest SHA across hosts and failed on Windows. Inspecting the complete artifact isolated the difference to checked-out text-file line endings. Reconstructing the exact GitHub manifest yielded LF file hash `736dd652...` and CRLF-transformed hash `f93ad8c7...`, precisely matching the original receipts; the immutable Git blob ID, all archives, source HEAD and semantic JSON referee were unchanged. The independent auditor was then amended to require exactly those two derived SHA-256 values per host, not weakened to ignore hashes. This is a **portable evidence-harness correction**, not a changed product, trial, comparator, frozen vector or promotion threshold.
+
+The complete three-host ZIP auditor and its PASS receipt were preserved separately as local forensic evidence. The evidence-backed process lesson is narrowly prospective: distinguish Git blob identity from checkout byte identity when cross-platform line endings can change. One observation is insufficient to change the Discovery Engine policy.
+
