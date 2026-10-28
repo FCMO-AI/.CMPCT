@@ -1,0 +1,77 @@
+# ci-lane: fast
+name: CMPCT v031 J24B03-H2 source-exact RAW BHDR offset forensic
+on:
+  pull_request:
+    paths:
+      - 'research/j24b03_bhdr_offset_diagnostic.py'
+      - 'research/j24b03_bhdr_offset_referee.py'
+      - 'docs/v031-research/2026-10-27-j24b03-bhdr-offset-diagnostic-prereg.md'
+      - '.github/workflows/v031-j24b03-bhdr-offset-diagnostic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  forensic:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+        python: ['3.11']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 80c358f8824ec1b20d349c92ed94c898090969b0
+          path: frozen-baseline
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install immutable released and guarded native-backed packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e './frozen-baseline[test]'
+          python -m pip install -e '.[test]'
+      - name: H2 independent paired forensic with exact source custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git -C frozen-baseline rev-parse HEAD)" = '80c358f8824ec1b20d349c92ed94c898090969b0'
+          mkdir -p benchmark-artifacts
+          git rev-parse HEAD > benchmark-artifacts/candidate-head.txt
+          git hash-object src/cmpct/reader.py > benchmark-artifacts/candidate-reader-blob.txt
+          git -C frozen-baseline hash-object src/cmpct/reader.py > benchmark-artifacts/frozen-reader-blob.txt
+          PYTHONPATH=src python research/j24b03_bhdr_offset_diagnostic.py \
+            --generate --corpus benchmark-artifacts/h2-corpus
+          PYTHONPATH=frozen-baseline/src python research/j24b03_bhdr_offset_diagnostic.py \
+            --arm baseline --corpus benchmark-artifacts/h2-corpus \
+            --receipt benchmark-artifacts/h2-baseline.json
+          PYTHONPATH=src python research/j24b03_bhdr_offset_diagnostic.py \
+            --arm candidate --corpus benchmark-artifacts/h2-corpus \
+            --receipt benchmark-artifacts/h2-candidate.json
+          python research/j24b03_bhdr_offset_referee.py \
+            --corpus benchmark-artifacts/h2-corpus \
+            --baseline benchmark-artifacts/h2-baseline.json \
+            --candidate benchmark-artifacts/h2-candidate.json \
+            --out benchmark-artifacts/h2-audit.json
+      - name: Verify CI workflow topology
+        if: runner.os == 'Linux'
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24b03-bhdr-offset-diagnostic.yml
+      - name: Retain source-exact original wire and every observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24b03-h2-${{ matrix.os }}-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn

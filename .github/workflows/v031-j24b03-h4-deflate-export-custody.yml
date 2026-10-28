@@ -1,0 +1,75 @@
+# ci-lane: fast
+name: CMPCT v031 J24B03-H4 fast Deflate ZIP export custody
+on:
+  pull_request:
+    paths:
+      - 'research/j24b03_h4_deflate_export_court.py'
+      - 'research/j24b03_h4_deflate_export_referee.py'
+      - 'tests/test_reader_deflate_export_custody.py'
+      - 'src/cmpct/reader.py'
+      - 'docs/v031-research/2026-10-27-j24b03-h4-deflate-export-custody-prereg.md'
+      - 'docs/v031-research/2026-10-27-j24b03-h4-deflate-export-custody-result.md'
+      - 'docs/HARDENING.md'
+      - '.github/workflows/v031-j24b03-h4-deflate-export-custody.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  fast-deflate-export:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+        python: ['3.11']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 068f24af02ef422d9c71e7cfd81ed4e81b032fa6
+          path: frozen-h3
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install both source-exact package dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e './frozen-h3[test]'
+          python -m pip install -e '.[test]'
+      - name: Execute immutable H3 versus current Reader on identical signed wires
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git -C frozen-h3 rev-parse HEAD)" = "068f24af02ef422d9c71e7cfd81ed4e81b032fa6"
+          mkdir -p benchmark-artifacts
+          git rev-parse HEAD > benchmark-artifacts/candidate-head.txt
+          git hash-object src/cmpct/reader.py > benchmark-artifacts/candidate-reader-blob.txt
+          git -C frozen-h3 hash-object src/cmpct/reader.py > benchmark-artifacts/h3-reader-blob.txt
+          PYTHONPATH=src python research/j24b03_h4_deflate_export_court.py --generate --corpus benchmark-artifacts/corpus
+          PYTHONPATH=frozen-h3/src python research/j24b03_h4_deflate_export_court.py --arm baseline --corpus benchmark-artifacts/corpus --receipt benchmark-artifacts/h3.json
+          PYTHONPATH=src python research/j24b03_h4_deflate_export_court.py --arm candidate --corpus benchmark-artifacts/corpus --receipt benchmark-artifacts/candidate.json
+          python research/j24b03_h4_deflate_export_referee.py --corpus benchmark-artifacts/corpus --baseline benchmark-artifacts/h3.json --candidate benchmark-artifacts/candidate.json --out benchmark-artifacts/audit.json
+          # These standalone H4 tests use only tmp_path; loading unrelated legacy tests/conftest.py
+          # requires ambient libzstd.so on non-Linux hosts and is not a prerequisite.
+          PYTHONPATH=src python -m pytest --noconftest -q tests/test_reader_deflate_export_custody.py
+      - name: Validate hosted workflow topology
+        if: runner.os == 'Linux'
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24b03-h4-deflate-export-custody.yml
+      - name: Preserve source-exact wires and observations even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24b03-h4-${{ matrix.os }}-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
