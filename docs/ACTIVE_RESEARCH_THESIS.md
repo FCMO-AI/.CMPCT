@@ -4,15 +4,13 @@ Status: **no active primary Foundry thesis**.
 
 Constitutional authority: `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`. Current release authority remains independent under `docs/V030_RELEASE_LOCK.json` and the v0.30 coordination task ledger.
 
-## Temporary global priority — v0.30 efficiency recovery
+## v0.30 efficiency recovery — closed release gate; v0.31 scientific input
 
-`docs/V030_EFFICIENCY_RECOVERY.md` is currently **ACTIVE** and is the dominant temporary allocator for CMPCT work until its explicit exit conditions are proven.
+`docs/V030_EFFICIENCY_RECOVERY.md` is **CLOSED AS A v0.30 RELEASE GATE**, as that document explicitly records following the published 2026-10-04 v0.30.0 checkpoint. It is **not an active global work allocator in v0.31**. This current-state note had continued to label it ACTIVE after the authoritative directive was closed; that stale label is retired here without rewriting the historical evidence.
 
-This is not a new Foundry thesis and does not weaken Foundry/Forge separation. It is a product-recovery priority created by measured end-to-end execution debt. While it is active, discretionary material work should directly advance, measure, unblock, or decisively falsify the efficiency-recovery mission: eliminate major create/extract/CPU/I/O/search waste, rehabilitate the proven v0.30 byte gains without exporting cost, and prove the real product against ZIP/Zstd and broader serious corpora rather than only the frozen 15-workload matrix.
+The completed recovery produced enduring **v0.31 technical hypotheses and debts**, including speculative r25/search create overhead, mixed ML/Logs execution costs, hidden-ZIP byte opportunities with expensive productization, and bounded-drift execution ownership. They compete against other current correctness, integrity, portability, recovery and product-leverage opportunities under `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`, the Discovery Engine and current GitHub evidence; no discretionary path is automatically privileged merely because it was the previous release gate.
 
-Do not start an unrelated primary Foundry thesis merely to keep Foundry occupied while this recovery is red. A new thesis during this interval should have a credible broad path to attack an efficiency/representation bottleneck or another release-critical constraint and must still pass the normal Thesis Initiation Gate. Safety, exactness, integrity, recovery, portability and truthful evidence remain non-negotiable and can preempt performance work when they are genuine blockers.
-
-The recovery directive ends only when its repository-defined exit conditions are durably satisfied; schedule cadence or passage of time does not end it.
+There is still **no active primary Foundry thesis**. Do not invent one to fill the schedule: any new thesis must pass the existing Thesis Initiation Gate, including prior-art scope, cheap oracle, broad opportunity and disproof criteria. Forge remains accountable for performance and competitive gaps; safety, exactness, recovery and unchanged promotion gates retain veto authority.
 
 ## A01 latent physical basis — FAMILY_RETIRED as current primary path
 
@@ -94,10 +92,10 @@ Do not reopen through operator/grid expansion or result-driven relabeling withou
 
 Do **not** immediately invent another named thesis merely to keep Foundry busy. Re-open the Assumption Ledger and current product/evidence landscape, then choose the highest-headroom falsifiable assumption that is not already covered by stronger preserved evidence. A new thesis must pass the initiation gate in `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md` before expensive work.
 
-While `docs/V030_EFFICIENCY_RECOVERY.md` is ACTIVE, that recovery directive further constrains allocation: an otherwise valid new thesis should not displace the measured efficiency/release recovery mission unless it directly attacks a broad efficiency/representation bottleneck or new evidence proves a higher-severity product blocker.
+The historical `docs/V030_EFFICIENCY_RECOVERY.md` gate is now **CLOSED**, not a standing priority veto. Compare a new thesis against current v0.31 product and evidence bottlenecks using the ordinary doctrine and Discovery Engine, rather than treating an already-satisfied v0.30 gate as unfinished.
 
-A15 (universal reconstruction IR) has only a **candidate initiation audit** on branch `agent/foundry-a15-initiation-audit`; it is not active and has no evidence credit. The cheap next step is semantic projection/inventory, not product code, and it is lower priority than the active efficiency-recovery mission unless new evidence changes that ordering.
+A15 (universal reconstruction IR) has only a **candidate initiation audit** on branch `agent/foundry-a15-initiation-audit`; it is not active and has no evidence credit. Its cheapest prospective step remains semantic projection/inventory, not product code. Rank it against **current v0.31** evidence and active ownership, not against a closed v0.30 release gate.
 
 ## Forge separation
 
-No Foundry result in this file grants v0.30 release credit. Current v0.30 fingerprint authority remains unchanged by these docs-only research updates. Forge remains responsible for exact-head receipts, physical ARM64 Android evidence, performance/competitor authority and final release state. While the efficiency directive is ACTIVE, Forge performance/competitor convergence is the dominant discretionary mission.
+No Foundry result in this file grants v0.30 or v0.31 release credit. Current v0.30 fingerprint authority remains unchanged by this docs-only priority reconciliation. Forge remains responsible for exact-head receipts, physical ARM64 Android evidence, performance/competitor authority and final release state. v0.31 performance/competitor convergence remains a strong actionable lane, but its priority must be earned from **current evidence**, not inherited from the closed v0.30 efficiency directive.
