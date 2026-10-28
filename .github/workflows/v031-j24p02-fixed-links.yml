@@ -54,6 +54,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Admit immutable frozen wire cheaply before wheel build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, hashlib, json
+          from pathlib import Path
+          manifest=json.loads(Path("tests/conformance/v24-link-tree.json").read_text(encoding="utf-8"))
+          assert manifest["schema"]=="cmpct-v24-fixed-link-tree-wire-v1"
+          assert manifest["revision"]==24
+          assert len(manifest["vectors"])==2
+          assert {v["codec"] for v in manifest["vectors"]}=={0,1}
+          for v in manifest["vectors"]:
+              wire=base64.b64decode(v["archive_base64"],validate=True)
+              if len(wire)!=v["archive_bytes"] or hashlib.sha256(wire).hexdigest()!=v["archive_sha256"]:
+                  raise SystemExit("frozen wire byte identity mismatch: "+v["name"])
+              if not wire.startswith(b"CMPCT24\\0"):
+                  raise SystemExit("wrong frozen archive identity: "+v["name"])
+          print("FIXED_LINK_FROZEN_SOURCE_ADMITTED")
+          PY
       - name: Install actual distribution and independent test dependencies
         shell: bash
         run: |
