@@ -97,7 +97,7 @@ def forged_courts(original):
     a=copy.deepcopy(original);a["raw"][1]["arm"]="parent";bad.append(a)
     a=copy.deepcopy(original);a["raw"][0]["archive_sha256"]="0"*64;bad.append(a)
     a=copy.deepcopy(original);a["source"]["candidate_validation_blob"]="0"*40;bad.append(a)
-    a=copy.deepcopy(original);a["raw"][0]["observations"][0]["wall_ns"]+=1;bad.append(a)
+    a=copy.deepcopy(original);a["raw"][0]["worker_wall_median_ns"]+=1;bad.append(a)
     for index,receipt in enumerate(bad):
         try:check(receipt)
         except (AssertionError,KeyError,TypeError,ValueError,ZeroDivisionError):continue
