@@ -61,6 +61,20 @@ jobs:
           test "$(grep -c '^J24K11_CELL=' j24k11-evidence/original-console.txt)" = 9
           grep -q '^J24K11_RESULT=' j24k11-evidence/original-console.txt
           grep -q '"status": "PASS"' j24k11-evidence/independent-audit.txt
+      - name: Fully charge per-query signed VZIP descriptor projection (J24K11b)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24k11b_projection_oracle.py research/j24k11b_projection_audit.py
+          J24K11B_OUT=j24k11-evidence/projection-results.json python research/j24k11b_projection_oracle.py 2>&1 | tee j24k11-evidence/projection-console.txt
+      - name: Independently referee charged projection, negatives and forged receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k11b_projection_audit.py research/j24k11b_projection_oracle.py j24k11-evidence/projection-results.json 2>&1 | tee j24k11-evidence/projection-audit.txt
+          test "$(grep -c '^J24K11B_CELL=' j24k11-evidence/projection-console.txt)" = 18
+          grep -q '^J24K11B_RESULT=' j24k11-evidence/projection-console.txt
+          grep -q '"verdict": "PASS"' j24k11-evidence/projection-audit.txt
       - name: Check CI topology
         shell: bash
         run: python tools/check_ci_topology.py .github/workflows/v031-j24k11-bhdr-batch.yml
