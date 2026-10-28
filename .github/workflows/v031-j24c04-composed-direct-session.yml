@@ -61,6 +61,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Each source needs its own package-owned native codec; a checkout alone is not runnable.
+          python -m pip install -e './frozen-baseline[test]'
           python -m pip install -e '.[test]'
       - name: Preserve first worker error and classify source versus harness
         shell: bash
