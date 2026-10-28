@@ -5,6 +5,8 @@ on:
     paths:
       - 'research/a14_o1b_natural_crc_oracle.py'
       - 'research/a14_o1b_independent_referee.py'
+      - 'research/a14_o1c_symmetric_codec_oracle.py'
+      - 'research/a14_o1c_independent_referee.py'
       - 'docs/v031-research/2026-10-28-a14-o1b-natural-checksum-*'
       - '.github/workflows/a14-o1b-research.yml'
   workflow_dispatch:
@@ -65,7 +67,9 @@ jobs:
         run: |
           python research/a14_o1b_natural_crc_oracle.py --output a14_o1b_result.json
           python research/a14_o1b_independent_referee.py --input a14_o1b_result.json
-          sha256sum a14_o1b_result.json a14_o1b_result.referee.json
+          python research/a14_o1c_symmetric_codec_oracle.py --source a14_o1b_result.json --output a14_o1c_symmetric_result.json
+          python research/a14_o1c_independent_referee.py --old a14_o1b_result.json --new a14_o1c_symmetric_result.json
+          sha256sum a14_o1b_result.json a14_o1b_result.referee.json a14_o1c_symmetric_result.json a14_o1c_symmetric_result.referee.json
       - name: Persist source-exact raw science
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,3 +80,5 @@ jobs:
           path: |
             a14_o1b_result.json
             a14_o1b_result.referee.json
+            a14_o1c_symmetric_result.json
+            a14_o1c_symmetric_result.referee.json
