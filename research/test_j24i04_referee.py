@@ -20,6 +20,9 @@ class RefereeSelfCourt(unittest.TestCase):
     def fixture(self, root: Path, *, false_red: bool) -> None:
         archive = b"CMPCT-not-a-product-fixture"
         archive_digest = hashlib.sha256(archive).hexdigest()
+        native_payload = b"not-an-actual-native-module-independent-referee-fixture"
+        (root / "native-source-cmpct-core.so").write_bytes(native_payload)
+        native_digest = hashlib.sha256(native_payload).hexdigest()
         identity = {
             f"{name}/{layer}": [len(archive), archive_digest]
             for name in NAMES for layer in ("library", "cli")
@@ -55,7 +58,7 @@ class RefereeSelfCourt(unittest.TestCase):
                     "python_source_sha256": {
                         f"f{i}.py": f"{i:064x}" for i in range(5)
                     },
-                    "native_sha256": "a" * 64, "native_bytes": 999,
+                    "native_sha256": native_digest, "native_bytes": len(native_payload),
                     "native_name": "cmpct_core.abi3.so",
                     "imported_paths": {
                         "package": path + "/src/cmpct/__init__.py",
