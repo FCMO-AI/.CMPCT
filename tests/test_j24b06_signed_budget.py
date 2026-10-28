@@ -110,3 +110,59 @@ def test_legitimate_zero_length_file_under_zero_byte_cap(tmp_path):
         assert archive.verify() == 1
         archive.extractall(destination, metadata=False, max_bytes=0)
     assert (destination / "empty.bin").read_bytes() == b""
+
+
+@pytest.mark.parametrize("bad_size", [-8192, True])
+def test_authenticated_hardlink_negative_length_cannot_cancel_budget(tmp_path, bad_size):
+    """Hardlinks need no symlink privilege on Windows and exercise another alias kind."""
+    from cmpct.codec import K_HARDLINK
+    root = tmp_path / "hardlink-source"
+    root.mkdir()
+    raw = b"".join(
+        hashlib.sha256(f"J24B06-hardlink:{i}".encode()).digest()
+        for i in range(8192 // 32)
+    )
+    (root / "payload.bin").write_bytes(raw)
+    try:
+        os.link(root / "payload.bin", root / "zz-alias.bin")
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"host cannot create hardlinks: {exc}")
+    archive_path = tmp_path / "hardlink-original.cmpct"
+    Builder(root, workers=1, reproducible=True).build(archive_path)
+    with CMPCT(archive_path) as archive:
+        assert archive.verify() == 2
+
+    raw_archive = archive_path.read_bytes()
+    magic, version, flags, cs, us, ds, original_hash = HDR.unpack_from(raw_archive)
+    assert magic == MAGIC and version == VERSION
+    old_raw_index = zd(raw_archive[HDR.size:HDR.size+cs], us)
+    assert sha(old_raw_index) == original_hash
+    index = msgpack.unpackb(old_raw_index, raw=False)
+    rows = [row for row in index["files"] if row[0] == "zz-alias.bin"]
+    assert len(rows) == 1
+    assert rows[0][1] == K_HARDLINK
+    assert rows[0][4] == 8192
+    rows[0][4] = bad_size
+    new_index = msgpack.packb(index, use_bin_type=True)
+    new_compressed = zc(new_index, 12)
+    new_hash = sha(new_index)
+    mutated_archive = tmp_path / "hardlink-hostile.cmpct"
+    physical = raw_archive[HDR.size+cs:HDR.size+cs+ds]
+    mutated_archive.write_bytes(
+        HDR.pack(MAGIC, VERSION, flags, len(new_compressed), len(new_index), ds, new_hash)
+        + new_compressed + physical + new_compressed
+        + FTR.pack(FMAGIC, 0, 1, 0, 0, len(new_compressed), len(new_index), 0, new_hash)
+    )
+    assert physical == raw_archive[HDR.size+cs:HDR.size+cs+ds]
+    bad_dest = tmp_path / "hardlink-not-created"
+    with CMPCT(mutated_archive) as archive:
+        assert archive.verify() == 2
+        with pytest.raises(IOError, match="invalid nonnegative logical size"):
+            archive.extractall(bad_dest, max_bytes=4096, metadata=False)
+    assert not bad_dest.exists()
+
+    valid_dest = tmp_path / "hardlink-accepted"
+    with CMPCT(archive_path) as archive:
+        archive.extractall(valid_dest, metadata=False, max_bytes=16384)
+    assert (valid_dest / "payload.bin").read_bytes() == raw
+    assert (valid_dest / "zz-alias.bin").read_bytes() == raw
