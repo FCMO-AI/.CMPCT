@@ -80,7 +80,7 @@ def _reader_with_physical_record(codec, decoded, stored, flags=0, reserved=0, cl
     obj.record_base = 0
     obj.blobs = [claimed if claimed is not None else (0, decoded, stored, codec, 0)]
     obj.mm = (BHDR.pack(BMAGIC, codec, flags, reserved, decoded, stored, 0,
-                       0, b"\\0" * 32) + b"x" * stored)
+                       0, bytes(32)) + b"x" * stored)
     return obj
 
 
