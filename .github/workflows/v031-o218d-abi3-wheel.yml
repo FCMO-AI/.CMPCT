@@ -55,6 +55,9 @@ jobs:
           mkdir -p o218d-evidence
           git rev-parse HEAD > o218d-evidence/source-head.txt
           python -m py_compile research/o218d_abi3_smoke.py research/o218d_abi3_referee.py
+          python research/o218d_abi3_source_custody.py > o218d-evidence/source-custody.log
+          cat o218d-evidence/source-custody.log
+          grep -q 'O218D_SOURCE_CUSTODY=PASS' o218d-evidence/source-custody.log
       - name: Build exactly one native cp311-abi3 wheel through supported host compiler
         shell: bash
         run: |
