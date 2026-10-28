@@ -1,0 +1,104 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT v031 J24K13 single-pass physical VZIP proof
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24k13-singlepass-vzip-20261028
+  pull_request:
+    paths:
+      - 'research/j24k13_*'
+      - 'docs/v031-research/2026-10-28-j24k13-*'
+      - '.github/workflows/v031-j24k13-singlepass-vzip.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24k13-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-singlepass:
+    name: J24K13 authentic VZIP single pass - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24K13_WORKDIR: science-work
+      J24K13_OUT: j24k13-evidence/results.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Frozen source and prospective question
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "e77578505985dd264d69425e3bc816c421ae3cdc"
+          test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "fe692c4595c1303dbc89b7d660501e4ef0f223c3"
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = "0614723549403f398a43552a7c5ad3f00fbec688"
+          git cat-file -e 'fb0ecc3beffcfe7f4f7f5cd63e867dffa2e5922a^{commit}'
+          test -s docs/v031-research/2026-10-28-j24k13-singlepass-vzip-prereg.md
+          python -m py_compile research/j24k13_singlepass_vzip.py research/j24k13_independent_audit.py
+          python tools/check_ci_topology.py .github/workflows/v031-j24k13-singlepass-vzip.yml
+          mkdir -p j24k13-evidence science-work
+          git rev-parse HEAD > j24k13-evidence/head.txt
+          git ls-tree HEAD src/cmpct/reader.py src/cmpct/codec.py src/cmpct/validation.py research/j24k13_singlepass_vzip.py > j24k13-evidence/source-blobs.txt
+      - name: Install exact r24 Reader as independent wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade setuptools wheel
+          python -m pip install .
+          python - <<'PY'
+          import inspect,os,subprocess
+          from pathlib import Path
+          import cmpct.reader as reader
+          import cmpct.codec as codec
+          repo=Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for module,rel in ((reader,"src/cmpct/reader.py"),(codec,"src/cmpct/codec.py")):
+              path=Path(inspect.getfile(module)).resolve()
+              assert not path.is_relative_to(repo), "editable source not allowed"
+              norm=lambda b:b.replace(b"\r\n",b"\n")
+              assert norm(path.read_bytes()) == norm(subprocess.check_output(
+                  ["git","show","HEAD:"+rel],cwd=repo)),("source mismatch",rel)
+          print("J24K13_WHEEL_BINDING=PASS",flush=True)
+          PY
+      - name: Execute genuine signed archive, independent paired A/B and hostile size lie
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k13_singlepass_vzip.py 2>&1 | tee j24k13-evidence/console.txt
+          grep -q '^J24K13_RESULT=' j24k13-evidence/console.txt
+          test "$(grep -c '^J24K13_CELL=' j24k13-evidence/console.txt)" = 12
+      - name: Independent source/corpus/medians referee with forged receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k13_independent_audit.py j24k13-evidence/results.json science-work 2>&1 | tee j24k13-evidence/referee.txt
+          grep -q '"verdict": "PASS"' j24k13-evidence/referee.txt
+          grep -q '"forgeries_rejected": 6' j24k13-evidence/referee.txt
+      - name: Archive original scientific bytes and all negative results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24k13-science-${{ matrix.os }}-${{ env.SOURCE_SHA }}
+          path: |
+            j24k13-evidence/
+            science-work/*.cmpct
+            science-work/input-*/science.zip
+          if-no-files-found: warn
+          retention-days: 30
