@@ -130,11 +130,29 @@ def read(blob):
         if pos+REC.size>len(blob):raise ValueError("member truncated")
         pid,n,sha,size=REC.unpack_from(blob,pos);pos+=REC.size
         if pid>=len(programs) or n>1<<22 or size>1<<22 or pos+size>len(blob):raise ValueError("member bounds")
-        body=reconstruct(unpack(blob[pos:pos+size]),programs[pid],n);pos+=size
+        payload=unpack(blob[pos:pos+size]);body=bespoke_reconstruct(payload,programs[pid],n) if kind==0 else reconstruct(payload,programs[pid],n);pos+=size
         if hashlib.sha256(body).digest()!=sha:raise ValueError("SHA mismatch")
         result.append(body)
     if pos!=len(blob):raise ValueError("trailing bytes")
     return result
+def bespoke_reconstruct(data,pipe,size):
+    # Strong specialized control: same codecs, frames and transform plans,
+    # but hard-dispatched composition rather than generic IR traversal.
+    if pipe==():
+        if len(data)!=size:raise ValueError("direct size")
+        return data
+    if pipe==("stripe2",):return reverse(data,"stripe2",size)
+    if pipe==("stripe4",):return reverse(data,"stripe4",size)
+    if pipe==("delta",):return reverse(data,"delta",size)
+    if pipe==("xor",):return reverse(data,"xor",size)
+    if pipe==("zero",):return reverse(data,"zero",size)
+    if pipe==("stripe2","delta"):return reverse(reverse(data,"delta",len(data)),"stripe2",size)
+    if pipe==("stripe4","delta"):return reverse(reverse(data,"delta",len(data)),"stripe4",size)
+    if pipe==("stripe2","xor"):return reverse(reverse(data,"xor",len(data)),"stripe2",size)
+    if pipe==("stripe4","xor"):return reverse(reverse(data,"xor",len(data)),"stripe4",size)
+    if pipe==("delta","stripe2"):return reverse(reverse(data,"stripe2",len(data)),"delta",size)
+    raise ValueError("unsupported bespoke plan")
+
 def measure(blob):
     samples=[]
     for _ in range(7):
