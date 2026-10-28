@@ -1,0 +1,90 @@
+# ci-lane: fast
+name: CMPCT J24G06c cross-window footer mutation discriminator
+on:
+  pull_request:
+    paths:
+      - 'research/j24g06c_buffer_window_mutation_court.py'
+      - 'docs/v031-research/2026-10-28-j24g06c-*'
+      - '.github/workflows/v031-j24g06c-cross-window-footer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  exact-installed-reader-cross-window:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      COURT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G06C_ARTIFACTS: j24g06c-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.COURT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bound source, parent, preregistration and instrument identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g06c-artifacts
+          test "$(git rev-parse HEAD)" = "$COURT_HEAD"
+          git merge-base --is-ancestor "24f43abe2dcf5a331a23fed3aa93469dd62f011f" HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "bead2ea6a09a6daaadc3ec2389cfb8853e3dd172"
+          test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          python - <<'PY'
+          import os,json,hashlib,pathlib,subprocess
+          paths=["src/cmpct/reader.py","research/j24g06b_live_footer_mutation_court.py",
+                 "research/j24g06c_buffer_window_mutation_court.py"]
+          rows={}
+          for p in paths:
+              git_bytes=subprocess.check_output(["git","show","HEAD:"+p])
+              assert git_bytes==pathlib.Path(p).read_bytes(),p
+              rows[p]={"sha256":hashlib.sha256(git_bytes).hexdigest(),
+                       "git_blob":subprocess.check_output(["git","rev-parse","HEAD:"+p],text=True).strip()}
+          pathlib.Path("j24g06c-artifacts/source.json").write_text(
+              json.dumps({"head":os.environ["COURT_HEAD"],"files":rows},indent=2)+"\n")
+          PY
+      - name: Install exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python - <<'PY'
+          import cmpct.reader,subprocess
+          from pathlib import Path
+          p=Path(cmpct.reader.__file__).resolve()
+          assert "site-packages" in str(p),str(p)
+          assert p.read_bytes()==subprocess.check_output(["git","show","HEAD:src/cmpct/reader.py"])
+          print("J24G06C_INSTALLED_SOURCE=PASS")
+          PY
+      - name: Run preregistered two-window source mutation court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g06c_buffer_window_mutation_court.py 2>&1 | tee j24g06c-artifacts/court.log
+          python - <<'PY'
+          import json,pathlib
+          j=json.loads(pathlib.Path("j24g06c-artifacts/court.json").read_text())
+          assert j["product_source_changed"] is False and j["release_credit"] == 0
+          assert j["decision"] == "CROSS_WINDOW_TEMPORAL_DIVERGENCE_CONFIRMED"
+          assert len(j["window_cases"])==2
+          for x in j["window_cases"]:
+              assert x["verdict"]=="GENERATION_SELECTION_DIVERGENCE"
+              assert x["physical_mutation"]["sha_payload_unchanged"]
+              assert x["mutated_historical"]["archive_sha256_after"]==x["mutated_candidate"]["archive_sha256_after"]
+          print("J24G06C_ADVERSARIAL_REFEREE=PASS")
+          PY
+      - name: Preserve all receipts including nonconfirming result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g06c-cross-window-${{ github.sha }}
+          path: j24g06c-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
