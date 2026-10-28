@@ -1,0 +1,100 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT v031 J24K12 authentic VZIP native-batch installed court
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24k12_*'
+      - 'docs/v031-research/2026-10-28-j24k12-*'
+      - '.github/workflows/v031-j24k12-installed-bhdr.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24k12-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authentic-installed-vzip-native-batch:
+    name: J24K12 source-exact signed installed VZIP - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24K12_WORKDIR: science-work
+      J24K12_OUT: j24k12-evidence/results.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Custody, prereg and frozen installed Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "e77578505985dd264d69425e3bc816c421ae3cdc"
+          test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "fe692c4595c1303dbc89b7d660501e4ef0f223c3"
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = "0614723549403f398a43552a7c5ad3f00fbec688"
+          git cat-file -e 'aeff783c6a0ea04d9017bedc54562224c6ae91f0^{commit}'
+          test -s docs/v031-research/2026-10-28-j24k12-installed-bhdr-prereg.md
+          python -m py_compile research/j24k12_installed_bhdr_batch.py research/j24k12_independent_receipt_audit.py
+          python tools/check_ci_topology.py .github/workflows/v031-j24k12-installed-bhdr.yml
+          mkdir -p j24k12-evidence science-work
+          git rev-parse HEAD > j24k12-evidence/head.txt
+          git ls-tree HEAD src/cmpct/reader.py src/cmpct/codec.py src/cmpct/validation.py research/j24k11_bhdr_oracle.py research/j24k12_installed_bhdr_batch.py > j24k12-evidence/source-blobs.txt
+      - name: Install unchanged genuine r24 wheel and scientific C compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade setuptools wheel
+          python -m pip install .
+          python - <<'PY'
+          import inspect, os, subprocess
+          from pathlib import Path
+          import cmpct.codec as codec, cmpct.reader as reader
+          repo = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for mod, rel in ((codec, "src/cmpct/codec.py"), (reader, "src/cmpct/reader.py")):
+              path = Path(inspect.getfile(mod)).resolve()
+              assert not path.is_relative_to(repo), ("editable/source checkout", rel)
+              norm = lambda s: s.replace(b"\r\n", b"\n")
+              assert norm(path.read_bytes()) == norm(subprocess.check_output(
+                  ["git", "show", "HEAD:" + rel], cwd=repo)), ("wrong installed source", rel)
+              print("J24K12_INSTALLED_SOURCE=" + rel, flush=True)
+          PY
+      - name: Execute authentic Builder-signed installed Reader and fresh-process ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k12_installed_bhdr_batch.py 2>&1 | tee j24k12-evidence/original-console.txt
+          grep -q '^J24K12_RESULT=' j24k12-evidence/original-console.txt
+          test "$(grep -c '^J24K12_CELL=' j24k12-evidence/original-console.txt)" = 12
+      - name: Independent standard-library referee, source custody and forged receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k12_independent_receipt_audit.py j24k12-evidence/results.json science-work 2>&1 | tee j24k12-evidence/second-root-audit.txt
+          grep -q '"verdict": "PASS"' j24k12-evidence/second-root-audit.txt
+          grep -q '"forgeries_rejected": 5' j24k12-evidence/second-root-audit.txt
+      - name: Preserve authentic scientific inputs and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24k12-installed-science-${{ matrix.os }}-${{ env.SOURCE_SHA }}
+          path: |
+            j24k12-evidence/
+            science-work/*.cmpct
+            science-work/input-*/science.zip
+          if-no-files-found: warn
+          retention-days: 30
