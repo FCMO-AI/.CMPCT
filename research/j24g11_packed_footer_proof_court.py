@@ -60,6 +60,7 @@ def membership_audit():
     rng = random.Random(20261028)
     values = set(rng.randrange(1, 1 << 62) for _ in range(30000))
     values.update((0, 1, (1 << 63) - 1, 1 << 63, (1 << 64) - 1))
+    initial_positive = len(values)  # packed byte sample precedes later intentional update
     probes = set(values)
     for v in sorted(values)[:15000]:
         probes.add((v + 7) % (1 << 64))
@@ -100,7 +101,7 @@ def membership_audit():
         assert 131072 not in proof
         physical = os.stat(path).st_size
     assert not os.path.exists(path)
-    return {"positive":len(values), "probe_count":len(probes),
+    return {"initial_positive":initial_positive, "positive":len(values), "probe_count":len(probes),
             "packed_payload_bytes":raw_bytes, "tier_cap_bytes":1 << 20,
             "disk_overflow_rows":131074, "disk_overflow_bytes":physical,
             "disk_cleanup":True, "u64_extremes_exact":True, "overflow_rejected":True}
