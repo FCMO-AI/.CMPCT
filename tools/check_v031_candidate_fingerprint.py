@@ -90,6 +90,70 @@ def fingerprint(manifest: dict, *, root: Path = ROOT) -> tuple[str, list[str]]:
     return digest.hexdigest(), rows
 
 
+
+def assert_git_head_custody(
+    rows: list[str], *, root: Path = ROOT, expected_head: str
+) -> None:
+    """Reject receipts whose scanned source cannot be attributed to exact Git HEAD.
+
+    The source fingerprint measures worktree bytes. An untracked matching source
+    could change that digest while the receipt's 'source_sha' stays unchanged;
+    a dirty tracked source has the same problem. Git HEAD identity alone does
+    not bind those bytes. Fail closed instead of silently excluding them.
+    """
+
+    root = root.resolve()
+
+    def git_bytes(*args: str) -> bytes:
+        try:
+            return subprocess.run(
+                ["git", *args],
+                cwd=root,
+                capture_output=True,
+                check=True,
+            ).stdout
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise ValueError("cannot establish Git HEAD custody for candidate source") from exc
+
+    head = git_bytes("rev-parse", "HEAD").decode("ascii").strip()
+    if head != expected_head:
+        raise ValueError("candidate Git HEAD changed while source was being scanned")
+
+    # NUL separation prevents quoted/escaped Git pathnames from passing the
+    # membership check incorrectly. Only committed source may claim HEAD.
+    tracked = {
+        entry.decode("utf-8")
+        for entry in git_bytes("ls-tree", "-r", "-z", "--name-only", expected_head).split(b"\0")
+        if entry
+    }
+    untracked = sorted(set(rows) - tracked)
+    if untracked:
+        raise ValueError(
+            "untracked source is not attributable to Git HEAD "
+            f"({len(untracked)} paths; first: {untracked[:5]})"
+        )
+
+    # HEAD-vs-worktree includes both staged and unstaged tracked changes,
+    # including removals that no longer appear in the filesystem glob scan.
+    # Git's own filters preserve legitimate platform checkout line endings.
+    dirty = [
+        entry.decode("utf-8")
+        for entry in git_bytes(
+            "diff", "--no-ext-diff", "--no-textconv",
+            "--name-only", "-z", expected_head, "--",
+        ).split(b"\0")
+        if entry
+    ]
+    if dirty:
+        raise ValueError(
+            "dirty tracked source cannot use a clean Git HEAD receipt "
+            f"({len(dirty)} paths; first: {dirty[:5]})"
+        )
+
+    if git_bytes("rev-parse", "HEAD").decode("ascii").strip() != expected_head:
+        raise ValueError("candidate Git HEAD changed during custody validation")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, help="JSON receipt location")
@@ -102,6 +166,7 @@ def main() -> None:
     expected = os.environ.get("EVIDENCE_HEAD")
     if expected and expected != git:
         raise SystemExit(f"candidate evidence SHA mismatch: {git} != {expected}")
+    assert_git_head_custody(rows, root=ROOT, expected_head=git)
     payload = {
         "schema": "cmpct-v031-candidate-source-receipt-v1",
         "source_sha": git,
