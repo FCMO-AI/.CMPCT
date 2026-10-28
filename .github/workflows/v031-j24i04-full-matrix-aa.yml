@@ -72,6 +72,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
 
+      - name: Execute original full correctness precondition, separately from timed court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q | tee j24i04-artifacts/correctness-precondition.stdout.txt
+
       - name: Create two physical worktrees at IDENTICAL #704 source SHA
         shell: bash
         run: |
