@@ -1,0 +1,72 @@
+# ci-lane: fast
+# A14-O0: frozen synthetic derived-field exactness oracle. No product or release authority.
+name: CMPCT v031 A14 derived-CRC O0 scientific court
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-a14-derived-field-crc-o0-20261028
+  pull_request:
+    paths:
+      - 'research/a14_*'
+      - 'docs/v031-research/2026-10-28-a14-*'
+      - '.github/workflows/v031-a14-derived-crc-o0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a14-o0-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-oracle:
+    name: A14 O0 exact roundtrip + second-root referee (Ubuntu/Python 3.11)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pin source witness and install baseline CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y zstd
+          python -m py_compile research/a14_derived_crc_o0.py research/a14_independent_referee.py
+          git rev-parse HEAD > a14_source_commit.txt
+          git hash-object research/a14_derived_crc_o0.py research/a14_independent_referee.py >> a14_source_commit.txt
+          zstd --version >> a14_source_commit.txt
+          python --version >> a14_source_commit.txt
+      - name: Execute frozen A14 O0 7-case court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/a14_derived_crc_o0.py a14_derived_crc_o0_result.json
+          python research/a14_independent_referee.py a14_derived_crc_o0_result.json a14_independent_referee_receipt.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("a14_derived_crc_o0_result.json").read_text())
+          s=json.loads(Path("a14_independent_referee_receipt.json").read_text())
+          assert r["decision"]=="O0_STRUCTURAL_HEADROOM_ONLY",r["decision"]
+          assert s["referee"]=="PASS" and s["decision"]==r["decision"] and len(s["forged_receipts_rejected"])==6,s
+          assert len(r["cases"])==7
+          assert sum(bool(x["detected"]) for x in r["cases"])==4
+          PY
+      - name: Preserve raw reproducible scientific receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a14-o0-ubuntu-python311-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            a14_source_commit.txt
+            a14_derived_crc_o0_result.json
+            a14_independent_referee_receipt.json
