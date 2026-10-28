@@ -121,6 +121,9 @@ def planned_logical_bytes(index: dict) -> int:
                 raise UnprovedEffect(f"{name}: vzip reference")
             if len(recipes[rid]) < 5 or _nat(recipes[rid][4], "vzip length") != size:
                 raise UnprovedEffect(f"{name}: vzip size")
+            # A signed recipe total is not a physical projection proof: see
+            # independently confirmed fully rehashed r24 counterexample #623.
+            raise UnprovedEffect(f"{name}: virtual stream length unproven")
         else:
             raise UnprovedEffect(f"{name}: unknown storage mode")
         resolved[name] = size
