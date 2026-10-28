@@ -76,6 +76,9 @@ jobs:
         env:
           CMPCT_J24C13_EXPECT_NATIVE: '1'
           CMPCT_J24C08_EXPECT_NATIVE: '1'
+          # O215 resolves frozen signed vectors relative to GITHUB_WORKSPACE.
+          # Our three checkouts live in sibling directories, not repository root.
+          GITHUB_WORKSPACE: ${{ github.workspace }}/candidate
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/j24c14-candidate/bin/python" -m pytest --noconftest -q \
