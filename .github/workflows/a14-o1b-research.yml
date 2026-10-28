@@ -1,0 +1,42 @@
+name: A14-O1b Research-Only Checksum Reconstruction
+
+on:
+  pull_request:
+    paths:
+      - 'research/a14_o1b_natural_crc_oracle.py'
+      - 'research/a14_o1b_independent_referee.py'
+      - 'docs/v031-research/2026-10-28-a14-o1b-natural-checksum-*'
+      - '.github/workflows/a14-o1b-research.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scientific-selftest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact PR head source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Show exact source and non-product boundary
+        run: |
+          git rev-parse HEAD
+          sha256sum research/a14_o1b_natural_crc_oracle.py research/a14_o1b_independent_referee.py
+          git diff --exit-code
+      - name: Prepare scientific-only dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd
+          python3 -m pip install --user 'brotli==1.2.0'
+      - name: Source-exact roundtrip and malicious-input selftest
+        run: |
+          python3 -m py_compile research/a14_o1b_natural_crc_oracle.py research/a14_o1b_independent_referee.py
+          python3 research/a14_o1b_natural_crc_oracle.py --selftest
+      - name: Confirm unchanged released implementation
+        run: |
+          test -f docs/v031-research/2026-10-28-a14-o1b-natural-checksum-prereg.md
+          echo 'O1b is a scientific oracle, not a CMPCT Builder/Reader product benchmark.'
