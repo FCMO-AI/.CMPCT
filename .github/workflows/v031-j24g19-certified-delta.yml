@@ -1,0 +1,90 @@
+# ci-lane: fast
+name: CMPCT v031 J24G19 certified signed delta projection
+on:
+  pull_request:
+    paths:
+      - 'research/j24g19_*'
+      - 'docs/v031-research/2026-10-28-j24g19-*'
+      - '.github/workflows/v031-j24g19-certified-delta.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-locked-projection-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G19_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G19_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Preserve current source identities and confirm ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g19-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G19_HEAD"
+          git merge-base --is-ancestor e78bec7efda1031000690ee7a0429f571716f018 HEAD
+          git merge-base --is-ancestor 804ccdc9576b860ff3b9d722c7b1e8ad0ac8176a HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          names=['research/j24g19_certified_subset.c',
+                 'research/j24g19_certified_projection.py',
+                 'research/j24g19_signed_reader_court.py',
+                 'src/cmpct/reader.py','src/cmpct/transactions.py','src/cmpct/codec.py']
+          sha={}
+          for name in names:
+              b=pathlib.Path(name).read_bytes()
+              assert b==subprocess.check_output(['git','show','HEAD:'+name])
+              sha[name]=hashlib.sha256(b).hexdigest()
+          pathlib.Path('j24g19-artifacts/source.json').write_text(
+              json.dumps({'head':os.environ['J24G19_HEAD'],'files_sha256':sha,
+              'published_reader_untouched':True,'research_only':True},indent=2)+'\n')
+          PY
+      - name: Compile conservative C subset and install unmodified CMPCT
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -O3 -std=c11 -Wall -Wextra -Werror -fPIC -shared research/j24g19_certified_subset.c -o research/j24g19_certified_subset.so
+          python -m pip install .
+          python -m pip install msgpack==1.1.2
+          python - <<'PY'
+          import msgpack, pathlib, subprocess, cmpct.reader
+          f=pathlib.Path(cmpct.reader.__file__).resolve()
+          assert f.read_bytes()==subprocess.check_output(['git','show','HEAD:src/cmpct/reader.py'])
+          assert 'site-packages' in str(f)
+          assert msgpack.version==(1,1,2)
+          print('J24G19_INSTALLED_SOURCE_CUSTODY=PASS')
+          PY
+          sha256sum research/j24g19_certified_subset.so > j24g19-artifacts/native-build-sha256.txt
+      - name: Independent canonical syntax and malformed-field differential test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24g19_certified_projection.py research/j24g19_signed_reader_court.py
+          python research/j24g19_certified_projection.py selftest | tee j24g19-artifacts/selftest.log
+      - name: Charged component A/B and authentic signed Reader physical court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g19_certified_projection.py court j24g19-artifacts/component | tee j24g19-artifacts/component.log
+          python research/j24g19_signed_reader_court.py --out j24g19-artifacts --repeats 3 | tee j24g19-artifacts/signed.log
+      - name: Preserve physical signed archives, raw observations and failed evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g19-certified-reader-${{ env.J24G19_HEAD }}
+          path: j24g19-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
