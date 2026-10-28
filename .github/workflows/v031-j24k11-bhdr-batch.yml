@@ -1,0 +1,88 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT v031 J24K11 Native BHDR Batch Scientific Court
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24k11_*'
+      - 'docs/v031-research/2026-10-28-j24k11-*'
+      - '.github/workflows/v031-j24k11-bhdr-batch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24k11-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-bhdr-batch:
+    name: J24K11 signed physical geometry component - ubuntu-24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Establish exact source/parent and frozen scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "e77578505985dd264d69425e3bc816c421ae3cdc"
+          test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "fe692c4595c1303dbc89b7d660501e4ef0f223c3"
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = "0614723549403f398a43552a7c5ad3f00fbec688"
+          test -s docs/v031-research/2026-10-28-j24k11-native-bhdr-batch-prereg.md
+          git cat-file -e 'cfcd7e6a42f837219c25515ea8eea7f2fa451741^{commit}'
+          mkdir -p j24k11-evidence
+          git rev-parse HEAD > j24k11-evidence/head.txt
+          git ls-tree HEAD src/cmpct/reader.py src/cmpct/codec.py src/cmpct/validation.py research/j24k11_bhdr_oracle.py > j24k11-evidence/source-blobs.txt
+          python -m py_compile research/j24k11_bhdr_oracle.py research/j24k11_receipt_audit.py
+      - name: Compile limited-ABI helper and measure ABBA raw samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade setuptools wheel
+          J24K11_OUT=j24k11-evidence/results.json python research/j24k11_bhdr_oracle.py 2>&1 | tee j24k11-evidence/original-console.txt
+      - name: Independently audit samples, source and hostile receipt mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k11_receipt_audit.py research/j24k11_bhdr_oracle.py j24k11-evidence/results.json 2>&1 | tee j24k11-evidence/independent-audit.txt
+          test "$(grep -c '^J24K11_CELL=' j24k11-evidence/original-console.txt)" = 9
+          grep -q '^J24K11_RESULT=' j24k11-evidence/original-console.txt
+          grep -q '"status": "PASS"' j24k11-evidence/independent-audit.txt
+      - name: Fully charge per-query signed VZIP descriptor projection (J24K11b)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24k11b_projection_oracle.py research/j24k11b_projection_audit.py
+          J24K11B_OUT=j24k11-evidence/projection-results.json python research/j24k11b_projection_oracle.py 2>&1 | tee j24k11-evidence/projection-console.txt
+      - name: Independently referee charged projection, negatives and forged receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k11b_projection_audit.py research/j24k11b_projection_oracle.py j24k11-evidence/projection-results.json 2>&1 | tee j24k11-evidence/projection-audit.txt
+          test "$(grep -c '^J24K11B_CELL=' j24k11-evidence/projection-console.txt)" = 18
+          grep -q '^J24K11B_RESULT=' j24k11-evidence/projection-console.txt
+          grep -q '"verdict": "PASS"' j24k11-evidence/projection-audit.txt
+      - name: Check CI topology
+        shell: bash
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24k11-bhdr-batch.yml
+      - name: Preserve positive and negative observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24k11-science-${{ env.SOURCE_SHA }}
+          path: j24k11-evidence/
+          if-no-files-found: warn
+          retention-days: 30
