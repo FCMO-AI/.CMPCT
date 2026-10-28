@@ -1,0 +1,62 @@
+# ci-lane: fast
+name: J24G26 ZIP symlink target acceptance court
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/v031-j24g26-zip-symlink-court.yml'
+      - 'research/j24g26_zip_symlink_output_court.py'
+      - 'docs/v031-research/2026-10-28-j24g26-*'
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/phased2-v031-j24g26-symlink-zip-output-semantics-20261028
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g26-zip-symlink-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-symlink:
+    name: source-exact symlink contract (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - name: Checkout candidate exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual candidate CMPCT runtime
+        run: python -m pip install -e '.[test]'
+      - name: Checkout published source as a separate read-only control
+        shell: bash
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/cmpct-released" 80c358f8824ec1b20d349c92ed94c898090969b0
+          test "$(git -C "$RUNNER_TEMP/cmpct-released" rev-parse HEAD)" = "80c358f8824ec1b20d349c92ed94c898090969b0"
+      - name: Run immutable physical archive differential on both engines
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python -B research/j24g26_zip_symlink_output_court.py --published-root "$RUNNER_TEMP/cmpct-released"
+      - name: Preserve every source and output observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g26-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24g26-evidence/
+          if-no-files-found: ignore
