@@ -121,3 +121,29 @@ def test_missing_repository_does_not_emulate_authority(tmp_path: Path) -> None:
     (tmp_path / "src/first.py").write_text("valid = True\n")
     with pytest.raises(ValueError, match="Git HEAD|repository"):
         C.assert_git_head_custody(["src/first.py"], root=tmp_path, expected_head="a" * 40)
+
+
+def test_assume_unchanged_index_flag_cannot_hide_dirty_source(tmp_path: Path) -> None:
+    manifest, head = _fixture_repo(tmp_path)
+    source = tmp_path / "src/first.py"
+    _git(tmp_path, "update-index", "--assume-unchanged", "src/first.py")
+    source.write_text("VALUE = 999999999\n")
+    # Independently reproduce the misleading negative from ordinary git diff:
+    # the index flag suppresses a genuinely changed tracked source.
+    assert _git(tmp_path, "diff", "--name-only", "HEAD", "--") == ""
+    assert "h src/first.py" in _git(tmp_path, "ls-files", "-v")
+    with pytest.raises(ValueError, match="index|flag|HEAD"):
+        _check(tmp_path, manifest, head)
+    _git(tmp_path, "update-index", "--no-assume-unchanged", "src/first.py")
+    with pytest.raises(ValueError, match="dirty|HEAD"):
+        _check(tmp_path, manifest, head)
+
+
+def test_skip_worktree_index_flag_is_not_accepted_as_full_source(tmp_path: Path) -> None:
+    manifest, head = _fixture_repo(tmp_path)
+    _git(tmp_path, "update-index", "--skip-worktree", "src/second.py")
+    assert "S src/second.py" in _git(tmp_path, "ls-files", "-v")
+    with pytest.raises(ValueError, match="index|flag|HEAD"):
+        _check(tmp_path, manifest, head)
+    _git(tmp_path, "update-index", "--no-skip-worktree", "src/second.py")
+    assert len(_check(tmp_path, manifest, head)[0]) == 64
