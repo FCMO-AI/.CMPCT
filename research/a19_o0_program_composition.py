@@ -245,10 +245,12 @@ def run(frames_dir: str):
     Path(frames_dir).mkdir(parents=True, exist_ok=True)
     cases = []
     total_search_wall_ns = 0
+    total_search_cpu_ns = 0
     for family in ("progression", "quantized", "heldout", "random", "periodic"):
         for seed in (0, 1):
             original = fixture(family, seed)
             before = time.perf_counter_ns()
+            before_cpu = time.process_time_ns()
             arms = []
             for index, steps in enumerate(candidates()):
                 frame = encode_archive(original, steps)
@@ -258,10 +260,13 @@ def run(frames_dir: str):
                 (Path(frames_dir) / rel).write_bytes(frame)
                 arms.append({
                     "frame_rel": rel, "steps": steps, "type": kind(steps), "stored_bytes": len(frame),
+                    "materialized_transform_output_bytes_floor": len(original) * len(steps),
                     "frame_sha256": hashlib.sha256(frame).hexdigest()
                 })
             search_wall_ns = time.perf_counter_ns() - before
+            search_cpu_ns = time.process_time_ns() - before_cpu
             total_search_wall_ns += search_wall_ns
+            total_search_cpu_ns += search_cpu_ns
             direct = next(a for a in arms if a["type"] == "direct")
             best_unary = min((a for a in arms if a["type"] == "unary"),
                              key=lambda a: (a["stored_bytes"], str(a["steps"])))
@@ -277,6 +282,7 @@ def run(frames_dir: str):
             cases.append({
                 "family": family, "seed": seed, "source_sha256": hashlib.sha256(original).hexdigest(),
                 "logical_bytes": len(original), "search_wall_ns": search_wall_ns,
+                "search_cpu_ns": search_cpu_ns,
                 "direct": direct, "best_unary": best_unary, "best_composed": best_comp,
                 "best_portfolio": best_all, "unary_minus_composed_bytes": saving,
                 "composed_improvement_fraction": saving / best_unary["stored_bytes"],
@@ -323,6 +329,7 @@ def run(frames_dir: str):
                      "grammar": "direct + unary deinterleave{2,4,8}/xor_prev{1,2,4,8} + deinterleave_then_xor"},
         "decision": "A19_COMPOSITION_O0_HEADROOM" if earned else "A19_COMPOSITION_O0_RETIRE_THIS_GRAMMAR",
         "case_count": len(cases), "total_search_wall_ns": total_search_wall_ns,
+        "total_search_cpu_ns": total_search_cpu_ns,
         "hostile_rejections": len(adversarial), "roundtrip_length_tests": 5 * 20,
         "cases": cases,
         "limitations": [
