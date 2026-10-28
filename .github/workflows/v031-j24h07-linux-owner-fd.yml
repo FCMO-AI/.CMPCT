@@ -36,7 +36,7 @@ jobs:
           set -euo pipefail
           mkdir -p j24h07-artifacts
           test "$(git rev-parse HEAD)" = "$J24H07_HEAD"
-          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "3abf6ff694b6d771da853b6d17f7180dc35b7772"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "fe0706ce00a425edb6572ff6cd2032f9be413468"
           test "$(git rev-parse HEAD:src/cmpct/builder.py)" = "6f60dfe63742ff4b777f959a15d6fb828ae29610"
           python - <<'PY'
           import hashlib,json,pathlib,subprocess
