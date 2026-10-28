@@ -35,6 +35,19 @@ From the **actual published** `S_CHUNKS` read loop (`p=0`, visit each ref until 
 
 The additional **65,536** baseline prefix visits for tail relative to front explain why full physical bytes can be identical yet late windows yield a material incremental win. These counts are a derivation from the shipped loop; they are not measured CPU instructions, disk bytes or cache misses.
 
+
+## End-to-end subprocess cost: separate, stronger whole-system check
+
+A supplementary **post-result** independent recalc of the original `outer_process_wall_ns` samples (all six subprocesses per arm/shape, unchanged source/artifact) quantifies the Python-startup boundary missing from the in-process research criterion. Outer wall includes interpreter startup, imports, manifest/archive fingerprint checks and process teardown; it is not claimed to be the `cmpct` CLI command or disk-cold I/O. Medians (ms):
+
+| Exact workload | Published outer wall | Sealed outer wall | Absolute saving | Relative saving |
+|---|---:|---:|---:|---:|
+| Q1 early | 78.732 | 78.487 | 0.245 | 0.31% (noise-scale; no product win) |
+| Q16 front | 122.484 | 120.323 | 2.162 | 1.76% |
+| Q16 tail | 126.269 | 119.393 | 6.877 | 5.45% |
+
+The median external process overhead (outer minus in-process session) is about **76.5–78.4 ms** across all 9 arms/shape combinations; this strongly dilutes selective Reader gains. The tail regime remains directionally faster across the process boundary, but its 14.51% in-process speed advantage becomes only **5.45%** once startup/import/custody is charged. The front regime remains below either proposed 5%+3ms materiality threshold. This is a **supplemental diagnostic**, not a post-hoc rewrite of the frozen in-process scientific decision, nor proof of a full CLI/product release benefit. It supports prioritizing execution architecture/process reuse before attempting a general selective-read speed headline.
+
 ## Strongest negative and scientific restraint
 
 - **Front failed the preregistered combined 5% AND 3ms gate in both CPU and wall**. Its observed 4.86% gain is real in six repeated matched observations but is not a material transferable win under the frozen standard.
