@@ -62,7 +62,7 @@ def worker(path, arm):
             result={'status':'opened','footer':a.latest_footer_pos,
                     'depth':a.delta_depth,'members':members}
     except Exception as e:
-        result={'status':'error','error':type(e).__name__}
+        result={'status':'error','error':type(e).__name__,'message':str(e)[:500]}
     result.update(cpu_ns=time.process_time_ns()-start_cpu,
                   wall_ns=time.perf_counter_ns()-start_wall,
                   rss_kib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
