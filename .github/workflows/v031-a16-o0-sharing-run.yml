@@ -1,0 +1,40 @@
+name: v0.31 A16 O0 sharing-run scientific court
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/v031-a16-o0-sharing-run.yml'
+      - 'research/a16_o0_sharing_run_court.py'
+      - 'docs/v031-research/2026-10-28-a16-o0-sharing-run-*'
+jobs:
+  source-exact-science:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Confirm exact source
+        shell: bash
+        run: |
+          git rev-parse HEAD | tee head.txt
+          python --version
+          zstd --version || true
+      - name: Install independent Zstd CLI
+        run: sudo apt-get update -qq && sudo apt-get install -y zstd libzstd1
+      - name: Run falsifiable byte-bound and exact reconstruction
+        run: python3 research/a16_o0_sharing_run_court.py --out a16-artifacts
+      - name: Upload raw receipt even when hypothesis loses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a16-o0-${{ matrix.os }}-${{ github.run_id }}
+          path: |
+            head.txt
+            a16-artifacts/*.json
+          if-no-files-found: warn
+          retention-days: 30
