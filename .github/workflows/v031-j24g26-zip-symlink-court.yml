@@ -46,13 +46,18 @@ jobs:
         run: |
           git worktree add --detach "$RUNNER_TEMP/cmpct-released" 80c358f8824ec1b20d349c92ed94c898090969b0
           test "$(git -C "$RUNNER_TEMP/cmpct-released" rev-parse HEAD)" = "80c358f8824ec1b20d349c92ed94c898090969b0"
+      - name: Install historical source independently with its own native core
+        shell: bash
+        run: |
+          python -m pip install --no-deps --target "$RUNNER_TEMP/cmpct-released-installed" "$RUNNER_TEMP/cmpct-released"
+          PYTHONPATH="$RUNNER_TEMP/cmpct-released-installed" python -c "import cmpct.reader as r; print(r.__file__)"
       - name: Run immutable physical archive differential on both engines
         shell: bash
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          python -B research/j24g26_zip_symlink_output_court.py --published-root "$RUNNER_TEMP/cmpct-released"
+          python -B research/j24g26_zip_symlink_output_court.py --published-root "$RUNNER_TEMP/cmpct-released" --installed-root "$RUNNER_TEMP/cmpct-released-installed"
       - name: Preserve every source and output observation
         if: always()
         uses: actions/upload-artifact@v4
