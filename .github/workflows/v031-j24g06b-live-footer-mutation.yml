@@ -1,0 +1,88 @@
+# ci-lane: fast
+name: CMPCT J24G06b same-inode footer reparenting negative-cache falsifier
+on:
+  pull_request:
+    paths:
+      - 'research/j24g06b_live_footer_mutation_court.py'
+      - 'docs/v031-research/2026-10-28-j24g06b-*'
+      - '.github/workflows/v031-j24g06b-live-footer-mutation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-bound-concurrent-mutation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G06B_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G06B_ARTIFACTS: j24g06b-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G06B_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Prove prereg and exact source, preserve sha receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g06b-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G06B_HEAD"
+          git merge-base --is-ancestor "e6c633d7a97dd3e926dff19f5804346c7a6fd219" HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "bead2ea6a09a6daaadc3ec2389cfb8853e3dd172"
+          test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          python - <<'PY'
+          import pathlib,subprocess,hashlib,json,os
+          rows={}
+          for p in ("src/cmpct/reader.py","research/j24g06b_live_footer_mutation_court.py"):
+              raw=subprocess.check_output(["git","show","HEAD:"+p])
+              assert raw==pathlib.Path(p).read_bytes()
+              rows[p]={"sha256":hashlib.sha256(raw).hexdigest(),
+                       "blob":subprocess.check_output(["git","rev-parse","HEAD:"+p],text=True).strip()}
+          pathlib.Path("j24g06b-artifacts/source.json").write_text(
+              json.dumps({"head":os.environ["J24G06B_HEAD"],"files":rows},indent=2)+"\n")
+          PY
+      - name: Install real candidate package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader,subprocess
+          p=Path(cmpct.reader.__file__).resolve()
+          assert "site-packages" in str(p)
+          assert p.read_bytes()==subprocess.check_output(["git","show","HEAD:src/cmpct/reader.py"])
+          print("J24G06B_INSTALLED_CANDIDATE=PASS")
+          PY
+      - name: Compare original and candidate at identical deterministic source mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g06b_live_footer_mutation_court.py             2>&1 | tee j24g06b-artifacts/mutation.log
+          python - <<'PY'
+          import json,pathlib
+          j=json.loads(pathlib.Path("j24g06b-artifacts/mutation.json").read_text())
+          assert j["result"]=="TEMPORAL_GENERATION_SELECTION_DIVERGENCE_CONFIRMED"
+          assert j["release_credit"]==0 and j["product_source_changed"] is False
+          assert j["historical_control"]["selected_footer"]==j["candidate_control"]["selected_footer"]==j["valid_builder_footer"]
+          assert j["historical_mutated"]["selected_footer"]==j["older_mutated_footer"]
+          assert j["candidate_mutated"]["selected_footer"]==j["valid_builder_footer"]
+          assert j["historical_mutated"]["archive_sha256_after"]==j["candidate_mutated"]["archive_sha256_after"]
+          assert j["historical_mutated"]["logical_sha256"]==j["candidate_mutated"]["logical_sha256"]
+          print("J24G06B_INDEPENDENT_ADVERSARIAL_REFEREE=PASS")
+          PY
+      - name: Preserve source and negative receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g06b-mutation-${{ github.sha }}
+          path: j24g06b-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
