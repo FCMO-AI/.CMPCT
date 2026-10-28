@@ -1,0 +1,88 @@
+# ci-lane: fast
+# J24C09 scientific court. The Reader, ABI3 predicate and original controls are unchanged.
+name: CMPCT v031 J24C09 installed native selective session
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24c09-native-session-economics-20261028
+  pull_request:
+    paths:
+      - 'research/j24c09_installed_session_*.py'
+      - 'docs/v031-research/2026-10-28-j24c09-*'
+      - '.github/workflows/v031-j24c09-installed-native-sessions.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c09-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  installed-product-sessions:
+    name: J24C09 authentic installed Reader sessions - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify unchanged candidate sources and syntax before any measurement
+        shell: bash
+        run: |
+          python -m py_compile research/j24c09_installed_session_court.py research/j24c09_installed_session_referee.py
+          test "$(git hash-object src/cmpct/reader.py)" = "9bca5d1047f9c78984b945d7ca90e3149fe429ab"
+          test "$(git hash-object src/cmpct/_chunk_admission.py)" = "432e86f73f3f1751c04ccbb0e45858c18531da1d"
+          test "$(git hash-object src/cmpct/_fastscan_abi3.c)" = "308598c42f2060a93d8c41ae8733faf4f18ec968"
+          test "$(git hash-object setup.py)" = "676c156740ead7c0673e16f9f9b9f47b5704bd8a"
+          git diff --exit-code -- src/cmpct setup.py
+      - name: Build and install original wheel, no editable source import
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip wheel
+          python -m pip wheel --no-deps . -w dist
+          python -m pip install dist/*.whl
+          mkdir -p receipts
+          python - <<'PY' > receipts/installed-source.json
+          import hashlib, inspect, json, os
+          from pathlib import Path
+          import cmpct.reader as rdr
+          import cmpct._chunk_admission as a
+          p=Path(inspect.getfile(rdr)).resolve()
+          q=Path(inspect.getfile(a)).resolve()
+          assert "site-packages" in p.parts or "dist-packages" in p.parts, p
+          assert a._scan_refs is not None, "optional ABI3 absent from wheel"
+          def git_blob(path):
+              raw=path.read_bytes()
+              return hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
+          assert git_blob(p)=="9bca5d1047f9c78984b945d7ca90e3149fe429ab"
+          assert git_blob(q)=="432e86f73f3f1751c04ccbb0e45858c18531da1d"
+          print(json.dumps({"head":os.environ["EVIDENCE_SHA"],"reader":str(p),
+                            "reader_blob":git_blob(p),"admission_blob":git_blob(q),
+                            "native_binary_loaded":True},sort_keys=True))
+          PY
+      - name: Execute preregistered ABBA actual selective sessions and independent referee
+        shell: bash
+        run: |
+          python research/j24c09_installed_session_court.py --output receipts/j24c09-raw.json
+          python research/j24c09_installed_session_referee.py --input receipts/j24c09-raw.json --output receipts/j24c09-decision.json
+      - name: Preserve decision and raw data even on scientific loss
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24c09-installed-selective-${{ matrix.os }}-${{ env.EVIDENCE_SHA }}
+          path: |
+            receipts/
+            dist/
+          if-no-files-found: warn
