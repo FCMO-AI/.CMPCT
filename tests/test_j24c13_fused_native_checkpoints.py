@@ -112,6 +112,37 @@ class FusedNativeCheckpointCourt(unittest.TestCase):
                 proof = admission.native_chunk_proof([S_CHUNKS, refs], blobs, size)
                 self.assertIs(proof, False)
 
+    def test_1000_held_out_native_original_equivalence(self):
+        # Independent structural comparator: the older stable-ABI full scan
+        # remains the hard safety acceptance set. A new checkpoint proof must
+        # never accept something the original scanner rejects, including
+        # malformed refs around the 512/513 admission boundary.
+        rng = random.Random(241313)
+        blobs = [[0, 1, 1, 0, 0], [0, 7, 7, 0, 0], [0, 0, 0, 0, 0]]
+        pool = [0, 1, 2, True, -1, 5, 2 ** 80, "0", 0.0, [0]]
+        for i in range(1000):
+            n = rng.choice([0, 1, 511, 512, 513, 1024, 4096])
+            good = (i % 4 == 0)
+            refs = ([rng.randrange(3) for _ in range(n)] if good
+                    else [rng.choice(pool) for _ in range(n)])
+            if good:
+                declared = sum(blobs[r][1] for r in refs)
+                if i % 8 == 0:
+                    declared += 1
+            else:
+                declared = rng.choice([0, 1, 512, 4096, True, 2 ** 80])
+            original = admission.native_chunk_ok([S_CHUNKS, refs], blobs, declared)
+            fused = admission.native_chunk_proof([S_CHUNKS, refs], blobs, declared)
+            self.assertEqual(original, bool(fused), (i, n))
+            if type(fused) is tuple:
+                self.assertGreaterEqual(n, 512)
+                prefix = 0
+                for j, ref in enumerate(refs):
+                    if j % 256 == 0:
+                        self.assertEqual(fused[j // 256], prefix)
+                    prefix += blobs[ref][1]
+                self.assertEqual(prefix, declared)
+
     def test_simulated_native_failure_preserves_strict_fallback_and_no_index(self):
         p, data = self._path("native-fail", [0] * 1024, [b"ABC"])
         admission._scan_refs_index = lambda *args: (_ for _ in ()).throw(RuntimeError("fault"))
