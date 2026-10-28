@@ -49,7 +49,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     # Windows Git checkouts can choose CRLF; compare canonical text, not checkout EOL.
-    norm = lambda b: b.replace(b"\\r\\n", b"\\n")
+    norm = lambda b: b.replace(b"\r\n", b"\n")
     base = norm((a.parent / "src/cmpct/codec.py").read_bytes())
     now = norm((a.candidate / "src/cmpct/codec.py").read_bytes())
     old, new = OLD.encode(), NEW.encode()
