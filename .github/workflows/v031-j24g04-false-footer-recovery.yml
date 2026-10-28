@@ -74,17 +74,20 @@ jobs:
           python - <<'PY'
           import json,pathlib
           j=json.loads(pathlib.Path("j24g04-artifacts/court.json").read_text())
-          assert j["status"]=="TRIANGULAR_SOURCE_DECODER_REVISITS_CONFIRMED"
+          assert j["status"]=="TRIANGULAR_INCREMENTAL_DECODER_REVISITS_CONFIRMED"
           assert j["release_credit"]==0 and j["product_source_changed"] is False
           assert len(j["cases"])==3
-          assert all(x["calls"]==0 for x in j["baseline"])
-          assert all(x["calls"]==0 for x in j["no_magic_tail_control"]["observed"])
-          assert all(x["calls"]>=1 for x in j["valid_transaction_calls"])
+          assert j["baseline_decoder_calls"]==1
+          assert all(x["calls"]==j["baseline_decoder_calls"] and x["selected_footer_pos"]==j["baseline_selected_footer_pos"] for x in j["baseline"])
+          assert all(x["calls"]==j["baseline_decoder_calls"] and x["selected_footer_pos"]==j["baseline_selected_footer_pos"] for x in j["no_magic_tail_control"]["observed"])
+          assert all(x["calls"]==j["baseline_decoder_calls"]+1 and x["delta_depth"]==1 for x in j["valid_transaction_calls"])
           for c,n in zip(j["cases"],(32,128,256)):
-              assert c["n"]==n and c["expected_decoder_calls"]==n*(n+1)//2
+              assert c["n"]==n and c["expected_incremental_decoder_calls"]==n*(n+1)//2
+              assert c["expected_decoder_calls"]==j["baseline_decoder_calls"]+n*(n+1)//2
               assert len(c["observed"])==3
-              assert all(x["calls"]==n*(n+1)//2 for x in c["observed"])
-              assert all(x["unique_footer_positions"]==n for x in c["observed"])
+              assert all(x["calls"]-j["baseline_decoder_calls"]==n*(n+1)//2 for x in c["observed"])
+              assert all(x["unique_footer_positions"]==n+j["baseline_decoder_calls"] for x in c["observed"])
+              assert all(x["selected_footer_pos"]==j["baseline_selected_footer_pos"] and x["delta_depth"]==0 for x in c["observed"])
           print("J24G04_INDEPENDENT_DECODER_COUNT_REFEREE=PASS")
           PY
       - name: Retain signed-source receipts including failure
