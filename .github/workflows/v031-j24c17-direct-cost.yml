@@ -1,0 +1,92 @@
+# ci-lane: fast
+# Independent prospective direct source cost: unchanged #662 versus sealed J24C17.
+name: CMPCT v031 J24C17 owner versus sealed cost court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24c17-sealed-range-custody-20261028
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24c17_direct_*'
+      - '.github/workflows/v031-j24c17-direct-cost.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c17-cost-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-owner-cost:
+    name: Exact independent #662 vs #676 installed CPython3.11
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: owner
+          ref: a66fd593a83cc4c71556d3d86d835c51abd20a96
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          path: candidate
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build real exact-source noneditable wheels in isolated environments
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C owner rev-parse HEAD)" = "a66fd593a83cc4c71556d3d86d835c51abd20a96"
+          test "$(git -C candidate rev-parse HEAD)" = "$EVIDENCE_SHA"
+          python -m pip install --upgrade pip wheel
+          python -m pip wheel --no-deps ./owner -w ./owner/dist
+          python -m pip wheel --no-deps ./candidate -w ./candidate/dist
+          python -m venv ./owner-env
+          python -m venv ./sealed-env
+          ./owner-env/bin/python -m pip install ./owner/dist/*.whl
+          ./sealed-env/bin/python -m pip install ./candidate/dist/*.whl
+          mkdir -p receipts
+          ./owner-env/bin/python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader as r
+          import cmpct._chunk_admission as a
+          assert 'site-packages' in Path(r.__file__).parts
+          assert callable(a._scan_refs_index)
+          print('J24C17_ORIGINAL_OWNER_INSTALLED',r.__file__)
+          PY
+          ./sealed-env/bin/python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader as r
+          import cmpct._chunk_admission as a
+          assert 'site-packages' in Path(r.__file__).parts
+          assert callable(a._scan_refs_index)
+          print('J24C17_SEALED_CANDIDATE_INSTALLED',r.__file__)
+          PY
+      - name: Original signed fixtures / paired fresh-process wall, CPU and RSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./sealed-env/bin/python candidate/research/j24c17_direct_source_cost_court.py \
+            --owner-python "$PWD/owner-env/bin/python" \
+            --sealed-python "$PWD/sealed-env/bin/python" \
+            --repetitions 4 --output receipts/direct-owner-vs-sealed.json
+          ./sealed-env/bin/python candidate/research/j24c17_direct_cost_referee.py \
+            --input receipts/direct-owner-vs-sealed.json \
+            --output receipts/direct-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24c17-direct-owner-sealed-${{ env.EVIDENCE_SHA }}
+          path: |
+            receipts/
+            owner/dist/
+            candidate/dist/
+          if-no-files-found: warn

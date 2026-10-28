@@ -1,0 +1,120 @@
+# ci-lane: fast
+# J24C17 signed reference sealing; no on-disk format, gate or baseline edits.
+name: CMPCT v031 J24C17 sealed native checkpoint custody
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24c17-sealed-range-custody-20261028
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_j24c17_sealed_indexed_refs.py'
+      - 'docs/v031-research/*j24c17*'
+      - '.github/workflows/v031-j24c17-sealed-indexed-refs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c17-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-native:
+    name: Installed cp311 ABI3, sealed mutation and A/B - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24C08_EXPECT_NATIVE: '1'
+      CMPCT_J24C13_EXPECT_NATIVE: '1'
+      CMPCT_J24C17_EXPECT_NATIVE: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Exact-source actual noneditable stable ABI3 wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_SHA"
+          python -m pip install --upgrade pip wheel pytest
+          python -m pip wheel --no-deps . -w dist
+          python -m pip install dist/*.whl
+          mkdir -p receipts
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader as r, cmpct._chunk_admission as a
+          p=Path(r.__file__).resolve()
+          assert 'site-packages' in p.parts or 'dist-packages' in p.parts,p
+          assert callable(a._scan_refs) and callable(a._scan_refs_index)
+          print('J24C17_INSTALLED_NATIVE_BOUND',p)
+          PY
+      - name: Signed mutation, adversarial and inherited strict admission
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest --noconftest -q tests/test_j24c17_sealed_indexed_refs.py tests/test_j24c13_fused_native_checkpoints.py tests/test_j24c08_optional_abi3.py tests/test_o215_fixed_chunk_admission.py tests/test_reader_unsupported_blob_bits.py tests/test_reader_deflate_export_custody.py 2>&1 | tee receipts/pytest-native.log
+      - name: Fresh-process C13 control economics with preserved historical judge
+        shell: bash
+        run: |
+          python research/j24c13_fused_installed_abba.py --output receipts/j24c17-abba.json --repetitions 3
+          python research/j24c13_independent_receipt_audit.py --input receipts/j24c17-abba.json --output receipts/j24c17-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24c17-installed-${{ matrix.os }}-${{ env.EVIDENCE_SHA }}
+          path: |
+            receipts/
+            dist/
+          if-no-files-found: warn
+
+  strict-python310:
+    name: Python3.10 exact strict fallback
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24C08_EXPECT_NATIVE: '0'
+      CMPCT_J24C13_EXPECT_NATIVE: '0'
+      CMPCT_J24C17_EXPECT_NATIVE: '0'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+      - name: Install genuine fallback wheel and run inherited tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_SHA"
+          python -m pip install --upgrade pip wheel pytest
+          python -m pip wheel --no-deps . -w dist
+          python -m pip install dist/*.whl
+          mkdir -p receipts
+          python - <<'PY'
+          import cmpct._chunk_admission as a
+          assert a._scan_refs is None and a._scan_refs_index is None
+          print('J24C17_STRICT_PYTHON310')
+          PY
+          python -m pytest --noconftest -q tests/test_j24c17_sealed_indexed_refs.py tests/test_j24c13_fused_native_checkpoints.py tests/test_j24c08_optional_abi3.py tests/test_o215_fixed_chunk_admission.py 2>&1 | tee receipts/pytest-fallback.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24c17-fallback-${{ env.EVIDENCE_SHA }}
+          path: |
+            receipts/
+            dist/
+          if-no-files-found: warn

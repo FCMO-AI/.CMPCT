@@ -92,6 +92,9 @@ class CMPCT:
             canonical_seen=set()
             # Only fully admitted native chunk lists receive a bounded, in-memory range hint.
             self._chunk_range_marks={}
+            # Authoritative read hints are bound to a sealed in-memory reference
+            # tuple, not to the caller-visible mutable index (J24C16).
+            self._chunk_range_sealed={}
             self._chunk_range_hint_count=0
             storage_validator=None
             for row in self.files:
@@ -114,6 +117,13 @@ class CMPCT:
                             ):
                                 # Bound all retained checkpoints for this Reader,
                                 # not only each individual signed member.
+                                # Replace the original list rather than retaining
+                                # a second O(N) snapshot. The ABI3 scan ran on the
+                                # exact pre-freeze list; its integer entries are
+                                # immutable, so the tuple preserves every identity.
+                                refs=tuple(storage[1])
+                                storage[1]=refs
+                                self._chunk_range_sealed[row[0]]=(row,storage,refs,proof,row[4])
                                 self._chunk_range_marks[row[0]]=proof
                                 self._chunk_range_hint_count+=len(proof)
                             continue
@@ -318,6 +328,18 @@ class CMPCT:
         return raw
     def read_range(self,name,start,length):
         row=self.by[name];size=row[4];storage=row[6];end=start+length
+        sealed=self._chunk_range_sealed.get(name)
+        if sealed is not None:
+            original_row,original_storage,refs,marks,signed_size=sealed
+            # Public descriptors can be rebound after authentication. A cached
+            # prefix is only meaningful for the exact tuple proven at open.
+            # Check that identity in O(1), before any storage-kind dispatch.
+            if (row is not original_row or row[0]!=name or row[1]!=K_FILE
+                or type(size) is not int or size!=signed_size
+                or storage is not original_storage
+                or type(storage) is not list or len(storage)!=2
+                or storage[0]!=S_CHUNKS or storage[1] is not refs):
+                raise IOError(f'authenticated chunk descriptor changed after open: {name}')
         if row[1]==K_HARDLINK:return self.read_range(storage[0],start,length)
         if start<0 or length<0 or end>size:raise ValueError('range outside member')
         if storage[0]==S_PACK:
@@ -347,12 +369,14 @@ class CMPCT:
             # Native admission has already paid the whole-file exact geometry scan.
             # Its by-product checkpoints skip the Python O(N) prefix walk; unindexed
             # readers preserve the original path, including Python 3.10/no-extension.
-            marks=self._chunk_range_marks.get(name)
-            if marks:
+            # Read from the sealed tuple and its matching original proof. A
+            # caller changing _chunk_range_marks cannot desynchronize the pair.
+            if sealed is not None:
+                refs=sealed[2]
+                marks=sealed[3]
                 if length==0:return b''
                 anchor=bisect_right(marks,start)-1
                 p=marks[anchor];out=[]
-                refs=storage[1]
                 for i in range(anchor*256,len(refs)):
                     idx=refs[i];bsize=self.blobs[idx][1]
                     if p+bsize>start and p<end:

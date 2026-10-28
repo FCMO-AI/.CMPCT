@@ -1,0 +1,26 @@
+# J24C17 prospective experiment — seal authenticated indexed references without retained duplicate lists
+
+**Date:** 2026-10-28 UTC. **Baseline:** owner PR #662, commit `a66fd593a83cc4c71556d3d86d835c51abd20a96`, Reader blob `c4d1dee0a31527b814d6e1f41b77abe1cc987996`. **Research-only independent child**, not an owner-branch edit, format change, merge or release.
+
+## Question and alternatives
+
+J24C16 (#672) established on an actual noneditable ABI3 Reader that mutating its exposed S_CHUNKS list after native index admission can cause `read_range(257,1)` to return `b'B'` instead of authentic `b'A'`. The 512-reference signed archive had unchanged SHA, positive pre-mutation verify, and checkpoint `(0,257)`. The simplest control is the original linear walk after mutation; it returns `b'A'` according to the *mutated* in-memory list, which is not the signed source. Neither result licenses in-process mutation of authenticated references.
+
+Candidate: **replace**, rather than duplicate, each eligible validated Python reference list with a single immutable tuple after native admission; bind both the tuple and checkpoint proof to a private per-member signed snapshot. All indexed reads then consume that sealed tuple. Keep the public nested storage container for existing caller shape, but fail closed if its member, logical size, name, kind, row identity or list identity changes after authentication. The already-existing private marks tuple is used rather than any externally altered map. Do not add whole-Reader revalidation on each range. Unindexed/absent-native paths preserve original mutable semantics and original strict validator.
+
+Alternatives: (a) retaining a full second `tuple(refs)` duplicates ~8 bytes/ref until close; (b) rehashing/refolding every read destroys Q64 acceleration; (c) special-casing the J24C16 start offset would be fixture-gaming; (d) deep-freezing the whole public CMPCT metadata/physical-owner table is broader API work with unmeasured costs. This candidate does **not** claim arbitrary deliberate mutation of `self.blobs`, arbitrary Python object replacement, or concurrent adversarial writes to Reader internals are safe. These remain separate property/ownership problems.
+
+## Prospective predictions / disproof
+
+1. Same signed 512-ref J24C16 archive: a healthy indexed Reader returns authentic `b'A'` at (257,1). Direct `refs[0],refs[256]=...` is impossible on the exposed tuple; replacing `row[6][1]`, `row[6]`, or changing signed `row[4]` makes `read_range` refuse with `IOError`, never silently return wrong bytes. Unmodified `read()`, `verify()`, all 400 signed random ranges, 1000 original native admission differential probes, and Python 3.10 fallback remain exact.
+2. Existing optional-native tests and new mutation-specific tests pass on an installed CPython3.11 wheel; a separate no-extension or CPython3.10 test proves strict fallback. A failure of any inherited exactness, safety or fallback test kills promotion.
+3. Unlike a *retained* tuple snapshot, replacing and releasing the old list should cost no permanent O(N) duplicate reference-pointer ownership; transient construction allocates O(N) and can increase Q1 time. Measure at least one 512/65,536/262,144 reference source-exact installed Reader open, Q1 and Q6 CPU/wall, RSS and package bytes before attributing product economics. Qualify as research only without the published v0.30.0 comparator and full 15 workload gate.
+4. Make adversarial output and same signed bytes the primary criterion, not speed. **Kill** if a legal post-open edit produces different silently wrong bytes, if original archive bytes cannot be reconstructed, if original validator behavior is weakened, if public index-shape compatibility causes material failures, or if full costs overwhelm Q6/Q64 benefit. An `IOError` is a containment decision for invalidated in-process signed metadata, not proof of robust immunity against arbitrary hostile Python code.
+
+## Evidence ladder / concurrency / release boundaries
+
+Primary falsifier is native-installed J24C16 counterexample with independent exact byte oracle; second rung inherited native validation and cross-boundary adversarial tests; third rung same-source fresh-process timing/RSS; full product benchmark only if the correctness fix survives. The source must remain exact in GitHub, and results are attributed to their measured SHA rather than inferred from generic green status.
+
+Discovered open owners #641, #662, #669, #672 and #574 at start. No active owner implementation of immutable S_CHUNKS custody found; this branch explicitly isolates a reversible **alternative candidate** rather than writing to #662. Any collision found later requires reconciliation, not force overwrite. Discovery state is stale against current PRs and remains under #574's ownership; leave it untouched.
+
+Not covered: hostile on-disk malformed archive acceptance, compromised native extension, arbitrary mutations to blob table, data races, physical-source replacement, full extraction/recovery, macOS/Windows, production ABI, performance/release promotion. Positive result grants only narrow scientific/engineering evidence. Preserve J24C15 Q1 negative (+5.186ms on slower host) regardless of what this repair measures.
