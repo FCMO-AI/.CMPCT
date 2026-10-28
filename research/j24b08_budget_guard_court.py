@@ -183,7 +183,7 @@ def micro_scan() -> dict:
     for turn in range(8):
         order = ["base", "candidate", "candidate", "base"]
         if turn % 2:
-            order.reverse()
+            order = ["candidate", "base", "base", "candidate"]
         for arm in order:
             t0, c0 = time.perf_counter_ns(), time.process_time_ns()
             result = base() if arm == "base" else candidate()
@@ -218,7 +218,7 @@ def run(out: Path) -> dict:
                 for repeat in range(4):
                     order = ["base", "candidate", "candidate", "base"]
                     if repeat % 2:
-                        order.reverse()
+                        order = ["candidate", "base", "base", "candidate"]
                     for step, arm in enumerate(order):
                         destination = temp / f"output-{g['files']}-{budget_mode}-{repeat}-{step}"
                         cls = baseline_cls if arm == "base" else CandidateCMPCT
