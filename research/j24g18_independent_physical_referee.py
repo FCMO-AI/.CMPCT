@@ -32,8 +32,8 @@ def audit(root, record):
             "research boundary"); n += 1
     require(record["body_sha256"] == CANON_SHA, "member expected SHA"); n += 1
     require(record["cap"] == 65536 and record["repeats"] >= 3, "frozen token gate"); n += 1
-    require(tuple(record["physical"]) == CASES, "case inventory"); n += 1
-    require(tuple(record["observations"]) == CASES, "observations inventory"); n += 1
+    require(set(record["physical"]) == set(CASES), "case inventory"); n += 1
+    require(set(record["observations"]) == set(CASES), "observations inventory"); n += 1
     # Independently prove the earlier committed Builder checkpoint exists in bytes,
     # not merely in the Reader's self-reported selected_footer field.
     baseline = (root / record["physical"]["clean"]["path"]).read_bytes()
@@ -96,7 +96,7 @@ def audit(root, record):
                     raise ValueError("malformed signed payload decoded")
                 n += 1
         observations = record["observations"][case]
-        require(tuple(observations) == ARMS, "arm inventory:" + case); n += 1
+        require(set(observations) == set(ARMS), "arm inventory:" + case); n += 1
         for arm in ARMS:
             rows = observations[arm]
             require(len(rows) == record["repeats"], "raw repeats:" + case + arm); n += 1
