@@ -19,7 +19,7 @@ MAGIC = b"CMPTF24\0"
 CANON_SHA = hashlib.sha256(b"CMPCT-J24G18-signed-Reader-fallback\0" * 41).hexdigest()
 CASES = ("clean", "writer-rename", "orphan-overcap", "linked-overcap",
          "linked-undercap", "malformed-signed")
-ARMS = ("direct", "gated", "catch")
+ARMS = ("released", "direct", "gated", "catch")
 
 def require(v, message):
     if not v:
@@ -32,6 +32,9 @@ def audit(root, record):
             "research boundary"); n += 1
     require(record["body_sha256"] == CANON_SHA, "member expected SHA"); n += 1
     require(record["cap"] == 65536 and record["repeats"] >= 3, "frozen token gate"); n += 1
+    require(record["released_reader_blob"] == "e716233403dabd0966863c45635e18fa5ac6afb8" and
+            record["released_commit"] == "80c358f8824ec1b20d349c92ed94c898090969b0",
+            "exact released source identity"); n += 1
     require(set(record["physical"]) == set(CASES), "case inventory"); n += 1
     require(set(record["observations"]) == set(CASES), "observations inventory"); n += 1
     # Independently prove the earlier committed Builder checkpoint exists in bytes,
@@ -128,7 +131,7 @@ def audit(root, record):
                                 "failed orphan recovery"); n += 1
                     if case == "linked-overcap":
                         require((row["selected_footer"] > record["checkpoint"])
-                                == (arm == "direct"), "wrong linked version"); n += 1
+                                == (arm in ("direct", "released")), "wrong linked version"); n += 1
     require(record["decisions"]["naive_default_gate"] ==
             "FALSIFIED_FOR_INHERITED_ACCEPTANCE_AND_FALLBACK",
             "unearned verdict"); n += 1
