@@ -53,7 +53,7 @@ jobs:
           git rev-parse HEAD:tests/conformance/v24-pack.json > "$CMPCT_J24P01_EVIDENCE/wire-blob.txt"
           git rev-parse HEAD:research/j24p01_pack_crosshost.py > "$CMPCT_J24P01_EVIDENCE/court-blob.txt"
           git rev-parse HEAD:research/j24p01_pack_referee.py > "$CMPCT_J24P01_EVIDENCE/referee-blob.txt"
-          sha256sum tests/conformance/v24-pack.json > "$CMPCT_J24P01_EVIDENCE/manifest-sha256.txt"
+          python -c 'import hashlib,os,pathlib; p=pathlib.Path("tests/conformance/v24-pack.json"); out=pathlib.Path(os.environ["CMPCT_J24P01_EVIDENCE"])/"manifest-sha256.txt"; out.write_text(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+str(p)+"\n")'
       - name: Python 3.12
         uses: actions/setup-python@v5
         with:
