@@ -1,0 +1,88 @@
+# ci-lane: fast
+name: CMPCT J24G07 negative ancestry cache above-cap work court
+on:
+  pull_request:
+    paths:
+      - 'research/j24g07_footer_cache_cap_cliff.py'
+      - 'docs/v031-research/2026-10-28-j24g07-*'
+      - '.github/workflows/v031-j24g07-footer-cap-cliff.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  actual-source-cache-cap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G07_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G07_ARTIFACTS: j24g07-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G07_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind unchanged product source, exact HEAD and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g07-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G07_HEAD"
+          git merge-base --is-ancestor fd4a35e043e26e28741182e657f215975295bb29 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "bead2ea6a09a6daaadc3ec2389cfb8853e3dd172"
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = "$(git rev-parse 10a6bc150cfa0ceb8608ee826dc09650ca3f4e3d:src/cmpct/builder.py)"
+          python - <<'PY'
+          import hashlib,os,json,pathlib,subprocess
+          paths=["src/cmpct/reader.py","research/j24g07_footer_cache_cap_cliff.py"]
+          result={}
+          for p in paths:
+              raw=subprocess.check_output(["git","show","HEAD:"+p])
+              assert raw==pathlib.Path(p).read_bytes()
+              result[p]={"sha256":hashlib.sha256(raw).hexdigest(),
+                         "blob":subprocess.check_output(["git","rev-parse","HEAD:"+p],text=True).strip()}
+          pathlib.Path("j24g07-artifacts/source.json").write_text(
+              json.dumps({"head":os.environ["J24G07_HEAD"],"files":result},indent=2)+"\n")
+          PY
+      - name: Install genuine candidate package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python - <<'PY'
+          import subprocess,cmpct.reader
+          from pathlib import Path
+          installed=Path(cmpct.reader.__file__).resolve()
+          assert "site-packages" in str(installed)
+          assert installed.read_bytes()==subprocess.check_output(["git","show","HEAD:src/cmpct/reader.py"])
+          print("J24G07_SOURCE_IDENTITY=PASS")
+          PY
+      - name: Run measured above-cap decoding court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g07_footer_cache_cap_cliff.py 2>&1 | tee j24g07-artifacts/court.log
+          python - <<'PY'
+          import json,pathlib
+          j=json.loads(pathlib.Path("j24g07-artifacts/court.json").read_text())
+          assert j["decision"]=="ABOVE_CAP_DECODE_REPLAY_CLIFF_CONFIRMED"
+          assert j["product_source_changed"] is False and j["release_credit"]==0
+          assert [x["predicted_decoder_calls"] for x in j["cases"]]==[16385,278665]
+          assert j["controls"]["flat"]["expected_decoder_calls"]==16401
+          assert j["controls"]["neutral"]["expected_decoder_calls"]==1
+          assert j["predicted_and_observed_call_ratio"]>16.9
+          print("J24G07_INDEPENDENT_COUNT_REFEREE=PASS")
+          PY
+      - name: Always preserve original output including negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g07-above-cap-${{ github.sha }}
+          path: j24g07-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
