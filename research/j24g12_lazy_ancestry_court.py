@@ -143,7 +143,7 @@ def make_tail(base: bytes, checkpoint: int, n: int, mode: str, corrupt=False):
     last = checkpoint
     for i in range(n):
         payload = (b"\xc1" if corrupt else DELTA)
-        prev = last if mode == "valid" else (last if mode == "orphan" else 0)
+        prev = last if mode == "valid" else (last if mode == "orphan" and i > 0 else 0)
         at = len(raw) + len(payload)
         raw += payload
         raw += FTR.pack(FMAGIC, 1, 0, 0, 0, len(payload), len(payload),
