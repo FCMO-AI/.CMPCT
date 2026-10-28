@@ -173,6 +173,9 @@ def main() -> None:
             (output / "progress.json").write_text(json.dumps(record, indent=2) + "\n")
             if code:
                 raise RuntimeError(f"original benchmark failed at {label} rc={code}")
+            # SHA and full corpus attestations occur OUTSIDE the original timed
+            # benchmark. Account for their possible inter-sweep cache footprint.
+            audit_t0 = time.perf_counter()
             result_path = harness / "benchmarks" / "_parity_work" / "out"
             src_json = result_path / "zip-parity.json"
             if not src_json.is_file():
@@ -192,6 +195,9 @@ def main() -> None:
             row["archive_sha256"] = observed
             if corpus_fingerprint(corpus) != before:
                 raise RuntimeError("corpus mutated during " + label)
+            row["post_sweep_audit_wall_s"] = time.perf_counter() - audit_t0
+            row["archive_bytes_hashed"] = sum(v[0] for v in observed.values())
+            row["corpus_logical_bytes_rehashed"] = before["logical_bytes"]
         if any(hashes[k] != hashes["base-a"] for k in hashes):
             raise RuntimeError("identical source did not produce identical complete archives")
         record["corpus_after"] = corpus_fingerprint(corpus)
