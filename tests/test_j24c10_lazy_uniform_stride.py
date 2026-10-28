@@ -206,6 +206,25 @@ class LazyStrideProof(unittest.TestCase):
             self.assertEqual(admission.native_uniform_stride([1, wrong], blobs, altered_size),
                              0, ("mutant", case))
 
+    def test_new_reader_never_inherits_witness_across_path_replacement(self):
+        path=self.root / "replaced.cmpct"
+        original=b"ABCD"*64
+        path.write_bytes(_make_archive([0]*64, original))
+        with CMPCT(path) as rd:
+            self.assertEqual(rd.read_range("fixed.bin", len(original)-16, 16),
+                             original[-16:])
+            self.assertEqual(rd._chunk_stride_cache.get("fixed.bin"), 4 if REQUIRED else 0)
+        blobs=(b"ABCD", b"F", b"XY")
+        refs=[0,1,2]*64
+        changed=b"".join(blobs[i] for i in refs)
+        # Replace archive pathname only after the previous Reader closes.
+        # A global/pathname cache would incorrectly carry a uniform proof.
+        path.write_bytes(_make_archive(refs, changed, blobs=blobs))
+        with CMPCT(path) as rd:
+            self.assertEqual(rd.read_range("fixed.bin", len(changed)-13, 13),
+                             changed[-13:])
+            self.assertEqual(rd._chunk_stride_cache.get("fixed.bin"), 0)
+
     def test_deterministic_hostile_differential_no_false_positives(self):
         if not REQUIRED:
             self.skipTest("no native extension; strict Python is the only route")
