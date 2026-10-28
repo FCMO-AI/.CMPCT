@@ -101,7 +101,7 @@ def queries_for(logical: bytes, regime: str, seed: int):
         if regime == "q64-mixed":
             offsets.extend(rnd.randrange(size + 1) for _ in range(58))
     assert len(offsets) == (1 if regime.startswith("q1") else
-                            6 if regime.startswith("q6") else 64)
+                            6 if regime == "q6-mixed" else 64)
     return [[p, min(16, size - p),
              logical[p:p + min(16, size - p)].hex()] for p in offsets]
 
