@@ -108,6 +108,12 @@ def test_reauthenticated_nonmode2_skipped_stream_suffix_coordinates(tmp_path, ca
     path.write_bytes(mutated)
     admission = _error_or_value(lambda: preflight_archive(path))
     assert admission["status"] == "REJECT" and admission["exception"] == "ValidationError", admission
+    # Post-first-court adversarial tightening: the strict control must reject for
+    # exactly the untrusted csize-to-physical-owner disagreement, not an
+    # unrelated syntax/frame issue that would mask a broken experiment.
+    cause = ("stored payload" if case[2] == zipfile.ZIP_STORED else
+             "retained stream" if case[3] == 1 else "canonical Deflate stream")
+    assert cause in admission["message"], (cause, admission)
     suffix_begin = original_recipe[1][0] + physical_csize
     # The preregistered query universe is all one-byte offsets past the
     # skipped stream, within BOTH the original and mutated declared totals.
@@ -147,7 +153,7 @@ def test_reauthenticated_nonmode2_skipped_stream_suffix_coordinates(tmp_path, ca
         "physical_sha256": hashlib.sha256(physical).hexdigest(),
         "original_length": len(exact), "mutated_declared_length": len(exact) + delta,
         "original_payload_csize": physical_csize, "declared_payload_csize": physical_csize + delta,
-        "preflight": admission["status"], "opened": opened,
+        "preflight": admission["status"], "preflight_cause": admission["message"], "opened": opened,
         "full_read": whole["status"] if whole else "UNMEASURED",
         "verify": verify["status"] if verify else "UNMEASURED",
         "probe_count": len(probes), "wrong_byte_count": len(wrong),
