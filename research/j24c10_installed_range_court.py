@@ -69,7 +69,33 @@ def worker(args):
         import resource
         rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     else:
-        rss = None
+        # J24C10: use actual Windows peak working set, NOT a fabricated
+        # zero or an unavailable POSIX resource.ru_maxrss analogue.
+        import ctypes
+        from ctypes import wintypes
+        class ProcessMemoryCounters(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD),
+                        ("PageFaultCount", wintypes.DWORD),
+                        ("PeakWorkingSetSize", ctypes.c_size_t),
+                        ("WorkingSetSize", ctypes.c_size_t),
+                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                        ("PagefileUsage", ctypes.c_size_t),
+                        ("PeakPagefileUsage", ctypes.c_size_t)]
+        info = ProcessMemoryCounters()
+        info.cb = ctypes.sizeof(info)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        psapi.GetProcessMemoryInfo.argtypes = [
+            ctypes.c_void_p, ctypes.POINTER(ProcessMemoryCounters), wintypes.DWORD]
+        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+        if not psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(),
+                                         ctypes.byref(info), info.cb):
+            raise OSError(ctypes.get_last_error(), "GetProcessMemoryInfo failed")
+        rss = int(info.PeakWorkingSetSize)
     return dict(arm=args.arm,position=args.position,wire_sha256=sha(Path(args.archive).read_bytes()),
                 result_sha256=sha(result),size=size,start=start,length=length,
                 open_wall_ns=t1-t0,read_wall_ns=t2-t1,total_wall_ns=t3-t0,
@@ -133,7 +159,7 @@ def main():
     summary={}
     import platform
     host=platform.system()
-    rss_unit=1 if host=="Linux" else (1024 if host=="Darwin" else None)
+    rss_unit=1 if host=="Linux" else (1024 if host=="Darwin" else (1 if host=="Windows" else None))
     for key, arms in group.items():
         a=statistics.median(z["read_wall_ns"] for z in arms["strict"])
         b=statistics.median(z["read_wall_ns"] for z in arms["witness"])
@@ -170,7 +196,7 @@ def main():
              "early_ragged_no_gt5pct_debt":no_early_or_ragged_debt,
              "rss_measured":rss_measured,"rss_no_gt8mib_debt":rss_gate if rss_measured else None,
              "scientific_gate_all_preregistered":decision,
-             "memory_caveat":"Child VmHWM/resource RSS includes package startup; Windows unavailable",
+             "memory_caveat":"Child RSS peak includes interpreter startup; Windows measured via psapi PeakWorkingSetSize",
              "product_release_credit":False}
     Path(args.output).parent.mkdir(parents=True,exist_ok=True)
     Path(args.output).write_text(json.dumps(payload,indent=2,sort_keys=True)+"\n",encoding="utf-8")
