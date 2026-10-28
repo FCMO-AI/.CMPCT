@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'research/j24g12_lazy_ancestry_court.py'
+      - 'research/j24g12_independent_receipt_audit.py'
       - 'docs/v031-research/2026-10-28-j24g12-*'
       - '.github/workflows/v031-j24g12-lazy-ancestry-court.yml'
   workflow_dispatch:
@@ -40,6 +41,7 @@ jobs:
           python - <<'PY'
           import hashlib,json,os,pathlib,subprocess
           paths=["src/cmpct/reader.py","research/j24g12_lazy_ancestry_court.py",
+                 "research/j24g12_independent_receipt_audit.py",
                  "docs/v031-research/2026-10-28-j24g12-lazy-ancestry-prereg.md"]
           files={}
           for p in paths:
@@ -58,6 +60,7 @@ jobs:
           python -m py_compile research/j24g12_lazy_ancestry_court.py
           python -m pip install .
           python research/j24g12_lazy_ancestry_court.py 2>&1 | tee j24g12-artifacts/court.log
+          python research/j24g12_independent_receipt_audit.py 2>&1 | tee j24g12-artifacts/audit.log
       - name: Preserve raw outcome even on negative or infrastructure failure
         if: always()
         uses: actions/upload-artifact@v4
