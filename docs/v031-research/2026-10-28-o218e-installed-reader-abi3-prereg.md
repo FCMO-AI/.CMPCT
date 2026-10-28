@@ -1,0 +1,28 @@
+# O218e — prospective whole-installed-Reader stable-ABI economics (preregistered)
+
+**Status: preregistration before experiment code, observations and CI. Scientific evidence only. No product code, version, format, release, evaluator or frozen benchmark changes.**
+
+## Source and question
+- Exact parent: O218d PR #631 at `3dd2e24b99eacf8f61b363278ff35e6ffb45b77b`, itself a three-host cp311-abi3 delivery *micro* result. Published control: v0.30.0 / physical r24 main `80c358f8824ec1b20d349c92ed94c898090969b0`.
+- Immutable product Reader Git blob: `dbd4ac576a05a47eae97e1e40de89cf1de440516`; validator: `51c2849061f99a4afeddb7666956b24566ce7de0`. Original direct-PyList C: `a54f15181d9dbe667b9e8c9d52e927b09c80152f`.
+- Question: after real installed CMPCT Reader construction and the costs of CPython limited-API calls, does the **same externally built abi3 wheel** retain meaningful strict-admission speedup vs best safe O216 Python, and how much does it lose to the faster macro-based native C that must be compiled per interpreter?
+- Primary hypothesis: O216 fast / abi3 constructor-wall median >=2.0 on both 65,536 and 262,144 references with one physical owner on each of Ubuntu 24.04, macOS 14 and Windows 2022, under CPython 3.11 and 3.13; and abi3 constructor-wall / direct-native <=2.0. These are *prospective*, not derived from the upcoming results. A 65,536-reference/256-owner held-out geometry is reported but not used to tune thresholds.
+- Clear falsification: any host/interpreter/focus profile fails the positive thresholds, semantics mismatch, source/wheel fingerprint mismatch, archive mutation or incomplete receipts means no positive cross-host promotion decision. Ratios 1.5–2.0 are ambiguous/insufficient for the stated strong hypothesis even if locally useful; <=1.0 vs safe Python is economically negative. No cherry-picking across hosts.
+
+## Strongest controls and construction
+- Compare five arms against **same signed revision-24 Builder-independent archive** and Reader: original Python validation; best-safe O216 fast Python; O218 native direct-PyList C compiled for *that* host/interpreter; O218d abi3 scanner installed from a **single wheel built on CPython 3.11 per OS and reused unchanged on 3.13**; unsafe no-validation oracle as a separate **lower-bound-only** measurement.
+- No Reader source edit. Install the real CMPCT distribution as a non-editable wheel. Record actual imported Reader/validator SHA, native C/binary SHA, source head, wheel SHA/tag, Python version and platform. Run original O215 plus O218 named/fuzz semantic equivalence independently through both native arms. Preserve original exception type/message and fallback to original validator for any failed/unusual native scan.
+- Fresh workers, alternating/shuffled modes, >=2 cycles and >=2 workers per arm/cycle, >=5 in-process Reader constructor-open-close samples/worker. Separate wheel compile, CPython startup/worker wall, in-process constructor wall/CPU and RSS (VmHWM where available). Archive identities and logical hashes fixed across arms and interpreters on each OS; save raw observations including CPU zero-quantization on Windows. Compile the direct C separately for each Python minor but **do not recompile the abi3 wheel**.
+- Independent referee recalculates medians from raw workers, validates every selected source/wire fingerprint, module path and binary/wheel custody, rejects forged receipts, and reports all negatives. Cross-host comparison requires identical semantic decisions but does not compare absolute wall between different hosts.
+
+## Alternative routes / information value
+- Reusing the existing Rust core could avoid another C packaging dependency, but the native r24 ABI has transaction/recovery-semantic gaps; it remains a distinct unmeasured alternative, not a false baseline.
+- A pure Python data-structure/index redesign could eliminate scanning entirely but has no current general same-semantics measured proof. This experiment is a **cheap source-exact product-economics falsifier** for the already proven optional ABI3 seed. If it loses, retire or narrow the limited-ABI delivery path instead of threshold gardening; if it wins, next step is actual Reader #569 composition with signed-journal recovery, hardlinks and D5 maintenance accounting.
+- Existing #569 approximately 27–28x high-reference open debt is **not** automatically retired; original Reader source, O216 safe Python and new native arms are different controls. No claims about Builder create/extract, arbitrary workload archive size, heterogeneous codecs, recovery, PyPy/ARM, cross-platform filesystem fidelity or full release parity.
+
+## Concurrency / admission / policy
+- Open ownership checked: #627 O218b direct full Reader, #628 O218c three-host C, #631 O218d abi3 wheel. No O218e whole-installed-Reader three-arm comparative PR was found at preregistration. This is an independent evidence-only child, not a duplicate native/Reader implementation. Do not alter any owner branch, discovery STATE (#574 owns), frozen experiment, format or release law.
+- **Kill condition:** if same-source safety equivalence fails or the stable ABI wheel loses materially against the direct C while safe Python is already comparable, preserve the negative, avoid package integration and reopen search/ownership architecture. A green workflow is not the claim; the raw measurements must show it.
+
+## Required handoff
+Record experiment commit and CI run IDs, actual source heads, raw artifact hashes, positive and negative deltas, real memory/startup/build/wheel costs, ambiguity, scope and next decision in a separate result record. Never backfill this document with results or alter the hypothesis after running.
