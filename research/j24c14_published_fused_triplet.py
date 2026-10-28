@@ -120,7 +120,7 @@ def worker(archive: Path, fixture_file: Path, arm: str) -> None:
         try:
             with CMPCT(archive) as rd:
                 refs, blobs, size = rd.files[0][6][1], rd.index["blobs"], rd.files[0][4]
-                marks = rd._chunk_range_marks.get("fixed.bin")
+                marks = getattr(rd, "_chunk_range_marks", {}).get("fixed.bin")
                 if arm == "fused":
                     if marks is None or len(marks) != (len(refs) + 255) // 256:
                         raise RuntimeError("fused Reader did not retain exact checkpoints")
