@@ -1,4 +1,4 @@
-# ci-lane: scientific-research
+# ci-lane: release
 # ci-cancel-policy: preserve-running-exact-receipt
 name: J24I04 full-matrix same-source A/A (research only)
 
