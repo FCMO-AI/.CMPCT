@@ -23,7 +23,7 @@ B06_SOURCE_BLOBS = {
 
 
 def git_blob_id(data: bytes) -> str:
-    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\\0" + data).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
 
 
 def test_b06_exact_source_and_immutable_released_lock():
@@ -57,7 +57,7 @@ def test_source_and_test_changes_invalidate_candidate_identity():
             f = root / path
             original = f.read_bytes()
             assert original
-            f.write_bytes(original + b"\\n# J24I01 source-custody mutation test\\n")
+            f.write_bytes(original + b"\n# J24I01 source-custody mutation test\n")
             altered, _ = fingerprint(small_manifest, root=root)
             assert altered != before, path
             f.write_bytes(original)
