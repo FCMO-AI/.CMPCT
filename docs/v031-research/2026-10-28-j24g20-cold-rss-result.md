@@ -25,6 +25,8 @@ Median **final process VmHWM in KiB**, original head `c82cff40`:
 
 At 800k, the projected candidate reduces median **absolute peak HWM by 157,664 KiB (~154 MiB)** versus published and **155,560 KiB** versus inherited. It also reduces the 200k peak by **41,120 KiB** versus published. Source data preserve all three raw repeated CPU and memory samples; 800k same-run median full-open/read/verify CPU is 118.619 ms published vs 12.297 ms projected, **~9.65x speedup for this one synthetic regime**. Actual physical 800k archive = **3,201,088 bytes**, authenticated delta = **3,200,055 bytes**. This is no compression/complete-product domination claim.
 
+**Physical-identity cross-run caveat:** the two independent Builder-generated archived 800k inputs had **3,201,088 B** in the first run and **3,201,090 B** in the second (their SHA receipts also differ). Never treat these as byte-identical across runs or pool their absolute CPU measurements. Each three-arm A/B remains fully byte-identical **within its own run**, which is the causal comparison underlying each savings figure. In both hosted runs `after_open VmHWM == after_verify VmHWM` for the 800k cases: the relevant temporary allocation peaks during open; final resident VmRSS is much lower.
+
 Independent **repeat** at `b615a453` measured published/parent/projected HWM **187,204 / 185,024 / 29,488 KiB** on 800k, giving savings **157,716 / 155,536 KiB**; on 200k, **66,736 / 64,616 / 25,628 KiB**. In the repeat 800k CPU was 168.341 ms published vs 20.108 ms candidate. *Absolute times varied across runs; compare only matched same-run/same-host samples.* Both runs satisfy the original >=16 MiB **800k prospective** discriminator.
 
 ### Contradiction resolved: `ru_maxrss` can inherit supervisor high water
