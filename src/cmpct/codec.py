@@ -203,6 +203,9 @@ def range_vzip(recipe,get_content,get_stream,start:int,length:int)->bytes:
     """Return an exact byte range from a virtual ZIP without rebuilding the whole nested archive."""
     skref,lens,payloads,want_sha,want_size,want_crc=recipe;end=start+length
     if start<0 or length<0 or end>want_size:raise ValueError('range outside virtual ZIP')
+    # A zero-byte view has no stream-position claim to verify. Avoid rebuilding
+    # earlier regenerated Deflate streams merely to return an empty result.
+    if length==0:return b''
     sk=get_content(skref);out=[];outpos=0;skpos=0
     for i,pr in enumerate(payloads):
         ln=lens[i]
