@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'research/j24g08_depth_cache_fallback_court.py'
+      - 'research/j24g08_independent_footer_audit.py'
       - 'docs/v031-research/2026-10-28-j24g08-*'
       - '.github/workflows/v031-j24g08-o10r-cache-fallback-court.yml'
   workflow_dispatch:
@@ -79,6 +80,23 @@ jobs:
           "$RUNNER_TEMP/j24g08-cache-venv/bin/python" research/j24g08_depth_cache_fallback_court.py assess --variant cache 2>&1 | tee j24g08-artifacts/cache.log
           "$RUNNER_TEMP/j24g08-o10r-venv/bin/python" research/j24g08_depth_cache_fallback_court.py assess --variant o10r 2>&1 | tee j24g08-artifacts/o10r.log
           "$RUNNER_TEMP/j24g08-cache-venv/bin/python" research/j24g08_depth_cache_fallback_court.py referee 2>&1 | tee j24g08-artifacts/referee.log
+      - name: Independently verify archived r24 physical SHA and footer ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root=Path("j24g08-artifacts")
+          with ZipFile(root/"physical-audit-input.zip", "w", ZIP_DEFLATED) as z:
+              for p in sorted(root.rglob("*")):
+                  if p.is_file() and p.name != "physical-audit-input.zip":
+                      z.write(p, p.relative_to(root))
+          PY
+          python research/j24g08_independent_footer_audit.py \
+            j24g08-artifacts/physical-audit-input.zip \
+            j24g08-artifacts/independent_audit.json \
+            2>&1 | tee j24g08-artifacts/independent_audit.log
       - name: Preserve raw negative and positive artifacts without changing product verdict
         if: always()
         uses: actions/upload-artifact@v4
