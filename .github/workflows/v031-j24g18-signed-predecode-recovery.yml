@@ -1,0 +1,89 @@
+# ci-lane: fast
+name: CMPCT v031 J24G18 authenticated predecode recovery court
+on:
+  pull_request:
+    paths:
+      - 'research/j24g18_*'
+      - 'docs/v031-research/2026-10-28-j24g18-*'
+      - '.github/workflows/v031-j24g18-signed-predecode-recovery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  exact-signed-reader-compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G18_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G18_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind exact head and inherited Reader/source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g18-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G18_HEAD"
+          git merge-base --is-ancestor 06617f194c45ebb38dda0592ff5e5196e204af80 HEAD
+          git merge-base --is-ancestor 45fe006e1009da92d9db17a8e1684c488619ce77 HEAD
+          git merge-base --is-ancestor 63ee7c53aa524a0945f0d33fdbab44e82bf067c6 HEAD
+          test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          names=["research/j24g17_msgpack_token_counter.c",
+                 "research/j24g17_native_predecode_court.py",
+                 "research/j24g18_native_reader_court.py",
+                 "research/j24g18_independent_physical_referee.py",
+                 "docs/v031-research/2026-10-28-j24g18-native-signed-recovery-prereg.md",
+                 "docs/v031-research/2026-10-28-j24g18-released-reader-control-addendum.md",
+                 "src/cmpct/reader.py", "src/cmpct/transactions.py", "src/cmpct/codec.py"]
+          records={}
+          for name in names:
+              disk=pathlib.Path(name).read_bytes()
+              assert disk==subprocess.check_output(["git","show","HEAD:"+name]),name
+              records[name]=hashlib.sha256(disk).hexdigest()
+          pathlib.Path("j24g18-artifacts/source.json").write_text(
+              json.dumps({"head":os.environ["J24G18_HEAD"],"files_sha256":records,
+              "reader_unchanged":True},indent=2,sort_keys=True)+"\n")
+          PY
+      - name: Compile original native preflight and install unmodified CMPCT
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -O3 -std=c11 -Wall -Wextra -Werror -fPIC -shared research/j24g17_msgpack_token_counter.c -o research/j24g17_token_counter.so
+          python -m pip install .
+          # Bind MessagePack to the J24G17 component court's actual decoder version.
+          python -m pip install msgpack==1.1.2
+          python - <<'PY'
+          import pathlib, subprocess, cmpct.reader, msgpack
+          f=pathlib.Path(cmpct.reader.__file__).resolve()
+          assert f.read_bytes()==subprocess.check_output(["git","show","HEAD:src/cmpct/reader.py"])
+          assert "site-packages" in str(f)
+          assert msgpack.version==(1,1,2),msgpack.version
+          print("J24G18_INSTALLED_PRODUCT_SOURCE_CUSTODY=PASS")
+          PY
+      - name: Authenticate physical files, replay original/candidate/catch policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24g18_native_reader_court.py research/j24g18_independent_physical_referee.py
+          python research/j24g18_native_reader_court.py --out j24g18-artifacts --repeats 3 | tee j24g18-artifacts/court.log
+          python research/j24g18_independent_physical_referee.py j24g18-artifacts | tee j24g18-artifacts/referee.log
+      - name: Preserve real files/receipts, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g18-native-signed-reader-${{ env.J24G18_HEAD }}
+          path: j24g18-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
