@@ -26,11 +26,16 @@ def payloads():
     p={
       "empty":msgpack.packb({"blobs":[],"ops":[]},use_bin_type=True),
       "opaque":msgpack.packb({"blobs":[],"ops":[],"extension":b"z"*800000},use_bin_type=True),
-      "nested":msgpack.packb({"blobs":[],"ops":[],"extension":[{"x":0} for _ in range(200000)]},use_bin_type=True)
+      # Generate in a separate process; a parent-side 200k-object peak pollutes
+      # ru_maxrss inherited by fork/exec benchmark workers on Linux.
+      "nested":subprocess.check_output([__import__("sys").executable,"-c",
+          "import msgpack,sys; sys.stdout.buffer.write(msgpack.packb("
+          "{'blobs':[],'ops':[],'extension':[{'x':0} for _ in range(200000)]},"
+          "use_bin_type=True))"])
     }
     assert abs(len(p["nested"])-len(p["opaque"]))<100
     assert all(len(v)<RETAINED_RAW_BUDGET for v in p.values())
-    assert len(msgpack.unpackb(p["nested"],raw=False)["extension"])==200000
+    # Do not deserialize nested payload in the parent process.
     return p
 
 def main():
