@@ -1,1 +1,0 @@
-The authoritative integration branch is a staging surface only. Evidence remains authoritative only on exact reviewed source heads and accepted workflow artifacts until the final release harness re-measures the integrated candidate.

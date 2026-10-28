@@ -24,20 +24,30 @@ def _safe_output_path(dest:Path,rel:str)->Path:
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
     def __init__(self,path:Path):
-        self.path=Path(path);self.f=open(path,'rb');self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};
-        if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
-        # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This
-        # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map
-        # one-to-one onto a destination filesystem.
-        canonical_seen=set()
+        self.path=Path(path);self.f=open(path,'rb');self.mm=None
         try:
-            for row in self.files:
-                key,_=canonical_logical_path(row[0])
-                if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
-                canonical_seen.add(key)
-        except ValueError as exc:
-            raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
-        self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
+            self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};
+            if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
+            # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This
+            # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map
+            # one-to-one onto a destination filesystem.
+            canonical_seen=set()
+            try:
+                for row in self.files:
+                    key,_=canonical_logical_path(row[0])
+                    if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
+                    canonical_seen.add(key)
+            except ValueError as exc:
+                raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
+            self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
+        except BaseException:
+            # Construction failures never reach close()/__exit__. Release owned handles before
+            # the original exception escapes: retained tracebacks may otherwise pin mmap/fd.
+            try:
+                if self.mm is not None:self.mm.close()
+            finally:
+                self.f.close()
+            raise
     def close(self):
         if getattr(self,'mm',None):self.mm.close();self.mm=None
         if self._zdict_decoder:self._zdict_decoder.close();self._zdict_decoder=None
