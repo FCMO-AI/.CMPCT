@@ -71,6 +71,14 @@ def test_unstaged_staged_and_deleted_tracked_sources_fail_closed(tmp_path: Path)
     with pytest.raises(ValueError, match="dirty|Git HEAD"):
         _check(tmp_path, manifest, head)
     source.unlink()
+    # A *required* source is refused earlier by the existing manifest gate.
+    with pytest.raises(ValueError, match="missing mandatory"):
+        _check(tmp_path, manifest, head)
+    _git(tmp_path, "reset", "--hard", "HEAD")
+    manifest["required_paths"] = ["src/second.py"]
+    source.unlink()
+    # An optional tracked source deletion must still be caught by Git custody,
+    # even when it no longer appears in the glob-scanned list of source files.
     with pytest.raises(ValueError, match="dirty|Git HEAD"):
         _check(tmp_path, manifest, head)
 
