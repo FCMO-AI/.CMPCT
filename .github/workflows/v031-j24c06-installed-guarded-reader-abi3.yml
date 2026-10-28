@@ -9,7 +9,11 @@ on:
   pull_request:
     paths:
       - 'research/j24c06_*'
-      - '.github/workflows/v031-j24c06-installed-reader-abi3.yml'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/validation.py'
+      - 'tests/test_reader_deflate_export_custody.py'
+      - 'tests/test_reader_unsupported_blob_bits.py'
+      - '.github/workflows/v031-j24c06-installed-guarded-reader-abi3.yml'
       - 'docs/v031-research/2026-10-28-j24c06-*'
   workflow_dispatch:
 
@@ -56,7 +60,7 @@ jobs:
           test "$(git rev-parse HEAD:research/o218_fastscan.c)" = a54f15181d9dbe667b9e8c9d52e927b09c80152f
           git diff --quiet 0a128ff55c7ae0f14c6bdf019a81b40f0d894eff HEAD -- src/cmpct native/cmpct-core
           git rev-parse HEAD > j24c06-evidence/source-head.txt
-          python -m py_compile research/j24c06_installed_reader_abi3_court.py research/j24c06_installed_reader_referee.py
+          python -m py_compile research/j24c06_o216_fastpath.py research/j24c06_o218b_native_reader.py research/j24c06_o218c_native_host.py research/j24c06_installed_reader_abi3_court.py research/j24c06_installed_reader_referee.py
       - name: Build stable-ABI wheel only once under CPython 3.11
         shell: bash
         run: |
