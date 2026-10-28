@@ -1,0 +1,80 @@
+# ci-lane: fast
+name: CMPCT v031 J24G17 native MessagePack predecode oracle
+on:
+  pull_request:
+    paths:
+      - 'research/j24g17_*'
+      - 'docs/v031-research/2026-10-28-j24g17-*'
+      - '.github/workflows/v031-j24g17-native-msgpack-oracle.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-predecode-research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G17_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G17_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Exact source and inherited release/Reader custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g17-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G17_HEAD"
+          git merge-base --is-ancestor 32099051333c9a23328bf3bc99778afe8ace8e0f HEAD
+          git merge-base --is-ancestor 5563b199bc03ed03c3e78918c51a7cf5396c2ff1 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          names=[
+            'research/j24g17_msgpack_token_counter.c',
+            'research/j24g17_native_predecode_court.py',
+            'research/j24g17_independent_referee.py',
+            'research/j24g17_differential_wire_fuzz.py',
+            'docs/v031-research/2026-10-28-j24g17-native-token-predecode-prereg.md'
+          ]
+          files={}
+          for n in names:
+              actual=pathlib.Path(n).read_bytes()
+              assert actual==subprocess.check_output(['git','show','HEAD:'+n]), n
+              files[n]=hashlib.sha256(actual).hexdigest()
+          pathlib.Path('j24g17-artifacts/source.json').write_text(json.dumps(
+              {'head':os.environ['J24G17_HEAD'],'reader_product_unchanged':True,
+               'source_sha256':files},indent=2)+'\n')
+          PY
+      - name: Compile C-only research oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -O3 -std=c11 -Wall -Wextra -Werror -fPIC -shared research/j24g17_msgpack_token_counter.c -o research/j24g17_token_counter.so
+          sha256sum research/j24g17_msgpack_token_counter.c research/j24g17_token_counter.so | tee j24g17-artifacts/native-build-sha256.txt
+      - name: Compare exact canonical MessagePack acceptance against C preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install msgpack==1.1.2
+          python -m py_compile research/j24g17_native_predecode_court.py research/j24g17_independent_referee.py research/j24g17_differential_wire_fuzz.py
+          python research/j24g17_native_predecode_court.py --selftest | tee j24g17-artifacts/selftest.log
+          python research/j24g17_differential_wire_fuzz.py j24g17-artifacts/wire-fuzz.json | tee j24g17-artifacts/wire-fuzz.log
+          python research/j24g17_native_predecode_court.py --court j24g17-artifacts --workers 5 --repeats 3 | tee j24g17-artifacts/court.log
+          python research/j24g17_independent_referee.py j24g17-artifacts | tee j24g17-artifacts/referee.log
+      - name: Preserve source-locked positive and negative receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g17-native-token-${{ env.J24G17_HEAD }}
+          path: j24g17-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
