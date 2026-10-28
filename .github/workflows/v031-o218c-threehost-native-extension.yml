@@ -95,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           python research/o218c_threehost_independent_referee.py o218c-evidence/raw.json \
-            --output o218c-evidence/referee.json > o218c-evidence/referee.log 2>&1
+            --output o218c-evidence/referee.json > o218c-evidence/referee.log 2>&1 || { cat o218c-evidence/referee.log; exit 1; }
           cat o218c-evidence/referee.log
           grep -q 'O218C_INDEPENDENT_REFEREE=PASS' o218c-evidence/referee.log
       - name: Always retain host binaries, archives and raw receipts including failures
