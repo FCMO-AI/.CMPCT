@@ -19,7 +19,7 @@ from cmpct.validation import preflight_archive
 
 STAMP_NS = 1_580_643_296_000_000_000
 TOLERANCE_NS = 3_000_000_000
-CONTENT = b"J24H05 exact first-party hardlink with metadata\\x00" * 29
+CONTENT = b"J24H05 exact first-party hardlink with metadata\x00" * 29
 OTHER = b"independent ordinary member" * 17
 
 
@@ -58,7 +58,7 @@ def test_default_metadata_writer_forward_hardlink_full_contract(tmp_path: Path) 
 
     original = tmp_path / "original.cmpct"
     Builder(src, workers=1, reproducible=False).build(original)
-    assert original.read_bytes().startswith(b"CMPCT24\\x00")
+    assert original.read_bytes().startswith(b"CMPCT24\x00")
     assert preflight_archive(original)["files"] == 4
     with CMPCT(original) as reader:
         assert reader.verify() == 4
@@ -129,5 +129,5 @@ def test_default_metadata_writer_forward_hardlink_full_contract(tmp_path: Path) 
         p = Path(output_dir)
         p.mkdir(parents=True, exist_ok=True)
         (p / "j24h05-default-extract.json").write_text(
-            json.dumps(receipt, sort_keys=True, indent=2) + "\\n"
+            json.dumps(receipt, sort_keys=True, indent=2) + "\n"
         )
