@@ -1,0 +1,112 @@
+# ci-lane: fast
+# J24C21 exact-source published/#662/#676 large RAW-owner research court.
+name: CMPCT v031 J24C21 large-owner Reader triplet
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24c21-large-owner-released-floor-20261028
+  pull_request:
+    paths:
+      - 'research/j24c21_large_owner_*'
+      - 'docs/v031-research/*j24c21*'
+      - '.github/workflows/v031-j24c21-large-owner-triplet.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24c21-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  three-source-installed:
+    name: Exact-source published vs fused vs sealed, signed physical owners
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Published v0.30.0 immutable historical source
+        uses: actions/checkout@v6
+        with:
+          path: published
+          ref: 80c358f8824ec1b20d349c92ed94c898090969b0
+          persist-credentials: false
+      - name: Original unsafe fused #662 source (control, never promotion)
+        uses: actions/checkout@v6
+        with:
+          path: fused
+          ref: a66fd593a83cc4c71556d3d86d835c51abd20a96
+          persist-credentials: false
+      - name: Sealed J24C17 #676 exact source
+        uses: actions/checkout@v6
+        with:
+          path: sealed
+          ref: 3b6a73f9205f40f11124cd9ff332407e52cebb93
+          persist-credentials: false
+      - name: Prospective J24C21 evidence instrument (own HEAD)
+        uses: actions/checkout@v6
+        with:
+          path: court
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Pin all four Git sources and build separate real wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C published rev-parse HEAD)" = 80c358f8824ec1b20d349c92ed94c898090969b0
+          test "$(git -C fused rev-parse HEAD)" = a66fd593a83cc4c71556d3d86d835c51abd20a96
+          test "$(git -C sealed rev-parse HEAD)" = 3b6a73f9205f40f11124cd9ff332407e52cebb93
+          test "$(git -C court rev-parse HEAD)" = "$EVIDENCE_SHA"
+          python -m pip install --upgrade pip wheel
+          mkdir -p receipts
+          for arm in published fused sealed; do
+            python -m pip wheel --no-deps "./$arm" -w "./$arm/dist"
+            python -m venv "$arm-env"
+            "./$arm-env/bin/python" -m pip install "./$arm/dist/"*.whl
+            ARM="$arm" "./$arm-env/bin/python" - <<'PY'
+          import os
+          from pathlib import Path
+          import cmpct.reader as reader
+          p = Path(reader.__file__).resolve()
+          assert "site-packages" in p.parts or "dist-packages" in p.parts, p
+          print("J24C21_INSTALLED", os.environ["ARM"], p)
+          PY
+          done
+      - name: Generate single independent signed-wire fixture set and verify bounds
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./sealed-env/bin/python court/research/j24c21_large_owner_court.py \
+            --generate --output receipts/fixtures \
+            | tee receipts/generation-summary.json
+      - name: Balanced fresh-process comparison, six repetitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./sealed-env/bin/python court/research/j24c21_large_owner_court.py \
+            --court --manifest receipts/fixtures/manifest.json \
+            --python-published "$PWD/published-env/bin/python" \
+            --python-fused "$PWD/fused-env/bin/python" \
+            --python-sealed "$PWD/sealed-env/bin/python" \
+            --repetitions 6 --output receipts/j24c21-raw.json \
+            | tee receipts/court-summary.json
+      - name: Independent complete-matrix, signed-fixture and mutation referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./sealed-env/bin/python court/research/j24c21_large_owner_referee.py \
+            --input receipts/j24c21-raw.json --fixtures receipts/fixtures \
+            --output receipts/j24c21-decision.json \
+            | tee receipts/referee-summary.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24c21-large-owner-triplet-${{ env.EVIDENCE_SHA }}
+          path: |
+            receipts/
+            published/dist/
+            fused/dist/
+            sealed/dist/
+          if-no-files-found: warn
