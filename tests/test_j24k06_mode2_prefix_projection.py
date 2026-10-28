@@ -51,6 +51,13 @@ def test_valid_two_mode2_streams_match_independent_concat_for_selective_offsets(
     # A prefix that ends before the first regenerated Deflate stream must remain lazy.
     assert range_vzip(recipe, get_content, get_stream, 0, 1) == b"A"
     assert calls == []
+    # Empty reads must not regenerate skipped mode2 streams, even at EOF.
+    for empty_start in (0, 2 + cp1, len(exact) - 1, len(exact)):
+        calls.clear()
+        assert range_vzip(recipe, get_content, get_stream, empty_start, 0) == b""
+        assert calls == []
+    with pytest.raises(ValueError, match="range outside virtual ZIP"):
+        range_vzip(recipe, get_content, get_stream, len(exact) + 1, 0)
     starts = [0, 1, 2, 3, 2 + cp1 - 1, 2 + cp1,
               2 + cp1 + 6, 2 + cp1 + 6 + cp2 - 1,
               len(exact) - 1, len(exact)]
