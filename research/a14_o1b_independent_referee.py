@@ -88,15 +88,15 @@ def judge(r,check_codec=True):
                     got=row['controls'][label]
                     if got['bytes']!=len(data) or got['sha256']!=sha(data):raise AssertionError('control mismatch '+label)
             sizes={k:v['bytes'] for k,v in row['controls'].items()}
-            expected_best=min(sizes,key=sizes.get)
-            if row['best_control']!=expected_best or row['best_control_bytes']!=sizes[expected_best]:raise AssertionError('best control')
-            if row['gain_bytes']!=sizes[expected_best]-len(artifact):raise AssertionError('gain bytes')
-            if abs(row['gain_pct']-100*(sizes[expected_best]-len(artifact))/sizes[expected_best])>1e-10:raise AssertionError('gain percent')
+            best_size=min(sizes.values())
+            if row['best_control'] not in sizes or sizes[row['best_control']]!=best_size or row['best_control_bytes']!=best_size:raise AssertionError('best control')
+            if row['gain_bytes']!=best_size-len(artifact):raise AssertionError('gain bytes')
+            if abs(row['gain_pct']-100*(best_size-len(artifact))/best_size)>1e-10:raise AssertionError('gain percent')
             if abs(row['raw_crc_opportunity_pct']-100*row['crc_bytes_saved']/len(src))>1e-10:raise AssertionError('crc opportunity')
             aggregates['valid']+=1
             if row['gain_pct']>=5:aggregates['positive5_files']+=1
             aggregates['total_raw_bytes']+=len(src);aggregates['total_crc_bytes']+=row['crc_bytes_saved']
-            aggregates['total_candidate_bytes']+=len(artifact);aggregates['total_best_control_bytes']+=sizes[expected_best]
+            aggregates['total_candidate_bytes']+=len(artifact);aggregates['total_best_control_bytes']+=best_size
             checked+=1
         found=r['summary'][format_label]
         for key,v in aggregates.items():
