@@ -212,7 +212,18 @@ def range_vzip(recipe,get_content,get_stream,start:int,length:int)->bytes:
         rawref,method,stream_mode,streamref,csize,level=pr
         if outpos+csize>start and outpos<end:
             seg=get_content(rawref) if method==zipfile.ZIP_STORED else get_stream(stream_mode,streamref,level)
+            # The signed csize is an offset claim, not proof of an actual stream
+            # boundary. A correct-length slice can contain the wrong bytes.
+            if len(seg)!=csize:
+                raise IOError('virtual ZIP selective reconstruction length mismatch')
             a=max(start,outpos)-outpos;b=min(end,outpos+csize)-outpos;out.append(seg[a:b])
+        elif method==zipfile.ZIP_DEFLATED and stream_mode==2 and outpos<end:
+            # Regenerated Deflate has no stored csize oracle. To locate a later
+            # literal correctly, verify every *preceding* mode2 stream exactly.
+            # Preserve lazy reads that end before this stream and never retain
+            # an unselected reconstructed stream in the result.
+            if len(get_stream(stream_mode,streamref,level))!=csize:
+                raise IOError('virtual ZIP selective reconstruction length mismatch')
         outpos+=csize
         if outpos>=end:
             result = b''.join(out)
