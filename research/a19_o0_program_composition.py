@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import platform
+from pathlib import Path
 import statistics
 import sys
 import time
@@ -240,7 +241,8 @@ def time_one(data: bytes, steps: list):
     return observations
 
 
-def run():
+def run(frames_dir: str):
+    Path(frames_dir).mkdir(parents=True, exist_ok=True)
     cases = []
     total_search_wall_ns = 0
     for family in ("progression", "quantized", "heldout", "random", "periodic"):
@@ -248,12 +250,14 @@ def run():
             original = fixture(family, seed)
             before = time.perf_counter_ns()
             arms = []
-            for steps in candidates():
+            for index, steps in enumerate(candidates()):
                 frame = encode_archive(original, steps)
                 if decode_archive(frame) != original:
                     raise AssertionError("nonexact reconstruction")
+                rel = f"{family}-{seed}-{index:02d}.a19"
+                (Path(frames_dir) / rel).write_bytes(frame)
                 arms.append({
-                    "steps": steps, "type": kind(steps), "stored_bytes": len(frame),
+                    "frame_rel": rel, "steps": steps, "type": kind(steps), "stored_bytes": len(frame),
                     "frame_sha256": hashlib.sha256(frame).hexdigest()
                 })
             search_wall_ns = time.perf_counter_ns() - before
@@ -334,8 +338,9 @@ def run():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="a19_o0_result.json")
+    parser.add_argument("--frames-dir", default="a19_o0_frames")
     args = parser.parse_args()
-    result = run()
+    result = run(args.frames_dir)
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, sort_keys=True)
     print("DECISION " + result["decision"])
