@@ -155,3 +155,23 @@ def test_skip_worktree_index_flag_is_not_accepted_as_full_source(tmp_path: Path)
         _check(tmp_path, manifest, head)
     _git(tmp_path, "update-index", "--no-skip-worktree", "src/second.py")
     assert len(_check(tmp_path, manifest, head)[0]) == 64
+
+
+def test_absent_skip_worktree_optional_source_cannot_disappear_from_head_receipt(tmp_path: Path) -> None:
+    manifest, head = _fixture_repo(tmp_path)
+    baseline, rows = _check(tmp_path, manifest, head)
+    assert rows == ["src/first.py", "src/second.py"]
+    # A tracked source outside required_paths is still part of Git HEAD custody.
+    manifest["required_paths"] = ["src/second.py"]
+    _git(tmp_path, "update-index", "--skip-worktree", "src/first.py")
+    (tmp_path / "src/first.py").unlink()
+    # Git diff does not expose the deletion because the index suppresses it.
+    assert _git(tmp_path, "diff", "--name-only", "HEAD", "--") == ""
+    assert "S src/first.py" in _git(tmp_path, "ls-files", "-v")
+    changed, current_rows = C.fingerprint(manifest, root=tmp_path)
+    assert changed != baseline and current_rows == ["src/second.py"]
+    with pytest.raises(ValueError, match="index|flag|HEAD"):
+        C.assert_git_head_custody(current_rows, root=tmp_path, expected_head=head)
+    _git(tmp_path, "update-index", "--no-skip-worktree", "src/first.py")
+    with pytest.raises(ValueError, match="dirty|HEAD"):
+        _check(tmp_path, manifest, head)
