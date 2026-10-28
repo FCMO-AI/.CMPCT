@@ -1,0 +1,144 @@
+"""J24C10: bounded optional uniform S_CHUNKS geometry, strictly after admission.
+
+Genuine first-party signed r24 fixture for Reader behavior; independent deterministic
+predicate/fallback and hostile checks. Tests do not weaken inherited validators.
+"""
+from __future__ import annotations
+
+import os
+import random
+import tempfile
+import unittest
+from pathlib import Path
+
+import cmpct._chunk_admission as admission
+from cmpct.reader import CMPCT
+from test_o215_fixed_chunk_admission import _make_archive
+
+REQUIRED = os.environ.get("CMPCT_J24C10_EXPECT_NATIVE", "0") == "1"
+
+
+def _blob_row(length):
+    return [0, length, length, 0, 0]
+
+
+def _strict_uniform(refs, blobs, size):
+    if (type(refs) is not list or type(blobs) is not list or
+            type(size) is not int or size <= 0 or not refs):
+        return 0
+    stride = 0
+    total = 0
+    for j, idx in enumerate(refs):
+        if type(idx) is not int or not 0 <= idx < len(blobs):
+            return 0
+        row = blobs[idx]
+        if type(row) is not list or len(row) != 5 or type(row[1]) is not int:
+            return 0
+        ln = row[1]
+        if ln <= 0:
+            return 0
+        total += ln
+        if j == 0:
+            stride = ln
+        elif j != len(refs)-1 and ln != stride:
+            return 0
+        elif j == len(refs)-1 and ln > stride:
+            return 0
+    return stride if total == size else 0
+
+
+class LazyStrideProof(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="j24c10-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        original = admission._uniform_stride
+        self.addCleanup(lambda: setattr(admission, "_uniform_stride", original))
+
+    def _signed(self, refs, logical):
+        path = self.root / "signed.cmpct"
+        path.write_bytes(_make_archive(refs, logical))
+        return path
+
+    def test_optional_binary_is_real_or_absent(self):
+        self.assertEqual(callable(admission._uniform_stride), REQUIRED)
+        blobs = [_blob_row(4), _blob_row(2)]
+        if REQUIRED:
+            self.assertEqual(admission._uniform_stride([0, 0, 1], blobs, 10), 4)
+            self.assertEqual(admission._uniform_stride([0, 1, 0], blobs, 10), 0)
+            self.assertEqual(admission._uniform_stride([0, True], blobs, 8), 0)
+            self.assertEqual(admission._uniform_stride([0, 2**100], blobs, 8), 0)
+            self.assertEqual(admission._uniform_stride([0, 0], blobs, 7), 0)
+        else:
+            self.assertIsNone(admission._uniform_stride)
+
+    def test_genuine_signed_reader_late_ranges_and_zero_boundary(self):
+        count = 256
+        logical = b"ABCD" * count
+        path = self._signed([0] * count, logical)
+        with CMPCT(path) as rd:
+            self.assertEqual(rd.read_range("fixed.bin", 0, 9), logical[:9])
+            self.assertNotIn("fixed.bin", rd._chunk_stride_cache)
+            for at, length in [(len(logical)//2, 13), (len(logical)-17, 17),
+                               (len(logical)-1, 1), (len(logical), 0),
+                               (0, 12), (37, 55)]:
+                self.assertEqual(rd.read_range("fixed.bin", at, length),
+                                 logical[at:at+length])
+            self.assertEqual(rd._chunk_stride_cache["fixed.bin"], 4 if REQUIRED else 0)
+            self.assertEqual(rd.read("fixed.bin"), logical)
+            self.assertEqual(rd.verify(), 1)
+
+    def test_invalid_ranges_keep_original_contract(self):
+        path = self._signed([0]*64, b"ABCD"*64)
+        with CMPCT(path) as rd:
+            for offset, ln in [(-1, 2), (255, 2), (4, -1), (257, 0)]:
+                with self.assertRaises(ValueError):
+                    rd.read_range("fixed.bin", offset, ln)
+            self.assertEqual(rd.read_range("fixed.bin", 256, 0), b"")
+
+    def test_disabled_failed_and_false_witness_are_identical(self):
+        path = self._signed([0]*256, b"ABCD"*256)
+        outcomes = []
+        native = admission._uniform_stride
+        for scanner in (None, lambda *_: 0,
+                        lambda *_: (_ for _ in ()).throw(RuntimeError("native failure")),
+                        native):
+            admission._uniform_stride = scanner
+            with CMPCT(path) as rd:
+                outcomes.append(tuple(rd.read_range("fixed.bin", p, n)
+                                      for p, n in ((512, 13), (1002, 22), (0, 12))))
+                self.assertEqual(rd._chunk_stride_cache.get("fixed.bin"), 4 if scanner is native and REQUIRED else 0)
+        self.assertTrue(all(o == outcomes[0] for o in outcomes))
+
+    def test_bogus_positive_witness_arithmetic_is_rejected(self):
+        blobs = [_blob_row(4), _blob_row(7)]
+        admission._uniform_stride = lambda *args: 4
+        self.assertEqual(admission.native_uniform_stride([1, [0, 1]], blobs, 11), 0)
+        self.assertEqual(admission.native_uniform_stride([1, [0, True]], blobs, 8), 0)
+        self.assertEqual(admission.native_uniform_stride([1, [0, 0]], blobs, 8), 4)
+        self.assertEqual(admission.native_uniform_stride([1, [0, 0]], blobs, 9), 0)
+
+    def test_multiowner_equal_lengths_and_short_tail(self):
+        blobs = [_blob_row(4) for _ in range(256)] + [_blob_row(2)]
+        refs = list(range(256))*2 + [256]
+        size = 512*4+2
+        if REQUIRED:
+            self.assertEqual(admission.native_uniform_stride([1, refs], blobs, size), 4)
+            self.assertEqual(admission.native_uniform_stride([1, refs[:-1]+[0]], blobs, size), 0)
+
+    def test_deterministic_hostile_differential_no_false_positives(self):
+        if not REQUIRED:
+            self.skipTest("no native extension; strict Python is the only route")
+        rng = random.Random(2410)
+        blobs = [_blob_row(4), _blob_row(4), _blob_row(2), _blob_row(7)]
+        pool = [0, 1, 2, 3, 4, -1, True, 2**80, 0.0, None, [0]]
+        for i in range(1200):
+            refs = [rng.choice(pool) for _ in range(rng.randrange(1, 15))]
+            size = rng.choice([0, 2, 4, 7, 8, 14, 24, 60, 2**90, True])
+            expected = _strict_uniform(refs, blobs, size)
+            actual = admission.native_uniform_stride([1, refs], blobs, size)
+            self.assertEqual(actual, expected, (i, refs, size))
+
+
+if __name__ == "__main__":
+    unittest.main()
