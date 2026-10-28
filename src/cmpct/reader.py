@@ -504,6 +504,17 @@ class CMPCT:
                 try:os.unlink(alias_full)
                 except FileNotFoundError:pass
                 _linux_link_owner_fd(fd,alias_full)
+            # The alias is source-fd-owned, but the public owner pathname must
+            # also still identify that same inode. A late substitution detected
+            # here must fail the extraction rather than report a complete tree.
+            # This does NOT guarantee stability after return in a hostile root.
+            bound=os.fstat(fd)
+            owner_full=materialized[owner_name][2]
+            try:visible=os.stat(owner_full,follow_symlinks=False)
+            except FileNotFoundError as exc:
+                raise IOError(f'hardlink owner disappeared during materialization: {owner_name!r}') from exc
+            if (bound.st_dev,bound.st_ino)!=(visible.st_dev,visible.st_ino) or not stat.S_ISREG(visible.st_mode):
+                raise IOError(f'hardlink owner path rebound during materialization: {owner_name!r}')
         for row,parts,full in clean:
             rel,k,mode,mt,size,h,storage=row
             if k in (K_DIR,K_HARDLINK):continue
