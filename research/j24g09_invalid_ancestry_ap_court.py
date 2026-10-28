@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import resource
 import statistics
 import subprocess
 import tempfile
@@ -29,7 +30,7 @@ from j24g04_false_footer_recovery_court import PAYLOAD, digest
 ORIGINAL_HEAD = "10a6bc150cfa0ceb8608ee826dc09650ca3f4e3d"
 ORIGINAL_BLOB = "bead2ea6a09a6daaadc3ec2389cfb8853e3dd172"
 CASE_N = (16_384, 16_400, 32_768)
-REPEATS = 2
+REPEATS = 5
 
 
 def original_reader():
@@ -253,6 +254,7 @@ def main():
             "cases": cases,
             "held_out_structures": held_out,
             "tracemalloc_peak_bytes_on_repeated_n32768": traced_peak,
+            "maxrss_kib_process_high_watermark": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
             "flat_control": {"archive_sha256": digest(flat), "paired": flat_pair},
             "neutral_control": {"archive_sha256": digest(neutral), "paired": neutral_pair},
             "committed_control": {"archive_sha256": digest(valid_p.read_bytes()),
@@ -265,6 +267,10 @@ def main():
         high = cases[1]["paired"]
         assert high["historical_median_ms"] / high["candidate_median_ms"] >= 2.0, high
         assert all(x["index_attempts"] <= 3 for x in high["candidate"]), high
+        # Preserve inherited ordinary below-cap and flat performance floors.
+        low = cases[0]["paired"]
+        assert low["candidate_median_ms"] <= 1.25 * low["historical_median_ms"], low
+        assert flat_pair["candidate_median_ms"] <= 1.25 * flat_pair["historical_median_ms"], flat_pair
         (out / "court.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
         print("J24G09_RESULT=" + json.dumps(result, sort_keys=True), flush=True)
 
