@@ -9,12 +9,14 @@ on:
     paths:
       - benchmarks/v031_j24i04_full_matrix_aa.py
       - research/j24i04_independent_receipt_referee.py
+      - research/test_j24i04_referee.py
       - .github/workflows/v031-j24i04-full-matrix-aa.yml
       - docs/v031-research/2026-10-28-j24i04-full-matrix-aa-preregistration.md
   pull_request:
     paths:
       - benchmarks/v031_j24i04_full_matrix_aa.py
       - research/j24i04_independent_receipt_referee.py
+      - research/test_j24i04_referee.py
       - .github/workflows/v031-j24i04-full-matrix-aa.yml
       - docs/v031-research/2026-10-28-j24i04-full-matrix-aa-preregistration.md
   workflow_dispatch:
@@ -71,6 +73,12 @@ jobs:
           sudo apt-get install -y zstd xz-utils libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
+
+      - name: Require independent referee neutral/red controls and forged-receipt rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest -v research.test_j24i04_referee |& tee j24i04-artifacts/referee-selftest.stdout.txt
 
       - name: Execute original full correctness precondition, separately from timed court
         shell: bash
