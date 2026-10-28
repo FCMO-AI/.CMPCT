@@ -1,0 +1,22 @@
+# J24G12 — lazy authenticated ancestry materialization frame-review (preregistration)
+
+Date: 2026-10-28 UTC. Scientific owner: Phased2 independent continuation. Exact source parent `698f576a13ae1d14f248271185de3503ed839ee7`, Reader blob `f13c5492f5acfa1cfcfec97cdbe0da71e41e327b` from draft PR #668. The published main release is v0.30.0, on-disk revision 24. This is **O0/O1 research only**; no product/format/version/release edit and no merge credit.
+
+## Mandatory frame review after J24G09–J24G11
+Three successive footer negative-proof storage families (arithmetic runs, SQLite, packed-u64 staging) improved known hostile cases but left the whole-chain decoded `chain` and `seen` proportional to ancestry length. Further proof-store threshold changes have low information value. Change **execution/lifetime ownership** instead: defer decoding MessagePack delta objects until a valid checkpoint is found. Track only authenticated offsets on the first walk, then re-decode each delta during successful replay. The cheaper alternative is leaving the released/current one-pass eager replay unchanged, and the stronger fallback is a capped-memory/external spool with exact semantics. Do not claim the latter without measurement.
+
+## Falsifiable primary question
+Does authenticated first-pass offset-only ancestry traversal materially reduce actual Reader peak Python allocation/CPU for deep invalid SHA-valid tails (no checkpoint), without unacceptable extra CPU on legitimate committed chains and without changing checkpoint/bytes/range/verify selection?
+
+Controls: source-exact #668 Reader on the same physical archive, a one-footer first-party Builder control, valid first-party Writer rename, a long VALID sequence of signed no-op deltas connected to its Builder footer, and 2 different invalid families (linked orphan and short independent tails). Fresh child processes; ABBA ordering; original archived bytes, SHA/CPU/wall/tracemalloc peak and genuine decode calls. Use existing r24 Builder/Writer and real Reader, not a mere Python fake. All results are research only.
+
+Prediction: skipping unneeded MessagePack trees should reduce peak temporary Python allocation on large invalid ancestry by >=25% and avoid most eager unpack calls; success-chain second-pass decoder calls should approximately double and may create unacceptable valid-open overhead. A single first-party rename must remain exact. **Kill always-lazy productization** if any byte/metadata/selected checkpoint differs, if source identity differs, if valid-one-footer opens slow materially (>25% at >=0.05ms absolute), if invalid peak savings are absent, or if mutation races admit inconsistent replay. Do not tune test sizes/cutoffs after observing output. Negative is valuable.
+
+## Security and full cost
+The first walk must authenticate the same r24 headers/payload SHA as inherited code; any successful replay must verify the second-pass delta bytes against their first-pass identities or fail closed, not silently mix two versions. An `offset+SHA` history is still O(depth) metadata; a Python `seen` set remains O(depth), so **global bounded RSS is not claimed**. Measure explicit net decoder calls, duplicate payload SHA CPU, residency, parse allocations, temp I/O and cold-start separate. This is an experiment on immutable file bytes, not proof of concurrent rewrite safety. No benchmark comparator/gate/policy changes.
+
+## Concurrency and decision boundary
+Search of open PRs/issues found active #668 owning packed proofs, #669 native S_CHUNKS range performance, #670 A14 field inversion and issue #649 tracking footer recovery. This branch owns only the **lazy ancestry execution oracle** as a child of #668 and does not modify their owners or Discovery Engine state. Existing #365 depth rejection is an independent semantic policy, not a substitute for fallback-preserving work. Source-exact hosted CI (when created) is lower-tier research, must preserve failed runs and report exact head status.
+
+## Next decision
+If both invalid memory and valid-open economics survive, seek a source-exact product implementation with stable snapshot/in-place mutation model and three-host hostile tests. If invalid gains require unacceptable valid regressions, **retire always-lazy**, retain the prospective observation, and compare hybrid adaptive checkpoint ownership or return to different product bottlenecks. No release credit from this experiment.
