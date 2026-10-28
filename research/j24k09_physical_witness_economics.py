@@ -24,7 +24,7 @@ def fixture(n, payload_size=64):
     for idx in range(n + 1):
         data = bytes([idx % 251]) * payload_size
         header = BHDR.pack(BMAGIC, CODEC_RAW, 0, 0, payload_size,
-                           payload_size, 0, 0, b"\\0" * 32)
+                           payload_size, 0, 0, bytes(32))
         blobs.append((position, payload_size, payload_size, CODEC_RAW, 0))
         parts.extend((header, data))
         contents[idx] = data
@@ -35,7 +35,7 @@ def fixture(n, payload_size=64):
     recipe = [0, [0] * n + [8],
               [[i, zipfile.ZIP_STORED, 0, i, payload_size, -1]
                for i in range(1, n + 1)],
-              b"\\0" * 32, n * payload_size + 8, 0]
+              bytes(32), n * payload_size + 8, 0]
     return reader, contents, recipe
 
 
