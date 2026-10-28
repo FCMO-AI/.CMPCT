@@ -1,0 +1,97 @@
+# ci-lane: fast
+name: CMPCT J24G06 bounded failed-footer product exact-source court
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24g06_bounded_footer_product_court.py'
+      - 'docs/v031-research/2026-10-28-j24g06-*'
+      - '.github/workflows/v031-j24g06-bounded-footer-product.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  installed-candidate-versus-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G06_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G06_ARTIFACTS: j24g06-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G06_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify prereg and exact historic source from Git
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g06-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G06_HEAD"
+          git merge-base --is-ancestor "61fa1c9e453008957ed6913b2d8918e686686743" HEAD
+          test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/builder.py)"
+          test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/codec.py)"
+          python - <<'PY'
+          import subprocess,pathlib,json,hashlib,os
+          paths=["src/cmpct/reader.py","research/j24g06_bounded_footer_product_court.py"]
+          data={"head":os.environ["J24G06_HEAD"],"paths":{}}
+          for p in paths:
+              raw=subprocess.check_output(["git","show","HEAD:"+p])
+              assert raw==pathlib.Path(p).read_bytes()
+              data["paths"][p]={"sha256":hashlib.sha256(raw).hexdigest(),
+                                "blob":subprocess.check_output(["git","rev-parse","HEAD:"+p],text=True).strip()}
+          pathlib.Path("j24g06-artifacts/source.json").write_text(json.dumps(data,indent=2)+"\n")
+          print("J24G06_SOURCE_EXACT="+json.dumps(data,sort_keys=True))
+          PY
+      - name: Install actual candidate wheel and verify package ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python - <<'PY'
+          import pathlib,subprocess,cmpct.reader
+          p=pathlib.Path(cmpct.reader.__file__).resolve()
+          assert "site-packages" in str(p)
+          assert p.read_bytes()==subprocess.check_output(["git","show","HEAD:src/cmpct/reader.py"])
+          print("J24G06_INSTALLED_CANDIDATE_READER_EXACT=PASS")
+          PY
+      - name: Run source-bound original-versus-product recovery and independent referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g06_bounded_footer_product_court.py             2>&1 | tee j24g06-artifacts/product-court.log
+          python - <<'PY'
+          import json,pathlib
+          j=json.loads(pathlib.Path("j24g06-artifacts/product_court.json").read_text())
+          assert j["status"]=="CANDIDATE_HOST_COURT_PASS_WITHIN_SCOPE"
+          assert j["release_credit"]==0 and j["product_source_modified"] is True
+          assert j["repeats_per_variant"]==3
+          assert len(j["orphan_cases"])==3
+          for c,n in zip(j["orphan_cases"],(32,128,256)):
+              assert c["n"]==n and c["bytes"]==j["builder_archive_bytes"]+n*81
+              for name,hist,now in [("linked",1+n*(n+1)//2,1+n),("flat",1+n,1+n)]:
+                  r=c[name];assert len(r["historical"])==len(r["candidate"])==3
+                  assert all(t["calls"]==hist for t in r["historical"])
+                  assert all(t["calls"]==now for t in r["candidate"])
+                  assert {t["footer"] for t in r["historical"]+r["candidate"]}.__len__()==1
+                  assert all(t["sha256"]==j["logical_sha256"] for t in r["historical"]+r["candidate"])
+          assert j["orphan_cases"][-1]["linked"]["wall_ratio_original_over_candidate"]>=2.0
+          assert j["orphan_cases"][-1]["flat"]["wall_ratio_original_over_candidate"]>=0.8
+          print("J24G06_INDEPENDENT_PRODUCT_REFEREE=PASS")
+          PY
+      - name: Preserve full receipts including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g06-product-source-bound-${{ github.sha }}
+          path: j24g06-artifacts/
+          if-no-files-found: warn
+          retention-days: 30

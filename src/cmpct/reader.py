@@ -57,11 +57,14 @@ class CMPCT:
         except Exception:return None
         if len(payload)!=us or sha(payload)!=ph:return None
         return kind,payload,prev
-    def _index_from_footer(self,footer_pos:int):
+    def _index_from_footer(self,footer_pos:int,known_bad:set[int]|None=None):
         chain=[];pos=footer_pos;depth=0;seen=set()
         while pos and pos not in seen:
+            # An earlier candidate can have proved this same ancestral footer invalid.
+            # This set is scoped to one scan on this one open archive descriptor.
+            if known_bad is not None and pos in known_bad:break
             seen.add(pos);g=self._decode_generation_payload(pos)
-            if g is None:return None
+            if g is None:break
             kind,payload,prev=g
             if kind==0:
                 idx=msgpack.unpackb(payload,raw=False)
@@ -79,13 +82,19 @@ class CMPCT:
                                 if x[0]==op[1]:x[0]=op[2];break
                     idx['files'].sort(key=lambda x:x[0])
                 return idx,depth
-            if kind!=1:return None
+            if kind!=1:break
             chain.append(msgpack.unpackb(payload,raw=False));depth+=1;pos=prev
+        # A failed chain cannot become a valid checkpoint by starting at one of
+        # its ancestors. Cache the proof, not a decoded object or successful index.
+        # Cap the supplemental set; overflow preserves the old full replay.
+        if known_bad is not None and len(seen)>1 and len(known_bad)+len(seen)<=16384:
+            known_bad.update(seen)
         return None
     def _latest_generation(self):
         # Scan backward for the newest valid commit footer. A partial append after an older footer
         # is harmless: the older footer remains discoverable and its hash/parent chain still validates.
         self.f.seek(0,2);size=self.f.tell();block=1024*1024;pos=size;carry=b'';magic=FMAGIC
+        known_bad=set()  # transient: no global Reader cache or persistent evidence
         while pos>0:
             n=min(block,pos);pos-=n;self.f.seek(pos);chunk=self.f.read(n)+carry;search=len(chunk)
             while True:
@@ -93,7 +102,7 @@ class CMPCT:
                 if i<0:break
                 fp=pos+i
                 if fp+FTR.size<=size:
-                    got=self._index_from_footer(fp)
+                    got=self._index_from_footer(fp,known_bad)
                     if got is not None:return got[0],fp,got[1]
                 search=i
             carry=chunk[:len(magic)-1]
