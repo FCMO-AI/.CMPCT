@@ -1,0 +1,54 @@
+# ci-lane: fast
+# A19-O1: source-bound same-host libzstd1.5.5 vs pinned bundled libzstd1.5.7.
+name: CMPCT v031 A19-O1 encoder-version transfer
+on:
+  push:
+    branches:
+      - agent/phased3-v031-a19-o0-charged-program-composition-20261028
+  pull_request:
+    paths:
+      - 'research/a19_o1_*'
+      - 'docs/v031-research/*a19-o1*'
+      - '.github/workflows/v031-a19-o1-encoder-version.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: a19-o1-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  same-host-version-transfer:
+    name: Original single-host Zstd19 vs pinned wheel Zstd19
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source SHA, never synthetic merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Keep original version-transfer identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_SHA"
+          mkdir -p receipts
+          git rev-parse HEAD > receipts/head.txt
+          python -m pip install msgpack==1.1.2 zstandard==0.25.0
+          python -m py_compile research/a19_o0_program_composition.py research/a19_o1_samehost_codec_transfer.py
+      - name: Run two real compressor engines on same fixed transformed bytes
+        run: |
+          set -euo pipefail
+          python research/a19_o1_samehost_codec_transfer.py | tee receipts/a19_o1_stdout.txt
+          sha256sum receipts/a19_o1_version_transfer.json | tee receipts/sha256.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a19-o1-${{ env.EVIDENCE_SHA }}
+          path: receipts/
+          if-no-files-found: warn
+          retention-days: 30

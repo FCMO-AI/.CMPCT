@@ -1,0 +1,65 @@
+# ci-lane: fast
+# Independent A19-O0 Foundry grammar-composition oracle; no CMPCT product code changed.
+name: CMPCT v031 A19-O0 charged program court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-a19-o0-charged-program-composition-20261028
+  pull_request:
+    paths:
+      - 'research/a19_o0_*'
+      - 'docs/v031-research/*a19-o0*'
+      - '.github/workflows/v031-a19-o0-charged-program.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: a19-o0-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  charged-component-oracle:
+    name: Exact charged 20-arm grammar and independent physical referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout immutable experiment source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Source pin and runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_SHA"
+          python -m py_compile research/a19_o0_program_composition.py research/a19_o0_independent_referee.py
+          python -m pip install msgpack==1.1.2
+          ldconfig -p | grep libzstd
+          mkdir -p receipts
+          git rev-parse HEAD | tee receipts/exact-head.txt
+          python -V | tee receipts/python-version.txt
+      - name: Prospectively fixed complete-bytes 20-arm court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/a19_o0_program_composition.py --output receipts/a19_o0_raw.json --frames-dir receipts/frames | tee receipts/a19_o0_stdout.txt
+      - name: Detached physical program decoder and seven forged receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/a19_o0_independent_referee.py --result receipts/a19_o0_raw.json --frames-dir receipts/frames --audit receipts/a19_o0_independent_audit.json | tee receipts/a19_o0_audit_stdout.txt
+          sha256sum receipts/a19_o0_raw.json receipts/a19_o0_independent_audit.json | tee receipts/sha256.txt
+      - name: Preserve full scientific evidence even if rejected
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a19-o0-${{ env.EVIDENCE_SHA }}
+          path: receipts/
+          if-no-files-found: error
+          retention-days: 30
