@@ -1,0 +1,71 @@
+# ci-lane: fast
+name: CMPCT v031 J24G13 untraced ancestry CPU RSS court
+on:
+  pull_request:
+    paths:
+      - 'research/j24g13_*'
+      - 'docs/v031-research/2026-10-28-j24g13-*'
+      - '.github/workflows/v031-j24g13-untraced-ancestry-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  no-tracer-source-exact-referee:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G13_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G13_ARTIFACTS: j24g13-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G13_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Assert exact Git source, preregistration and frozen inherited Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g13-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G13_HEAD"
+          git merge-base --is-ancestor 2a56e83a55bdd60a0b9de86e7d09bec2ca4d664d HEAD
+          git merge-base --is-ancestor 7b3aeab46c99a87c75c4fa8886f72fe1702ed6a1 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          paths=['src/cmpct/reader.py','research/j24g12_lazy_ancestry_court.py',
+                 'research/j24g13_untraced_cpu_court.py',
+                 'research/j24g13_independent_receipt_audit.py',
+                 'docs/v031-research/2026-10-28-j24g13-untraced-cpu-prereg.md']
+          out={}
+          for path in paths:
+              data=subprocess.check_output(['git','show','HEAD:'+path])
+              assert pathlib.Path(path).read_bytes()==data
+              out[path]={'sha256':hashlib.sha256(data).hexdigest(),
+                         'git_blob':subprocess.check_output(
+                             ['git','rev-parse','HEAD:'+path],text=True).strip()}
+          pathlib.Path('j24g13-artifacts/source.json').write_text(
+              json.dumps({'head':os.environ['J24G13_HEAD'],'files':out},indent=2)+'\n')
+          PY
+      - name: Compare untraced versus traced Reader CPU, total child RSS and semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24g13_untraced_cpu_court.py research/j24g13_independent_receipt_audit.py
+          python -m pip install .
+          python research/j24g13_untraced_cpu_court.py 2>&1 | tee j24g13-artifacts/court.log
+          python research/j24g13_independent_receipt_audit.py 2>&1 | tee j24g13-artifacts/audit.log
+      - name: Save original raw runs even on negative or infrastructure failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g13-untraced-ancestry-${{ github.sha }}
+          path: j24g13-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
