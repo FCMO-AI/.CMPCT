@@ -81,7 +81,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pytest -v -s tests/test_v031_o167_win32_mtime.py tests/test_v031_j24h05_win32_default_hardlink.py --junitxml=j24h05-artifacts/junit.xml 2>&1 | tee j24h05-artifacts/pytest.log
+          # Exact test bodies, isolated from unrelated experiments imported by tests/conftest.py.
+          mkdir -p j24h05-isolated
+          cp tests/test_v031_o167_win32_mtime.py j24h05-isolated/test_v031_o167_win32_mtime.py
+          cp tests/test_v031_j24h05_win32_default_hardlink.py j24h05-isolated/test_v031_j24h05_win32_default_hardlink.py
+          python - <<'PY'
+          import hashlib,pathlib
+          for name in ('test_v031_o167_win32_mtime.py','test_v031_j24h05_win32_default_hardlink.py'):
+            original=pathlib.Path('tests')/name
+            isolated=pathlib.Path('j24h05-isolated')/name
+            assert original.read_bytes()==isolated.read_bytes(),name
+            print('J24H05_ISOLATED_TEST_SHA256='+name+':'+hashlib.sha256(isolated.read_bytes()).hexdigest())
+          PY
+          python -m pytest -v -s j24h05-isolated/test_v031_o167_win32_mtime.py j24h05-isolated/test_v031_j24h05_win32_default_hardlink.py --junitxml=j24h05-artifacts/junit.xml 2>&1 | tee j24h05-artifacts/pytest.log
           python - <<'PY'
           import json,pathlib,sys,xml.etree.ElementTree as ET
           root=pathlib.Path('j24h05-artifacts')
