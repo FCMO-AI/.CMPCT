@@ -120,8 +120,10 @@ def audit(receipt, folder, check_physical=True):
     for arm in ("base", "candidate"):
         raw = micro["raw"][arm]
         assert len(raw) == 16
+        # Win32 process CPU ticks can be zero for 4–7ms component calls;
+        # the monotonic wall clock still must measure a positive interval.
         assert all(type(x["wall_ns"]) is int and x["wall_ns"] > 0
-                   and type(x["cpu_ns"]) is int and x["cpu_ns"] > 0
+                   and type(x["cpu_ns"]) is int and x["cpu_ns"] >= 0
                    for x in raw)
         assert micro["median_wall_ns"][arm] == statistics.median(
             x["wall_ns"] for x in raw
