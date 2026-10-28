@@ -36,20 +36,38 @@ def check(payload):
                     assert all(x["proof_cache"]==4 for x in arms["witness"])
                 sv=statistics.median(x["read_wall_ns"] for x in arms["strict"])
                 wv=statistics.median(x["read_wall_ns"] for x in arms["witness"])
+                sc=statistics.median(x["read_cpu_ns"] for x in arms["strict"])
+                wc=statistics.median(x["read_cpu_ns"] for x in arms["witness"])
                 ratio=sv/wv
                 result=payload["summary"][key]
                 assert result["strict_median_read_ns"]==sv
                 assert result["witness_median_read_ns"]==wv
+                assert result["strict_median_cpu_ns"]==sc
+                assert result["witness_median_cpu_ns"]==wc
                 assert abs(result["ratio_strict_over_witness"]-ratio)<1e-10
-                summaries[key]=ratio
-    decision=all(summaries[f"{n}/{family}/late"]>=2.0
-                 for n in (65536,262144) for family in ("one","owners256"))
-    assert payload["late_four_profile_wall_gate"] is decision
+                assert abs(result["cpu_ratio"]-sc/wc)<1e-10
+                summaries[key]=result
+    late=[summaries[f"{n}/{family}/late"] for n in (65536,262144)
+          for family in ("one","owners256")]
+    wall=all(x["ratio_strict_over_witness"]>=2.0 for x in late)
+    cpu=all(x["cpu_ratio"]>1.0 for x in late)
+    negatives=[v for k,v in summaries.items() if k.endswith("/early") or "/ragged/" in k]
+    no_debt=all(x["ratio_strict_over_witness"]>=1/1.05 for x in negatives)
+    rss_measured=all(x["peak_rss_delta_mib"] is not None for x in summaries.values())
+    rss_gate=rss_measured and all(x["peak_rss_delta_mib"]<=8.0 for x in summaries.values())
+    assert payload["late_four_profile_wall_gate"] is wall
+    assert payload["late_four_profile_cpu_direction"] is cpu
+    assert payload["early_ragged_no_gt5pct_debt"] is no_debt
+    assert payload["rss_measured"] is rss_measured
+    assert payload["rss_no_gt8mib_debt"] is (rss_gate if rss_measured else None)
+    decision=wall and cpu and no_debt and rss_gate
+    assert payload["scientific_gate_all_preregistered"] is decision
     return {"status":"PASS_RECEIPT_ARITHMETIC",
-            "scientific_wall_gate":"PASS" if decision else "FAIL",
+            "scientific_wall_gate":"PASS" if wall else "FAIL",
+            "all_preregistered":"PASS" if decision else ("INCOMPLETE_RSS" if not rss_measured else "FAIL"),
+            "cpu_direction":cpu,"early_ragged_no_debt":no_debt,
             "samples":len(rows),"groups":len(summaries),
-            "min_late_ratio":min(summaries[f"{n}/{family}/late"]
-                    for n in (65536,262144) for family in ("one","owners256")),
+            "min_late_ratio":min(x["ratio_strict_over_witness"] for x in late),
             "release_credit":False}
 
 def main():
