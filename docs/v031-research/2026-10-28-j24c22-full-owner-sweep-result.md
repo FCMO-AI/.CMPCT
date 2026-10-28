@@ -48,6 +48,11 @@ A supplementary **post-result** independent recalc of the original `outer_proces
 
 The median external process overhead (outer minus in-process session) is about **76.5–78.4 ms** across all 9 arms/shape combinations; this strongly dilutes selective Reader gains. The tail regime remains directionally faster across the process boundary, but its 14.51% in-process speed advantage becomes only **5.45%** once startup/import/custody is charged. The front regime remains below either proposed 5%+3ms materiality threshold. This is a **supplemental diagnostic**, not a post-hoc rewrite of the frozen in-process scientific decision, nor proof of a full CLI/product release benefit. It supports prioritizing execution architecture/process reuse before attempting a general selective-read speed headline.
 
+
+### Measurement-boundary attribution: 18.7ms outside open/list/read
+
+The original 54 raw observations also permit a stricter additive audit of where session wall time goes, without changing the frozen experiment. Compute **per process**, before aggregating, `session_wall_ns - open_wall_ns - list_wall_ns - read_wall_ns`: median residual for Q16 front published/fused/sealed is **18.694 / 18.720 / 18.738ms**; Q16 tail is **18.696 / 18.724 / 18.688ms**. All individual Q16 residuals lie about **18.66–18.80ms**, near-invariant between Readers and logical positions. By contrast Q1 residual is approximately **0.037–0.039ms**. This residual includes the court's application-side per-answer SHA-256, combined-answer SHA-256, closing the Reader and other Python statements; the present timers do **not** independently isolate those costs. It would be a scientific error to attribute the extra ~18.7ms to `read_range()` or physical decoding, or to drop it post hoc from the preregistered full-session comparator. Future experiments should retain the checked full-session baseline **and** expose the separately measured read-call component, avoiding either endpoint gaming or misleading throughput claims. The front Q16 case still fails both frozen materiality constraints.
+
 ## Strongest negative and scientific restraint
 
 - **Front failed the preregistered combined 5% AND 3ms gate in both CPU and wall**. Its observed 4.86% gain is real in six repeated matched observations but is not a material transferable win under the frozen standard.
