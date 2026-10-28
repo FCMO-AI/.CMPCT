@@ -220,7 +220,7 @@ def run(folder: Path, out: Path, wheel_dir: Path):
                   "wheel": wheel,
                   "direct_native": {**build, "artifact": binary.name},
                   "semantics": semantics, "fixtures": manifest["rows"],
-                  "raw_workers": raw, "summary": summary,
+                  "raw_workers": raw, "raw_workers_sha256": digest(json.dumps(raw, sort_keys=True, separators=(",", ":")).encode()), "summary": summary,
                   "timing_contract": {"cycles": CYCLES, "workers_per_mode_cycle": WORKERS_PER_MODE_CYCLE,
                                       "samples_per_worker": SAMPLES_PER_WORKER,
                                       "startup_and_wheel_build_excluded_from_constructor": True,
