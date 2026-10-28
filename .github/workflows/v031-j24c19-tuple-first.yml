@@ -1,0 +1,72 @@
+# ci-lane: fast
+name: CMPCT v031 J24C19 tuple-first ownership oracle
+on:
+  pull_request:
+    paths:
+      - 'research/j24c19_*'
+      - 'docs/v031-research/2026-10-28-j24c19-*'
+      - '.github/workflows/v031-j24c19-tuple-first.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  tuple-first-microcourt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind exact-source and unmodified product owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24c19-artifacts
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor 3b6a73f9205f40f11124cd9ff332407e52cebb93 HEAD
+          git merge-base --is-ancestor 822a80a349e15fa48e464c6e3ffb6df79c4bdf09 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "$(git rev-parse 3b6a73f9205f40f11124cd9ff332407e52cebb93:src/cmpct/reader.py)"
+          test "$(git rev-parse HEAD:src/cmpct/_fastscan_abi3.c)" = "$(git rev-parse 3b6a73f9205f40f11124cd9ff332407e52cebb93:src/cmpct/_fastscan_abi3.c)"
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          paths=['research/j24c19_tuple_first_admission_court.py',
+                 'research/j24c19_independent_referee.py',
+                 'docs/v031-research/2026-10-28-j24c19-tuple-first-prereg.md']
+          for p in paths:
+              assert pathlib.Path(p).read_bytes()==subprocess.check_output(['git','show','HEAD:'+p])
+          evidence={'source_sha':os.environ['SOURCE_SHA'],
+                    'parent_sha':'3b6a73f9205f40f11124cd9ff332407e52cebb93',
+                    'files':{p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}}
+          pathlib.Path('j24c19-artifacts/source.json').write_text(json.dumps(evidence,indent=2)+'\n')
+          PY
+      - name: Install original CMPCT format and validator semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          python -m py_compile research/j24c19_tuple_first_admission_court.py research/j24c19_independent_referee.py
+      - name: Exact semantic and economic court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24c19_tuple_first_admission_court.py --selftest | tee j24c19-artifacts/selftest.log
+          python research/j24c19_tuple_first_admission_court.py --court --source-sha "$SOURCE_SHA" --out j24c19-artifacts/observations.json | tee j24c19-artifacts/court.log
+          python research/j24c19_independent_referee.py j24c19-artifacts/observations.json --out j24c19-artifacts/referee.json | tee j24c19-artifacts/referee.log
+      - name: Preserve raw observations, including negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24c19-tuple-first-${{ github.sha }}
+          path: j24c19-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
