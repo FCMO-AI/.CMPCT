@@ -95,7 +95,8 @@ def run(out:Path):
                                "sparse extent overrun","fresh must refuse")
     assert target.read_bytes()==canary and os.stat(target).st_ino==before.st_ino, "changed existing canary inode/content"
     assert not (fresh/"sparse.bin").exists()
-    assert not list(existing.glob("*.cmpct-part-*")) and not list(fresh.glob("*.cmpct-part-*"))
+    assert sorted(p.name for p in existing.iterdir()) == ["sparse.bin"], "unexpected leftover stage in preexisting destination"
+    assert list(fresh.iterdir()) == [], "unexpected leftover file or stage in fresh destination"
     result={"schema":"cmpct-j24b11-transfer-v1","decision":"EXISTING_SPARSE_HELPER_PREVENTS_J24B10_OVERFLOW",
             "source_head":source_head,"parent_head_expected":SRC_HEAD_EXPECTED,
             "source_identities":identities,"platform":__import__("platform").platform(),
