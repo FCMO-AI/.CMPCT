@@ -64,7 +64,9 @@ def test_raw_reader_rejects_unsupported_physical_bits(
         assert reader.read_range(member, 7, 8) == PAYLOAD[7:15]
         assert reader.read(member) == PAYLOAD
         assert reader.verify() == 1
-        assert bytes(reader._raw_blob_view_for_extract(0)) == PAYLOAD
+        # #569 deliberately exposes a bounded descriptor slice, not a materializable mmap view.
+        # Preserve the original exact full-payload assertion with its native slice interface.
+        assert reader._raw_blob_view_for_extract(0)[:] == PAYLOAD
 
     pos = valid.find(frame)
     assert pos >= 0 and valid.count(frame) == 1
