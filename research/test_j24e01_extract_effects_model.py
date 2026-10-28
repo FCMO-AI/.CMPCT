@@ -168,6 +168,7 @@ class ModelCourt(unittest.TestCase):
         self.assertEqual(certified + uncertified_vzip, 2000)
         self.assertGreater(certified, 0)
         self.assertGreater(uncertified_vzip, 0)
+        print(f"J24E01_HELDOUT total=2000 proven={certified} vzip_unproved={uncertified_vzip}", flush=True)
 
     def test_alias_of_alias_and_nonregular_owner(self):
         obj = empty()
@@ -189,9 +190,12 @@ class ModelCourt(unittest.TestCase):
         for i in range(n):
             row(obj, f"link{i}", K_HARDLINK, 8, [f"link{i+1}" if i+1 < n else "owner"])
         row(obj, "owner", K_FILE, 8, [S_BLOB, blob(obj, 8)])
-        started = time.perf_counter()
+        started_wall, started_cpu = time.perf_counter(), time.process_time()
         self.assertEqual(planned_logical_bytes(obj), (n+1)*8)
-        self.assertLess(time.perf_counter()-started, 12.0, "unexpected superlinear alias walk")
+        elapsed_wall = time.perf_counter() - started_wall
+        elapsed_cpu = time.process_time() - started_cpu
+        print(f"J24E01_CHAIN aliases={n} bytes={(n+1)*8} wall_s={elapsed_wall:.6f} cpu_s={elapsed_cpu:.6f}", flush=True)
+        self.assertLess(elapsed_wall, 12.0, "unexpected superlinear alias walk")
 
     def test_cycle_bad_types_and_unknown_owners(self):
         cases = []
