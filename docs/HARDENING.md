@@ -139,6 +139,38 @@ results. The preregistration is
 An experimental win must not authorize release, weaken preflight, or rewrite
 the frozen comparator; the published r24 reader remains unchanged.
 
+## J24C17 experimental sealed native reference ownership — separate draft, not promoted
+
+The J24C16 independent source-exact installed Reader witness (#672) confirms that
+caller mutation of the *public, in-memory* S_CHUNKS list after the J24C13
+native proof can silently return wrong bytes: for signed 512 refs, the cached
+prefix at 256 remains 257 while the changed list's prefix becomes 255. The
+archive bytes are unmodified; this is **not** malformed-on-disk admission
+or a remote exploit.
+
+Draft #676 preregistered a narrower containment alternative before code:
+when a native prefix map has been fully admitted and fits the existing global
+budget, replace its list with an immutable tuple instead of retaining an
+additional O(N) copy, then bind that tuple to its original row/storage/size and
+trusted prefix proof. Changing the public row or storage reference after open
+causes `read_range()` to fail closed; absence of the extension or exhausted
+index budget still uses the preexisting validation/search path.
+
+The installed noneditable wheel result for exact source `b5ec70ea` is
+[GitHub Actions #40690376678](https://github.com/FCMO-AI/.CMPCT/actions/runs/40690376678):
+Ubuntu/macOS/Windows CPython3.11 targeted tests and original fresh-process
+ABI3 economics passed; Python3.10 strict fallback passed separately. Detailed
+negative/positive measurements and artifact digests live in
+`docs/v031-research/2026-10-28-j24c17-sealed-reference-result.md`.
+This is **research only**. It neither establishes fully immutable Reader
+metadata nor subsumes #662: Python public blob lists remain mutable; tuple
+creation incurs transient O(N) allocation and may expose compatibility cost;
+the earlier released-Reader Q1 regression, generic-suite failures, unmeasured
+full product, and independent safety/recovery gates remain unresolved.
+The original #662 Reader remains the vulnerable owner source until explicit
+independent integration and promotion. This note does not modify format 24
+or the published version.
+
 ## Revision rule
 
 No format revision bump is required for this increment because it writes **no new field, record, codec, transform or storage semantic**. If later hardening requires a reader-visible on-disk rule, that change must follow the repository's normal revision/spec/history/current-state/conformance gate.
