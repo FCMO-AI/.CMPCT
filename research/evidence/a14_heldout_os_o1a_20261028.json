@@ -1,0 +1,52 @@
+{
+  "by_category": [
+    {
+      "admissions": 0,
+      "candidates_considered": 5760,
+      "category": "ELF",
+      "crc_checks": 5760,
+      "files": 64,
+      "windows": 192
+    },
+    {
+      "admissions": 0,
+      "candidates_considered": 5760,
+      "category": "Python",
+      "crc_checks": 5760,
+      "files": 64,
+      "windows": 192
+    },
+    {
+      "admissions": 0,
+      "candidates_considered": 5760,
+      "category": "Shared",
+      "crc_checks": 5760,
+      "files": 64,
+      "windows": 192
+    },
+    {
+      "admissions": 0,
+      "candidates_considered": 2880,
+      "category": "JSON",
+      "crc_checks": 2880,
+      "files": 32,
+      "windows": 96
+    }
+  ],
+  "elapsed_ms": 830.402953,
+  "instrument_sha256": "f6f5fb61afb4549f6f1afc248b1418a396bc6756676a44b039791ad9ed289262",
+  "limitations": "Nonrepresentative host binaries/text; 4KiB windows may break record alignment; zero positives cannot prove universality; no original names/bytes exported",
+  "manifest_sha256": "e8007065ba050b010ec9815f0ccc615255e3685adc9d89264eff8cc6c965afc2",
+  "os": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "python": "3.13.5",
+  "schema": "cmpct-a14-heldout-os-o1a-v1",
+  "status": "EXPLORATORY_NOT_PRODUCT",
+  "total": {
+    "admissions": 0,
+    "candidate_geometries": 20160,
+    "crc_checks": 20160,
+    "files": 224,
+    "windows": 672
+  },
+  "true_positive_if_any": []
+}
