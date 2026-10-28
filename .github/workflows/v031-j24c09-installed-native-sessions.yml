@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: j24c09-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   installed-product-sessions:
