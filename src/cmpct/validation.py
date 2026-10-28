@@ -285,34 +285,56 @@ def _load_effective_index(f, archive_size: int, limits: ParserLimits):
     return index, record_base, 0, 0
 
 
-def _validate_recipe(recipe, blob_count: int, limits: ParserLimits, rid: int) -> None:
+def _validate_recipe(recipe, blobs, limits: ParserLimits, rid: int) -> None:
+    blob_count = len(blobs)
     if not isinstance(recipe, list) or len(recipe) != 6:
         raise ValidationError(f"recipe {rid} has invalid shape")
     skeleton, literals, payloads, digest, total, crc = recipe
-    _ref(skeleton, blob_count, f"recipe {rid} skeleton")
+    skeleton = _ref(skeleton, blob_count, f"recipe {rid} skeleton")
     if not isinstance(literals, list) or not isinstance(payloads, list):
         raise ValidationError(f"recipe {rid} literals/payloads must be arrays")
     if len(literals) != len(payloads) + 1:
         raise ValidationError(f"recipe {rid} literal count mismatch")
     if any(not isinstance(n, int) or isinstance(n, bool) or n < 0 for n in literals):
         raise ValidationError(f"recipe {rid} has invalid literal length")
+    # A recipe's signed logical total is not proof that its physical skeleton can supply
+    # those bytes. Prove the projection against the authenticated blob-size table.
+    skeleton_bytes = sum(literals)
+    if skeleton_bytes != blobs[skeleton][1]:
+        raise ValidationError(f"recipe {rid} literal lengths disagree with skeleton blob")
     _int(total, f"recipe {rid} total size")
     _int(crc, f"recipe {rid} CRC32")
     if not isinstance(digest, (bytes, bytearray)) or len(digest) != 32:
         raise ValidationError(f"recipe {rid} SHA-256 must be 32 bytes")
+    projected_bytes = skeleton_bytes
     for pi, payload in enumerate(payloads):
         if not isinstance(payload, list) or len(payload) != 6:
             raise ValidationError(f"recipe {rid} payload {pi} has invalid shape")
         raw_ref, method, stream_mode, stream_ref, csize, level = payload
-        _ref(raw_ref, blob_count, f"recipe {rid} payload {pi} raw blob")
+        raw_ref = _ref(raw_ref, blob_count, f"recipe {rid} payload {pi} raw blob")
         if method not in (0, 8):
             raise ValidationError(f"recipe {rid} payload {pi} uses unsupported ZIP method")
         if stream_mode not in (0, 1, 2):
             raise ValidationError(f"recipe {rid} payload {pi} uses unknown stream mode")
-        _ref(stream_ref, blob_count, f"recipe {rid} payload {pi} stream blob")
-        _int(csize, f"recipe {rid} payload {pi} compressed size")
+        stream_ref = _ref(stream_ref, blob_count, f"recipe {rid} payload {pi} stream blob")
+        csize = _int(csize, f"recipe {rid} payload {pi} compressed size")
         if not isinstance(level, int) or isinstance(level, bool) or level < -1 or level > 9:
             raise ValidationError(f"recipe {rid} payload {pi} has invalid Deflate level")
+        # Mode 2's Deflate bytes are regenerated: source usize does not prove its
+        # compressed length. Preserve mode-2 compatibility; checked selective output
+        # length independently enforces the promise when reconstruction runs.
+        if method == 0:
+            if csize != blobs[raw_ref][1]:
+                raise ValidationError(f"recipe {rid} stored payload {pi} size disagrees with blob")
+        elif stream_mode == 1:
+            if csize != blobs[stream_ref][1]:
+                raise ValidationError(f"recipe {rid} retained stream {pi} size disagrees with blob")
+        elif stream_mode == 0:
+            if blobs[stream_ref][3] != CODEC_DEFLATE or csize != blobs[stream_ref][2]:
+                raise ValidationError(f"recipe {rid} canonical Deflate stream {pi} size/codec mismatch")
+        projected_bytes += csize
+    if projected_bytes != total:
+        raise ValidationError(f"recipe {rid} declared size disagrees with physical projection")
 
 
 def _validate_storage(path: str, kind: int, size: int, storage, blobs, recipes) -> None:
@@ -435,7 +457,7 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
             raise ValidationError(f"blob {i} extends beyond archive")
 
     for rid, recipe in enumerate(recipes):
-        _validate_recipe(recipe, len(blobs), limits, rid)
+        _validate_recipe(recipe, blobs, limits, rid)
 
     dict_idx = index.get("dict_blob")
     if dict_idx is not None:

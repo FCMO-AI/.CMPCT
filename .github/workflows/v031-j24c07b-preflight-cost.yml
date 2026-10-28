@@ -1,0 +1,86 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24C07b exact-source VZIP preflight economics
+
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/validation.py'
+      - 'research/j24c07b_preflight_cost.py'
+      - 'research/j24c07b_preflight_referee.py'
+      - 'docs/v031-research/2026-10-28-j24c07b-*'
+      - '.github/workflows/v031-j24c07b-preflight-cost.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c07b-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  complete-preflight-source-abba:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 0a128ff55c7ae0f14c6bdf019a81b40f0d894eff
+          path: frozen-j24c03
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind both source owners and prospective instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24c07b-evidence
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C frozen-j24c03 rev-parse HEAD)" = "0a128ff55c7ae0f14c6bdf019a81b40f0d894eff"
+          test "$(git hash-object src/cmpct/validation.py)" = "0614723549403f398a43552a7c5ad3f00fbec688"
+          test "$(git -C frozen-j24c03 hash-object src/cmpct/validation.py)" = "fbcf6e9c108799dc8b6f5c19e95bcb0618cf41e8"
+          git rev-parse HEAD > j24c07b-evidence/source-sha.txt
+          python -m py_compile research/j24c07b_preflight_cost.py research/j24c07b_preflight_referee.py
+      - name: Prepare independent noneditable installs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m pip install --no-deps --target "$RUNNER_TEMP/j24c07-parent-site" "$GITHUB_WORKSPACE/frozen-j24c03"
+          python -m pip install --no-deps --target "$RUNNER_TEMP/j24c07-candidate-site" "$GITHUB_WORKSPACE"
+      - name: Run same authenticated wires and full preflight ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24c07b_preflight_cost.py \
+            --parent-site "$RUNNER_TEMP/j24c07-parent-site" \
+            --candidate-site "$RUNNER_TEMP/j24c07-candidate-site" \
+            --goldens tests/conformance \
+            --workspace "$GITHUB_WORKSPACE" \
+            --work-dir "$RUNNER_TEMP/j24c07-cost-files" \
+            --out "$GITHUB_WORKSPACE/j24c07b-evidence/raw.json" \
+            2>&1 | tee j24c07b-evidence/experiment.log
+          python research/j24c07b_preflight_referee.py \
+            --receipt j24c07b-evidence/raw.json \
+            --out j24c07b-evidence/referee.json \
+            2>&1 | tee j24c07b-evidence/referee.log
+      - name: Validate workflow topology
+        shell: bash
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24c07b-preflight-cost.yml
+      - name: Preserve raw economics and negative outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24c07b-${{ env.SOURCE_SHA }}
+          path: j24c07b-evidence/
+          if-no-files-found: warn
+          retention-days: 30

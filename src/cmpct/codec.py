@@ -214,11 +214,20 @@ def range_vzip(recipe,get_content,get_stream,start:int,length:int)->bytes:
             seg=get_content(rawref) if method==zipfile.ZIP_STORED else get_stream(stream_mode,streamref,level)
             a=max(start,outpos)-outpos;b=min(end,outpos+csize)-outpos;out.append(seg[a:b])
         outpos+=csize
-        if outpos>=end:return b''.join(out)
+        if outpos>=end:
+            result = b''.join(out)
+            # A logically admitted range must never silently truncate at a physical
+            # skeleton/payload boundary, including when callers omit strict preflight.
+            if len(result) != length:
+                raise IOError('virtual ZIP selective reconstruction length mismatch')
+            return result
     ln=lens[-1]
     if outpos+ln>start and outpos<end:
         a=max(start,outpos)-outpos;b=min(end,outpos+ln)-outpos;out.append(sk[skpos+a:skpos+b])
-    return b''.join(out)
+    result = b''.join(out)
+    if len(result) != length:
+        raise IOError('virtual ZIP selective reconstruction length mismatch')
+    return result
 
 def _sparse_data_extents(path:Path, size:int):
     """Return [(offset, bytes), ...] when a regular file is meaningfully sparse.
