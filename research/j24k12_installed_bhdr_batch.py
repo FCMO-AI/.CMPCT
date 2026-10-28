@@ -31,6 +31,12 @@ def digest(b):
     return hashlib.sha256(b).hexdigest()
 
 
+def source_digest(b):
+    # Custody must bind Git's LF blob identity across Windows CRLF wheel installs.
+    # This is line-ending canonicalization, never content or validator weakening.
+    return digest(b.replace(b"\r\n", b"\n"))
+
+
 def queries_for(size, case):
     assert size > 48
     early = (4, 1)
@@ -59,6 +65,10 @@ def make_authentic_archive(root: Path, n: int):
         for i in range(n):
             info = zipfile.ZipInfo(f"entry-{i:05d}.bin", date_time=(2020, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_STORED
+            # Fix ZipInfo's host-dependent create_system and mode attributes.
+            # This is a deterministic fixture, not a production encoder policy.
+            info.create_system = 3
+            info.external_attr = 0o600 << 16
             payload = hashlib.sha256(f"j24k12:{i}".encode()).digest()
             z.writestr(info, payload)
     archive = root / (str(n) + ".cmpct")
@@ -265,10 +275,10 @@ def main():
     parent.mkdir(parents=True, exist_ok=True)
     cells = []
     source_id = {
-        "reader_sha256": digest(Path(reader_module.__file__).read_bytes()),
-        "codec_sha256": digest(Path(codec_module.__file__).read_bytes()),
+        "reader_sha256": source_digest(Path(reader_module.__file__).read_bytes()),
+        "codec_sha256": source_digest(Path(codec_module.__file__).read_bytes()),
         "c_scanner_sha256": digest(__import__("j24k11_bhdr_oracle").C_SOURCE.encode()),
-        "instrument_sha256": digest(Path(__file__).read_bytes())
+        "instrument_sha256": source_digest(Path(__file__).read_bytes())
     }
     env = dict(os.environ, J24K12_NATIVE_PATH=str(build_dir))
     for n in SIZES:
