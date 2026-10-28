@@ -50,18 +50,16 @@ def singlepass_read_range(reader, name, start, length):
         return reader.read_range(name, start, length)
     if length == 0:
         return b""
-    # Restrict research claim to real physical ZIP_STORED members. Mode2 and
-    # Deflate are deliberately delegated to the source-exact safe path.
-    if not all(type(pr) in (tuple, list) and len(pr) == 6 and
-               type(pr[1]) is int and pr[1] == zipfile.ZIP_STORED
-               for pr in payloads):
-        return reader.read_range(name, start, length)
-
+    # Restrict the research claim to STORED without adding a second N-stream
+    # prepass: unsupported members delegate as encountered to the safe Reader.
     sk = reader._blob(skref)
     out = []
     outpos = 0
     skpos = 0
     for i, pr in enumerate(payloads):
+        if (type(pr) not in (tuple, list) or len(pr) != 6 or
+                type(pr[1]) is not int or pr[1] != zipfile.ZIP_STORED):
+            return reader.read_range(name, start, length)
         ln = lens[i]
         if outpos + ln > start and outpos < end:
             a = max(start, outpos) - outpos
