@@ -91,3 +91,7 @@ No narrow ownership collision was discovered with #653 (VZIP), #662/#676 (native
 
 disproof: invented same-source equivalence, false SHA, accepted malformed refs, omitted carrying bytes, a weakened comparator, or a claim that process-instrument latency measures CMPCT Reader performance.
 quality-ratchet: published v0.30.0 / r24 unchanged; all gains/losses research-only.
+
+## CI evidence-gate reconciliation
+
+The first full PR evidence workflow failed on final dossier-only HEAD `947d02cb...` ([Actions #40704647432](https://github.com/FCMO-AI/.CMPCT/actions/runs/40704647432)) because the original PR description used different headings from the mandatory `tools/check_pr_evidence.py` section names (11 required headings absent). This was a **documentation/PR-evidence formatting failure**, not a failed scientific byte or performance observation. The actual original and later source-exact scientific courts were green. The PR body has now been supplemented with all required sections (Problem and baseline; Insight and hypothesis; Alternatives considered; Evidence; Losses, ambiguity and negative evidence; Safety, integrity and resource accounting; Compatibility and portability; Performance accounting; Public-surface check; Completion gates; Future leverage) without changing code, benchmarks, comparator, or evaluator. A newly triggered exact-head Engineering Evidence job must pass before the PR is called CI-complete. The standard has not been weakened, and historical failure remains in the record.
