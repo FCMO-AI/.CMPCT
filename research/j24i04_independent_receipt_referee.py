@@ -126,7 +126,20 @@ def evaluate(folder: Path, record: dict | None = None,
                                 f"aggregated median mismatch: {label}/{name}/{layer}/{fmt}/{field}")
                     confirmed = fmt == "cmpct" and (ba > ab * 1.05 and
                                  (ba - ab) * 1000 > 3)
+                    # Exact ABBA identity for two same-source runs:
+                    # Bmean - Amean = [(B1 - A0) - (A3 - B2)] / 2.
+                    # Therefore a purely linear time drift cancels; any
+                    # A/A red requires asymmetric adjacent-step behavior.
+                    first_step_ms = (float(cells[1][field]) - float(cells[0][field])) * 1000
+                    last_step_ms = (float(cells[3][field]) - float(cells[2][field])) * 1000
+                    curvature_ms = (first_step_ms - last_step_ms) / 2
+                    require(math.isclose(curvature_ms, (ba-ab)*1000,
+                                         rel_tol=1e-10, abs_tol=1e-8),
+                            "ABBA curvature identity contradiction")
                     o = {"name": name, "layer": layer, "format": fmt, "metric": field,
+                         "first_adjacent_step_ms": round(first_step_ms, 6),
+                         "last_adjacent_step_ms": round(last_step_ms, 6),
+                         "nonlinear_curvature_contrast_ms": round(curvature_ms, 6),
                          "base_ms": round(ab * 1000, 6),
                          "candidate_ms": round(ba * 1000, 6),
                          "delta_ms": round((ba - ab) * 1000, 6),
