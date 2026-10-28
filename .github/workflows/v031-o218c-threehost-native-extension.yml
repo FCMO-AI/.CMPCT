@@ -1,0 +1,92 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 O218c three-host identical C admission installed Reader court
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-o218c-threehost-portable-extension-20261027
+  pull_request:
+    paths:
+      - 'research/o218c_threehost_*'
+      - '.github/workflows/v031-o218c-threehost-native-extension.yml'
+      - 'docs/v031-research/2026-10-27-o218c-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o218c-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable:
+    name: Source-exact O218c on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind frozen actual Reader, C and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor d3d87e5df39ab9e58043cab74d5b2a1d87f5bed5 HEAD
+          git merge-base --is-ancestor 5250eea4d8581f02e84c9a7eceb845b6d81ad4fe HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = dbd4ac576a05a47eae97e1e40de89cf1de440516
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          test "$(git rev-parse HEAD:research/o218_fastscan.c)" = a54f15181d9dbe667b9e8c9d52e927b09c80152f
+          python -m py_compile research/o218c_threehost_portable_extension_court.py research/o218c_threehost_independent_referee.py
+          mkdir -p o218c-evidence
+          git rev-parse HEAD > o218c-evidence/source-head.txt
+          git rev-parse HEAD:research/o218_fastscan.c > o218c-evidence/native-source.blob
+          git rev-parse HEAD:src/cmpct/reader.py > o218c-evidence/reader-source.blob
+      - name: Install real Reader and compiler tooling without editing any product code
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest setuptools
+      - name: Preserve original independent revision-24 O215 admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/test_o215_fixed_chunk_admission.py > o218c-evidence/o215.log 2>&1
+          cat o218c-evidence/o215.log
+      - name: Build unchanged C using host compiler and execute comparative full Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o218c_threehost_portable_extension_court.py --output o218c-evidence/raw.json \
+            > o218c-evidence/court.log 2>&1 || { cat o218c-evidence/court.log; exit 1; }
+          cat o218c-evidence/court.log
+          test -s o218c-evidence/raw.json
+      - name: Independently recompute ratios and reject forged receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o218c_threehost_independent_referee.py o218c-evidence/raw.json \
+            --output o218c-evidence/referee.json > o218c-evidence/referee.log 2>&1
+          cat o218c-evidence/referee.log
+          grep -q 'O218C_INDEPENDENT_REFEREE=PASS' o218c-evidence/referee.log
+      - name: Always retain host binaries, archives and raw receipts including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o218c-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: o218c-evidence/
+          if-no-files-found: warn
+          retention-days: 30
