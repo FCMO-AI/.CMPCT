@@ -1,0 +1,84 @@
+# ci-lane: fast
+name: CMPCT v031 J24G20 cold Reader RSS crossover
+on:
+  pull_request:
+    paths:
+      - 'research/j24g20_*'
+      - 'docs/v031-research/2026-10-28-j24g20-*'
+      - '.github/workflows/v031-j24g20-cold-rss.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  cold-signed-reader-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      COURT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.COURT_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Check frozen parent and original Reader source
+        run: |
+          set -euo pipefail
+          mkdir -p j24g20-artifacts
+          test "$(git rev-parse HEAD)" = "$COURT_SHA"
+          git merge-base --is-ancestor e15553bf409f4bb3b339af2ec1af83062af2926a HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          paths = ['research/j24g20_cold_rss_court.py','research/j24g20_peak_inheritance.py','research/j24g19_certified_projection.py',
+                   'research/j24g19_certified_subset.c','src/cmpct/reader.py']
+          hashes = {}
+          for path in paths:
+              raw=pathlib.Path(path).read_bytes()
+              assert raw==subprocess.check_output(['git','show','HEAD:'+path])
+              hashes[path]=hashlib.sha256(raw).hexdigest()
+          pathlib.Path('j24g20-artifacts/source.json').write_text(json.dumps(
+              {'head':os.environ['COURT_SHA'],'files_sha256':hashes},indent=2)+'\n')
+          PY
+      - name: Install unmodified CMPCT and C-certification component
+        run: |
+          set -euo pipefail
+          cc -O3 -std=c11 -Wall -Wextra -Werror -fPIC -shared research/j24g19_certified_subset.c -o research/j24g19_certified_subset.so
+          python -m pip install .
+          python -m pip install msgpack==1.1.2
+          python - <<'PY'
+          import pathlib, subprocess, msgpack, cmpct.reader
+          path=pathlib.Path(cmpct.reader.__file__).resolve()
+          assert path.read_bytes()==subprocess.check_output(['git','show','HEAD:src/cmpct/reader.py'])
+          assert 'site-packages' in str(path) and msgpack.version==(1,1,2)
+          PY
+          python -m py_compile research/j24g20_cold_rss_court.py
+          sha256sum research/j24g19_certified_subset.so > j24g20-artifacts/native-build-sha256.txt
+      - name: Run source-exact physical signed Reader, stage-separated RSS
+        run: |
+          set -euo pipefail
+          python research/j24g20_cold_rss_court.py --out j24g20-artifacts --repeats 3 | tee j24g20-artifacts/result.log
+      - name: Independent subprocess high-watermark inheritance replay
+        run: |
+          set -euo pipefail
+          python research/j24g20_peak_inheritance.py | tee j24g20-artifacts/peak-inheritance.json
+      - name: Original component economics control (unaltered J24G19)
+        run: |
+          set -euo pipefail
+          python research/j24g19_certified_projection.py selftest | tee j24g20-artifacts/component-selftest.log
+          python research/j24g19_certified_projection.py court j24g20-artifacts/component | tee j24g20-artifacts/component-result.log
+      - name: Always preserve physical archives and raw observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g20-cold-rss-${{ env.COURT_SHA }}
+          path: j24g20-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
