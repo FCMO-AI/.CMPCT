@@ -36,3 +36,18 @@ In particular, H4 checks header/geometry but does **not** authenticate a reused 
 ## Scientific disposition and next action
 
 The narrowly preregistered H4 static hypothesis is **CONFIRMED** at the paired-court evidence rung; CI full-host acceptance and general product parity remain separate gates. Three adjacent direct header-family activations now support a **frame review**, rather than indefinitely gardening another header field: compose the smallest proven physical-ownership guards with the existing #569 Reader owner, then attack measured global Reader open/reader architecture and existing hardlink/recovery debts. Never weaken exact semantics/evaluators to pay timing debt. PR #615 owns hardlink alias size; PR #574 owns Discovery state, left untouched. No merge, release, format change or Discovery policy promotion.
+
+
+## Exact-head hosted three-OS closure — 2026-10-28 UTC (append-only)
+
+The follow-up [isolated H4 workflow run #40605546477](https://github.com/FCMO-AI/.CMPCT/actions/runs/40605546477), source PR branch head `696eeca7cd8bd19f46475758863e3ef641c33fb2` (GitHub Actions synthetic merge checkout `92354cf2e1d9b5e2c6d7b1a74a53e5d126868ebc`), has now **COMPLETED SUCCESS on all three hosts**. Independent GitHub file inspection confirms that **both branch HEAD and merge checkout contain the identical Reader Git blob `72a1fd0acda62e518d53594c521391d42a9190e4`**. The inherited H3 source control was retained separately; this is not a second altered product candidate.
+
+| Host | Job ID | Paired source-exact referee | Isolated H4 regression tests | Artifact |
+| --- | ---: | --- | --- | --- |
+| Windows 2022 / Python 3.11 | 122544014487 | `H4_DIRECT_DEFLATE_EXPORT_CUSTODY_CONFIRMED` | **12 passed (0.17 s)** | #12779479397 |
+| macOS 14 / Python 3.11 | 122544014772 | same | **12 passed (0.07 s)** | #12780791993 |
+| Ubuntu 24.04 / Python 3.11 | 122544014908 | same | **12 passed (0.05 s)** | #12779804648 |
+
+Each job's source-exact paired court counted 2 valid and 10 malformed inputs with **zero malformed exports accepted by the guarded candidate**; the stdlib referee independently returned the frozen H4 decision. Unlike the original run #40604548602 (whose paired courts passed but whose broad `conftest.py` collection failed on macOS/Windows), this follow-up used the prospective unchanged 12-test module with `pytest --noconftest`; it did not edit the testcase assertions, source, control versions, or historical H failures.
+
+**Decision delta:** the narrow H4 targeted **three-platform CI acceptance uncertainty is now closed**. This is a targeted reader/ZIP fast-path safety result, **not** comprehensive v0.31 Reader composition, ZIP payload cryptographic authentication, ZIP publication atomicity, performance parity, complete CI authority, or permission to merge/release. Neighboring active PR owners already cover direct Deflate stream verification, ZIP transactional publication, hardlink alias size, and the #569 composed Reader; do not duplicate them. The strongest independent next action is source-exact whole-Reader integration with charged open/read economics, retaining these H4 and earlier J24B03 guards.
