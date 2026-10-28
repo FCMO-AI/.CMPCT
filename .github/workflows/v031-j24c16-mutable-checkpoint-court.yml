@@ -1,0 +1,70 @@
+# ci-lane: fast
+# J24C16 independent installed-Reader falsifier; unchanged product and release gates.
+name: CMPCT v031 J24C16 mutable checkpoint installed court
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24c16-mutable-checkpoint-replication-20261028
+  pull_request:
+    paths:
+      - 'research/j24c16_*'
+      - 'docs/v031-research/*j24c16*'
+      - '.github/workflows/v031-j24c16-mutable-checkpoint-court.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c16-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed:
+    name: Ubuntu CPython3.11 installed native immutable-source falsifier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install a real noneditable ABI3 wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip wheel setuptools pytest
+          python -m pip wheel --no-deps . -w dist
+          python -m pip install dist/*.whl
+          mkdir -p receipts
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.reader as r, cmpct._chunk_admission as a
+          assert 'site-packages' in str(Path(r.__file__).resolve())
+          assert callable(a._scan_refs_index)
+          print('J24C16_ACTUAL_INSTALLED_NATIVE',r.__file__)
+          PY
+      - name: Build-independent signed r24 oracle baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest --noconftest -q tests/test_o215_fixed_chunk_admission.py tests/test_j24c13_fused_native_checkpoints.py -k 'high_reference_count_preserves_exact_selective_ranges or signed_heterogeneous_with_empty_blob_and_reused_owners' 2>&1 | tee receipts/inherited-court.log
+      - name: Execute mutation falsifier and independent refusal auditor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24c16_installed_mutable_hint_court.py --output receipts/j24c16-original.json
+          python research/j24c16_independent_audit.py --input receipts/j24c16-original.json --output receipts/j24c16-verdict.json
+          sha256sum receipts/j24c16-original.json receipts/j24c16-verdict.json > receipts/SHA256SUMS.txt
+          git rev-parse HEAD | tee receipts/exact-head.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24c16-installed-mutable-${{ env.EVIDENCE_SHA }}
+          path: receipts/
+          if-no-files-found: warn
