@@ -33,6 +33,14 @@ NEW = """        if outpos+csize>start and outpos<end:
                 raise IOError('virtual ZIP selective reconstruction length mismatch')
         outpos+=csize"""
 
+ZERO_OLD = """    if start<0 or length<0 or end>want_size:raise ValueError('range outside virtual ZIP')
+    sk=get_content(skref);out=[];outpos=0;skpos=0"""
+ZERO_NEW = """    if start<0 or length<0 or end>want_size:raise ValueError('range outside virtual ZIP')
+    # A zero-byte view has no stream-position claim to verify. Avoid rebuilding
+    # earlier regenerated Deflate streams merely to return an empty result.
+    if length==0:return b''
+    sk=get_content(skref);out=[];outpos=0;skpos=0"""
+
 PRESERVED = (
     "src/cmpct/reader.py",
     "src/cmpct/validation.py",
@@ -53,8 +61,11 @@ def main() -> None:
     base = norm((a.parent / "src/cmpct/codec.py").read_bytes())
     now = norm((a.candidate / "src/cmpct/codec.py").read_bytes())
     old, new = OLD.encode(), NEW.encode()
+    zero_old, zero_new = ZERO_OLD.encode(), ZERO_NEW.encode()
     assert base.count(old) == 1, "frozen parent has unexpected codec source"
-    assert now == base.replace(old, new), "candidate codec differs beyond preregistered patch"
+    assert base.count(zero_old) == 1, "frozen parent has unexpected empty-read boundary"
+    expected = base.replace(old, new).replace(zero_old, zero_new)
+    assert now == expected, "candidate codec differs beyond both preregistered patches"
     hashes = {}
     for name in PRESERVED:
         lhs, rhs = norm((a.parent / name).read_bytes()), norm((a.candidate / name).read_bytes())
@@ -65,7 +76,7 @@ def main() -> None:
         "parent_codec_sha256": hashlib.sha256(base).hexdigest(),
         "candidate_codec_sha256": hashlib.sha256(now).hexdigest(),
         "inherited_unchanged_sha256": hashes,
-        "exact_substitution_count": 1,
+        "exact_substitution_count": 2,
         "decision": "PASS",
     }
     a.out.parent.mkdir(parents=True, exist_ok=True)
