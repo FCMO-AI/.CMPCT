@@ -85,7 +85,12 @@ def check(data, basedir: Path):
         assert row["vmhwm_bytes"] is None or row["vmhwm_bytes"] > 0
         for sample in row["samples"]:
             assert type(sample["wall_ns"]) is int and 0 < sample["wall_ns"] < 120e9
-            assert type(sample["cpu_ns"]) is int and 0 < sample["cpu_ns"] < 120e9
+            # Windows process_time_ns can quantize sub-tick operations to zero.
+            # Preserve those original zeros and charge CPU as unavailable at this
+            # granularity; never convert them into positive fabricated measurements.
+            assert type(sample["cpu_ns"]) is int and 0 <= sample["cpu_ns"] < 120e9
+            if data["host"]["platform"] != "win32":
+                assert sample["cpu_ns"] > 0
         assert isinstance(row["python"], str) and row["python"]
 
     recomputed = []
@@ -127,7 +132,9 @@ def check(data, basedir: Path):
     decision = ("HOST_C_EXTENSION_VIABLE" if positive else
                 "HOST_C_EXTENSION_ECONOMICS_NOT_PROVEN")
     assert decision == data["decision"]
+    cpu_zero_samples = sum(s["cpu_ns"] == 0 for w in workers for s in w["samples"])
     return {"host": data["host"]["platform"], "decision": decision,
+            "cpu_timer_zero_samples": cpu_zero_samples,
             "workers": len(workers), "timed_opens": len(workers)*5,
             "binary_bytes": build["binary_bytes"],
             "build_wall_ms": build["build_wall_ns"]/1e6,
