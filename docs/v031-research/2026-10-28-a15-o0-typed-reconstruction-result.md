@@ -51,3 +51,9 @@ A cheaper prospective cost bound for a shared tag (at most number of selected op
 - No collision with #469 A05, #475 A07, #653 VZIP, #662/#676 ABI3 S_CHUNKS, and #574 Discovery STATE. Docs/discovery/STATE.json is a staleable cache and remains owned by #574.
 - No product merge or release. Future CI after this documentation commit must be reported under its own exact HEAD; the scientific SUCCESS refers to 7814a61f source and original artifact.
 - Existing issue/checker failures, if any, are not reason to change evaluators. No discovery policy change earned from a single bounded experiment.
+
+
+## Additional independent physical-payload custody discriminator
+After fetching the unmodified original hosted artifact ZIP, a detached standard-library script parsed both complete archived research formats directly (fixed header, program catalogs, member descriptors, Zstd frame spans) without importing either decoder. It independently compared **all 205/205 member compressed frame bytes**, member descriptors (including SHA-256), and the complete catalog operations. Result: **every member's actual compressed payload and full member descriptor is byte-identical between bespoke and typed IR**. Every difference in the complete artifact size equals **exactly one type-tag byte per opcode in the unique shared program catalog**, with a maximum of three bytes per 32-member cohort; no other bytes change. The original artifact ZIP passed its own CRC check. Detached audit receipt SHA-256: 1faeab0c78211202a64d0d50cd5d7664dbd04d27d4519b03352e1d032173434e.
+
+This **sharpens the causal conclusion**: A15-O0 establishes the serialization/dispatch tax of a tiny typed grammar, not a better compression representation. The decoder unification thesis remains **unproven** against current CMPCT storage kinds, and a simple bespoke switch can still win product economics. This follow-up is independent post-result audit evidence, not a preregistered additional promotion gate.
