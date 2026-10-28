@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 
 import msgpack
 from cmpct.builder import Builder
@@ -29,6 +30,8 @@ BODY = b"CMPCT-J24G18-signed-Reader-fallback\0" * 41
 CAP = 65536
 EXPECTED_READER_BLOB = "f13c5492f5acfa1cfcfec97cdbe0da71e41e327b"
 PARENT = "06617f194c45ebb38dda0592ff5e5196e204af80"
+RELEASE_SHA = "80c358f8824ec1b20d349c92ed94c898090969b0"
+RELEASE_READER_BLOB = "e716233403dabd0966863c45635e18fa5ac6afb8"
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -50,14 +53,28 @@ class CatchAndFallbackReader(CMPCT):
                 return None  # optional hypothetical policy: silently skip a signed footer
         return g
 
-READERS = {"direct": CMPCT, "gated": GatedReader, "catch": CatchAndFallbackReader}
+# This independent published-source control is **not** a rewrite of release semantics.
+# It executes the actual historical Reader blob against the same installed
+# revision-24 codec namespace, exactly as prior J24G06 comparative research.
+def exact_released_reader():
+    path = RELEASE_SHA + ":src/cmpct/reader.py"
+    actual = subprocess.check_output(["git", "rev-parse", path], text=True).strip()
+    assert actual == RELEASE_READER_BLOB, actual
+    raw = subprocess.check_output(["git", "show", path])
+    module = types.ModuleType("cmpct._j24g18_exact_released_reader")
+    module.__package__ = "cmpct"
+    exec(compile(raw, "<released Git blob " + actual + ">", "exec"), module.__dict__)
+    return module.CMPCT
+
+READERS = {"released": None, "direct": CMPCT, "gated": GatedReader,
+           "catch": CatchAndFallbackReader}
 
 def worker(path, arm):
     start_wall = time.perf_counter_ns()
     start_cpu = time.process_time_ns()
     result = {"status": "error", "exception": None}
     try:
-        with READERS[arm](Path(path)) as archive:
+        with (exact_released_reader() if arm == "released" else READERS[arm])(Path(path)) as archive:
             result = {
                 "status": "opened",
                 "selected_footer": archive.latest_footer_pos,
@@ -173,9 +190,11 @@ def main(out, repeats):
             stable("clean", arm, "opened", 0, "owner.bin")
             stable("writer-rename", arm, "opened", 1, "renamed.bin")
             stable("linked-undercap", arm, "opened", 1, "renamed.bin")
+        stable("orphan-overcap", "released", "opened", 0, "owner.bin")
         stable("orphan-overcap", "direct", "opened", 0, "owner.bin")
         stable("orphan-overcap", "gated", "error")
         stable("orphan-overcap", "catch", "opened", 0, "owner.bin")
+        stable("linked-overcap", "released", "opened", 1, "renamed.bin")
         stable("linked-overcap", "direct", "opened", 1, "renamed.bin")
         stable("linked-overcap", "gated", "error")
         stable("linked-overcap", "catch", "opened", 0, "owner.bin")
@@ -187,11 +206,13 @@ def main(out, repeats):
                    all_rows["orphan-overcap"]["direct"])
         assert all(r["selected_footer"] == checkpoint for r in
                    all_rows["linked-overcap"]["catch"])
-        assert all(r["selected_footer"] > checkpoint for r in
-                   all_rows["linked-overcap"]["direct"])
+        assert all(r["selected_footer"] > checkpoint for arm in ("released", "direct")
+                   for r in all_rows["linked-overcap"][arm])
         src = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         result = {"experiment": "J24G18", "head": src, "parent": PARENT,
-                  "reader_blob": EXPECTED_READER_BLOB, "cap": CAP,
+                  "reader_blob": EXPECTED_READER_BLOB,
+                  "released_reader_blob": RELEASE_READER_BLOB,
+                  "released_commit": RELEASE_SHA, "cap": CAP,
                   "checkpoint": checkpoint, "body_sha256": digest(BODY),
                   "physical": physical, "repeats": repeats,
                   "observations": all_rows,
