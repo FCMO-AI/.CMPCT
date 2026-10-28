@@ -65,7 +65,10 @@ jobs:
           assert a._scan_refs is not None, "optional ABI3 absent from wheel"
           def git_blob(path):
               raw=path.read_bytes()
-              return hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
+              assert b"\r" not in raw.replace(b"\r\n",b""), "unexpected source CR"
+              # Exact Git content after permissible Windows LF/CRLF checkout conversion.
+              normalized=raw.replace(b"\r\n",b"\n")
+              return hashlib.sha1(b"blob "+str(len(normalized)).encode()+b"\0"+normalized).hexdigest()
           assert git_blob(p)=="9bca5d1047f9c78984b945d7ca90e3149fe429ab"
           assert git_blob(q)=="432e86f73f3f1751c04ccbb0e45858c18531da1d"
           print(json.dumps({"head":os.environ["EVIDENCE_SHA"],"reader":str(p),
