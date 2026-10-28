@@ -52,6 +52,8 @@ def run():
             "versions":{"system_zstd":version_native,"wheel_zstd":version_wheel,
                         "zstandard_py":zstandard.__version__},
             "status":"PENDING","cases":[]}
+    frame_dir=pathlib.Path("receipts/o1-frames")
+    frame_dir.mkdir(parents=True,exist_ok=True)
     comp=zstandard.ZstdCompressor(level=19)
     decomp=zstandard.ZstdDecompressor()
     for fam in ("progression","quantized","heldout","random","periodic"):
@@ -72,9 +74,13 @@ def run():
                     raise AssertionError("wheel corrupt compressed transform")
                 if inverse(transformed,program)!=logical:raise AssertionError("invalid inverse")
                 for name,frame in (("system",comp_native),("wheel",comp_wheel)):
+                    frame_rel=f"{fam}-{seed}-{len(entries[name]):02d}-{name}.a19"
+                    full=b"A19O"+len(hdr).to_bytes(4,"big")+hdr+frame
+                    (frame_dir/frame_rel).write_bytes(full)
                     typ=("direct" if not program else "unary" if len(program)==1 else "composed")
                     entries[name].append({
                         "type":typ,"steps":program,"size":8+len(hdr)+len(frame),
+                        "frame_rel":frame_rel,"complete_frame_sha256":hashlib.sha256(full).hexdigest(),
                         "compressed_sha256":hashlib.sha256(frame).hexdigest(),
                         "meta_sha256":hashlib.sha256(hdr).hexdigest(),
                         "transformed_sha256":hashlib.sha256(transformed).hexdigest(),
