@@ -1,0 +1,88 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: v0.31 J24P01 installed fixed PACK cross-host
+
+on:
+  pull_request:
+    paths:
+      - "research/j24p01_pack_crosshost.py"
+      - "research/j24p01_pack_referee.py"
+      - ".github/workflows/v031-j24p01-pack-crosshost.yml"
+      - "docs/v031-research/2026-10-28-j24p01-*.md"
+      - "tests/conformance/v24-pack.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24p01-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-fixed-pack:
+    name: Fixed PACK installed Python and independent wire (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      CMPCT_EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24P01_EVIDENCE: ${{ github.workspace }}/pack-crosshost-evidence
+    steps:
+      - name: Exact-source checkout, prereg ancestry, unchanged product
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CMPCT_EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert original #307 product source and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CMPCT_EVIDENCE_HEAD"
+          git merge-base --is-ancestor 256a263748b9f65b4bc00dd572799e4f00ae06e7 HEAD
+          git merge-base --is-ancestor 07e8be776740e7a2dcf4d8afe31e29c9e9b0a7e0 HEAD
+          test -z "$(git diff --name-only 256a263748b9f65b4bc00dd572799e4f00ae06e7 HEAD -- src/ native/ tests/conformance/)"
+          mkdir -p "$CMPCT_J24P01_EVIDENCE"
+          git rev-parse HEAD > "$CMPCT_J24P01_EVIDENCE/head.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$CMPCT_J24P01_EVIDENCE/reader-blob.txt"
+          git rev-parse HEAD:src/cmpct/codec.py > "$CMPCT_J24P01_EVIDENCE/codec-blob.txt"
+          git rev-parse HEAD:tests/conformance/v24-pack.json > "$CMPCT_J24P01_EVIDENCE/wire-blob.txt"
+          git rev-parse HEAD:research/j24p01_pack_crosshost.py > "$CMPCT_J24P01_EVIDENCE/court-blob.txt"
+          git rev-parse HEAD:research/j24p01_pack_referee.py > "$CMPCT_J24P01_EVIDENCE/referee-blob.txt"
+          python -c 'import hashlib,os,pathlib; p=pathlib.Path("tests/conformance/v24-pack.json"); out=pathlib.Path(os.environ["CMPCT_J24P01_EVIDENCE"])/"manifest-sha256.txt"; out.write_text(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+str(p)+"\n")'
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install actual wheel-backed CMPCT and external independent Zstd decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . zstandard
+      - name: Source-bound installed Reader / RAW and Zstd PACK conformance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24p01_pack_crosshost.py" \
+            2>&1 | tee "$CMPCT_J24P01_EVIDENCE/court.log"
+      - name: Independent physical-source and falsified-receipt audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24p01_pack_referee.py" \
+            2>&1 | tee "$CMPCT_J24P01_EVIDENCE/referee.log"
+          grep -q '"status": "PASS"' "$CMPCT_J24P01_EVIDENCE/referee.json"
+      - name: Preserve original exact-head receipts, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p01-pack-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: pack-crosshost-evidence/
+          if-no-files-found: warn
+          retention-days: 90
