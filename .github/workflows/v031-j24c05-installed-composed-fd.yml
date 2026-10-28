@@ -1,0 +1,129 @@
+# ci-lane: fast
+# Source-pinned research: installed-wheel J24F11/J24F12/J24C01 on combined J24C03 Reader.
+name: CMPCT v031 J24C05 installed composed Reader fd publication
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/v031-j24c05-installed-composed-fd.yml'
+      - 'docs/v031-research/2026-10-28-j24c05-installed-fd-custody-prereg.md'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/validation.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  installed-source-fd:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Authenticate exact source, unchanged inherited courts and host capability
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git hash-object src/cmpct/reader.py)" = b37b786966ac1506a0439567d4a58eea472d85f8
+          test "$(git hash-object src/cmpct/validation.py)" = fbcf6e9c108799dc8b6f5c19e95bcb0618cf41e8
+          test "$(git hash-object research/j24f11_fd_fresh_chunk_publication_court.py)" = 121600e1294c79c9ac7bd66cedb4f278f65e710f
+          test "$(git hash-object research/j24f12_opath_wx_parent_court.py)" = 7ecbc5e325fc5f06b51631338dad355e1aabb9f5
+          test "$(git hash-object research/j24c01_geometry_fd_composed_court.py)" = 1740382e5d2a3db5a9ddc8704a55e07ef7ff59bf
+          git rev-parse HEAD > benchmark-artifacts/HEAD.txt
+          git hash-object src/cmpct/reader.py > benchmark-artifacts/READER_BLOB.txt
+          git hash-object src/cmpct/validation.py > benchmark-artifacts/VALIDATION_BLOB.txt
+          python - <<'PY'
+          import os,sys
+          assert sys.platform.startswith("linux") and os.geteuid()!=0
+          assert hasattr(os,"O_TMPFILE") and hasattr(os,"O_PATH") and hasattr(os,"pread")
+          print("J24C05_LINUX_FD_CAPABILITY_PRESENT")
+          PY
+      - name: Build and install real non-editable wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+      - name: Independently compare installed package bytes with exact committed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY' | tee "$GITHUB_WORKSPACE/benchmark-artifacts/installed-source.json"
+          import hashlib,inspect,json,os,subprocess,sys
+          from pathlib import Path
+          import cmpct.reader as reader
+          import cmpct.validation as validation
+          repo=Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          records=[]
+          for module,path in ((reader,"src/cmpct/reader.py"),(validation,"src/cmpct/validation.py")):
+              installed=Path(inspect.getfile(module)).resolve()
+              assert installed.is_relative_to(Path(sys.prefix).resolve()),installed
+              assert not installed.is_relative_to(repo),installed
+              original=subprocess.check_output(["git","show","HEAD:"+path],cwd=repo)
+              normalize=lambda raw:raw.replace(b"\r\n",b"\n")
+              assert normalize(original)==normalize(installed.read_bytes()),path
+              records.append({"source":path,"installed":str(installed),
+                 "sha256":hashlib.sha256(normalize(original)).hexdigest()})
+          print(json.dumps({"decision":"EXACT_INSTALLED_READER_AND_VALIDATOR",
+             "source_head":subprocess.check_output(["git","rev-parse","HEAD"],cwd=repo,text=True).strip(),
+             "records":records},sort_keys=True))
+          PY
+      - name: Re-execute original three independent descriptor/extraction courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          blob="$(git hash-object src/cmpct/reader.py)"
+          python research/j24f11_fd_fresh_chunk_publication_court.py \
+            --expected-blob "$blob" --output "$PWD/benchmark-artifacts/j24f11.json" \
+            2>&1 | tee benchmark-artifacts/j24f11.log
+          grep -q 'J24F11_DECISION=SCOPED_LINUX_FRESH_CHUNK_FD_PUBLISH_PASS' benchmark-artifacts/j24f11.log
+          python research/j24f12_opath_wx_parent_court.py \
+            --expected-blob "$blob" --output "$PWD/benchmark-artifacts/j24f12.json" \
+            2>&1 | tee benchmark-artifacts/j24f12.log
+          grep -q 'J24F12_DECISION=WX_ONLY_PARENT_EXACT_FD_TRANSFER_PASS' benchmark-artifacts/j24f12.log
+          python research/j24c01_geometry_fd_composed_court.py \
+            --expected-reader-blob "$blob" --output "$PWD/benchmark-artifacts/j24c01.json" \
+            2>&1 | tee benchmark-artifacts/j24c01.log
+          grep -q 'J24C01_DECISION=COMPOSED_CDC_ADMISSION_AND_FD_PUBLICATION_PASS' benchmark-artifacts/j24c01.log
+      - name: Independently audit original receipts against expected full case counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("benchmark-artifacts")
+          expected={"j24f11":(8,"SCOPED_LINUX_FRESH_CHUNK_FD_PUBLISH_PASS"),
+                    "j24f12":(4,"WX_ONLY_PARENT_EXACT_FD_TRANSFER_PASS"),
+                    "j24c01":(2,"COMPOSED_CDC_ADMISSION_AND_FD_PUBLICATION_PASS")}
+          all_rows={}
+          for key,(count,verdict) in expected.items():
+              result=json.loads((root/(key+".json")).read_text())
+              assert len(result["cases"])==count,(key,len(result["cases"]))
+              assert result["decision"]==verdict
+              all_rows[key]={"cases":count,"decision":verdict}
+          (root/"j24c05-referee.json").write_text(json.dumps({
+               "decision":"J24C05_INSTALLED_SOURCE_EXACT_FD_COURTS_PASS",
+               "original_courts":all_rows,"product_release_credit":False
+          },indent=2,sort_keys=True)+"\n")
+          print("J24C05_DECISION=INSTALLED_SOURCE_EXACT_FD_COURTS_PASS")
+          PY
+      - name: Check CI topology
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24c05-installed-composed-fd.yml
+      - name: Persist exact-source positive and negative receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24c05-${{ github.event.pull_request.head.sha || github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
