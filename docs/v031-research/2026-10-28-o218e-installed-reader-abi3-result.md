@@ -35,6 +35,10 @@ Actual 262k one-owner median constructor wall (milliseconds), by host/minor, **s
 
 One-time ABI3 wheel distribution size: **7,580 B Linux; 4,813 B macOS; 6,758 B Windows**. One-time wheel compile wall: **1.381 s / 2.028 s / 17.622 s**, respectively; kept outside the constructor measurements but charged. Direct non-ABI3 C binary and per-interpreter compile costs retained in raw receipts, not hidden. Original unsafe no-validation floor remains faster and is not a correct candidate. Linux process VmHWM was measured, with no material demonstrated reduction attributable to ABI3; macOS/Windows whole-process RSS was **not** measured. Windows CPU timer generated **306 real 0ns observations** across both interpreters, preserved as quantization rather than fabricated positive CPU timings. Cross-host absolute times must not be compared as identical hardware.
 
+### Worker-to-worker robustness, before aggregate medians
+
+A separate replay computed the intentionally **pessimistic unpaired** ratio `minimum of four safe-Python worker medians / maximum of four ABI3 worker medians` for each of the 12 prereg focus OS/minor/cardinality cells. The smallest was **2.650×** (Windows 2022, Python 3.11, 262,144 references), with all other ratios at least 2.714×. This does not confer a statistical confidence interval or represent a paired crossover probability: the worst-extreme calculation is only an independently rooted check that the published >=2.0× result is not solely an artifact of the median-of-medians choice. Keep the original prereg decision, which used medians across workers, unchanged.
+
 ## Separate fresh-process economics — startup and repeated opens matter
 
 The raw `fresh_process_wall_ns` measure is **one newly started Python worker performing five repeated constructor calls**, including import/startup and worker setup; it is *not* a single cold-open measurement. Recomputed same-host safe-Python/ABI3 worker-process median ratio (65k one-owner / 262k one-owner):
