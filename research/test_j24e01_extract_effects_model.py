@@ -1,6 +1,8 @@
 """Independent deterministic, valid/hostile effect-model court (not a product test)."""
 import copy
+import hashlib
 import random
+import zlib
 import time
 import unittest
 
@@ -72,7 +74,12 @@ def generated(seed):
                 extents.append([start, span, [blob(obj, span)]])
             row(obj, name, K_FILE, size, [S_SPARSE, extents])
         elif mode == "vzip":
-            obj["recipes"].append([0, 0, 0, None, size])
+            literal = bytes(size)
+            skref = blob(obj, size)
+            obj["recipes"].append([
+                skref, [size], [], hashlib.sha256(literal).digest(),
+                size, zlib.crc32(literal),
+            ])
             row(obj, name, K_FILE, size,
                 [S_VZIP, len(obj["recipes"]) - 1])
         oracle_bytes += size
@@ -90,7 +97,12 @@ class ModelCourt(unittest.TestCase):
         row(obj, "chunks", K_FILE, 6, [S_CHUNKS, [blob(obj, 2), blob(obj, 4)]])
         row(obj, "cdc", K_FILE, 12, [S_CDC, [[5, blob(obj, 5)], [7, blob(obj, 7)]]])
         row(obj, "sparse", K_FILE, 2048, [S_SPARSE, [[512, 7, [blob(obj, 7)]]]])
-        obj["recipes"].append([0, 0, 0, None, 61])
+        literal = bytes(61)
+        skref = blob(obj, len(literal))
+        obj["recipes"].append([
+            skref, [61], [], hashlib.sha256(literal).digest(),
+            61, zlib.crc32(literal),
+        ])
         row(obj, "vzip", K_FILE, 61, [S_VZIP, 0])
         row(obj, "dir", K_DIR, 0, None)
         row(obj, "hardlink", K_HARDLINK, 33, ["direct"])
