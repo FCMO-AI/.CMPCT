@@ -27,7 +27,7 @@ Date: 2026-10-28 UTC. **Scientific decision: H1 PATH_EQUIVALENCE_CONFIRMED; H2 A
 | Windows | early, 8192 calls | 22.077300 ms | 22.000800 ms | 1.003477x | **YES** | **0 / 0** |
 | Windows | ragged, 16 calls | 273.094950 ms | 273.123450 ms | 0.999896x | **YES** | **0 / 0** |
 
-Windows process CPU is **not fabricated as zero**: median early strict and witness were both 15.625 ms, and ragged strict 273.4375 ms vs witness 265.6250 ms; the aggregate window resolves the timer that had zero granularity for the original single call.
+Windows process CPU is **not fabricated as zero**: median early strict and witness were both **15.625 ms**, and ragged strict 273.4375 ms vs witness 265.6250 ms. The aggregate window produces nonzero CPU measurements, satisfying only the preregistered observability condition; **the 15.625-ms quantization remains too coarse to infer a <5% early-CPU difference**. The original Q=1 Windows CPU evidence remains unresolved, not repaired retroactively.
 
 All outputs match literal data independently of the Reader; all scope-specific inherited tests PASS. The optional C scanner still drives the Reader constructor admission; the new uniform read-time proof was *never called* in either negative-control arm.
 
