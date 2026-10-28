@@ -33,8 +33,8 @@ def assert_exact_tracked_blob(path: Path, expected_sha: str) -> None:
     # Windows checkout may map LF to CRLF. This acceptance is conditioned on
     # recovering the *exact* known Git blob byte-for-byte by that one mapping,
     # never on weaker semantic equivalence or an unpinned normalized digest.
-    assert b"\\r\\n" in raw, ("unrecognized tracked source drift", path)
-    canonical = raw.replace(b"\\r\\n", b"\\n")
+    assert b"\r\n" in raw, ("unrecognized tracked source drift", path)
+    canonical = raw.replace(b"\r\n", b"\n")
     assert git_blob_id(canonical) == expected_sha, ("tracked Git blob drift", path)
 
 
