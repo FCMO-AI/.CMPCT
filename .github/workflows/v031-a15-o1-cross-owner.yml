@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install explicit Zstd CLI control
         run: |
           sudo apt-get update -qq
@@ -28,6 +30,7 @@ jobs:
           zstd --version
       - name: Confirm exact source identity
         run: |
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           git rev-parse HEAD
           sha256sum research/a15_o1_cross_owner_oracle.py research/a15_o1_independent_referee.py
       - name: Execute source-locked six-case scientific oracle
