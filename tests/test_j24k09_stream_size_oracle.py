@@ -56,13 +56,16 @@ def test_no_work_after_early_or_empty_ranges():
     assert range_vzip(_recipe(), fail, fail, 2, 0, fail) == b""
 
 
-def test_no_callback_uses_expensive_but_safe_standalone_control():
+def test_internal_no_callback_preserves_inherited_nonmode2_laziness():
+    # The public installed Reader *always* supplies a physical-size witness.
+    # Stand-alone internal callers retain earlier lazy behavior and must not
+    # be credited with the Reader's new physical-coordinate guarantee.
     calls = []
     def content(idx):
         calls.append(idx)
         return b"ABCWXYZ" if idx == 0 else b"pq"
     assert range_vzip(_recipe(), content, lambda *args: b"pq", 6, 2) == b"XY"
-    assert calls == [0, 1]
+    assert calls == [0]
 
 
 # A separately constructed physical BHDR is a different-rooted oracle from
