@@ -34,12 +34,16 @@ jobs:
         run: python3 research/a15_o1_cross_owner_oracle.py --out a15-o1-evidence
       - name: Execute independent byte-exact reparser and forged-receipt referee
         run: python3 research/a15_o1_independent_referee.py --root a15-o1-evidence
+      - name: Execute source-locked in-process matched-decoder cost court
+        run: python3 research/a15_o1b_inprocess_decode_court.py --root a15-o1-evidence
+      - name: Independently audit in-process raw timing and byte identities
+        run: python3 research/a15_o1b_independent_referee.py --root a15-o1-evidence
       - name: Preserve source identity
         if: always()
         run: |
           mkdir -p a15-o1-evidence
           git rev-parse HEAD > a15-o1-evidence/head.txt
-          sha256sum research/a15_o1_cross_owner_oracle.py research/a15_o1_independent_referee.py > a15-o1-evidence/source-hashes.txt
+          sha256sum research/a15_o1_cross_owner_oracle.py research/a15_o1_independent_referee.py research/a15_o1b_inprocess_decode_court.py research/a15_o1b_independent_referee.py > a15-o1-evidence/source-hashes.txt
       - name: Publish unmodified raw artifacts
         if: always()
         uses: actions/upload-artifact@v4
