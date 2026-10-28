@@ -42,6 +42,7 @@ jobs:
             'research/j24g17_msgpack_token_counter.c',
             'research/j24g17_native_predecode_court.py',
             'research/j24g17_independent_referee.py',
+            'research/j24g17_differential_wire_fuzz.py',
             'docs/v031-research/2026-10-28-j24g17-native-token-predecode-prereg.md'
           ]
           files={}
@@ -64,15 +65,16 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install msgpack==1.1.2
-          python -m py_compile research/j24g17_native_predecode_court.py research/j24g17_independent_referee.py
+          python -m py_compile research/j24g17_native_predecode_court.py research/j24g17_independent_referee.py research/j24g17_differential_wire_fuzz.py
           python research/j24g17_native_predecode_court.py --selftest | tee j24g17-artifacts/selftest.log
+          python research/j24g17_differential_wire_fuzz.py j24g17-artifacts/wire-fuzz.json | tee j24g17-artifacts/wire-fuzz.log
           python research/j24g17_native_predecode_court.py --court j24g17-artifacts --workers 5 --repeats 3 | tee j24g17-artifacts/court.log
           python research/j24g17_independent_referee.py j24g17-artifacts | tee j24g17-artifacts/referee.log
       - name: Preserve source-locked positive and negative receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: j24g17-native-token-${{ github.sha }}
+          name: j24g17-native-token-${{ env.J24G17_HEAD }}
           path: j24g17-artifacts/
           if-no-files-found: warn
           retention-days: 30
