@@ -4,6 +4,9 @@ on:
     paths:
       - 'research/j24g22_verified_stdout_court.py'
       - 'research/j24g22_verified_stdout_referee.py'
+      - 'research/j24g22b_crc_semantic_court.py'
+      - 'docs/v031-research/2026-10-28-j24g22b-crc-semantic-prereg.md'
+      - 'docs/v031-research/2026-10-28-j24g22-verified-stdout-result.md'
       - '.github/workflows/v031-j24g22-verified-stdout.yml'
       - 'docs/v031-research/2026-10-28-j24g22-verified-stdout-prereg.md'
   workflow_dispatch:
@@ -40,6 +43,9 @@ jobs:
       - name: Independently referee physical files and mutations
         run: |
           python research/j24g22_verified_stdout_referee.py test-artifacts/j24g22 --tamper-test | tee test-artifacts/j24g22/referee.txt
+      - name: Test the stronger CRC-only semantic comparator
+        run: |
+          python research/j24g22b_crc_semantic_court.py test-artifacts/j24g22 | tee test-artifacts/j24g22/crc_summary.txt
       - name: Persist source and run identity
         if: always()
         shell: bash
