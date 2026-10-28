@@ -47,7 +47,10 @@ jobs:
       - name: Execute signed symlink/hardlink guard and legitimate controls
         shell: bash
         run: |
-          python -m pytest -q tests/test_j24b06_signed_budget.py
+          # Run this narrow installed-Reader court without tests/conftest.py, whose
+          # unrelated historical experiment imports require external libzstd on Win32.
+          # General CMPCT Tests still runs the unchanged full suite separately.
+          python -m pytest --noconftest -q tests/test_j24b06_signed_budget.py
       - name: Persist source identity even on failure
         if: always()
         uses: actions/upload-artifact@v4
