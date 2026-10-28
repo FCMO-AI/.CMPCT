@@ -1,0 +1,226 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24C06 guarded Reader stable ABI economics
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24c06-abi3-on-custody-reader-20261028
+  pull_request:
+    paths:
+      - 'research/j24c06_*'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/validation.py'
+      - 'tests/test_reader_deflate_export_custody.py'
+      - 'tests/test_reader_unsupported_blob_bits.py'
+      - '.github/workflows/v031-j24c06-installed-guarded-reader-abi3.yml'
+      - 'docs/v031-research/2026-10-28-j24c06-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c06-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reader:
+    name: Same abi3 wheel and exact installed Reader on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Preserve exact Git source bytes on all platforms
+        shell: bash
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Preregistration, ancestry and immutable product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24c06-evidence/archives j24c06-evidence/py311 j24c06-evidence/py313
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor c65874a3c548016d7135727959214884eeb306c2 HEAD
+          git merge-base --is-ancestor fdd5b040dbbaeaac79f029c2ab5c58162ec894cd HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = b37b786966ac1506a0439567d4a58eea472d85f8
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = fbcf6e9c108799dc8b6f5c19e95bcb0618cf41e8
+          test "$(git rev-parse HEAD:research/o218_fastscan.c)" = a54f15181d9dbe667b9e8c9d52e927b09c80152f
+          git diff --quiet 0a128ff55c7ae0f14c6bdf019a81b40f0d894eff HEAD -- src/cmpct native/cmpct-core
+          git rev-parse HEAD > j24c06-evidence/source-head.txt
+          python -m py_compile research/j24c06_o216_fastpath.py research/j24c06_o218b_native_reader.py research/j24c06_o218c_native_host.py research/j24c06_installed_reader_abi3_court.py research/j24c06_installed_reader_referee.py research/j24c06_guarded_native_pytest.py
+      - name: Build stable-ABI wheel only once under CPython 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install setuptools wheel 'abi3audit==0.0.26'
+          python - <<'PY'
+          import hashlib,json,subprocess,sys,time
+          from pathlib import Path
+          root=Path("research/o218d_abi3_package").resolve()
+          t=time.perf_counter_ns()
+          p=subprocess.run([sys.executable,"setup.py","bdist_wheel","--dist-dir","dist"],cwd=root,capture_output=True,text=True)
+          ms=(time.perf_counter_ns()-t)/1e6
+          Path("j24c06-evidence/wheel-build.log").write_text(p.stdout+"\n"+p.stderr)
+          if p.returncode:
+              raise SystemExit(p.stdout+"\n"+p.stderr)
+          wheels=list((root/"dist").glob("*.whl"))
+          assert len(wheels)==1 and "cp311-abi3-" in wheels[0].name,wheels
+          wire=wheels[0].read_bytes()
+          Path("j24c06-evidence/wheel-build.json").write_text(json.dumps(
+              {"name":wheels[0].name,"sha256":hashlib.sha256(wire).hexdigest(),
+               "bytes":len(wire),"build_wall_ms":ms,"build_python":"3.11"},indent=2)+"\n")
+          print("O218E_ABI3_ONE_BUILD",wheels[0].name,ms)
+          PY
+          python -m abi3audit --strict research/o218d_abi3_package/dist/*.whl > j24c06-evidence/abi3audit.log 2>&1 || { cat j24c06-evidence/abi3audit.log; exit 1; }
+          cat j24c06-evidence/abi3audit.log
+      - name: Install true CMPCT wheel plus abi3 wheel on CPython 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest setuptools wheel > j24c06-evidence/cmpct-py311-install.log 2>&1 || { cat j24c06-evidence/cmpct-py311-install.log; exit 1; }
+          python -m pip install research/o218d_abi3_package/dist/*.whl
+          python research/j24c06_installed_reader_abi3_court.py --make-fixtures j24c06-evidence/archives
+      - name: Exact Reader ABBA, adversarial semantics and independent audit on 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24c06_installed_reader_abi3_court.py --fixtures j24c06-evidence/archives --output j24c06-evidence/py311 --wheel-dir research/o218d_abi3_package/dist > j24c06-evidence/py311/court.log 2>&1 || { cat j24c06-evidence/py311/court.log; exit 1; }
+          cat j24c06-evidence/py311/court.log
+          python research/j24c06_installed_reader_referee.py j24c06-evidence/py311 | tee j24c06-evidence/py311/referee.log
+          grep -q 'O218E_INDEPENDENT_REFEREE_PASS' j24c06-evidence/py311/referee.log
+          # Exact #630 inherited adversarial physical custody and O215 source semantics.
+          # --noconftest avoids unrelated optional-native preloading on Windows/macOS.
+          python -m pytest --noconftest -q tests/test_reader_deflate_export_custody.py tests/test_reader_unsupported_blob_bits.py tests/test_o215_fixed_chunk_admission.py 2>&1 | tee j24c06-evidence/py311/guarded-regression.log
+          echo J24C06_GUARDED_INSTALLED_FOCUS_PASS_PY311
+          # In the same Python interpreter, exercise the native-admission branch
+          # while inherited physical-header/ZIP and O215 hostile tests run.
+          python research/j24c06_guarded_native_pytest.py 2>&1 | tee j24c06-evidence/py311/native-guard.log
+          grep -q 'J24C06_NATIVE_GUARDED_READER_PASS' j24c06-evidence/py311/native-guard.log
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Reuse the same abi3 wheel, compile only direct-C interpreter control
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest setuptools wheel > j24c06-evidence/cmpct-py313-install.log 2>&1 || { cat j24c06-evidence/cmpct-py313-install.log; exit 1; }
+          python -m pip install research/o218d_abi3_package/dist/*.whl
+          python research/j24c06_installed_reader_abi3_court.py --fixtures j24c06-evidence/archives --output j24c06-evidence/py313 --wheel-dir research/o218d_abi3_package/dist > j24c06-evidence/py313/court.log 2>&1 || { cat j24c06-evidence/py313/court.log; exit 1; }
+          cat j24c06-evidence/py313/court.log
+          python research/j24c06_installed_reader_referee.py j24c06-evidence/py313 | tee j24c06-evidence/py313/referee.log
+          grep -q 'O218E_INDEPENDENT_REFEREE_PASS' j24c06-evidence/py313/referee.log
+          # Exact #630 inherited adversarial physical custody and O215 source semantics.
+          # --noconftest avoids unrelated optional-native preloading on Windows/macOS.
+          python -m pytest --noconftest -q tests/test_reader_deflate_export_custody.py tests/test_reader_unsupported_blob_bits.py tests/test_o215_fixed_chunk_admission.py 2>&1 | tee j24c06-evidence/py313/guarded-regression.log
+          echo J24C06_GUARDED_INSTALLED_FOCUS_PASS_PY313
+          # In the same Python interpreter, exercise the native-admission branch
+          # while inherited physical-header/ZIP and O215 hostile tests run.
+          python research/j24c06_guarded_native_pytest.py 2>&1 | tee j24c06-evidence/py313/native-guard.log
+          grep -q 'J24C06_NATIVE_GUARDED_READER_PASS' j24c06-evidence/py313/native-guard.log
+      - name: Compare the same physical archive and wheel across two interpreters
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("j24c06-evidence")
+          a=json.loads((root/"py311/result.json").read_text())
+          b=json.loads((root/"py313/result.json").read_text())
+          assert a["source"]==b["source"],"source mismatch"
+          assert a["semantics"]==b["semantics"],"semantic mismatch"
+          assert a["fixtures"]==b["fixtures"],"wire mismatch"
+          assert a["wheel"]["wheel_sha256"]==b["wheel"]["wheel_sha256"],"abi3 wheel recompiled or changed"
+          assert a["wheel"]["installed_binary_sha256"]==b["wheel"]["installed_binary_sha256"],"abi3 binary changed"
+          assert a["host"]["python_minor"]==[3,11] and b["host"]["python_minor"]==[3,13]
+          assert {x["count"] for x in a["summary"]}=={65536,262144}
+          verdict={"source":a["source"],"wheel_sha256":a["wheel"]["wheel_sha256"],
+                   "decision_py311":a["decision"],"decision_py313":b["decision"],
+                   "semantic_sha256":a["semantics"]["decision_sha256"],
+                   "fixtures":[x["archive_sha256"] for x in a["fixtures"]]}
+          (root/"within-host.json").write_text(json.dumps(verdict,indent=2)+"\n")
+          print("O218E_CROSS_MINOR_SOURCE_WHEEL_PARITY_PASS")
+          PY
+      - name: Retain all raw artifacts even on a failed attempt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24c06-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            j24c06-evidence/
+            research/o218d_abi3_package/dist/*.whl
+          retention-days: 30
+          if-no-files-found: warn
+
+  cross_host:
+    name: Independent three-host source/wheel/semantic parity
+    needs: reader
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: j24c06-*-${{ github.event.pull_request.head.sha || github.sha }}
+          merge-multiple: false
+          path: j24c06-all
+      - name: Require six completed exact-head verdicts and preserve negative economics
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          dirs=list(Path("j24c06-all").iterdir())
+          assert len(dirs)==3,dirs
+          rows=[]
+          for folder in dirs:
+              root=folder/"j24c06-evidence"
+              assert (root/"source-head.txt").read_text().strip()=="${{ github.event.pull_request.head.sha || github.sha }}"
+              a=json.loads((root/"py311/result.json").read_text())
+              b=json.loads((root/"py313/result.json").read_text())
+              v=json.loads((root/"within-host.json").read_text())
+              assert a["semantics"]==b["semantics"]
+              assert a["wheel"]["wheel_sha256"]==b["wheel"]["wheel_sha256"]==v["wheel_sha256"]
+              assert json.loads((root/"py311/referee.json").read_text())["forgeries_rejected"]==5
+              assert json.loads((root/"py313/referee.json").read_text())["forgeries_rejected"]==5
+              rows.append({"platform":a["host"]["platform"],
+                           "source":a["source"],"semantics":a["semantics"]["decision_sha256"],
+                           "decision_py311":a["decision"],"decision_py313":b["decision"],
+                           "focus_py311":[(x["count"],x["safe_python_over_abi3"],x["abi3_over_direct"]) for x in a["summary"] if x["owners"]==1],
+                           "focus_py313":[(x["count"],x["safe_python_over_abi3"],x["abi3_over_direct"]) for x in b["summary"] if x["owners"]==1]})
+          assert {r["platform"] for r in rows}=={"linux","darwin","win32"},rows
+          assert len({json.dumps(r["source"],sort_keys=True) for r in rows})==1
+          assert len({r["semantics"] for r in rows})==1
+          # Scientific workflow passes for well-audited negative evidence too.
+          overall="STRONG_CROSS_HOST_HYPOTHESIS" if all(r["decision_py311"]==r["decision_py313"]=="ABI3_FULL_READER_STRONG_HOST_PASS" for r in rows) else "MIXED_OR_NEGATIVE_ECONOMICS"
+          Path("j24c06-crosshost.json").write_text(json.dumps({"decision":overall,"head":"${{ github.event.pull_request.head.sha || github.sha }}","hosts":rows},indent=2)+"\n")
+          print("O218E_CROSS_HOST_AUDIT_PASS",overall)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24c06-crosshost-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24c06-crosshost.json
+          retention-days: 30
+          if-no-files-found: warn
