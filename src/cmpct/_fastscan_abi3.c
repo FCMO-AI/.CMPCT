@@ -93,8 +93,10 @@ static PyObject *scan_refs_index(PyObject *self, PyObject *args) {
         if (indexed && (i & 255) == 0) {
             PyObject *prefix = PyLong_FromSsize_t(sum);
             if (!prefix) goto error;
+            /* PyTuple_SetItem steals the new-reference ownership even when
+             * it reports failure. Never DECREF prefix a second time.
+             */
             if (PyTuple_SetItem(marks, i / 256, prefix) < 0) {
-                Py_DECREF(prefix);
                 goto error;
             }
         }
