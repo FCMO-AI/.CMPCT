@@ -49,7 +49,7 @@ class _FooterInvalidProof:
     def __len__(self):
         if self._db is not None:
             return self._count
-        return len(self.hot) if self._packed is None else len(self._packed)
+        return len(self.hot) if self._packed is None else len(self._packed) + len(self.hot)
 
     def __contains__(self, pos: int) -> bool:
         if pos in self.hot:
@@ -75,10 +75,12 @@ class _FooterInvalidProof:
             self.hot.clear()
         else:
             import heapq
-            new = sorted(positions)
+            # J24G11b: merge in bounded hot batches, not after each independent
+            # two-footer failure. Rebuilding the entire packed array per update
+            # exports quadratic Python work under hostile short invalid chains.
+            new = sorted(self.hot.union(positions))
             for pos in new:
                 self._key(pos)
-            # Bounded merge: no extra Python set of all existing packed members.
             sentinel = object()
             previous = sentinel
             def merged_unique():
@@ -88,6 +90,7 @@ class _FooterInvalidProof:
                         previous = pos
                         yield pos
             self._packed = array.array('Q', merged_unique())
+            self.hot.clear()
         # The byte ceiling is checked before construction; assert it afterwards.
         if self._packed.buffer_info()[1] * self._packed.itemsize > self._PACKED_LIMIT_BYTES:
             raise ValueError('packed footer proof exceeded byte ceiling')
@@ -99,6 +102,24 @@ class _FooterInvalidProof:
         # Use only a fixed 1-MiB u64 payload tier. This *does not* globally bound
         # the caller's failed-chain seen/decoded objects, Python temporaries or RSS.
         # Conservatively count duplicates twice; a premature disk spill is safe.
+        if self._db is None and self._packed is not None:
+            import bisect
+            # Preserve exact length/cap semantics even across duplicate batches:
+            # no hot duplicate may already live in the sorted packed tier.
+            novel = set(positions).difference(self.hot)
+            for pos in novel:
+                self._key(pos)
+            packed = self._packed
+            novel = {pos for pos in novel
+                     if not (lambda i: i < len(packed) and packed[i] == pos)(
+                         bisect.bisect_left(packed, pos))}
+            if not novel:
+                return
+            if (len(self.hot) + len(novel) <= self._HOT_LIMIT
+                    and (len(self) + len(novel)) * 8 <= self._PACKED_LIMIT_BYTES):
+                self.hot.update(novel)
+                return
+            positions = novel
         if self._db is None and (len(self) + len(positions)) * 8 <= self._PACKED_LIMIT_BYTES:
             self._update_packed(positions)
             return
@@ -115,10 +136,15 @@ class _FooterInvalidProof:
             self._db.execute('PRAGMA cache_size=-512')
             self._db.execute('CREATE TABLE bad(p INTEGER PRIMARY KEY) WITHOUT ROWID')
             self._db.execute('BEGIN')
-            previous = self._packed if self._packed is not None else self.hot
+            # Staged hot offsets are separate from packed offsets. The disk
+            # handoff must carry BOTH exact sets before any negative membership
+            # may be treated as durable evidence.
+            import itertools
+            previous = (itertools.chain(self._packed, self.hot)
+                        if self._packed is not None else iter(self.hot))
             self._db.executemany('INSERT OR IGNORE INTO bad(p) VALUES (?)',
                                  ((self._key(p),) for p in previous))
-            self._count = len(previous)
+            self._count = len(self)
             self._packed = None
             self.hot.clear()
         self._db.executemany('INSERT OR IGNORE INTO bad(p) VALUES (?)',

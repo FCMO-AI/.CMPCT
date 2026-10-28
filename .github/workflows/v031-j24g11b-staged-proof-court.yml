@@ -1,0 +1,68 @@
+# ci-lane: fast
+name: CMPCT J24G11b staged-u64 short-ancestry installed court
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'research/j24g11b_staged_proof_court.py'
+      - 'research/j24g11b_independent_receipt_audit.py'
+      - 'docs/v031-research/2026-10-28-j24g11b-*'
+      - '.github/workflows/v031-j24g11b-staged-proof-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  installed-source-exact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G11B_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G11B_ARTIFACTS: j24g11b-artifacts
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G11B_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind prereg and protected original source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g11b-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G11B_HEAD"
+          git merge-base --is-ancestor c363ec7dcec370509a8318dae8d5603fe5835808 HEAD
+          git merge-base --is-ancestor 19f8d0313a93655af05a365d1777a7a303a550be HEAD
+          test "$(git rev-parse 19f8d0313a93655af05a365d1777a7a303a550be:src/cmpct/reader.py)" = 4bcedb059316171963d258fc93caaa49fec56f12
+          test "$(git rev-parse da5552d4f74113de1887fdad9683b433bb6e6cf2:src/cmpct/reader.py)" = 0a8a7afa036cb4988b80836bcbe550c3b5d0bb40
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          files={}
+          for p in ['src/cmpct/reader.py','research/j24g11b_staged_proof_court.py','research/j24g11b_independent_receipt_audit.py']:
+              src=subprocess.check_output(['git','show','HEAD:'+p])
+              assert pathlib.Path(p).read_bytes()==src
+              files[p]={'sha256':hashlib.sha256(src).hexdigest(),'blob':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()}
+          pathlib.Path('j24g11b-artifacts/source.json').write_text(
+              json.dumps({'head':os.environ['J24G11B_HEAD'],'files':files},indent=2)+'\n')
+          PY
+      - name: Install and run actual four-Reader same-archive hostile court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python research/j24g11b_staged_proof_court.py 2>&1 | tee j24g11b-artifacts/court.log
+          python research/j24g11b_independent_receipt_audit.py j24g11b-artifacts/court.json | tee j24g11b-artifacts/audit.log
+      - name: Preserve original raw evidence, failures and control results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g11b-staged-proof-${{ github.sha }}
+          path: j24g11b-artifacts/
+          retention-days: 30
+          if-no-files-found: warn
