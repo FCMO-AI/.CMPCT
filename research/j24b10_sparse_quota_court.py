@@ -124,8 +124,8 @@ def execute(root: Path) -> dict:
     installed_bytes = installed.read_bytes()
     # Source pinning must survive checkout CRLF transformations on Windows, but
     # no other byte mismatch or fallback-to-checkout is admissible.
-    normalized_source = source_bytes.replace(b"\\r\\n", b"\\n")
-    normalized_installed = installed_bytes.replace(b"\\r\\n", b"\\n")
+    normalized_source = source_bytes.replace(b"\r\n", b"\n")
+    normalized_installed = installed_bytes.replace(b"\r\n", b"\n")
     assert normalized_installed == normalized_source, (
         "installed Reader differs from exact checkout beyond LF/CRLF"
     )
