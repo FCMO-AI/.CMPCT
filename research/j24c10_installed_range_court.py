@@ -159,7 +159,8 @@ def main():
     summary={}
     import platform
     host=platform.system()
-    rss_unit=1 if host=="Linux" else (1024 if host=="Darwin" else (1 if host=="Windows" else None))
+    # Linux ru_maxrss uses KiB; macOS uses bytes; Windows psapi bytes.
+    rss_unit=1024 if host=="Linux" else (1 if host in ("Darwin","Windows") else None)
     for key, arms in group.items():
         a=statistics.median(z["read_wall_ns"] for z in arms["strict"])
         b=statistics.median(z["read_wall_ns"] for z in arms["witness"])
