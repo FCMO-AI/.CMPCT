@@ -132,9 +132,33 @@ class ModelCourt(unittest.TestCase):
                 mod = copy.deepcopy(obj)
                 target = next((x for x in mod["files"] if x[1] != K_DIR), None)
                 if target:
-                    target[4] += 1
+                    # A longer sparse logical file may simply have a valid trailing hole.
+                    # A negative size is hostile for every member kind, without exception.
+                    target[4] = -1
                     with self.assertRaises(UnprovedEffect):
                         planned_logical_bytes(mod)
+                direct = next((x for x in obj["files"]
+                    if x[1] in (K_FILE, K_SYMLINK) and x[6][0] == S_BLOB), None)
+                if direct:
+                    mod = copy.deepcopy(obj)
+                    victim = next(x for x in mod["files"] if x[0] == direct[0])
+                    victim[4] += 1  # Signed nonnegative/physical disagreement.
+                    with self.assertRaises(UnprovedEffect):
+                        planned_logical_bytes(mod)
+
+    def test_alias_of_alias_and_nonregular_owner(self):
+        obj = empty()
+        row(obj, "late", K_HARDLINK, 8, ["middle"])
+        row(obj, "early", K_HARDLINK, 8, ["middle"])
+        row(obj, "middle", K_HARDLINK, 8, ["owner"])
+        row(obj, "owner", K_FILE, 8, [S_BLOB, blob(obj, 8)])
+        self.assertEqual(planned_logical_bytes(obj), 32)
+        bad = copy.deepcopy(obj)
+        bad["files"][-1][1] = K_DIR
+        bad["files"][-1][4] = 0
+        bad["files"][-1][6] = None
+        with self.assertRaises(UnprovedEffect):
+            planned_logical_bytes(bad)
 
     def test_long_forward_hardlink_chain_without_recursion(self):
         obj = empty()
