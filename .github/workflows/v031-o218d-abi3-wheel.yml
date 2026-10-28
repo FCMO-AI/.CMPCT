@@ -1,0 +1,164 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 O218d abi3 wheel cross-minor research court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-o218d-abi3-distribution-oracle-20261028
+  pull_request:
+    paths:
+      - 'research/o218d_*'
+      - '.github/workflows/v031-o218d-abi3-wheel.yml'
+      - 'docs/v031-research/2026-10-28-o218d-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: o218d-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  court:
+    name: same abi3 wheel on CPython 3.11 and 3.13 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Do not rewrite checkout source newlines
+        shell: bash
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Require prospective custody and unchanged original product/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor f96a54d058bdac24a6216ec66f47086a7ecfa1ec HEAD
+          git merge-base --is-ancestor a2d69c89769868fe4a454ce0556f6a19806f0647 HEAD
+          test "$(git rev-parse HEAD:research/o218_fastscan.c)" = a54f15181d9dbe667b9e8c9d52e927b09c80152f
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = dbd4ac576a05a47eae97e1e40de89cf1de440516
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 51c2849061f99a4afeddb7666956b24566ce7de0
+          mkdir -p o218d-evidence
+          git rev-parse HEAD > o218d-evidence/source-head.txt
+          python -m py_compile research/o218d_abi3_smoke.py research/o218d_abi3_referee.py
+      - name: Build exactly one native cp311-abi3 wheel through supported host compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install setuptools wheel
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess,sys,time,hashlib,json
+          folder=Path('research/o218d_abi3_package').resolve()
+          start=time.perf_counter_ns()
+          proc=subprocess.run([sys.executable,'setup.py','bdist_wheel','--dist-dir','dist'],cwd=folder,capture_output=True,text=True)
+          wall=(time.perf_counter_ns()-start)/1e6
+          Path('o218d-evidence/build.log').write_text(proc.stdout+'\n'+proc.stderr)
+          if proc.returncode:
+              print(proc.stdout,proc.stderr,file=sys.stderr)
+              raise SystemExit(proc.returncode)
+          paths=list((folder/'dist').glob('*.whl'))
+          assert len(paths)==1,paths
+          wire=paths[0].read_bytes()
+          data={'wheel':paths[0].name,'bytes':len(wire),'sha256':hashlib.sha256(wire).hexdigest(),'wall_ms':wall,'build_python':list(sys.version_info[:2])}
+          Path('o218d-evidence/build.json').write_text(json.dumps(data,indent=2)+'\n')
+          print('ABI3_WHEEL_BUILT',json.dumps(data))
+          PY
+      - name: Validate installed identical wheel in CPython 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install research/o218d_abi3_package/dist/*.whl
+          python research/o218d_abi3_smoke.py --wheel-dir research/o218d_abi3_package/dist --output o218d-evidence/py311.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Reuse same physical abi3 wheel on CPython 3.13 with no recompilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install research/o218d_abi3_package/dist/*.whl
+          python research/o218d_abi3_smoke.py --wheel-dir research/o218d_abi3_package/dist --output o218d-evidence/py313.json
+      - name: Independently recompute economics and reject forged receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/o218d_abi3_referee.py o218d-evidence --wheel-dir research/o218d_abi3_package/dist | tee o218d-evidence/referee.log
+          grep -q 'O218D_ABI3_INDEPENDENT_REFEREE_PASS' o218d-evidence/referee.log
+      - name: Preserve artifacts whether science succeeds or fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o218d-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            o218d-evidence/
+            research/o218d_abi3_package/dist/*.whl
+          retention-days: 30
+          if-no-files-found: warn
+
+  cross_host:
+    name: Three-host abi3 portability and source custody
+    needs: court
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: o218d-*-${{ github.event.pull_request.head.sha || github.sha }}
+          merge-multiple: false
+          path: o218d-all
+      - name: Compare distinct hosts and identical source and semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python - <<'PY'
+          from pathlib import Path
+          import json,hashlib
+          dirs=list(Path('o218d-all').iterdir())
+          assert len(dirs)==3,dirs
+          receipts={}
+          for folder in dirs:
+              ev=folder/'o218d-evidence'
+              assert (ev/'source-head.txt').read_text().strip()=='${{ github.event.pull_request.head.sha || github.sha }}'
+              a=json.loads((ev/'py311.json').read_text())
+              b=json.loads((ev/'py313.json').read_text())
+              r=json.loads((ev/'referee.json').read_text())
+              assert a['host']['os']==b['host']['os']==r['host']
+              assert r['decision']=='ABI3_WHEEL_MICRO_ROUTE_VIABLE' and r['forgeries_rejected']==5
+              assert r['wheel_sha256']==a['wheel']['sha256']==b['wheel']['sha256']
+              assert a['semantics']==b['semantics']
+              receipts[r['host']]={'semantics':a['semantics']['decision_sha256'],'wheel':r['wheel_sha256']}
+          assert set(receipts)=={'linux','darwin','win32'},receipts
+          assert len({z['semantics'] for z in receipts.values()})==1
+          Path('o218d-crosshost.json').write_text(json.dumps({'decision':'RESEARCH_ABI3_WHEEL_THREE_HOST_PASS','head':'${{ github.event.pull_request.head.sha || github.sha }}','receipts':receipts},indent=2)+'\n')
+          print('O218D_THREE_HOST_CROSS_MINOR_PASS')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: o218d-crosshost-${{ github.event.pull_request.head.sha || github.sha }}
+          path: o218d-crosshost.json
+          retention-days: 30
+          if-no-files-found: warn
