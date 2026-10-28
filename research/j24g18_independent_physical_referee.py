@@ -118,7 +118,7 @@ def audit(root, record):
                 if row["status"] == "opened":
                     expected_depth = 1 if (case in
                         ("writer-rename", "linked-undercap") or
-                        (case == "linked-overcap" and arm == "direct")) else 0
+                        (case == "linked-overcap" and arm in ("direct", "released"))) else 0
                     require(row["depth"] == expected_depth,
                             "selected depth:" + case + arm); n += 1
                     member = ("renamed.bin" if expected_depth == 1 else "owner.bin")
