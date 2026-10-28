@@ -70,7 +70,7 @@ jobs:
               wire=base64.b64decode(v["archive_base64"],validate=True)
               if len(wire)!=v["archive_bytes"] or hashlib.sha256(wire).hexdigest()!=v["archive_sha256"]:
                   raise SystemExit("frozen wire byte identity mismatch: "+v["name"])
-              if not wire.startswith(b"CMPCT24\\0"):
+              if not wire.startswith(b"CMPCT24\0"):
                   raise SystemExit("wrong frozen archive identity: "+v["name"])
           print("FIXED_LINK_FROZEN_SOURCE_ADMITTED")
           PY
