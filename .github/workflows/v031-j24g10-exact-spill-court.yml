@@ -38,7 +38,7 @@ jobs:
           git merge-base --is-ancestor ff9dfe31ac15e15ce6eef80441d430f5f5e0df48 HEAD
           git merge-base --is-ancestor 11963e53947829ce141e9910fdd4adf0d866fb5f HEAD
           test "$(git rev-parse 11963e53947829ce141e9910fdd4adf0d866fb5f:src/cmpct/reader.py)" = ec0335268d0486e41b460f14b1a3543b7cb1a589
-          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 690ab86564c9f2989ed4af0879167d8394140dd0
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 0a8a7afa036cb4988b80836bcbe550c3b5d0bb40
           python - <<'PY'
           import hashlib,json,os,pathlib,subprocess
           paths=['src/cmpct/reader.py','research/j24g10_exact_spill_court.py']
@@ -61,7 +61,7 @@ jobs:
           import json,pathlib
           r=json.loads(pathlib.Path('j24g10-artifacts/court.json').read_text())
           assert r['release_credit']==0
-          assert r['candidate_reader_blob']=='690ab86564c9f2989ed4af0879167d8394140dd0'
+          assert r['candidate_reader_blob']=='0a8a7afa036cb4988b80836bcbe550c3b5d0bb40'
           assert r['parent_reader_blob']=='ec0335268d0486e41b460f14b1a3543b7cb1a589'
           assert not r['full_RSS_bounded']
           for case in ('alternating-16400','random-16400'):
