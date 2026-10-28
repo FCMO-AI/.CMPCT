@@ -167,6 +167,19 @@ def selftest():
             except Exception:
                 continue
             raise AssertionError(name + " wrongly accepted")
+    # Exact node-count boundary, on a valid payload. Above-budget refusal
+    # deliberately changes the acceptance domain and is NOT format policy.
+    boundary_ok = msgpack.packb([None] * (CAP - 1), use_bin_type=True)
+    boundary_reject = msgpack.packb([None] * CAP, use_bin_type=True)
+    assert count_wire_nodes(boundary_ok) == CAP
+    assert gated(boundary_ok) == baseline(boundary_ok)
+    assert baseline(boundary_reject) == [None] * CAP
+    try:
+        gated(boundary_reject)
+    except TooManyNodes:
+        pass
+    else:
+        raise AssertionError("node-boundary failure")
     # Prove negative control: skip-only can miss invalid nested map keys.
     msgpack.Unpacker(io.BytesIO(bad["nested_unhashable_key"]), raw=False).skip()
     return {"valid_vectors": len(values), "malformed_vectors": len(bad),
