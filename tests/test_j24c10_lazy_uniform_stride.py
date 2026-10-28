@@ -225,6 +225,36 @@ class LazyStrideProof(unittest.TestCase):
                              changed[-13:])
             self.assertEqual(rd._chunk_stride_cache.get("fixed.bin"), 0)
 
+    def test_seeded_signed_reader_range_differential_against_strict(self):
+        rng = random.Random(241072)
+        variants = (
+            ("one-owner", [0]*128, (b"ABCD",)),
+            ("256-owner", list(range(256)), tuple(bytes([i])*4 for i in range(256))),
+            ("ragged", [0,1,2]*128, (b"ABCD", b"F", b"XYZ")),
+            ("short-tail", [0]*127+[1], (b"ABCD", b"XY")),
+        )
+        native = admission._uniform_stride
+        for label, refs, blobs in variants:
+            logical = b"".join(blobs[idx] for idx in refs)
+            path = self.root / (label + "-range-differential.cmpct")
+            path.write_bytes(_make_archive(refs, logical, blobs=blobs))
+            spans = [(len(logical), 0), (0, 0), (0, len(logical))]
+            for _ in range(200):
+                start = rng.randrange(0, len(logical)+1)
+                length = rng.randrange(0, len(logical)-start+1)
+                spans.append((start, length))
+            admission._uniform_stride = None
+            with CMPCT(path) as strict:
+                baseline = [strict.read_range("fixed.bin", start, length)
+                            for start, length in spans]
+            admission._uniform_stride = native
+            with CMPCT(path) as candidate:
+                for (start, length), expected in zip(spans, baseline):
+                    out = candidate.read_range("fixed.bin", start, length)
+                    self.assertEqual(out, expected, (label, start, length))
+                    self.assertEqual(out, logical[start:start+length],
+                                     (label, "independent literal", start, length))
+
     def test_deterministic_hostile_differential_no_false_positives(self):
         if not REQUIRED:
             self.skipTest("no native extension; strict Python is the only route")
