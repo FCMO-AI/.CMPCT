@@ -55,3 +55,8 @@ A positive exact-path outcome provides **causal falsification** and improved Win
 ## Handoff
 
 J24C11 scientific question is **decision-complete** at the causal research rung. Both original PRs remain draft; no merge/release/format version changes. Before integration, recover live #641/#652/#583 ownership, review exact HEAD/source and latest checks; do not copy new claims into canonical product state or excuse source-pinned historical CI failure. This result document is a later evidence-only commit, so CI on its new HEAD must be rechecked separately from the proved `33a3c632` code+test source.
+
+
+## Evidence-dossier CI correction (later documentary HEAD)
+
+The first evidence-only final-document commit `1569c59470626e5adeed8ffa605e870a1baaf52f` had **Engineering Evidence FAILURE**, [Actions #40646479059](https://github.com/FCMO-AI/.CMPCT/actions/runs/40646479059), because the draft PR description used noncanonical heading labels. Its product/experiment source and original three-host scientific receipts were not implicated. The original CI failure remains immutable. The draft PR body was corrected to contain every exact heading required by `tools/check_pr_evidence.py`, its disproof/quality-ratchet markers and full factual content, without altering the checker or a success threshold. **A fresh GitHub Actions run on the subsequent documentary HEAD is required before treating this CI gate as closed.** Source-exact positive J24C11 result remains tied solely to `33a3c632`.
