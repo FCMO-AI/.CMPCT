@@ -231,16 +231,19 @@ def member_read(rec):
     return raw
 
 def time_reads(blob):
-    items=read_index(blob);q1=[];whole=[]
+    items=read_index(blob);q1=[];whole=[];q1_cpu=[];whole_cpu=[]
     for _ in range(7):
-        t=time.perf_counter_ns()
+        tc=time.process_time_ns();t=time.perf_counter_ns()
         member_read(items[-1])
         q1.append((time.perf_counter_ns()-t)/1e6)
-        t=time.perf_counter_ns()
+        q1_cpu.append((time.process_time_ns()-tc)/1e6)
+        tc=time.process_time_ns();t=time.perf_counter_ns()
         for rec in items:member_read(rec)
         whole.append((time.perf_counter_ns()-t)/1e6)
-    return {'q1_ms':q1,'whole_ms':whole,
-            'median_q1_ms':statistics.median(q1),'median_whole_ms':statistics.median(whole)}
+        whole_cpu.append((time.process_time_ns()-tc)/1e6)
+    return {'q1_ms':q1,'whole_ms':whole,'q1_cpu_ms':q1_cpu,'whole_cpu_ms':whole_cpu,
+            'median_q1_ms':statistics.median(q1),'median_whole_ms':statistics.median(whole),
+            'median_q1_cpu_ms':statistics.median(q1_cpu),'median_whole_cpu_ms':statistics.median(whole_cpu)}
 
 def run_o2(root):
     root.mkdir(parents=True,exist_ok=True)
@@ -279,7 +282,8 @@ def run_o2(root):
               'portfolio_candidate_bytes':min(sizes['direct'],sizes['chunkref'],sizes['positional_coowner'])+1,
               'portfolio_selected':selected,
               'ratio_positional_over_fixed':sizes['positional_coowner']/sizes['chunkref'],
-              'read_speedup_fixed_over_positional':reads['chunkref']['median_whole_ms']/reads['positional_coowner']['median_whole_ms']}
+              'read_speedup_fixed_over_positional':reads['chunkref']['median_whole_ms']/reads['positional_coowner']['median_whole_ms'],
+              'cpu_speedup_fixed_over_positional':reads['chunkref']['median_whole_cpu_ms']/reads['positional_coowner']['median_whole_cpu_ms']}
         cases.append(case)
         (folder/'result.json').write_text(json.dumps(case,sort_keys=True,indent=2)+'\n')
         print(regime,seed,sizes,'units',min(geometry['positional_coowner']['units']),
@@ -293,7 +297,8 @@ def run_o2(root):
                  and x['complete_bytes']['positional_coowner']<=1.005*x['complete_bytes']['binary_segref']
                  for x in partial)
     joint=all(x['ratio_positional_over_fixed']<=.99
-              and x['read_speedup_fixed_over_positional']>=1.5 for x in partial)
+              and x['read_speedup_fixed_over_positional']>=1.5
+              and x['cpu_speedup_fixed_over_positional']>=1.5 for x in partial)
     receipt={'schema':'a16-o2-positional-coowner-hosted-v1',
              'source_parent':'acaa48a74c2e8859e476c629bf1debab25e89f37',
              'prereg_sha':'a0b75a33f17c67c749c467227266092ba799c224',
