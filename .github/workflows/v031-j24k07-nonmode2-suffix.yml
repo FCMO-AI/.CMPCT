@@ -1,0 +1,148 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT v031 J24K07 signed nonmode2 suffix scientific court
+
+on:
+  pull_request:
+    paths:
+      - 'tests/test_j24k07_signed_nonmode2_suffix.py'
+      - 'tests/test_j24k07b_signed_canonical_suffix.py'
+      - 'docs/v031-research/2026-10-28-j24k07-*'
+      - 'docs/v031-research/2026-10-28-j24k07b-*'
+      - '.github/workflows/v031-j24k07-nonmode2-suffix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24k07-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  three-host-signed-nonmode2-falsifier:
+    name: J24K07 signed source-preserving court - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bind exact candidate and unchanged inherited source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "b37b786966ac1506a0439567d4a58eea472d85f8"
+          test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "a5e5fd0cdaff9001d4d00e131c163c8768adc2b0"
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = "0614723549403f398a43552a7c5ad3f00fbec688"
+          test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip.json)" = "1f199cafb40ca487263ed421e0d0908402ae6c3f"
+          test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip-deflate-mode1.json)" = "06381fab57609252bfb9b887e33c2bdd480de681"
+          test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip-deflate-mode0.json)" = "663b9fdb4df560fb9572fa14bf003928a2379e5e"
+          mkdir -p j24k07-evidence
+          git rev-parse HEAD > j24k07-evidence/head.txt
+          git ls-tree HEAD src/cmpct/codec.py src/cmpct/reader.py src/cmpct/validation.py tests/conformance/v24-virtual-zip.json tests/conformance/v24-virtual-zip-deflate-mode1.json > j24k07-evidence/original-blobs.txt
+          python -m py_compile tests/test_j24k07_signed_nonmode2_suffix.py tests/test_j24k07b_signed_canonical_suffix.py
+      - name: Install real CMPCT wheel, not editable
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+      - name: Verify installed package source custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import inspect, os, subprocess
+          from pathlib import Path
+          import cmpct.codec as codec
+          import cmpct.reader as reader
+          import cmpct.validation as validation
+          root = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for mod, rel in ((codec, "src/cmpct/codec.py"), (reader, "src/cmpct/reader.py"), (validation, "src/cmpct/validation.py")):
+              path = Path(inspect.getfile(mod)).resolve()
+              assert not path.is_relative_to(root), (rel, "editable installation")
+              committed = subprocess.check_output(["git", "show", "HEAD:"+rel], cwd=root)
+              normalize = lambda b: b.replace(b"\r\n", b"\n")
+              assert normalize(path.read_bytes()) == normalize(committed), (rel, "installed source drift")
+              print("J24K07_INSTALLED_SOURCE="+rel, flush=True)
+          PY
+      - name: Execute frozen signed fixtures and inherited mode2 controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_HOME="$RUNNER_TEMP/j24k07-tests"
+          mkdir -p "$TEST_HOME/conformance"
+          cp tests/test_j24k07_signed_nonmode2_suffix.py "$TEST_HOME/"
+          cp tests/test_j24k07b_signed_canonical_suffix.py "$TEST_HOME/"
+          cp tests/test_j24k06_mode2_prefix_projection.py "$TEST_HOME/"
+          cp tests/test_j24c07c_signed_mode2_regeneration.py "$TEST_HOME/"
+          cp tests/conformance/v24-virtual-zip.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-virtual-zip-deflate-mode1.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-virtual-zip-deflate-mode0.json "$TEST_HOME/conformance/"
+          cd "$TEST_HOME"
+          python -m pytest --noconftest -q -s \
+            test_j24k07_signed_nonmode2_suffix.py \
+            test_j24k07b_signed_canonical_suffix.py \
+            test_j24k06_mode2_prefix_projection.py \
+            test_j24c07c_signed_mode2_regeneration.py \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24k07-evidence/court.txt"
+      - name: Independently count immutable experiment cells from raw stdout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("j24k07-evidence/court.txt")
+          rows = [json.loads(line.split("J24K07_RECEIPT=", 1)[1])
+                  for line in path.read_text(encoding="utf-8").splitlines()
+                  if "J24K07_RECEIPT=" in line]
+          assert len(rows) == 4, ("missing cell receipts", len(rows))
+          assert {(r["case"], r["delta"]) for r in rows} == {
+              ("stored", -1), ("stored", 1), ("retained", -1), ("retained", 1)}
+          for r in rows:
+              assert r["source_sha"] and r["source_sha"] == Path("j24k07-evidence/head.txt").read_text().strip()
+              assert r["preflight"] == "REJECT"
+              assert r["full_read"] == "REJECT" and r["verify"] == "REJECT"
+              assert r["wrong_byte_count"] >= 1 and r["truncated_probes"] == 0
+          heldout = [json.loads(line.split("J24K07B_RECEIPT=", 1)[1])
+                     for line in path.read_text(encoding="utf-8").splitlines()
+                     if "J24K07B_RECEIPT=" in line]
+          assert len(heldout) == 2, ("missing canonical-mode0 cells", len(heldout))
+          assert {r["delta"] for r in heldout} == {-1, 1}
+          for r in heldout:
+              assert r["source_sha"] == Path("j24k07-evidence/head.txt").read_text().strip()
+              assert r["case"] == "canonical" and r["preflight"] == "REJECT"
+              assert r["full_read"] == "REJECT" and r["verify"] == "REJECT"
+              assert r["wrong_byte_count"] >= 1 and r["truncated_probes"] == 0
+          Path("j24k07-evidence/heldout-canonical.json").write_text(
+              json.dumps(heldout, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print("J24K07B_CANONICAL_TWO_SIGNED_CELLS_CONFIRMED", flush=True)
+          Path("j24k07-evidence/receipts.json").write_text(
+              json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print("J24K07_ALL_FOUR_SIGNED_CELLS_CONFIRMED", flush=True)
+          PY
+      - name: Check workflow topology on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24k07-nonmode2-suffix.yml
+      - name: Preserve signed evidence even on failed prediction
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24k07-${{ matrix.os }}-${{ env.SOURCE_SHA }}
+          path: j24k07-evidence/
+          retention-days: 30
+          if-no-files-found: warn

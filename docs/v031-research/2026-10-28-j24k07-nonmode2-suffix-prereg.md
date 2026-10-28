@@ -1,0 +1,25 @@
+# J24K07 — signed non-mode2 VZIP suffix-coordinate falsifier (preregistration)
+
+Date: 2026-10-28 UTC. **Research-only; no product code, evaluator, physical format, frozen source or release mutation.** Branch is source child of [#642](https://github.com/FCMO-AI/.CMPCT/pull/642) at exact `78bc1f552fee24970228f89ac25dbf23307b0406` (released v0.30.0 / revision 24 remains unchanged). Prior source history [#623](https://github.com/FCMO-AI/.CMPCT/issues/623) and [#640](https://github.com/FCMO-AI/.CMPCT/issues/640) identifies physical projection and regenerated mode2 defects; this experiment isolates **skipped** STORED/retained mode1 length claims *without invoking strict preflight*.
+
+## Primary question and predicted result
+Can an authenticated, self-consistent index lie about a **preceding** STORED or retained-mode1 stream's compressed-size by +1 or -1 (adjusting file-size and recipe-size together, recalculating BOTH index digests), then obtain a **correct-length but wrong-byte** result from ordinary `CMPCT.read_range` on a later suffix? Predict **YES** in at least one positive-length suffix position for each of two independent original v24 goldens under both positive/negative csize mutations; `preflight_archive` should reject; legitimate goldens should reproduce their SHA and ZIP identity. No fixture hashes are to be altered.
+
+## Mechanism, simple control, counter-hypothesis
+`range_vzip()` in #642 verifies *visited* stream sizes, and verifies *skipped* mode2 streams, but advances past **skipped non-mode2** streams using signed `csize` without verifying their source lengths. The simpler control is already-available strict `preflight_archive` physical projection; it should reject these mutations but may not be part of ordinary Reader opening. Alternative explanation: current ordinary Reader admission may already validate stored/retained physical lengths, or the suffix bytes may be uniform enough that coordinate shift is unobservable; in either case this question is narrowed/falsified, not rescued by changing the corpus.
+
+## Prospective evidence ladder
+1. Source inspection plus exact immutable golden archive SHA values and original authenticated index verification.
+2. Generate two Builder-independent signed mutated archives for each of +1 and -1, preserving physical blobs and proving both copies of the freshly signed compressed index match; check file/recipe total remain equal.
+3. On each original verify full reconstruction SHA/ZIP, exact random/sequential bounded ranges, and strict admission.
+4. On each mutant capture strict preflight outcome, full read/verify outcome, and **all one-byte suffix offsets within the original declared-size overlap**. Count correct-length bytes mismatching original legitimate reconstruction *without catch-and-continue reinterpretation*. Record explicit errors separately. Negative scientific result is valid.
+5. Execute installed CMPCT on Ubuntu 24.04, macOS 14 and Windows 2022; retain machine-readable raw receipts, actual source SHA and fixture SHA. A code-free deterministic oracle may explain index arithmetic but is not product evidence.
+
+## Disproof, kill / narrow and costs
+Hypothesis is falsified for a given golden/mutation if the ordinary Reader refuses the signed malformed archive or every in-bounds suffix request rejects or returns only matching bytes; it is fully corroborated only if all four scoped mutation classes exhibit at least one correct-length wrong-byte suffix result with signed receipts on 3 hosts. Do not widen to alternate specimens after observing a negative. This tests an invalid hostile index, not authorized reading of arbitrary external memory. It does not prove hash-authenticated per-range data or release safety. Full-package CPU/wall/RSS remains unmeasured; no product change means no compression or create improvement.
+
+## Coordination and alternatives
+Before selection checked current open PRs #642 (mode2 repair), #638 (VZIP projection), #624 (strict VZIP), #644 (ABI3 sessions) and issue #623. No open implementation was located for this **skipped mode0/mode1 csize** question. It is a dependency-safe adjacent falsifier, not a duplicate implementation. Alternatives were (a) implement another local csize repair before proving a defect (rejected), (b) change revision-24 wire to add proof bytes (incompatible, rejected), (c) force entire preflight on each range (performance/ownership debt, not a cheap first oracle), and (d) test component-only offsets (weaker than actual installed signed archive evidence).
+
+## Decision implications
+If confirmed, a common authenticated segment-offset plan at Reader admission or a bounded on-demand per-owner proof is preferable to repeated stream reconstruction, particularly after #642 measured 1,048,576:1 data-work amplification for mode2. If falsified, retire this narrow family and do not create implementation debt. Preserve every negative. Discovery STATE is stale and separately owned by #574; no change until decision-changing evidence is obtained.
