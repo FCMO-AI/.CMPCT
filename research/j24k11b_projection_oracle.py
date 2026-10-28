@@ -24,7 +24,10 @@ def model(n,mode,layout):
 def project(blobs,payloads):
     rows=[]
     for rawref,method,stream_mode,streamref,csize,level in payloads:
+        if method!=0 and (method!=8 or stream_mode not in (0,1)):raise IOError('unsupported VZIP physical mode')
         idx=rawref if method==0 else streamref
+        if type(idx) is not int or idx<0 or idx>=len(blobs):raise IOError('invalid physical owner index type/bounds')
+        if type(csize) is not int or csize<0:raise IOError('invalid signed VZIP csize')
         off,us,cs,codec,ml=blobs[idx]
         compressed=int(method==8 and stream_mode==0)
         rows.append((off,us,cs,codec,ml,csize,compressed))
@@ -33,6 +36,7 @@ def project(blobs,payloads):
 def direct(wire,blobs,payloads):
     # Strong comparator consumes real r24-shaped signed descriptors directly.
     for rawref,method,stream_mode,streamref,csize,level in payloads:
+        if method!=0 and (method!=8 or stream_mode not in (0,1)):raise IOError('unsupported VZIP physical mode')
         idx=rawref if method==0 else streamref
         if type(idx) is not int or idx<0 or idx>=len(blobs):raise IOError('bad owner index')
         off,us,cs,codec,ml=blobs[idx]
@@ -92,6 +96,32 @@ def hostile(wire,blobs,payloads,native):
         results.append({'name':name,'accepted':ok})
     return results
 
+def strict_ref_hostile(wire,blobs,payloads,native):
+    """New post-falsification transfer, separately counted from frozen original 54."""
+    mid=len(payloads)//2
+    raw=list(payloads[mid])
+    cases=[]
+    def bad(name,field,value):
+        altered=list(payloads);row=list(raw);row[field]=value;altered[mid]=tuple(row)
+        cases.append((name,altered))
+    indexfield=0 if raw[1]==0 else 3
+    bad('boolean_owner',indexfield,True)
+    bad('subclass_owner',indexfield,type('SurrogateInt',(int,),{})(1))
+    bad('negative_owner',indexfield,-1)
+    bad('outside_owner',indexfield,len(blobs))
+    bad('unsupported_method',1,13)
+    bad('unsupported_stream_mode',2,2) if raw[1]==8 else bad('boolean_signed_csize',4,True)
+    results=[]
+    for name,modified in cases:
+        verdict=[]
+        for strategy in ('direct','projected_python','projected_native'):
+            try:accepted=bool(run(wire,blobs,modified,native,strategy))
+            except (TypeError,ValueError,OverflowError,OSError,IndexError):accepted=False
+            verdict.append(accepted)
+        assert verdict==[False,False,False],(name,verdict)
+        results.append({'name':name,'accepted':verdict})
+    return results
+
 def main():
     native,tmp,build_ns=base.install_native()
     cells=[]
@@ -101,6 +131,7 @@ def main():
                 wire,blobs,payloads=model(n,mode,layout)
                 assert all(run(wire,blobs,payloads,native,s) for s in ('direct','projected_python','projected_native'))
                 tests=hostile(wire,blobs,payloads,native)
+                typed_tests=strict_ref_hostile(wire,blobs,payloads,native)
                 raw,med=measurements(wire,blobs,payloads,native)
                 projected=project(blobs,payloads)
                 import sys
@@ -108,7 +139,7 @@ def main():
                 speedup={key:med['direct'][key]/med['projected_native'][key] for key in ('wall_ns','cpu_ns')}
                 row={'n':n,'mode':mode,'layout':layout,'source_sha256':hashlib.sha256(wire).hexdigest(),
                      'descriptor_count':len(blobs),'payload_count':len(payloads),
-                     'raw':raw,'median':med,'speedup_over_direct':speedup,'hostile':tests,
+                     'raw':raw,'median':med,'speedup_over_direct':speedup,'hostile':tests,'strict_ref_hostile':typed_tests,
                      'fresh_projected_python_heap_bytes':projected_bytes,
                      'class':'component_projection_model_not_product'}
                 cells.append(row)
@@ -118,7 +149,7 @@ def main():
     result={'schema':'j24k11b-projection-v1','source_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'c_scanner_sha256':hashlib.sha256(base.C_SOURCE.encode()).hexdigest(),
             'native_build_ns':build_ns,'observations':sum(len(s) for c in cells for s in c['raw'].values()),
-            'hostile_cases':sum(len(c['hostile']) for c in cells),'cells':cells,
+            'hostile_cases':sum(len(c['hostile']) for c in cells),'strict_ref_hostile_cases':sum(len(c['strict_ref_hostile']) for c in cells),'cells':cells,
             'min_4096_speedup':min_speedup,
             'decision':'PROJECTION_BRIDGE_HEADROOM' if min_speedup>=1.5 else 'PROJECTION_BRIDGE_HEADROOM_NOT_PROVEN',
             'class':'scientific_component_not_product'}
