@@ -78,6 +78,9 @@ def build_unmodified_extension(root: Path, evidence_dir: Path):
     }
 
 def run(output: Path):
+    # Child worker cwd differs; absolute artifact paths also avoid Win32 DLL-lock
+    # cleanup errors and preserve the exact loaded binary for the independent audit.
+    output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     source = inherited.source_identity()  # Reader, validator and C from actual installed source
     with tempfile.TemporaryDirectory(prefix="cmpct-o218c-") as temp:
