@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import base64, binascii, concurrent.futures, ctypes, ctypes.util, errno, hashlib, io, json, mmap, os, shutil, stat, struct, sys, tempfile, threading, time, zipfile, zlib
 from pathlib import Path
+from bisect import bisect_right
 import msgpack
 
 from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
 from .path_policy import canonical_logical_path
-from ._chunk_admission import native_chunk_ok
+from ._chunk_admission import native_chunk_ok, native_chunk_proof
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -82,6 +83,8 @@ class CMPCT:
             # too few bytes (O215); validate the SAME effective index before mmap (O208/O212/O214).
             # Validate this SAME in-memory index, never a separately reopened pathname (#546).
             canonical_seen=set()
+            # Only fully admitted native chunk lists receive a bounded, in-memory range hint.
+            self._chunk_range_marks={}
             storage_validator=None
             for row in self.files:
                 try:
@@ -95,8 +98,12 @@ class CMPCT:
                     # ABI3 is an optional positive-only proof for exact built-in S_CHUNKS.
                     # Invalid, unknown and unavailable cases ALWAYS run the inherited strict validator.
                     # This happens after canonical path admission and before mmap allocation.
-                    if storage[0]==S_CHUNKS and native_chunk_ok(storage,self.index['blobs'],row[4]):
-                        continue
+                    if storage[0]==S_CHUNKS:
+                        proof=native_chunk_proof(storage,self.index['blobs'],row[4])
+                        if proof is not False:
+                            if type(proof) is tuple:
+                                self._chunk_range_marks[row[0]]=proof
+                            continue
                     if storage_validator is None:
                         from .validation import _validate_storage
                         storage_validator=_validate_storage
@@ -324,6 +331,22 @@ class CMPCT:
             # Compressed small members remain one independent frame, preserving ZIP-like granularity.
             return self._blob(idx)[start:end]
         if storage[0]==S_CHUNKS:
+            # Native admission has already paid the whole-file exact geometry scan.
+            # Its by-product checkpoints skip the Python O(N) prefix walk; unindexed
+            # readers preserve the original path, including Python 3.10/no-extension.
+            marks=self._chunk_range_marks.get(name)
+            if marks:
+                if length==0:return b''
+                anchor=bisect_right(marks,start)-1
+                p=marks[anchor];out=[]
+                refs=storage[1]
+                for i in range(anchor*256,len(refs)):
+                    idx=refs[i];bsize=self.blobs[idx][1]
+                    if p+bsize>start and p<end:
+                        b=self._blob(idx);a=max(start,p)-p;z=min(end,p+bsize)-p;out.append(b[a:z])
+                    p+=bsize
+                    if p>=end:break
+                return b''.join(out)
             out=[];p=0
             for idx in storage[1]:
                 bsize=self.blobs[idx][1]
