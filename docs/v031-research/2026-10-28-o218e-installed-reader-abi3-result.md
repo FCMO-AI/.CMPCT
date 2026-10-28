@@ -35,6 +35,18 @@ Actual 262k one-owner median constructor wall (milliseconds), by host/minor, **s
 
 One-time ABI3 wheel distribution size: **7,580 B Linux; 4,813 B macOS; 6,758 B Windows**. One-time wheel compile wall: **1.381 s / 2.028 s / 17.622 s**, respectively; kept outside the constructor measurements but charged. Direct non-ABI3 C binary and per-interpreter compile costs retained in raw receipts, not hidden. Original unsafe no-validation floor remains faster and is not a correct candidate. Linux process VmHWM was measured, with no material demonstrated reduction attributable to ABI3; macOS/Windows whole-process RSS was **not** measured. Windows CPU timer generated **306 real 0ns observations** across both interpreters, preserved as quantization rather than fabricated positive CPU timings. Cross-host absolute times must not be compared as identical hardware.
 
+## Separate fresh-process economics — startup and repeated opens matter
+
+The raw `fresh_process_wall_ns` measure is **one newly started Python worker performing five repeated constructor calls**, including import/startup and worker setup; it is *not* a single cold-open measurement. Recomputed same-host safe-Python/ABI3 worker-process median ratio (65k one-owner / 262k one-owner):
+
+| Runner | Python 3.11 | Python 3.13 |
+|---|---|---|
+| Ubuntu 24.04 | 1.27× / 1.76× | 1.41× / 2.03× |
+| macOS 14 | 1.29× / 1.84× | 1.49× / 2.23× |
+| Windows 2022 | 1.24× / 1.66× | 1.25× / 1.67× |
+
+**Important negative:** these worker-process gains are materially lower than the pre-registered repeated-constructor-only gains for small profiles. The harness deliberately timed 5 opens per worker, so the process ratios cannot be advertised as the one-open cold-process benefit; any shipping native ABI3 module still owes a specifically pre-registered process-start/one-open crossover, optional-import penalty and multi-member mixed-index test. This counterfactual separator is inexpensive and prospective: for a one-open user workflow, import/startup may erase a meaningful share of the 2.8–4.8× constructor improvement, even though the five-open repeated-worker gains remain positive. No post-hoc relaxation of the constructor criterion occurred.
+
 ## Independent custody, reproducibility, negative controls
 
 The workflow’s independent raw-worker referee recomputed median-of-worker-medians, exact wheel/binary and physical archive SHA-256, source/prereg ancestry, both native validators' semantics, and all six results; rejected **5/5 deliberately forged scientific receipts per host/minor**, or **30/30** across six cells. Separate cross-host job checked source/wheel identity within each OS, six expected results and the common semantic fingerprint. All four GitHub jobs succeeded.
