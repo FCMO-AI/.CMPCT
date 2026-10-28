@@ -26,6 +26,8 @@ jobs:
     timeout-minutes: 30
     env:
       EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24C08_EXPECT_NATIVE: '1'
+      CMPCT_J24C13_EXPECT_NATIVE: '1'
     steps:
       - uses: actions/checkout@v6
         with:
