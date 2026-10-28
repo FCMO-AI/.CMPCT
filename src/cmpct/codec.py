@@ -199,7 +199,7 @@ def rebuild_vzip(recipe,get_content,get_stream)->bytes:
     if len(res)!=want_size or (binascii.crc32(res)&0xffffffff)!=want_crc:raise IOError('virtual ZIP reconstruction mismatch')
     return res
 
-def range_vzip(recipe,get_content,get_stream,start:int,length:int)->bytes:
+def range_vzip(recipe,get_content,get_stream,start:int,length:int,stream_size=None)->bytes:
     """Return an exact byte range from a virtual ZIP without rebuilding the whole nested archive."""
     skref,lens,payloads,want_sha,want_size,want_crc=recipe;end=start+length
     if start<0 or length<0 or end>want_size:raise ValueError('range outside virtual ZIP')
@@ -220,12 +220,22 @@ def range_vzip(recipe,get_content,get_stream,start:int,length:int)->bytes:
             if len(seg)!=csize:
                 raise IOError('virtual ZIP selective reconstruction length mismatch')
             a=max(start,outpos)-outpos;b=min(end,outpos+csize)-outpos;out.append(seg[a:b])
-        elif method==zipfile.ZIP_DEFLATED and stream_mode==2 and outpos<end:
-            # Regenerated Deflate has no stored csize oracle. To locate a later
-            # literal correctly, verify every *preceding* mode2 stream exactly.
-            # Preserve lazy reads that end before this stream and never retain
-            # an unselected reconstructed stream in the result.
-            if len(get_stream(stream_mode,streamref,level))!=csize:
+        elif outpos<end:
+            # A skipped physical stream determines every later logical offset.
+            # Checking only selected payloads lets a valid-length read return a
+            # wrong suffix byte when signed csize differs from physical size.
+            # The installed Reader supplies a metadata/header size witness;
+            # stand-alone callers retain the safe, more expensive decode control.
+            if method==zipfile.ZIP_DEFLATED and stream_mode==2:
+                # Regenerated Deflate has no physical compressed-size oracle.
+                # Retain the exact preceding-stream recompression proof.
+                physical_size=len(get_stream(stream_mode,streamref,level))
+            elif stream_size is not None:
+                physical_size=stream_size(method,stream_mode,rawref,streamref)
+            else:
+                physical_size=len(get_content(rawref) if method==zipfile.ZIP_STORED
+                                  else get_stream(stream_mode,streamref,level))
+            if physical_size!=csize:
                 raise IOError('virtual ZIP selective reconstruction length mismatch')
         outpos+=csize
         if outpos>=end:
