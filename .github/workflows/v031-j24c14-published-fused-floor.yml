@@ -1,0 +1,115 @@
+# ci-lane: fast
+# J24C14: exact three-source economic tribunal; no change to release gates.
+name: CMPCT v031 J24C14 published native fused Q6 floor
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24c14-published-fused-triplet-20261028
+  pull_request:
+    paths:
+      - 'research/j24c14_*'
+      - 'docs/v031-research/2026-10-28-j24c14-*'
+      - '.github/workflows/v031-j24c14-published-fused-floor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c14-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-three-source:
+    name: J24C14 published/native/fused installed exact-source court (Ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: candidate
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          path: released
+          ref: 80c358f8824ec1b20d349c92ed94c898090969b0
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          path: native
+          ref: a639570c1e9f9b36decae3893265be74a6d185b0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify HEAD and frozen source custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "$EVIDENCE_SHA"
+          test "$(git -C released rev-parse HEAD)" = "80c358f8824ec1b20d349c92ed94c898090969b0"
+          test "$(git -C native rev-parse HEAD)" = "a639570c1e9f9b36decae3893265be74a6d185b0"
+          test "$(git -C released hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git -C native hash-object src/cmpct/reader.py)" = "9bca5d1047f9c78984b945d7ca90e3149fe429ab"
+          test "$(git -C candidate hash-object src/cmpct/reader.py)" = "c4d1dee0a31527b814d6e1f41b77abe1cc987996"
+          test "$(git -C candidate hash-object tests/test_o215_fixed_chunk_admission.py)" = "a8efaebd9fff8b3203cfd55304d365c309ff394b"
+          python -m py_compile candidate/research/j24c14_published_fused_triplet.py candidate/research/j24c14_published_fused_referee.py
+          mkdir -p receipts
+          printf '%s\n' "$EVIDENCE_SHA" > receipts/experimental-head.txt
+      - name: Build and install exact independent noneditable product wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          for arm in released native candidate; do
+            python -m venv "$RUNNER_TEMP/j24c14-$arm"
+            py="$RUNNER_TEMP/j24c14-$arm/bin/python"
+            "$py" -m pip install --upgrade pip wheel pytest
+            "$py" -m pip install "./$arm"
+            "$py" -m pip freeze > "receipts/$arm-installed-dependencies.txt"
+            "$py" -m pip show cmpct > "receipts/$arm-installed-metadata.txt"
+          done
+      - name: Require inherited fused Reader security and exact-r24 correctness
+        shell: bash
+        env:
+          CMPCT_J24C13_EXPECT_NATIVE: '1'
+          CMPCT_J24C08_EXPECT_NATIVE: '1'
+        run: |
+          set -euo pipefail
+          # GitHub Actions owns GITHUB_WORKSPACE; merely declaring an env override
+          # does not relocate the inherited O215 vector lookup. Stage an exact
+          # byte-for-byte copy from pinned candidate without regenerating the fixture.
+          mkdir -p tests/conformance
+          cp candidate/tests/conformance/v24-chunk-maps.json tests/conformance/v24-chunk-maps.json
+          cmp candidate/tests/conformance/v24-chunk-maps.json tests/conformance/v24-chunk-maps.json
+          test -f "$GITHUB_WORKSPACE/tests/conformance/v24-chunk-maps.json"
+          "$RUNNER_TEMP/j24c14-candidate/bin/python" -m pytest --noconftest -q \
+            candidate/tests/test_j24c13_fused_native_checkpoints.py \
+            candidate/tests/test_j24c08_optional_abi3.py \
+            candidate/tests/test_o215_fixed_chunk_admission.py \
+            candidate/tests/test_reader_unsupported_blob_bits.py \
+            candidate/tests/test_reader_deflate_export_custody.py 2>&1 | tee receipts/pytest-candidate.log
+      - name: Three actual installed Readers on identical signed r24 Q6 operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/j24c14-candidate/bin/python" \
+            candidate/research/j24c14_published_fused_triplet.py \
+            --released-python "$RUNNER_TEMP/j24c14-released/bin/python" \
+            --native-python "$RUNNER_TEMP/j24c14-native/bin/python" \
+            --fused-python "$RUNNER_TEMP/j24c14-candidate/bin/python" \
+            --output receipts/j24c14-original.json
+          "$RUNNER_TEMP/j24c14-candidate/bin/python" \
+            candidate/research/j24c14_published_fused_referee.py \
+            --input receipts/j24c14-original.json \
+            --output receipts/j24c14-verdict.json
+          sha256sum receipts/j24c14-original.json receipts/j24c14-verdict.json > receipts/SHA256SUMS.txt
+      - name: Preserve raw negative or positive original evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24c14-published-native-fused-${{ env.EVIDENCE_SHA }}
+          path: receipts/
+          if-no-files-found: warn

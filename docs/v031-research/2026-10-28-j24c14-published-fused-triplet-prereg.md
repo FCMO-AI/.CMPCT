@@ -1,0 +1,26 @@
+# J24C14 — Preregistered published / ABI3 / fused Reader session floor
+
+**Status: PREDICTION LOCKED BEFORE INSTRUMENT.** Date: 2026-10-28 UTC. This is v0.31 research, not release authority.
+
+## Current authority and owned question
+Published v0.30.0/r24 Reader remains at `80c358f8824ec1b20d349c92ed94c898090969b0` (Reader blob `e716233403dabd0966863c45635e18fa5ac6afb8`). J24C12 #659 showed the J24C08 #641 native-only Reader (source `a639570c1e9f9b36decae3893265be74a6d185b0`, Reader blob `9bca5d1047f9c78984b945d7ca90e3149fe429ab`) has +8.22–15.00% Q6 session wall/CPU regression on 262,144 authenticated fixed RAW references versus the actually published Reader. J24C13 #662 (source `a66fd593a83cc4c71556d3d86d835c51abd20a96`, Reader blob `c4d1dee0a31527b814d6e1f41b77abe1cc987996`) fuses checkpoint proof into the existing ABI3 admission scan. Its exact-head workflow run `40661057739` passed 4/4 jobs on Ubuntu/macOS/Windows and Python 3.10 fallback; 3-host installed same-wheel studies show Q6 speedups versus #641, but NOT against released v0.30. This missing same-runner published comparator is the primary question here.
+
+**One question:** Does J24C13 materially reverse J24C12's released-Reader Q6 regression without being merely faster than its own slower control?
+
+## Falsifiable mechanism and controls
+The source-exact fused scanner retains complete signed reference checks; stride-256 authenticated logical offsets avoid repeated O(N) Python range scanning. Independent archive construction via pre-existing `test_o215_fixed_chunk_admission._make_archive` must use identical serialized r24 archive bytes for each arm and operation. Compare three **separately installed, noneditable** wheels on **one Ubuntu 24.04 runner**, Python 3.11, exactly pinned code identities: `released`, `native`, `fused`. The published Reader may offer weaker hostile-input validation and is used only as an economic control on valid, signed, same-input archives, never as an interchangeable safety oracle. The original strict Python Reader is historically measured in J24C12 and can be restored if comparison suggests another bottleneck; no fourth arm is necessary to decide this particular economic fork.
+
+Use the four inherited J24C12 profiles: 4,096 references/1 owner with full verify; 65,536 references/1 owner; 65,536 references/256 owners; 262,144 references/1 owner. All use six identical 16-byte queries including beginning/middle/end; maintain its order-balanced A/B/C/C/B/A process schedule (three cycles; three samples per fresh worker) and phase accounting for opening, listing, six reads, optional full verification, closing, process startup, CPU and wall. Preserve full repeated raw samples and source/fixture SHA identities. The attached source-exact auditor must recalculate medians from raw workers and reject forged source, missing worker, altered digest, missing native call, or modified thresholds. Six reads are the primary product verdict. Prior J24C13 same-wheel Q1 data are supporting research only, **not** a substitute for published-Q1 parity.
+
+## Prospective decision
+- **Strong research win** only if on both 65,536/1, 65,536/256 and 262,144/1 Q6 profiles, fused beats actually released **by at least 5% and 3.0 ms in BOTH wall and CPU** on same-runner medians. If only some rows pass, classify as `PROFILE_LIMITED`.
+- **Explicit residual debt** if fused fails any of those material Q6 rows, or is slower than native-only on a profile by both 5% and 3.0 ms in wall or CPU.
+- **RSS caution** if fused exceeds released by >8 MiB on any major profile; `rss unavailable` is not zero. Do not use RSS as a fabricated pass if telemetry unavailable.
+- **Reject as ambiguous** if source/fixture identity, answer bytes, native branch activation or ordered/complete original observations fail.
+- Even a strong research win is NOT product promotion: only valid fixed RAW `S_CHUNKS` is covered; other codecs, sparse/CDC, hardlinks, update/recovery, filesystem integrity, hostile mutation, full release benchmarks, port/wheel burden and actual Reader in-memory descriptor mutability remain outstanding.
+
+## Cheapest evidence rung, alternatives, counterfactual
+The hosted J24C13 source exact same-wheel test already survived; repeating the same test adds little. Reuse the J24C12 published triad **without modifying historical frozen evidence** and replace the strict arm with the new fused source, retaining J24C12's published and native controls. Requiring same runner and same serialized archive is necessary because combining independent CI runtimes would be an invalid attribution. Test this narrow fork before modifying the Reader, new index representation or checkpoint stride. Old O221 #583 and uniform-range #652 are alternative ownership models; their short-session negatives remain binding. A negative should retire unconditional fused promotion in the measured profile, not weaken the gate.
+
+## Ownership / concurrency / safe surface
+This independent, explicitly preregistered replication/extension is a child of #662 for measurement only. No writes to #662, #641, #659, #583 or Discovery Engine owner #574. No changes to product/format/release policies, builder, shared evaluators or thresholds. Any CI job is durable under its run ID and exact source SHA. Preserve results even if they contradict the prediction.
