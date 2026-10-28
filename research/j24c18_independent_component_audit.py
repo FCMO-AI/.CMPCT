@@ -44,7 +44,9 @@ def audit(result, source_digest):
         assert isinstance(r["digest"], str) and len(r["digest"]) == 64
         assert all(c in "0123456789abcdef" for c in r["digest"])
         assert type(r["wall_ms"]) in (int, float) and 0 < r["wall_ms"] < 10000
-        assert type(r["cpu_ms"]) in (int, float) and 0 < r["cpu_ms"] < 10000
+        # Windows CPU clock granularity can return zero for sub-tick calls;
+        # preserve it as observed, but deny quantitative CPU credit.
+        assert type(r["cpu_ms"]) in (int, float) and 0 <= r["cpu_ms"] < 10000
         if r["process_hwm_kib"] is not None:
             assert 0 < r["process_hwm_kib"] < 10_000_000
     stats = {}
@@ -63,7 +65,8 @@ def audit(result, source_digest):
             samples = [r["process_hwm_kib"] for r in vals[arm]]
             rss[arm] = statistics.median(samples) if all(v is not None for v in samples) else None
         wall_ratio = wall["fused"] / wall["control"]
-        cpu_ratio = cpu["fused"] / cpu["control"]
+        cpu_ratio = (cpu["fused"] / cpu["control"]
+                     if cpu["control"] > 0 and cpu["fused"] > 0 else None)
         extra_rss_mib = ((rss["fused"] - rss["control"]) / 1024
                          if rss["fused"] is not None and rss["control"] is not None else None)
         stats[case] = {
@@ -73,7 +76,8 @@ def audit(result, source_digest):
         }
     decisive = ("four-65536", "four-262144")
     pass_wall = all(stats[c]["wall_ratio"] <= 0.95 for c in decisive)
-    pass_cpu = all(stats[c]["cpu_ratio"] <= 1.05 for c in decisive)
+    pass_cpu = all(stats[c]["cpu_ratio"] is not None and
+                   stats[c]["cpu_ratio"] <= 1.05 for c in decisive)
     pass_mem = all(stats[c]["extra_rss_mib"] is None or
                    stats[c]["extra_rss_mib"] <= 8 for c in decisive)
     # Never turn absence of Windows HWM into measured zero. Pass_mem only
@@ -126,4 +130,4 @@ if __name__ == "__main__":
           "hostile_rejections", out["hostile_receipts_rejected"])
     for k,v in out["cases"].items():
         print(k,"ratio",round(v["wall_ratio"],4),
-              "CPU",round(v["cpu_ratio"],4),"RSS_delta_MiB",v["extra_rss_mib"])
+              "CPU",(round(v["cpu_ratio"],4) if v["cpu_ratio"] is not None else "UNMEASURABLE"),"RSS_delta_MiB",v["extra_rss_mib"])
