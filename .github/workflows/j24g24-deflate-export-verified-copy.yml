@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout candidate source exact
         uses: actions/checkout@v4
+        with:
+          ref: \${{ github.event.pull_request.head.sha || github.sha }}
       - name: Python 3.11
         uses: actions/setup-python@v5
         with:
