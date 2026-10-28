@@ -199,7 +199,7 @@ class CMPCT:
         # Immutable committed generations are memory-mapped. Slicing an mmap avoids seek/read
         # syscalls and is naturally safe for concurrent readers; the OS still faults pages lazily.
         m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos);p=pos+BHDR.size
-        if m!=BMAGIC or rus!=us:raise IOError('blob header mismatch')
+        if m!=BMAGIC or rus!=us or flags or res:raise IOError('blob header mismatch')
         meta=self.mm[p:p+rml];comp=self.mm[p+rml:p+rml+rcs]
         if c==CODEC_RAW:raw=comp
         elif c==CODEC_ZSTD:raw=zd(comp,rus)
@@ -239,7 +239,14 @@ class CMPCT:
         row=self.by[name];rel,k,mode,mt,size,h,storage=row
         if k==K_DIR:raise IsADirectoryError(name)
         if k==K_HARDLINK:return self.read(storage[0])
-        if k==K_SYMLINK:return self._blob(storage[1])
+        if k==K_SYMLINK:
+            # Symlink bytes must have the same logical length as their authenticated physical owner.
+            idx=storage[1]
+            if type(size) is not int or size!=self.blobs[idx][1]:
+                raise IOError(f'symlink size failure: {name}')
+            raw=self._blob(idx)
+            if len(raw)!=size:raise IOError(f'symlink size failure: {name}')
+            return raw
         sk=storage[0]
         if sk==S_PACK:
             pack=self._blob(storage[1]);raw=pack[storage[2]:storage[2]+storage[3]]
@@ -294,9 +301,19 @@ class CMPCT:
             # the rest of the file. This matters for already-compressed media where recompression is
             # pointless but ZIP would still normally inflate the whole member to reach a late range.
             idx=storage[1];off,us,cs,codec,ml=self.blobs[idx]
+            # Admit only ranges owned by the entire authenticated direct blob, even for empty reads.
+            if type(size) is not int or size!=us:
+                raise IOError(f'direct blob size failure: {name}')
             if codec==CODEC_RAW:
-                pos=self.record_base+off;m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+                pos=self.record_base+off
+                if pos<self.record_base or pos+BHDR.size>len(self.mm):
+                    raise IOError('RAW blob header outside archive')
+                m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+                if m!=BMAGIC or c!=CODEC_RAW or rus!=us or rcs!=cs or rml!=ml or rcs!=rus or flags or res:
+                    raise IOError('RAW blob header mismatch')
                 base=pos+BHDR.size+rml
+                if base<0 or base+rcs>len(self.mm) or end>rcs:
+                    raise IOError('RAW blob range outside physical owner')
                 return self.mm[base+start:base+end]
             # Compressed small members remain one independent frame, preserving ZIP-like granularity.
             return self._blob(idx)[start:end]
@@ -359,7 +376,7 @@ class CMPCT:
         else:
             if pos+BHDR.size>len(self.mm):raise IOError('blob header outside archive')
             m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
-        if m!=BMAGIC or c!=CODEC_RAW or rus!=us or rcs!=cs or rml!=ml or rcs!=rus:
+        if m!=BMAGIC or c!=CODEC_RAW or rus!=us or rcs!=cs or rml!=ml or rcs!=rus or flags or res:
             raise IOError('RAW blob header mismatch')
         start=pos+BHDR.size+rml;end=start+rcs
         if start<0:raise IOError('RAW blob payload outside archive')
@@ -623,8 +640,19 @@ class CMPCT:
         if row[1] not in (K_FILE,K_SYMLINK) or not storage or storage[0]!=S_BLOB:return None
         idx=storage[1];off,us,cs,codec,ml=self.blobs[idx]
         if codec!=CODEC_DEFLATE:return None
-        pos=self.record_base+off;m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+        # ZIP's zero-recompression path bypasses _blob(). It must independently honor the
+        # same signed logical owner and physical BHDR restrictions as ordinary reads.
+        if type(row[4]) is not int or row[4]!=us:
+            raise IOError('Deflate export logical owner size mismatch')
+        pos=self.record_base+off
+        if pos<self.record_base or pos+BHDR.size>len(self.mm):
+            raise IOError('Deflate export blob header outside archive')
+        m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+        if m!=BMAGIC or c!=CODEC_DEFLATE or flags or res or rus!=us or rcs!=cs or rml!=ml:
+            raise IOError('Deflate export blob header mismatch')
         p=pos+BHDR.size+rml
+        if p<0 or p+rcs>len(self.mm):
+            raise IOError('Deflate export stream outside archive')
         return self.mm[p:p+rcs],rcrc,rus
 
     def export_zip(self,out:Path,level=6):
