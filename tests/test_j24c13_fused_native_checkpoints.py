@@ -143,6 +143,24 @@ class FusedNativeCheckpointCourt(unittest.TestCase):
                     prefix += blobs[ref][1]
                 self.assertEqual(prefix, declared)
 
+    def test_malformed_optional_checkpoint_tuple_fails_closed(self):
+        p, expected = self._path("malformed-hint", [0] * 1024, [b"ABC"])
+        # Native code is treated as an optimization, not the sole safety gate.
+        # A malformed tuple cannot bypass the inherited native/strict validator
+        # or become a range map, even when its parent full index is valid.
+        malicious = (
+            (), (0,), (0, -1, 700, 1000), (0, 0, True, 0),
+            (0, 0, 3000, 9999999),
+        )
+        for hint in malicious:
+            with self.subTest(hint=hint):
+                admission._scan_refs_index = lambda *a, h=hint: h
+                with CMPCT(p) as rd:
+                    self.assertFalse(rd._chunk_range_marks)
+                    self.assertEqual(rd.read_range("fixed.bin", 2231, 19),
+                                     expected[2231:2250])
+                    self.assertEqual(rd.verify(), 1)
+
     def test_simulated_native_failure_preserves_strict_fallback_and_no_index(self):
         p, data = self._path("native-fail", [0] * 1024, [b"ABC"])
         admission._scan_refs_index = lambda *args: (_ for _ in ()).throw(RuntimeError("fault"))
