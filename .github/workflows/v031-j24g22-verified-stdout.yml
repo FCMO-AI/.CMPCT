@@ -1,0 +1,55 @@
+name: v0.31 J24G22 Verified Stdout Custody Court
+on:
+  pull_request:
+    paths:
+      - 'research/j24g22_verified_stdout_court.py'
+      - 'research/j24g22_verified_stdout_referee.py'
+      - '.github/workflows/v031-j24g22-verified-stdout.yml'
+      - 'docs/v031-research/2026-10-28-j24g22-verified-stdout-prereg.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  genuine-r24-stdout-court:
+    name: genuine-r24-stdout-court
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - name: Prove original published Reader identity
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          git status --short
+      - name: Install candidate research environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Build real Builder archives and run independent cold workers
+        run: |
+          mkdir -p test-artifacts/j24g22
+          python research/j24g22_verified_stdout_court.py --out test-artifacts/j24g22 | tee test-artifacts/j24g22/summary.txt
+      - name: Independently referee physical files and mutations
+        run: |
+          python research/j24g22_verified_stdout_referee.py test-artifacts/j24g22 --tamper-test | tee test-artifacts/j24g22/referee.txt
+      - name: Persist source and run identity
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p test-artifacts/j24g22
+          git rev-parse HEAD > test-artifacts/j24g22/source_sha.txt
+          git hash-object src/cmpct/reader.py > test-artifacts/j24g22/reader_blob.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24g22-${{ env.EVIDENCE_HEAD }}
+          path: test-artifacts/j24g22/
+          if-no-files-found: error
