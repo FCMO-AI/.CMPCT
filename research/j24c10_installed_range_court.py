@@ -45,7 +45,6 @@ def worker(args):
     import cmpct._chunk_admission as admission
     from cmpct.reader import CMPCT
     from pathlib import Path
-    import resource
     import time
     native = admission._uniform_stride
     if not callable(native):
@@ -66,7 +65,11 @@ def worker(args):
         cache = reader._chunk_stride_cache.get("fixed.bin")
     t3 = time.perf_counter_ns()
     c3 = time.process_time_ns()
-    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss if os.name != "nt" else None
+    if os.name != "nt":
+        import resource
+        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    else:
+        rss = None
     return dict(arm=args.arm,position=args.position,wire_sha256=sha(Path(args.archive).read_bytes()),
                 result_sha256=sha(result),size=size,start=start,length=length,
                 open_wall_ns=t1-t0,read_wall_ns=t2-t1,total_wall_ns=t3-t0,
