@@ -25,7 +25,8 @@ def audit(x):
     assert a["u64_extremes_exact"] and a["overflow_rejected"] and a["disk_cleanup"]
     assert a["disk_overflow_rows"] == 131074
     assert a["disk_overflow_bytes"] > 0
-    assert a["packed_payload_bytes"] == a["positive"]*8
+    assert a["packed_payload_bytes"] == a["initial_positive"]*8
+    assert a["positive"] == a["initial_positive"]+1
     assert a["packed_payload_bytes"] <= a["tier_cap_bytes"] == 1<<20
     count=0
     cases=x["cases"]
