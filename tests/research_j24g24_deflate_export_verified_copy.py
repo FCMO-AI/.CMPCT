@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """J24G24: authentic installed CMPCT direct-Deflate ZIP export physical-integrity court.
 
-Research-only: checks an expected *negative* on the released Reader; it must not
-be mistaken for a product-fix regression suite until the negative is repaired.
-Preregistration: docs/v031-research/2026-10-28-j24g24-deflate-export-integrity-prereg.md
+Candidate-only: a source-exact historical fast-path control is used on the
+same valid archive, while physical CRC corruption must be rejected by export.
+Preregistration: docs/v031-research/2026-10-28-j24g24-deflate-export-verified-copy-prereg.md
 """
 from __future__ import annotations
 
@@ -15,11 +15,12 @@ import shutil
 import struct
 import tempfile
 import time
+import types
 import zipfile
 from pathlib import Path
 
 from cmpct.builder import Builder
-from cmpct.codec import BHDR, CODEC_DEFLATE, S_BLOB
+from cmpct.codec import BHDR, CODEC_DEFLATE, S_BLOB, K_FILE, K_SYMLINK
 from cmpct.reader import CMPCT
 from cmpct.transactions import append_delete
 
@@ -31,6 +32,18 @@ CRC_FIELD_OFFSET = struct.calcsize("<4sBBHQQI")
 
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def released_fast_deflate_stream(self, row):
+    # Source-exact released method main@80c358f8, deliberately used ONLY on the
+    # uncorrupted same-input control. This is not the repair or a fixture oracle.
+    storage=row[6]
+    if row[1] not in (K_FILE,K_SYMLINK) or not storage or storage[0]!=S_BLOB:return None
+    idx=storage[1];off,us,cs,codec,ml=self.blobs[idx]
+    if codec!=CODEC_DEFLATE:return None
+    pos=self.record_base+off;m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+    p=pos+BHDR.size+rml
+    return self.mm[p:p+rcs],rcrc,rus
 
 
 def record_failure(fn):
@@ -155,15 +168,24 @@ def run() -> dict:
         # of an existing destination is still separate productization debt.
         assert damaged["zip_consumer"]["result"] != "PASS", damaged
 
+        # The historical and candidate ZIPs are compared byte-for-byte on
+        # the SAME physical source and SAME host. POSIX-vs-Win32 Builder mode
+        # metadata can differ, so one Linux ZIP hash is not a Windows oracle.
+        published_export = root / "historical_valid.zip"
+        with CMPCT(archive_path) as old_reader:
+            old_reader._direct_deflate_stream = types.MethodType(
+                released_fast_deflate_stream, old_reader)
+            old_reader.export_zip(published_export)
         good_zip = valid_export.read_bytes()
-        assert digest(good_zip) == "8445ad472bb5130e05b41bb1e1030930003a9d61d56a6a91db67605fab6afead"
+        assert good_zip == published_export.read_bytes(), (
+            "candidate changed valid ZIP bytes vs source-exact historical fast endpoint")
         bad_zip = damaged_export.read_bytes() if damaged_export.exists() else b""
         zip_diff = []
         report = {
             "court": "J24G24",
             "source_release": "v0.30.0-r24",
             "question": "Does direct-Deflate export reject source physical CRC corruption?",
-            "scientific_decision": "CANDIDATE_REJECTS_CORRUPT_DEFATE_EXPORT",
+            "scientific_decision": "CANDIDATE_REJECTS_CORRUPT_DEFLATE_EXPORT",
             "source_archive_sha256": digest(valid),
             "mutated_archive_sha256": digest(bytes(tampered)),
             "mutation_absolute_byte_offset": off,
@@ -171,6 +193,9 @@ def run() -> dict:
             "candidate_failed_export_bytes": len(bad_zip),
             "raw_member_sha256": digest(raw),
             "raw_member_bytes": len(raw),
+            "candidate_valid_zip_sha256": digest(good_zip),
+            "historical_valid_zip_sha256": digest(published_export.read_bytes()),
+            "same_host_historical_candidate_byte_identity": True,
             "baseline": reference,
             "crc_mutation": damaged,
             "product_fix": True,
@@ -180,7 +205,7 @@ def run() -> dict:
         if os.environ.get("J24G24_ARTIFACT_DIR"):
             dest = Path(os.environ["J24G24_ARTIFACT_DIR"])
             dest.mkdir(parents=True, exist_ok=True)
-            for p in (archive_path, damaged_path, valid_export, damaged_export):
+            for p in (archive_path, damaged_path, valid_export, damaged_export, published_export):
                 shutil.copyfile(p, dest / p.name)
             (dest / "report.json").write_text(
                 json.dumps(report, sort_keys=True, indent=2) + "\n")
