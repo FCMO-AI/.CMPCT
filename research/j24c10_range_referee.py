@@ -8,7 +8,8 @@ def check(payload):
     assert payload["schema"] == "j24c10-installed-range-v1"
     assert payload["product_release_credit"] is False
     rows = payload["records"]
-    unit = {"Linux": 1, "Darwin": 1024, "Windows": 1}.get(payload["host"])
+    # Linux ru_maxrss is KiB; macOS ru_maxrss and Windows psapi are bytes.
+    unit = {"Linux": 1024, "Darwin": 1, "Windows": 1}.get(payload["host"])
     assert unit is not None, payload["host"]
     assert len(rows) == 2*3*2*2*payload["repetitions"], len(rows)
     summaries={}
