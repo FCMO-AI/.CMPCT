@@ -1,0 +1,125 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24K06 signed mode2 suffix coordinate proof
+
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/codec.py'
+      - 'tests/test_j24k06_mode2_prefix_projection.py'
+      - 'tests/test_j24c07c_signed_mode2_regeneration.py'
+      - 'research/j24k06_source_guard.py'
+      - 'docs/v031-research/2026-10-28-j24k06-*'
+      - '.github/workflows/v031-j24k06-mode2-prefix-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24k06-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-mode2-prefix-proof:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: f33fa91995043bf731e5a4a786fdec0b2dcfd4eb
+          path: frozen-j24c07
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pin source and check exact bounded edit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C frozen-j24c07 rev-parse HEAD)" = "f33fa91995043bf731e5a4a786fdec0b2dcfd4eb"
+          mkdir -p j24k06-evidence
+          git rev-parse HEAD > j24k06-evidence/source-head.txt
+          git hash-object src/cmpct/codec.py > j24k06-evidence/codec-blob.txt
+          git hash-object src/cmpct/reader.py > j24k06-evidence/reader-blob.txt
+          python research/j24k06_source_guard.py --candidate . --parent frozen-j24c07 --out j24k06-evidence/source-custody.json
+          python -m py_compile src/cmpct/codec.py tests/test_j24k06_mode2_prefix_projection.py tests/test_j24c07c_signed_mode2_regeneration.py
+      - name: Install CMPCT wheel and pytest, not editable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+      - name: Verify installed Reader and codec source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import inspect, os, subprocess
+          from pathlib import Path
+          import cmpct.reader as rd
+          import cmpct.codec as co
+          root = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for module, path in ((rd,"src/cmpct/reader.py"),(co,"src/cmpct/codec.py")):
+              installed = Path(inspect.getfile(module)).resolve()
+              assert not installed.is_relative_to(root), ("editable source", path)
+              committed = subprocess.check_output(["git","show","HEAD:"+path],cwd=root)
+              norm = lambda b: b.replace(b"\r\n",b"\n")
+              assert norm(installed.read_bytes()) == norm(committed), ("source drift",path)
+              print("J24K06_INSTALLED_EXACT="+path,flush=True)
+          PY
+      - name: Test genuine signed hostile mode2 plus independent two-stream property
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_HOME="$RUNNER_TEMP/j24k06-tests"
+          mkdir -p "$TEST_HOME/conformance"
+          cp tests/test_j24k06_mode2_prefix_projection.py "$TEST_HOME/"
+          cp tests/test_j24c07c_signed_mode2_regeneration.py "$TEST_HOME/"
+          cp tests/test_j24c07_vzip_guard_composition.py "$TEST_HOME/"
+          cp tests/test_reader_deflate_export_custody.py "$TEST_HOME/"
+          cp tests/test_reader_unsupported_blob_bits.py "$TEST_HOME/"
+          cp tests/test_o215_fixed_chunk_admission.py "$TEST_HOME/"
+          cp tests/test_o212_sparse_admission.py "$TEST_HOME/"
+          cp tests/test_o214_cdc_admission.py "$TEST_HOME/"
+          cp tests/test_chunked_extract_platform_fchmod.py "$TEST_HOME/"
+          cp tests/conformance/v24-virtual-zip.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-virtual-zip-deflate-mode0.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-virtual-zip-deflate-mode1.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-chunk-maps.json "$TEST_HOME/conformance/"
+          cd "$TEST_HOME"
+          python -m pytest --noconftest -q -s \
+            test_j24k06_mode2_prefix_projection.py \
+            test_j24c07c_signed_mode2_regeneration.py \
+            test_j24c07_vzip_guard_composition.py \
+            test_reader_deflate_export_custody.py \
+            test_reader_unsupported_blob_bits.py \
+            test_o215_fixed_chunk_admission.py \
+            test_o212_sparse_admission.py \
+            test_o214_cdc_admission.py \
+            test_chunked_extract_platform_fchmod.py \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24k06-evidence/courts.txt"
+      - name: Check workflow topology on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24k06-mode2-prefix-proof.yml
+      - name: Preserve positive and negative raw receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24k06-${{ matrix.os }}-${{ env.SOURCE_SHA }}
+          path: j24k06-evidence/
+          retention-days: 30
+          if-no-files-found: warn
