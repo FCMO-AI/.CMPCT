@@ -1,0 +1,29 @@
+# A15-O0 prospective test — bounded universal reconstruction IR versus equally strong bespoke programs
+
+**Pre-result preregistration — 2026-10-28 UTC.** Scope: isolated Foundry science only. Authority: main `80c358f8824ec1b20d349c92ed94c898090969b0`, v0.30.0/r24. No Reader/Builder, native ABI, on-disk format, release policy, frozen benchmark, score, historical evidence, or shared Discovery Engine state is modified.
+
+## Primary question
+Can a *single bounded typed reconstruction interpreter* reconstruct multiple distinct information descriptions (byte-stripe shuffle; XOR-predictor; byte-difference predictor; sparse literal/zero segments; and depth<=2 compositions) exactly, with **complete description bytes and decode work near the strongest equally capable specialized control**? This tests A15's *decoder-unification cost*, NOT A05's already-observed synthetic two-stage compression headroom (#469) or A07's self-index (#475).
+
+The simplest competing explanation is that an ordinary enum switch over specialized routines accomplishes the same with less machinery. Give that alternative **the exact same operations, transforms, search/admission, shared program interning, Zstd-19 backend, and SHA-integrity information**. No strawman per-file descriptors when a shared descriptor suffices.
+
+## Frozen mechanism and tests
+- One input-independent typed instruction bytecode with finite op count <=3, no arbitrary jumps, branches, external files, recursive references, ambient code execution or nested loops. Decode terminal literal byte streams with bounded exact-length checks; zero-fill is explicitly length-budgeted. Interpreter validates exact opcode set, sizes, descriptors, stream consumption, output SHA-256.
+- Same fixed 44- or 48-byte artifact header for all arms, and charge each program byte, length field, uncompressed size, SHA-256, Zstd-19 encoded streams, any shared-program catalog and member locators. Comparisons must encode/decode the **same logical byte inputs** and support the **same selective member boundary**; do not compare IR to a solid single-stream archive as though it had selective access. A solid Zstd-19 size-only control is additional.
+- Frozen test families with independent deterministic seeds and no extension-driven selection: 16-bit and 32-bit numeric lanes, bursty zero/literal mixes, repeated byte-difference sequences, high-entropy random, and held-out variations with shuffled field order and lengths. Include member catalogs of 1, 8, and 32 members to reveal program-sharing opportunity and overhead.
+- For every tested input, compare direct Zstd, best depth<=2 specialized composition, and typed IR running *the same chosen transform*. Bespoke is allowed to reuse/deduplicate program definitions and receives the same compressor. Rebuild bytes exactly and check SHA independently.
+- Perform malicious-program tests: invalid opcode, truncated lengths, oversized zero runs, wrong raw length, wrong hash, missing payload, unexpected trailing bytes, transform parameter outside bounds, and invalid inverse order. These must reject without partial output claims.
+- Report raw repeated median CPU/wall per operation, cold decode and post-initialization decode separately where possible; Python tracemalloc peak and full-frame bytes; do not interpret microbenchmarks as product/read RSS or official release gates. Strong independent result referee must reparse serialized envelopes independently from the generating encoder and recompute decisions, with falsified-receipt controls.
+
+## Prospective falsification / decision
+A15 **FEASIBLE_RESEARCH_SEED** only if (1) all roundtrips and hostile rejections pass; (2) the IR carries <=2% AND <=128 bytes extra complete storage per member cohort against the strongest equally capable bespoke control on >=4/5 families including one held-out; and (3) <=15% median decode CPU/wall regression relative to bespoke over >=4/5 families under matched program/payload. This is a scientific feasibility hurdle, not product admission. Failure of any part yields `IR_COST_OR_CORRECTNESS_NEGATIVE`, with per-family exceptions preserved. Even a pass cannot claim reduced maintenance, product portability, cold-open, native throughput, decoder-complexity reduction, or r24 compatibility without a genuine product design and independent evidence.
+
+## Alternative explanations, risks, strongest controls
+- A fake IR may merely rename an enum. Count independent decoder implementation paths and disclose any Python helper sharing; do not award product or qualitative simplicity credit from a source-line-count scalar.
+- Zstd model dominates size: compare actual encoded full bytes; do not claim compression improvement from a one-byte opcode trick.
+- Interpreter dispatch and transient buffers may outweigh program sharing, especially single-member and high-entropy cases; preserve negatives.
+- In-place algorithmic transforms can break exactness across element widths; adversarially perturb alignment and length.
+- An IR requiring more than one independently specialized decoder defeats A15's central simplification.
+
+## Stop/reopen contract and coordination
+A15-O0 owns only new isolated `research/a15_o0_*`, one dedicated workflow, preregistration and result notes on this branch. Do not touch #469/A05, #475/A07, #676 fused Reader, #653 VZIP, #574 Discovery STATE or any other owner. Base `main` immutable release. Product incorporation is prohibited by this experiment. If a simple shared enum control dominates or the oracle fails, retire this *specific bytecode vocabulary*; reopening requires a different execution/proof frame with a newly measurable advantage. Predictions are immutable; corrections are appended separately. A final dossier must distinguish source/local/hosted measurements and pending/untested gates.

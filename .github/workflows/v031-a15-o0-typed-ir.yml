@@ -1,0 +1,37 @@
+name: v0.31 A15-O0 typed reconstruction IR science
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'research/a15_o0_*.py'
+      - 'docs/v031-research/*a15-o0*'
+      - '.github/workflows/v031-a15-o0-typed-ir.yml'
+permissions:
+  contents: read
+jobs:
+  exact-independent-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify independent compiler/runtime dependencies
+        run: |
+          python3 --version
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd libzstd1
+          zstd --version
+      - name: Run complete exact A15-O0 encoder and distinct reference decode
+        run: |
+          set -euo pipefail
+          python3 research/a15_o0_typed_reconstruction_oracle.py --out a15_o0_out
+      - name: Independent standard-tools referee, altered receipts and strongest control
+        run: |
+          set -euo pipefail
+          python3 research/a15_o0_independent_referee.py --dir a15_o0_out
+      - name: Preserve raw measured and encoded source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a15-o0-raw-source-and-independent-audit
+          path: a15_o0_out/
+          retention-days: 14
