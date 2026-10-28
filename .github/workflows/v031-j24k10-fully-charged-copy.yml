@@ -1,0 +1,96 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT v031 J24K10 fully charged VZIP source copy
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24k10_*'
+      - 'docs/v031-research/2026-10-28-j24k10-*'
+      - '.github/workflows/v031-j24k10-fully-charged-copy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24k10-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fully-charged-vzip-geometry-source-copy:
+    name: J24K10 charged quiescent source copy - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pin source owner, frozen prior fixture and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "e77578505985dd264d69425e3bc816c421ae3cdc"
+          test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "fe692c4595c1303dbc89b7d660501e4ef0f223c3"
+          test "$(git rev-parse HEAD:research/j24k09_physical_witness_economics.py)" = "e3ad370ff8253fff999f003637e30cde53a5ce52"
+          test -s docs/v031-research/2026-10-28-j24k10-full-copy-session-prereg.md
+          python -m py_compile research/j24k10_fully_charged_snapshot.py research/j24k10_receipt_referee.py
+          mkdir -p j24k10-evidence
+          git rev-parse HEAD > j24k10-evidence/source-head.txt
+          git ls-tree HEAD src/cmpct/reader.py src/cmpct/codec.py research/j24k09_physical_witness_economics.py research/j24k10_fully_charged_snapshot.py research/j24k10_receipt_referee.py > j24k10-evidence/source-blobs.txt
+      - name: Install actual CMPCT wheel
+        shell: bash
+        run: python -m pip install .
+      - name: Verify installed CMPCT source differs from checkout but equals HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import inspect, os, subprocess
+          from pathlib import Path
+          import cmpct.codec as codec
+          import cmpct.reader as reader
+          root=Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for mod, rel in ((codec,"src/cmpct/codec.py"),(reader,"src/cmpct/reader.py")):
+              installed=Path(inspect.getfile(mod)).resolve()
+              assert not installed.is_relative_to(root), (rel,"editable source")
+              committed=subprocess.check_output(["git","show","HEAD:"+rel],cwd=root)
+              norm=lambda b:b.replace(b"\r\n",b"\n")
+              assert norm(installed.read_bytes())==norm(committed), ("source mismatch",rel)
+              print("J24K10_INSTALLED_SOURCE="+rel,flush=True)
+          PY
+      - name: Run ABBA fully charged quiescent source-copy component matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k10_fully_charged_snapshot.py 2>&1 | tee j24k10-evidence/raw-observations.jsonl
+      - name: Independent stdlib referee including tampered receipt rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k10_receipt_referee.py --input j24k10-evidence/raw-observations.jsonl --output j24k10-evidence/independent-referee.json
+      - name: Check source workflow topology
+        if: runner.os == 'Linux'
+        shell: bash
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24k10-fully-charged-copy.yml
+      - name: Preserve results and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24k10-${{ matrix.os }}-${{ env.SOURCE_SHA }}
+          path: j24k10-evidence/
+          retention-days: 30
+          if-no-files-found: warn
