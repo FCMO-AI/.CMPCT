@@ -1,0 +1,97 @@
+# ci-lane: fast
+name: CMPCT J24G04 signed orphan-footer recovery decode court
+on:
+  pull_request:
+    paths:
+      - 'research/j24g04_false_footer_recovery_court.py'
+      - 'docs/v031-research/2026-10-28-j24g04-*'
+      - '.github/workflows/v031-j24g04-false-footer-recovery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  genuine-released-reader:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G04_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G04_ARTIFACTS: j24g04-artifacts
+    steps:
+      - name: Checkout exact scientific source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G04_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Confirm original released source and preregistered ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g04-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G04_HEAD"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "e716233403dabd0966863c45635e18fa5ac6afb8"
+          test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          git merge-base --is-ancestor "5ab5bc8aea5d5fef47bd5b481e756c39cdbbddad" HEAD
+          python - <<'PY'
+          import hashlib,json,pathlib,subprocess,os
+          files=["src/cmpct/reader.py","src/cmpct/codec.py",
+                 "research/j24g04_false_footer_recovery_court.py"]
+          rec={"head":os.environ["J24G04_HEAD"],"files":{}}
+          for name in files:
+              raw=subprocess.check_output(["git","show","HEAD:"+name])
+              assert raw==pathlib.Path(name).read_bytes(),name
+              rec["files"][name]={"sha256":hashlib.sha256(raw).hexdigest(),
+                                  "git_blob":subprocess.check_output(
+                                      ["git","rev-parse","HEAD:"+name],
+                                      text=True).strip()}
+          pathlib.Path("j24g04-artifacts/source.json").write_text(json.dumps(rec,indent=2)+"\n")
+          print("J24G04_SOURCE_PROVENANCE="+json.dumps(rec,sort_keys=True))
+          PY
+      - name: Install actual released CMPCT package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python - <<'PY'
+          import pathlib,subprocess,cmpct.reader
+          actual=pathlib.Path(cmpct.reader.__file__).read_bytes()
+          expected=subprocess.check_output(["git","show","HEAD:src/cmpct/reader.py"])
+          assert actual==expected,"Installed Reader did not match exact Git source"
+          assert "site-packages" in str(pathlib.Path(cmpct.reader.__file__).resolve())
+          print("J24G04_INSTALLED_READER_SOURCE_IDENTICAL=PASS")
+          PY
+      - name: Execute authentic recovery and independent count referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g04_false_footer_recovery_court.py             2>&1 | tee j24g04-artifacts/court.log
+          python - <<'PY'
+          import json,pathlib
+          j=json.loads(pathlib.Path("j24g04-artifacts/court.json").read_text())
+          assert j["status"]=="TRIANGULAR_SOURCE_DECODER_REVISITS_CONFIRMED"
+          assert j["release_credit"]==0 and j["product_source_changed"] is False
+          assert len(j["cases"])==3
+          assert all(x["calls"]==0 for x in j["baseline"])
+          assert all(x["calls"]==0 for x in j["no_magic_tail_control"]["observed"])
+          assert all(x["calls"]>=1 for x in j["valid_transaction_calls"])
+          for c,n in zip(j["cases"],(32,128,256)):
+              assert c["n"]==n and c["expected_decoder_calls"]==n*(n+1)//2
+              assert len(c["observed"])==3
+              assert all(x["calls"]==n*(n+1)//2 for x in c["observed"])
+              assert all(x["unique_footer_positions"]==n for x in c["observed"])
+          print("J24G04_INDEPENDENT_DECODER_COUNT_REFEREE=PASS")
+          PY
+      - name: Retain signed-source receipts including failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g04-recovery-court-${{ github.sha }}
+          path: j24g04-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
