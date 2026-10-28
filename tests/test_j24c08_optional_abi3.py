@@ -81,7 +81,7 @@ class InstalledOptionalAbi3(unittest.TestCase):
             ("wrong-bool", [True], b"ABCD", 4),
             ("wrong-negative", [-1], b"ABCD", 4),
             ("wrong-index", [5], b"ABCD", 4),
-            ("wrong-huge", [2 ** 120], b"ABCD", 4),
+            ("wrong-huge", [2 ** 63], b"ABCD", 4),
             ("wrong-sublist", [[0]], b"ABCD", 4),
             ("wrong-tail", [0, 0, True], b"ABCD" * 3, 12),
         ]
