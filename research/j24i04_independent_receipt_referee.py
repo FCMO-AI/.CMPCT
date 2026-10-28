@@ -63,6 +63,13 @@ def evaluate(folder: Path, record: dict | None = None,
         require(a.get(k) == b.get(k), f"engine field mismatch: {k}")
     require(len(a.get("python_source_sha256", {})) > 4, "unbound Python source")
     require(a["native_bytes"] > 0 and len(a["native_sha256"]) == 64, "native payload")
+    # The native payload itself is independently retained by the producer,
+    # so a forged self-reported SHA cannot establish source/native custody.
+    physical_native = folder / "native-source-cmpct-core.so"
+    require(physical_native.exists() and
+            physical_native.stat().st_size == a["native_bytes"] and
+            sha_file(physical_native) == a["native_sha256"],
+            "retained physical native payload disagrees with signed-source receipt")
     require(a["engine_root"] != b["engine_root"], "same physical source location")
     for e in (a, b):
         for k in ("package", "native"):
