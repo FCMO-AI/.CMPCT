@@ -179,7 +179,8 @@ def main():
     late_keys=[f'{n}/{family}/late' for n in (65536,262144)
                 for family in ("one","owners256")]
     wall_gate=all(summary[k]["ratio_strict_over_witness"]>=2.0 for k in late_keys)
-    cpu_direction=all(summary[k]["cpu_ratio"]>1.0 for k in late_keys)
+    cpu_measured=all(summary[k]["cpu_ratio"] is not None for k in late_keys)
+    cpu_direction=cpu_measured and all(summary[k]["cpu_ratio"]>1.0 for k in late_keys)
     negative_keys=[k for k in summary if k.endswith("/early") or "/ragged/" in k]
     no_early_or_ragged_debt=all(summary[k]["ratio_strict_over_witness"]>=1/1.05
                                 for k in negative_keys)
@@ -192,6 +193,7 @@ def main():
              "reader_sha256":sha(path.read_bytes()),"python":sys.version,
              "repetitions":args.repetitions,"records":run,"summary":summary,
              "late_four_profile_wall_gate":wall_gate,
+             "late_four_profile_cpu_measured":cpu_measured,
              "late_four_profile_cpu_direction":cpu_direction,
              "early_ragged_no_gt5pct_debt":no_early_or_ragged_debt,
              "rss_measured":rss_measured,"rss_no_gt8mib_debt":rss_gate if rss_measured else None,
