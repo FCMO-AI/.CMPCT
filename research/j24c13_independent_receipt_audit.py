@@ -20,9 +20,12 @@ def audit(source):
     assert reps>=3 and len(raw)==20*2*reps, (len(raw),reps)
     groups=defaultdict(list)
     for entry in raw:
-        for key in ("session_wall_ns","open_wall_ns","read_wall_ns",
-                    "session_cpu_ns","open_cpu_ns","read_cpu_ns","process_wall_ns"):
+        for key in ("session_wall_ns","open_wall_ns","read_wall_ns","process_wall_ns"):
             assert isinstance(entry[key],int) and entry[key]>0, (entry["case"],key)
+        # Windows process CPU clocks may quantize short reads to zero. Preserve
+        # the raw zero as unmeasurable; never call it zero work or infer speedup.
+        for key in ("session_cpu_ns","open_cpu_ns","read_cpu_ns"):
+            assert isinstance(entry[key],int) and entry[key]>=0, (entry["case"],key)
         assert entry["open_wall_ns"]+entry["read_wall_ns"]==entry["session_wall_ns"]
         assert entry["open_cpu_ns"]+entry["read_cpu_ns"]==entry["session_cpu_ns"]
         assert entry["source_head"]==head
@@ -53,12 +56,14 @@ def audit(source):
                 med[arm]=statistics.median(values)
             expected.append(dict(case=case,field=key,original_ns=med["native-original"],
                                  fused_ns=med["fused"],
-                                 speedup=med["native-original"]/med["fused"]))
+                                 speedup=(med["native-original"]/med["fused"]
+                                          if med["fused"] else None)))
     assert len(expected)==len(data["summary"])==100
     for computed,reported in zip(expected,data["summary"]):
         for key in computed:
             if key=="speedup":
-                assert abs(computed[key]-reported[key])<1e-9
+                if computed[key] is None: assert reported[key] is None
+                else: assert abs(computed[key]-reported[key])<1e-9
             else:
                 assert computed[key]==reported[key], (key,computed,reported)
     q6=[x for x in expected if x["field"]=="session_wall_ns" and "-q6-" in x["case"]]
