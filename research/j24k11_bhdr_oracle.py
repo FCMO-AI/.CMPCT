@@ -40,7 +40,7 @@ static PyObject* scan(PyObject *self,PyObject *args) {
     uint64_t base=0;
     if(!PyArg_ParseTuple(args,"OOO",&wire,&rows,&base_obj))return NULL;
     if(!scalar_u64(base_obj,&base))Py_RETURN_FALSE;
-    if(!PyList_Check(rows))Py_RETURN_FALSE;
+    if(!PyList_CheckExact(rows))Py_RETURN_FALSE;
     if(PyObject_GetBuffer(wire,&view,PyBUF_SIMPLE)!=0)return NULL;
     int ok=1;
     const unsigned char *data=(const unsigned char*)view.buf;
@@ -123,7 +123,7 @@ def fixture(n, mode, seed=411):
         us=1+(i*13)%31; ml=(i%3)
         if mode==0:codec=RAW;cs=us
         elif mode==1:codec=DEFLATE;cs=3+(i%11)
-        else:codec=RAW;cs=us
+        else:codec=1;cs=3+(i%11) # opaque retained stream encoded as Zstd physical blob
         blob=bytes(rng.getrandbits(8) for _ in range(cs))
         data=bytes(rng.getrandbits(8) for _ in range(ml))
         digest=hashlib.sha256(blob).digest()
