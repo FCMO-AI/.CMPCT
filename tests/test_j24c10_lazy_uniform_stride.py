@@ -180,6 +180,32 @@ class LazyStrideProof(unittest.TestCase):
                 outcomes.append((type(error.exception).__name__, str(error.exception)))
         self.assertEqual(outcomes[0], outcomes[1])
 
+    def test_structured_positive_and_single_interior_mutation_differential(self):
+        if not REQUIRED:
+            self.skipTest("native witness absent on Python 3.10")
+        rng = random.Random(241001)
+        for case in range(1200):
+            stride = rng.randrange(2, 65)
+            tail = rng.randrange(1, stride + 1)
+            n = rng.randrange(3, 130)
+            blobs = [_blob_row(stride) for _ in range(6)]
+            blobs.append(_blob_row(tail))
+            blobs.append(_blob_row(stride - 1))
+            refs = [rng.randrange(6) for _ in range(n - 1)] + [6]
+            size = stride * (n - 1) + tail
+            self.assertEqual(_strict_uniform(refs, blobs, size), stride)
+            self.assertEqual(admission.native_uniform_stride([1, refs], blobs, size),
+                             stride, ("positive", case))
+            # A single different interior physical length can leave the
+            # signed total valid when its declared size is updated. It must
+            # NOT acquire the original stride or be mislocated arithmetically.
+            wrong = list(refs)
+            wrong[rng.randrange(1, n - 1)] = 7
+            altered_size = size - 1
+            self.assertEqual(_strict_uniform(wrong, blobs, altered_size), 0)
+            self.assertEqual(admission.native_uniform_stride([1, wrong], blobs, altered_size),
+                             0, ("mutant", case))
+
     def test_deterministic_hostile_differential_no_false_positives(self):
         if not REQUIRED:
             self.skipTest("no native extension; strict Python is the only route")
