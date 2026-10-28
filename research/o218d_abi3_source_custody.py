@@ -8,7 +8,6 @@ checker / permitting a broken or weaker control.
 from __future__ import annotations
 import hashlib
 from pathlib import Path
-import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIGINAL = ROOT / "research" / "o218_fastscan.c"
@@ -29,10 +28,10 @@ def check() -> dict:
                 .replace("PyList_GET_SIZE(", "PyList_Size(")
                 .replace("PyList_GET_ITEM(", "PyList_GetItem("))
     assert old.count("PyList_GET_SIZE(") == 3
-    assert old.count("PyList_GET_ITEM(") == 2
+    assert old.count("PyList_GET_ITEM(") == 3
     assert expected.encode("utf-8") == ABI3.read_bytes(), (
         "unapproved abi3 predicate source mutation")
-    assert "Py_LIMITED_API=0x030B0000" in expected.replace(" ", "")
+    assert "#define Py_LIMITED_API 0x030B0000" in expected
     assert "PyList_GET_SIZE(" not in expected
     assert "PyList_GET_ITEM(" not in expected
     assert "PyList_Size(" in expected and "PyList_GetItem(" in expected
@@ -43,7 +42,7 @@ def check() -> dict:
         "max_rewrite_scope": [
             "one Py_LIMITED_API 3.11 define",
             "three PyList_GET_SIZE->PyList_Size",
-            "two PyList_GET_ITEM->PyList_GetItem",
+            "three PyList_GET_ITEM->PyList_GetItem",
             "one explanatory comment update",
         ],
     }
