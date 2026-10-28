@@ -9,6 +9,7 @@ on:
       - 'src/cmpct/reader.py'
       - 'tests/test_j24k09_*'
       - 'research/j24k09_source_guard.py'
+      - 'research/j24k09_*'
       - 'docs/v031-research/2026-10-28-j24k09-*'
       - '.github/workflows/v031-j24k09-vzip-physical-size.yml'
   workflow_dispatch:
@@ -129,6 +130,42 @@ jobs:
               assert all(x["wall_ns"] >= 0 and x["cpu_ns"] >= 0
                          for values in r["raw"].values() for x in values)
           print("J24K09_COMPONENT_RAW_SAMPLE_AUDIT_PASS")
+          PY
+      - name: Compare fully charged immutable-snapshot proof ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24k09_session_economics.py \
+            2>&1 | tee j24k09-evidence/session.txt
+      - name: Audit prospective session cost matrix and cache charge
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = [json.loads(line.split("J24K09B_SESSION=",1)[1])
+                  for line in Path("j24k09-evidence/session.txt").read_text().splitlines()
+                  if "J24K09B_SESSION={" in line]
+          assert {(r["streams"],r["queries"]) for r in rows} == {
+              (n,q) for n in (64,512,4096) for q in (1,8,64)}
+          for r in rows:
+              assert r["class"] == "immovable_source_snapshot_oracle_not_product"
+              assert r["physically_charged_prevalidation"]
+              assert r["concurrent_same_inode_cache_invalidity_unresolved"]
+              assert set(r["raw"]) == {
+                  "per_query_physical","per_session_verified","unsafe_no_witness"}
+              assert len(r["raw"]["per_query_physical"]) == 10
+              assert len(r["raw"]["per_session_verified"]) == 10
+              assert len(r["raw"]["unsafe_no_witness"]) == 5
+              for strategy, samples in r["raw"].items():
+                  for sample in samples:
+                      assert sample["wall_ns"] >= 0 and sample["cpu_ns"] >= 0
+                      if strategy == "per_session_verified":
+                          assert sample["extra_cache_bytes"] > 0
+                      else:
+                          assert sample["extra_cache_bytes"] == 0
+          print("J24K09B_FULLY_CHARGED_SESSION_MATRIX_PASS")
           PY
       - name: Audit six frozen signed mutation transfers
         shell: bash
