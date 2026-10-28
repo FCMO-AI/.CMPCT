@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/j24g25-deflate-read-export-compat.yml'
       - 'tests/research_j24g25_deflate_read_export_compat.py'
+      - 'research/j24g25_physical_wire_referee.py'
       - 'docs/v031-research/2026-10-28-j24g25-*.md'
   workflow_dispatch:
 
@@ -41,12 +42,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
+          python -m pip install zstandard
       - name: Run actual installed Reader read-vs-export signed wire court
         shell: bash
         env:
           J24G25_ARTIFACT_DIR: ${{ runner.temp }}/j24g25-evidence
         run: |
           python tests/research_j24g25_deflate_read_export_compat.py
+      - name: Independently audit physical CMPCT indexes, Deflate records and ZIP bytes
+        shell: bash
+        env:
+          J24G25_ARTIFACT_DIR: ${{ runner.temp }}/j24g25-evidence
+        run: |
+          python research/j24g25_physical_wire_referee.py "$J24G25_ARTIFACT_DIR"
       - name: Confirm inherited PR284 safety suite unchanged
         shell: bash
         run: |
