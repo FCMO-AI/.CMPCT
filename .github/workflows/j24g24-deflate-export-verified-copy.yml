@@ -1,0 +1,51 @@
+# ci-lane: fast
+concurrency:
+  group: j24g24-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+name: J24G24 Verified Deflate ZIP Copy
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/j24g24-deflate-export-verified-copy.yml'
+      - 'tests/research_j24g24_deflate_export_verified_copy.py'
+      - 'src/cmpct/reader.py'
+      - 'docs/v031-research/2026-10-28-j24g24-*.md'
+  workflow_dispatch:
+
+jobs:
+  source-exact-candidate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    timeout-minutes: 18
+    steps:
+      - name: Checkout candidate source exact
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install package with shipping native core
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Run source-exact physical r24 Deflate court
+        shell: bash
+        env:
+          J24G24_ARTIFACT_DIR: ${{ runner.temp }}/j24g24-evidence
+        run: |
+          python tests/research_j24g24_deflate_export_verified_copy.py
+      - name: Preserve original physical evidence and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g24-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/j24g24-evidence/
+          if-no-files-found: warn

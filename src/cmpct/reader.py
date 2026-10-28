@@ -497,14 +497,71 @@ class CMPCT:
         return ztime,zdate
 
     def _direct_deflate_stream(self,row):
-        """Return (stream, crc32, usize) when a file already lives as exact raw Deflate bytes."""
+        """Return verified original raw-Deflate bytes for zero-recompression ZIP export.
+
+        Footnote: the physical r24 Deflate header is not self-authenticating. Returning its
+        raw CRC and encoded bytes without decoding let export_zip publish a broken ZIP from
+        an archive whose ordinary read/verify rejected the same CRC-bit corruption (J24G23).
+        Verify one immutable compressed-byte snapshot before transferring it across formats.
+        Bounded decode output avoids materializing a large second uncompressed copy solely
+        to preserve the original Deflate stream.
+        """
         storage=row[6]
         if row[1] not in (K_FILE,K_SYMLINK) or not storage or storage[0]!=S_BLOB:return None
         idx=storage[1];off,us,cs,codec,ml=self.blobs[idx]
         if codec!=CODEC_DEFLATE:return None
-        pos=self.record_base+off;m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+        pos=self.record_base+off
+        if pos<0 or pos+BHDR.size>len(self.mm):raise IOError('Deflate export blob header outside archive')
+        m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+        if m!=BMAGIC or c!=CODEC_DEFLATE or rus!=us or rcs!=cs or rml!=ml or rus!=row[4]:
+            raise IOError('Deflate export blob geometry mismatch')
         p=pos+BHDR.size+rml
-        return self.mm[p:p+rcs],rcrc,rus
+        if p<0 or p+rcs>len(self.mm):raise IOError('Deflate export blob outside archive')
+        # Slicing mmap takes the same compressed-byte snapshot the old fast path returned;
+        # downstream ZIP emission must use this exact object, not reread mutable mmap bytes.
+        stream=self.mm[p:p+rcs]
+        decoder=zlib.decompressobj(-15);digest=hashlib.sha256();crc=0;decoded=0
+        chunk_size=64*1024
+        def charge(output):
+            nonlocal crc,decoded
+            decoded+=len(output)
+            if decoded>rus:raise IOError('Deflate export size overrun')
+            crc=binascii.crc32(output,crc)
+            digest.update(output)
+        try:
+            for offset in range(0,len(stream),chunk_size):
+                pending=stream[offset:offset+chunk_size]
+                # Both published raw-Deflate readers accept unused trailing bytes
+                # after end-of-stream; copying the exact original Deflate stream
+                # must not narrow that historical acceptance contract.
+                if decoder.eof:break
+                # max_length bounds each materialized decoder output, including hostile
+                # high-ratio streams. The iteration cap also bounds no-progress loops.
+                for _ in range(rus//chunk_size+len(pending)+20):
+                    previous=len(pending)
+                    output=decoder.decompress(pending,chunk_size)
+                    pending=decoder.unconsumed_tail
+                    charge(output)
+                    if decoder.eof:break
+                    if pending:
+                        if len(pending)==previous and not output:raise IOError('Deflate export no progress')
+                        continue
+                    if len(output)==chunk_size:
+                        pending=b''
+                        continue
+                    break
+                else:raise IOError('Deflate export decode step limit')
+            for _ in range(rus//chunk_size+20):
+                if decoder.eof:break
+                output=decoder.decompress(b'',chunk_size)
+                charge(output)
+                if not output:break
+            else:raise IOError('Deflate export drain step limit')
+        except zlib.error as exc:
+            raise IOError('Deflate export decode failure') from exc
+        if not decoder.eof or decoded!=rus or (crc&0xffffffff)!=rcrc or digest.digest()!=rh:
+            raise IOError('Deflate export blob integrity failure')
+        return stream,rcrc,rus
 
     def export_zip(self,out:Path,level=6):
         """Export a conventional Deflate ZIP while reusing CMPCT's existing compressed streams.
