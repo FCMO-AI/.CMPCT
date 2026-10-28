@@ -117,13 +117,28 @@ def execute(root: Path) -> dict:
     assert len(actual_bad) - L == B - 1 == 8_191
 
     installed = Path(inspect.getfile(CMPCT)).resolve()
+    source_path = Path(__file__).resolve().parents[1] / "src" / "cmpct" / "reader.py"
+    source_path = source_path.resolve()
+    assert installed != source_path, "Reader was imported from checkout, not installed package"
+    source_bytes = source_path.read_bytes()
+    installed_bytes = installed.read_bytes()
+    # Source pinning must survive checkout CRLF transformations on Windows, but
+    # no other byte mismatch or fallback-to-checkout is admissible.
+    normalized_source = source_bytes.replace(b"\\r\\n", b"\\n")
+    normalized_installed = installed_bytes.replace(b"\\r\\n", b"\\n")
+    assert normalized_installed == normalized_source, (
+        "installed Reader differs from exact checkout beyond LF/CRLF"
+    )
     source_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     result = {
         "schema": "cmpct-j24b10-court-v1",
         "decision": "CONFIRMED_SPARSE_SIGNED_EXTENT_QUOTA_OVERRUN",
         "source_head": source_sha,
         "installed_reader_path": str(installed),
-        "installed_reader_sha256": hashlib.sha256(installed.read_bytes()).hexdigest(),
+        "installed_reader_sha256": hashlib.sha256(installed_bytes).hexdigest(),
+        "source_reader_sha256": hashlib.sha256(source_bytes).hexdigest(),
+        "reader_normalized_sha256": hashlib.sha256(normalized_source).hexdigest(),
+        "installed_source_identity_pass": True,
         "platform": __import__('platform').platform(),
         "python": __import__('sys').version,
         "original_archive_sha256": hashlib.sha256(good_path.read_bytes()).hexdigest(),
