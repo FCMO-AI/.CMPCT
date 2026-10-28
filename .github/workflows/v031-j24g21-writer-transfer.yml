@@ -39,7 +39,7 @@ jobs:
           python - <<'PY'
           import hashlib,json,os,pathlib,subprocess
           paths=['research/j24g21_writer_transfer_court.py','research/j24g19_certified_projection.py',
-                 'research/j24g19_certified_subset.c','src/cmpct/transactions.py','src/cmpct/reader.py']
+                 'research/j24g19_certified_subset.c','research/j24g21_independent_referee.py','src/cmpct/transactions.py','src/cmpct/reader.py']
           hashes={}
           for path in paths:
               raw=pathlib.Path(path).read_bytes()
@@ -67,6 +67,11 @@ jobs:
         run: |
           set -euo pipefail
           python research/j24g21_writer_transfer_court.py --out j24g21-artifacts --repeats 5 | tee j24g21-artifacts/court.log
+      - name: Independent physical receipt and forged-evidence referee
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24g21_independent_referee.py
+          python research/j24g21_independent_referee.py j24g21-artifacts | tee j24g21-artifacts/independent-referee.json
       - name: Preserve raw source identity and physical files
         if: always()
         uses: actions/upload-artifact@v4
