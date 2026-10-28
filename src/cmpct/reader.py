@@ -531,7 +531,10 @@ class CMPCT:
         try:
             for offset in range(0,len(stream),chunk_size):
                 pending=stream[offset:offset+chunk_size]
-                if decoder.eof:raise IOError('Deflate export trailing stream')
+                # Both published raw-Deflate readers accept unused trailing bytes
+                # after end-of-stream; copying the exact original Deflate stream
+                # must not narrow that historical acceptance contract.
+                if decoder.eof:break
                 # max_length bounds each materialized decoder output, including hostile
                 # high-ratio streams. The iteration cap also bounds no-progress loops.
                 for _ in range(rus//chunk_size+len(pending)+20):
@@ -539,8 +542,6 @@ class CMPCT:
                     output=decoder.decompress(pending,chunk_size)
                     pending=decoder.unconsumed_tail
                     charge(output)
-                    if decoder.unused_data or (decoder.eof and (pending or offset+chunk_size<len(stream))):
-                        raise IOError('Deflate export trailing stream')
                     if decoder.eof:break
                     if pending:
                         if len(pending)==previous and not output:raise IOError('Deflate export no progress')
@@ -554,7 +555,6 @@ class CMPCT:
                 if decoder.eof:break
                 output=decoder.decompress(b'',chunk_size)
                 charge(output)
-                if decoder.unused_data:raise IOError('Deflate export trailing stream')
                 if not output:break
             else:raise IOError('Deflate export drain step limit')
         except zlib.error as exc:
