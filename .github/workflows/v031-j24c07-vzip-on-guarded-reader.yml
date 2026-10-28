@@ -1,0 +1,133 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: v031 J24C07 VZIP physical projection on guarded Reader
+
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/validation.py'
+      - 'src/cmpct/codec.py'
+      - 'tests/test_j24c07_vzip_guard_composition.py'
+      - 'research/j24c07_source_custody.py'
+      - 'docs/v031-research/2026-10-28-j24c07-*'
+      - '.github/workflows/v031-j24c07-vzip-on-guarded-reader.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c07-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-guarded-vzip-composition:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 0a128ff55c7ae0f14c6bdf019a81b40f0d894eff
+          path: frozen-j24c03
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: a4b54266f7cb09e03f9d8704155774b10d6351ab
+          path: frozen-j24k05
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify source identity and prove exactly bounded transfer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24c07-evidence
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C frozen-j24c03 rev-parse HEAD)" = "0a128ff55c7ae0f14c6bdf019a81b40f0d894eff"
+          test "$(git -C frozen-j24k05 rev-parse HEAD)" = "a4b54266f7cb09e03f9d8704155774b10d6351ab"
+          git rev-parse HEAD > j24c07-evidence/source-head.txt
+          git hash-object src/cmpct/reader.py > j24c07-evidence/reader-blob.txt
+          git hash-object src/cmpct/validation.py > j24c07-evidence/validator-blob.txt
+          git hash-object src/cmpct/codec.py > j24c07-evidence/codec-blob.txt
+          git hash-object tests/test_j24c07_vzip_guard_composition.py > j24c07-evidence/court-blob.txt
+          python research/j24c07_source_custody.py --candidate . --parent frozen-j24c03 --owner frozen-j24k05 --out j24c07-evidence/source-custody.json
+          python -m py_compile src/cmpct/validation.py src/cmpct/codec.py tests/test_j24c07_vzip_guard_composition.py research/j24c07_source_custody.py
+      - name: Install actual CMPCT wheel and pytest, not editable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+      - name: Independently verify installed source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import inspect, os, subprocess
+          from pathlib import Path
+          import cmpct.reader as rd
+          import cmpct.validation as va
+          import cmpct.codec as co
+          root = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for module, path in ((rd, "src/cmpct/reader.py"),
+                               (va, "src/cmpct/validation.py"),
+                               (co, "src/cmpct/codec.py")):
+              installed = Path(inspect.getfile(module)).resolve()
+              assert not installed.is_relative_to(root), ("noneditable site install required", path)
+              committed = subprocess.check_output(["git", "show", "HEAD:" + path], cwd=root)
+              normalize = lambda b: b.replace(b"\r\n", b"\n")
+              assert normalize(installed.read_bytes()) == normalize(committed), ("installed drift", path)
+              print("J24C07_INSTALLED_SOURCE_EXACT=" + path, flush=True)
+          PY
+      - name: Run source-identical VZIP hostile/positive court and inherited safety courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_HOME="$RUNNER_TEMP/j24c07-tests"
+          mkdir -p "$TEST_HOME/conformance"
+          cp tests/test_j24c07_vzip_guard_composition.py "$TEST_HOME/"
+          cp tests/test_reader_deflate_export_custody.py "$TEST_HOME/"
+          cp tests/test_reader_unsupported_blob_bits.py "$TEST_HOME/"
+          cp tests/test_o215_fixed_chunk_admission.py "$TEST_HOME/"
+          cp tests/test_o212_sparse_admission.py "$TEST_HOME/"
+          cp tests/test_o214_cdc_admission.py "$TEST_HOME/"
+          cp tests/test_chunked_extract_platform_fchmod.py "$TEST_HOME/"
+          cp tests/conformance/v24-virtual-zip.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-virtual-zip-deflate-mode0.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-virtual-zip-deflate-mode1.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-chunk-maps.json "$TEST_HOME/conformance/"
+          cd "$TEST_HOME"
+          python -m pytest --noconftest -q -s \
+            test_j24c07_vzip_guard_composition.py \
+            test_reader_deflate_export_custody.py \
+            test_reader_unsupported_blob_bits.py \
+            test_o215_fixed_chunk_admission.py \
+            test_o212_sparse_admission.py \
+            test_o214_cdc_admission.py \
+            test_chunked_extract_platform_fchmod.py \
+            2>&1 | tee "$GITHUB_WORKSPACE/j24c07-evidence/courts.txt"
+      - name: Check workflow topology on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24c07-vzip-on-guarded-reader.yml
+      - name: Preserve raw receipts including negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24c07-${{ matrix.os }}-${{ env.SOURCE_SHA }}
+          path: j24c07-evidence/
+          retention-days: 30
+          if-no-files-found: warn
