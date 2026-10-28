@@ -76,8 +76,10 @@ def worker(manifest, arm):
 def run(args):
     sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tests"))
     from test_o215_fixed_chunk_admission import _make_archive
-    prior=Path(args.owner_python).resolve()
-    new=Path(args.sealed_python).resolve()
+    # Venv python executables often symlink to the SAME host interpreter.
+    # Keep the distinct venv entrypoint paths; .resolve() erases isolation.
+    prior=Path(args.owner_python).absolute()
+    new=Path(args.sealed_python).absolute()
     assert prior!=new and prior.exists() and new.exists()
     raw=[]
     with tempfile.TemporaryDirectory(prefix="cmpct-j24c17-direct-cost-") as td:
