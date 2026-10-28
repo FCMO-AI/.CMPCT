@@ -30,7 +30,7 @@ from j24g09_invalid_ancestry_ap_court import PAYLOAD, digest, orphan_tail, varia
 
 PARENT = "11963e53947829ce141e9910fdd4adf0d866fb5f"
 PARENT_BLOB = "ec0335268d0486e41b460f14b1a3543b7cb1a589"
-CANDIDATE_BLOB = "690ab86564c9f2989ed4af0879167d8394140dd0"
+CANDIDATE_BLOB = "0a8a7afa036cb4988b80836bcbe550c3b5d0bb40"
 N = 16400
 REPEATS = 3
 
