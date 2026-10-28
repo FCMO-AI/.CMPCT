@@ -1,0 +1,74 @@
+# ci-lane: fast
+# J24C18 component-only C copy versus original native proof plus CPython tuple.
+# Do NOT treat a successful hosted court as Reader/release product evidence.
+name: CMPCT v031 J24C18 fused C tuple ownership falsifier
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24c18-native-fused-freeze-falsifier-20261028
+  pull_request:
+    paths:
+      - 'research/j24c18_*'
+      - 'docs/v031-research/*j24c18*'
+      - '.github/workflows/v031-j24c18-fused-freeze-falsifier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24c18-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-component:
+    name: C fused-copy component court - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Confirm exact source and compiler dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_SHA"
+          python -m pip install --upgrade setuptools wheel
+          mkdir -p receipts
+          python - <<'PY'
+          import hashlib, pathlib, sys
+          p=pathlib.Path("research/j24c18_fused_copy_component.c")
+          print("J24C18_COMPONENT_SOURCE_SHA256",hashlib.sha256(p.read_bytes()).hexdigest())
+          print("J24C18_PYTHON",sys.version)
+          assert p.read_text("utf-8").count("scan_refs_index_copy") >= 2
+          PY
+      - name: Execute source-exact native A/B with fresh worker processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24c18_fused_freeze_component_oracle.py \
+            --output receipts/j24c18-raw.json --repetitions 9
+      - name: Independent referee - preserve negative decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24c18_independent_component_audit.py \
+            --input receipts/j24c18-raw.json \
+            --output receipts/j24c18-referee.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24c18-component-${{ matrix.os }}-${{ env.EVIDENCE_SHA }}
+          path: receipts/
+          if-no-files-found: warn
