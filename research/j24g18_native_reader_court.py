@@ -70,11 +70,15 @@ READERS = {"released": None, "direct": CMPCT, "gated": GatedReader,
            "catch": CatchAndFallbackReader}
 
 def worker(path, arm):
+    # Historical released source is loaded/compiled via Git as a separate
+    # custody action; exclude this subprocess/source-setup time from Reader
+    # open CPU/wall, exactly as all installed-code arms exclude their imports.
+    reader_cls = exact_released_reader() if arm == "released" else READERS[arm]
     start_wall = time.perf_counter_ns()
     start_cpu = time.process_time_ns()
     result = {"status": "error", "exception": None}
     try:
-        with (exact_released_reader() if arm == "released" else READERS[arm])(Path(path)) as archive:
+        with reader_cls(Path(path)) as archive:
             result = {
                 "status": "opened",
                 "selected_footer": archive.latest_footer_pos,
