@@ -62,6 +62,9 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install -e '.[test]'
+      - name: Preserve first worker error and classify source versus harness
+        shell: bash
+        run: python research/j24c04_first_worker_diagnostic.py
       - name: Measure complete authentic r24 Reader sessions in 36 ABBA workers
         shell: bash
         run: |
