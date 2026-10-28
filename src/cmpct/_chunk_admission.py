@@ -46,6 +46,9 @@ def native_chunk_proof(storage, blobs, size):
         or type(storage[1]) is not list
     ):
         return False
+    # Preserve the inherited short-member native call and its external test surface.
+    if len(storage[1]) < 512:
+        return native_chunk_ok(storage, blobs, size)
     if _scan_refs_index is not None:
         try:
             proof = _scan_refs_index(storage[1], blobs, size)
