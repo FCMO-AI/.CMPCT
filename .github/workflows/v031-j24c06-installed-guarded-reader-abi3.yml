@@ -60,7 +60,7 @@ jobs:
           test "$(git rev-parse HEAD:research/o218_fastscan.c)" = a54f15181d9dbe667b9e8c9d52e927b09c80152f
           git diff --quiet 0a128ff55c7ae0f14c6bdf019a81b40f0d894eff HEAD -- src/cmpct native/cmpct-core
           git rev-parse HEAD > j24c06-evidence/source-head.txt
-          python -m py_compile research/j24c06_o216_fastpath.py research/j24c06_o218b_native_reader.py research/j24c06_o218c_native_host.py research/j24c06_installed_reader_abi3_court.py research/j24c06_installed_reader_referee.py
+          python -m py_compile research/j24c06_o216_fastpath.py research/j24c06_o218b_native_reader.py research/j24c06_o218c_native_host.py research/j24c06_installed_reader_abi3_court.py research/j24c06_installed_reader_referee.py research/j24c06_guarded_native_pytest.py
       - name: Build stable-ABI wheel only once under CPython 3.11
         shell: bash
         run: |
@@ -105,6 +105,10 @@ jobs:
           # --noconftest avoids unrelated optional-native preloading on Windows/macOS.
           python -m pytest --noconftest -q tests/test_reader_deflate_export_custody.py tests/test_reader_unsupported_blob_bits.py tests/test_o215_fixed_chunk_admission.py 2>&1 | tee j24c06-evidence/py311/guarded-regression.log
           echo J24C06_GUARDED_INSTALLED_FOCUS_PASS_PY311
+          # In the same Python interpreter, exercise the native-admission branch
+          # while inherited physical-header/ZIP and O215 hostile tests run.
+          python research/j24c06_guarded_native_pytest.py 2>&1 | tee j24c06-evidence/py311/native-guard.log
+          grep -q 'J24C06_NATIVE_GUARDED_READER_PASS' j24c06-evidence/py311/native-guard.log
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -122,6 +126,10 @@ jobs:
           # --noconftest avoids unrelated optional-native preloading on Windows/macOS.
           python -m pytest --noconftest -q tests/test_reader_deflate_export_custody.py tests/test_reader_unsupported_blob_bits.py tests/test_o215_fixed_chunk_admission.py 2>&1 | tee j24c06-evidence/py313/guarded-regression.log
           echo J24C06_GUARDED_INSTALLED_FOCUS_PASS_PY313
+          # In the same Python interpreter, exercise the native-admission branch
+          # while inherited physical-header/ZIP and O215 hostile tests run.
+          python research/j24c06_guarded_native_pytest.py 2>&1 | tee j24c06-evidence/py313/native-guard.log
+          grep -q 'J24C06_NATIVE_GUARDED_READER_PASS' j24c06-evidence/py313/native-guard.log
       - name: Compare the same physical archive and wheel across two interpreters
         shell: bash
         run: |
