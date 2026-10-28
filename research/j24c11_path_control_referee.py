@@ -6,10 +6,26 @@ does not execute CMPCT or confer new product/release authority.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
 import statistics
+
+
+def independent_expected(kind):
+    """Literal generator independent of CMPCT and J24C11 instrument code."""
+    if kind == "early-one":
+        literal = b"ABCD" * 4
+        return 12, literal
+    if kind == "late-ragged":
+        n = 262144
+        pieces = (b"ABCD", b"F", b"XY")
+        size = (n // 3) * sum(len(x) for x in pieces)
+        size += sum(len(pieces[i]) for i in range(n % 3))
+        suffix = b"".join(pieces[i % 3] for i in range(n - 32, n))
+        return size - 32, suffix[-32:-16]
+    raise AssertionError(kind)
 
 
 def check(payload):
@@ -32,7 +48,10 @@ def check(payload):
         assert item["length"] == 16
         assert item["repetitions"] == payload["q_policy"][item["kind"]]
         assert item["n"] == (65536 if item["kind"] == "early-one" else 262144)
-        assert item["offset"] == (12 if item["kind"] == "early-one" else item["offset"])
+        position, literal = independent_expected(item["kind"])
+        assert item["offset"] == position
+        true_digest = hashlib.sha256(literal * item["repetitions"]).hexdigest()
+        assert item["answer_sha256"] == true_digest, "answer differs from independent literal"
         assert type(item["proof_dispatch_calls"]) is int and item["proof_dispatch_calls"] == 0
         assert len(item["wire_sha256"]) == 64
         assert len(item["answer_sha256"]) == 64
