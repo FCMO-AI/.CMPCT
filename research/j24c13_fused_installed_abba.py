@@ -21,6 +21,13 @@ import time
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
+def _rss_mib():
+    if os.name=="nt":
+        return None  # Windows RSS needs a separate native witness, never call it zero.
+    import resource
+    peak=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return peak/1048576 if sys.platform=="darwin" else peak/1024
+
 def worker(cfg, arm):
     import cmpct.reader
     import cmpct._chunk_admission as admission
@@ -52,13 +59,15 @@ def worker(cfg, arm):
         read_cpu_ns=done_cpu-opened_cpu,session_cpu_ns=done_cpu-open_cpu,
         digest=sha(b"".join(out)),index_count=len(marks) if marks is not None else 0,
         archive_sha256=cfg["archive_sha256"],installed_reader=cmpct.reader.__file__,
-        python=sys.version.split()[0],host=platform.platform(),
+        python=sys.version.split()[0],host=platform.platform(),max_rss_mib=_rss_mib(),
     )
 
 def run(output, repetitions):
     import cmpct.reader
     import cmpct._chunk_admission as admission
     assert admission._scan_refs is not None and admission._scan_refs_index is not None
+    # The independent fixture is repository-owned but not part of the wheel.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests"))
     from test_o215_fixed_chunk_admission import _make_archive
     raw=[]
     with tempfile.TemporaryDirectory(prefix="cmpct-j24c13-court-") as td:
@@ -69,19 +78,22 @@ def run(output, repetitions):
                 logical=b"".join(blobs[i] for i in refs)
                 archive=_make_archive(refs,logical,blobs=tuple(blobs))
                 path=root/f"{family}-{n}.cmpct";path.write_bytes(archive)
-                for q in (1,6,32):
-                    # Same queries and hash expectations for both arms, with
-                    # deterministic early, interior, late and random positions.
+                for q,regime in ((1,"early"),(1,"middle"),(1,"late"),(6,"mixed"),(32,"mixed")):
+                    # Same query ordinals and hash expectations for both arms.
+                    # Q=1 covers early/middle/late independently, not only start zero.
                     rnd=random.Random(241300 + n + q + len(blobs))
-                    queries=[]
-                    starts=[0,len(logical)//2,max(0,len(logical)-1)]
+                    anchors={"early":0,"middle":len(logical)//2,
+                             "late":max(0,len(logical)-1)}
+                    starts=[anchors[regime]] if q==1 else [
+                        0,len(logical)//2,max(0,len(logical)-1)]
                     while len(starts)<q:
                         starts.append(rnd.randrange(len(logical)+1))
+                    queries=[]
                     for start in starts[:q]:
                         length=min(1+(start%7),len(logical)-start)
                         queries.append((start,length,sha(logical[start:start+length])))
-                    cfg=dict(case=f"{family}-{n}-q{q}",n=n,archive=str(path),
-                             archive_sha256=sha(archive),queries=queries)
+                    cfg=dict(case=f"{family}-{n}-q{q}-{regime}",n=n,
+                             archive=str(path),archive_sha256=sha(archive),queries=queries)
                     manifest=root/(cfg["case"]+".json")
                     manifest.write_text(json.dumps(cfg),encoding="utf-8")
                     for iteration in range(repetitions):
