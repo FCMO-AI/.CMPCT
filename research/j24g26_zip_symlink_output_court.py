@@ -51,11 +51,12 @@ def old_zip(path: Path) -> bytes:
 def child(args: argparse.Namespace) -> None:
     # The script is hosted in the candidate branch but imports CMPCT only from
     # the requested exact-source tree; not from the editable site installation.
-    sys.path.insert(0, str(args.engine_root / "src"))
+    module_root = (args.installed_root if args.installed_root is not None else args.engine_root / "src")
+    sys.path.insert(0, str(module_root))
     from cmpct.reader import CMPCT
     import cmpct.reader as reader_module
 
-    expected_reader = (args.engine_root / "src/cmpct/reader.py").resolve()
+    expected_reader = (module_root / "cmpct/reader.py").resolve()
     assert Path(reader_module.__file__).resolve() == expected_reader
     archive_path = args.case_root / "source.cmpct"
     output_path = args.case_root / "output.zip"
@@ -191,6 +192,7 @@ def parent(args: argparse.Namespace) -> None:
                     proc = subprocess.run(
                         [sys.executable, "-B", str(Path(__file__).resolve()), "--child",
                          "--engine-root", str(engine_root), "--engine", engine,
+                         *(["--installed-root", str(args.installed_root)] if engine == "published" else []),
                          "--case-root", str(case_root), "--case", case, "--name", name,
                          "--expected-sha", item["logical_sha256"]],
                         cwd=str(case_root), text=True, capture_output=True, timeout=40
@@ -229,6 +231,7 @@ def main() -> None:
     parser.add_argument("--child", action="store_true")
     parser.add_argument("--published-root", type=Path)
     parser.add_argument("--engine-root", type=Path)
+    parser.add_argument("--installed-root", type=Path)
     parser.add_argument("--case-root", type=Path)
     parser.add_argument("--engine", choices=("published", "candidate"))
     parser.add_argument("--case", choices=(*CASES, "source_alias"))
