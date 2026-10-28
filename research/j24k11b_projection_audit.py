@@ -8,7 +8,7 @@ def audit(d,source):
     assert d['source_sha256']==hashlib.sha256(Path(source).read_bytes()).hexdigest()
     assert d['class']=='scientific_component_not_product'
     assert len(d['c_scanner_sha256'])==64
-    assert len(d['cells'])==18 and d['observations']==648 and d['hostile_cases']==54
+    assert len(d['cells'])==18 and d['observations']==648 and d['hostile_cases']==54 and d['strict_ref_hostile_cases']==108
     expected={(n,m,p) for n in (64,512,4096) for m in (0,1,2) for p in ('sequential','permuted')}
     assert {(c['n'],c['mode'],c['layout']) for c in d['cells']}==expected
     for c in d['cells']:
@@ -18,6 +18,10 @@ def audit(d,source):
         assert c['class']=='component_projection_model_not_product'
         assert {x['name'] for x in c['hostile']}=={'signed_size_plus','signed_size_minus','physical_flags'}
         assert all(x['accepted']==[False,False,False] for x in c['hostile'])
+        assert len(c['strict_ref_hostile'])==6
+        assert all(x['accepted']==[False,False,False] for x in c['strict_ref_hostile'])
+        expect={'boolean_owner','subclass_owner','negative_owner','outside_owner','unsupported_method', ('boolean_signed_csize' if c['mode']==0 else 'unsupported_stream_mode')}
+        assert {x['name'] for x in c['strict_ref_hostile']}==expect
         assert set(c['raw'])=={'direct','projected_python','projected_native'}
         for arm,samples in c['raw'].items():
             assert len(samples)==12
@@ -33,7 +37,7 @@ def audit(d,source):
     assert math.isclose(d['min_4096_speedup'],minimum,rel_tol=1e-12)
     assert d['decision']==('PROJECTION_BRIDGE_HEADROOM' if minimum>=1.5 else 'PROJECTION_BRIDGE_HEADROOM_NOT_PROVEN')
     assert d['native_build_ns']>0
-    return {'verdict':'PASS','samples':648,'hostile_cases':54,'worst_4096_speedup':minimum,'scientific_decision':d['decision']}
+    return {'verdict':'PASS','samples':648,'hostile_cases':54,'strict_ref_hostile_cases':108,'worst_4096_speedup':minimum,'scientific_decision':d['decision']}
 
 def main():
     source=sys.argv[1] if len(sys.argv)>1 else 'research/j24k11b_projection_oracle.py'
@@ -53,6 +57,7 @@ def main():
     trial('median',lambda q:q['cells'][0]['median']['projected_native'].__setitem__('wall_ns',1))
     trial('hostile',lambda q:q['cells'][0]['hostile'][0]['accepted'].__setitem__(0,True))
     trial('speedup',lambda q:q['cells'][0]['speedup_over_direct'].__setitem__('wall_ns',1000))
+    trial('bool_owner',lambda q:q['cells'][0]['strict_ref_hostile'][0]['accepted'].__setitem__(2,True))
     trial('projection_heap',lambda q:q['cells'][0].__setitem__('fresh_projected_python_heap_bytes',0))
     trial('decision',lambda q:q.__setitem__('decision','PROJECTION_BRIDGE_HEADROOM' if q['decision']!='PROJECTION_BRIDGE_HEADROOM' else 'PROJECTION_BRIDGE_HEADROOM_NOT_PROVEN'))
     record['forged_rejected']=len(forged)
