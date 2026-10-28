@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/cmpct/reader.py'
       - 'research/j24h07_linux_owner_fd_court.py'
+      - 'research/j24h07b_linux_multi_owner_court.py'
       - '.github/workflows/v031-j24h07-linux-owner-fd.yml'
       - 'docs/v031-research/2026-10-28-j24h07-*'
   workflow_dispatch:
@@ -66,6 +67,7 @@ jobs:
           print("J24H07_INSTALLED_READER="+str(installed))
           PY
           python research/j24h07_linux_owner_fd_court.py 2>&1 | tee j24h07-artifacts/court.log
+          python research/j24h07b_linux_multi_owner_court.py 2>&1 | tee j24h07-artifacts/portfolio.log
       - name: Independently referee claimed inode binding and fail-closed result
         shell: bash
         run: |
@@ -87,6 +89,14 @@ jobs:
           assert "rebound" in x["extract_exception"]
           assert j["external_initial_sha256"]==j["external_final_sha256"]
           print("J24H07_INDEPENDENT_REFEREE=BOUND_SOURCE_AND_FAIL_CLOSED")
+          p=json.loads(pathlib.Path("j24h07-artifacts/portfolio.json").read_text())
+          assert p["hypothesis"]=="J24H07B-MULTI-OWNER" and p["result"]=="PASS_WITHIN_HOST_SCOPE"
+          assert p["CDC_storage_true"] is True and p["physical_hardlink_pairs"]==26
+          assert p["actual_kernel_link_calls"]==26 and len(p["cases"])==26
+          assert p["fd_amplification"]<=16
+          assert all(x["same_inode"] and x["bytes"]>0 for x in p["cases"])
+          assert p["create_wall_seconds"]>0 and p["extract_wall_seconds"]>0
+          print("J24H07B_INDEPENDENT_REFEREE=MULTI_STORAGE_AND_FD_BOUND_PASS")
           PY
       - name: Preserve original receipt even on failures
         if: always()
