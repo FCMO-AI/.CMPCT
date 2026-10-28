@@ -101,6 +101,9 @@ class RefereeSelfCourt(unittest.TestCase):
             self.assertEqual((x["name"], x["layer"], x["format"], x["metric"]),
                              ("binary", "library", "cmpct", "create_s_median"))
             self.assertAlmostEqual(x["delta_ms"], 10.0)
+            self.assertAlmostEqual(x["first_adjacent_step_ms"], 10.0)
+            self.assertAlmostEqual(x["last_adjacent_step_ms"], -10.0)
+            self.assertAlmostEqual(x["nonlinear_curvature_contrast_ms"], 10.0)
             self.assertEqual(len(mutation_court(root)), 7)
 
 
