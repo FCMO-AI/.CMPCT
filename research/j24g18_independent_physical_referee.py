@@ -34,6 +34,15 @@ def audit(root, record):
     require(record["cap"] == 65536 and record["repeats"] >= 3, "frozen token gate"); n += 1
     require(tuple(record["physical"]) == CASES, "case inventory"); n += 1
     require(tuple(record["observations"]) == CASES, "observations inventory"); n += 1
+    # Independently prove the earlier committed Builder checkpoint exists in bytes,
+    # not merely in the Reader's self-reported selected_footer field.
+    baseline = (root / record["physical"]["clean"]["path"]).read_bytes()
+    checkpoint = record["checkpoint"]
+    require(0 < checkpoint <= len(baseline) - FOOTER.size,
+            "checkpoint location outside physical base"); n += 1
+    base_footer = FOOTER.unpack(baseline[checkpoint:checkpoint+FOOTER.size])
+    require(base_footer[0] == MAGIC and base_footer[1] == 0,
+            "checkpoint is not a physically signed complete generation"); n += 1
     for case in CASES:
         p = record["physical"][case]
         require(p["path"] == "physical/" + case + ".cmpct", "relative path"); n += 1
@@ -42,6 +51,8 @@ def audit(root, record):
         require(hashlib.sha256(raw).hexdigest() == p["sha256"],
                 "archive digest:" + case); n += 1
         require(len(raw) >= FOOTER.size, "missing physical footer"); n += 1
+        require(raw[:len(baseline)] == baseline,
+                "physical Builder prefix differs across arms"); n += 1
         x = FOOTER.unpack(raw[-FOOTER.size:])
         require(x[0] == MAGIC, "no signed footer:" + case); n += 1
         if case in ("orphan-overcap", "linked-overcap", "linked-undercap",
@@ -54,6 +65,8 @@ def audit(root, record):
             require(x[5] == x[6] == tail["payload_bytes"] and
                     x[5] <= offset, "payload length:" + case); n += 1
             require(x[7] == tail["prev"], "signed predecessor:" + case); n += 1
+            expected_prev = 0 if case == "orphan-overcap" else checkpoint
+            require(x[7] == expected_prev, "wrong ancestry root:" + case); n += 1
             require(hashlib.sha256(raw[-FOOTER.size:]).hexdigest() ==
                     tail["footer_sha256"], "footer SHA:" + case); n += 1
             payload = raw[offset-x[5]:offset]
