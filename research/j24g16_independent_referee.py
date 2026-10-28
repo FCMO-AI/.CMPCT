@@ -73,6 +73,10 @@ def audit(report, root, *, physical=True):
         group["scan_cpu_ratio_to_direct"] = round(
             group["scan_decode"]["cpu_ms"] / group["direct"]["cpu_ms"], 4)
         summary[case] = group
+    # The P1 preregistered memory claim requires a *measured* peak-RSS
+    # difference on same-size files, not only syntactic resource refusal.
+    saved_kib = summary["tiny_maps_200k"]["direct"]["rss_kib"] - summary["tiny_maps_200k"]["scan_decode"]["rss_kib"]
+    ok(saved_kib >= 12 * 1024, "P1 >=12 MiB physical RSS saving on 800KiB tiny-map vector")
     # Negative receipt controls: every deliberate violation must be caught.
     mutations = []
     for case in range(6):
@@ -92,6 +96,7 @@ def audit(report, root, *, physical=True):
     ok(all(mutations), "six forged receipt rejections")
     return {"assertions": checks, "forged_receipts_rejected": len(mutations),
             "decision": {"P1_high_object_resource_refusal": True,
+                         "P1_saved_peak_rss_kib": saved_kib,
                          "P2_admitted_semantics": "held-out checked",
                          "P3_pure_python_ordinary10k_cpu_ratio":
                              summary["ordinary_10k"]["scan_cpu_ratio_to_direct"],
