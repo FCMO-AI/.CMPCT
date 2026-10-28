@@ -334,7 +334,7 @@ class CMPCT:
                 # Cheap necessary condition avoids a full C pass for plainly
                 # irregular interior lengths; C still proves EVERY reference.
                 a=self.blobs[ids[0]][1]
-                mid=self.blobs[ids[len(ids)//2]][1]
+                mid=self.blobs[ids[(len(ids)-1)//2]][1]
                 prelast=self.blobs[ids[-2]][1]
                 stride=(native_uniform_stride(storage,self.blobs,size)
                         if a>0 and a==mid==prelast else 0)
