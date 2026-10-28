@@ -3,3 +3,5 @@
 include native/cmpct-core/Cargo.toml
 include native/cmpct-core/Cargo.lock
 recursive-include native/cmpct-core/src *.rs
+# Optional stable-ABI accelerator must survive sdist-to-wheel builds without a checkout.
+include src/cmpct/_fastscan_abi3.c
