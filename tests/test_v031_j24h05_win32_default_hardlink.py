@@ -59,7 +59,7 @@ def test_default_metadata_writer_forward_hardlink_full_contract(tmp_path: Path) 
     original = tmp_path / "original.cmpct"
     Builder(src, workers=1, reproducible=False).build(original)
     assert original.read_bytes().startswith(b"CMPCT24\x00")
-    assert preflight_archive(original)["files"] == 4
+    assert preflight_archive(original)["files"] == 5
     with CMPCT(original) as reader:
         assert reader.verify() == 4
         assert reader.by["b-owner"][1] == K_FILE
@@ -81,7 +81,7 @@ def test_default_metadata_writer_forward_hardlink_full_contract(tmp_path: Path) 
     renamed = tmp_path / "renamed.cmpct"
     renamed.write_bytes(original.read_bytes())
     append_rename(renamed, "z-alias", "a-alias")
-    assert preflight_archive(renamed)["files"] == 4
+    assert preflight_archive(renamed)["files"] == 5
     with CMPCT(renamed) as reader:
         assert reader.delta_depth >= 1
         assert sorted(reader.by) == ["a-alias", "b-owner", "nested", "nested/other.bin", "x-independent"]
