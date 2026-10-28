@@ -1,3 +1,4 @@
+# ci-lane: fast
 name: v0.31 A16-O2 positional co-owner scientific court
 
 on:
@@ -8,6 +9,10 @@ on:
       - 'research/a16_o2_positional_coowner_court.py'
       - 'research/a16_o2_independent_referee.py'
       - 'docs/v031-research/2026-10-28-a16-o2-*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   exact-source-science:
