@@ -102,6 +102,43 @@ This is a representation-specific safety increment, not a replacement for full n
 5. Turn validated structural maxima and canonical encodings into the normative byte-level spec.
 6. Expand the Rust/Python cross-check beyond authenticated primary-index enumeration plus implemented direct/map/pack/virtual ranges to complete structural validation, representation-complete virtual member reads, extraction and tail/journal recovery before treating the native reader as an independent conformance implementation.
 
+## J24C13 experimental fused native range hints — not promoted
+
+In the standalone v0.31 draft PR #662, exact built-in `S_CHUNKS` admission may optionally
+produce an in-memory tuple of logical prefix offsets every 256 references **during the
+same native pass that already proves complete signed logical length**. The Reader
+does not accept these hints from disk, from the payload, from an unverified archive,
+or from a second pathname. It still performs inherited canonical path admission,
+physical BHDR checks, owner-size checks, decoding and ordinary extract verification.
+
+The fast-path applies only when the new ABI3 helper has checked **all** reference
+indices, strict built-in value types, physical blob tuple shape and the complete
+logical-size sum. It is bounded to 512–4,194,304 references; shorter or larger
+lists use inherited native admission without new index ownership.
+Across all members in one Reader, at most 65,536 prefix entries may be
+retained in total (roughly 3 MiB of tuple pointers and Python integer objects
+on a typical 64-bit runtime). If a further valid member exceeds the budget,
+the Reader retains its full prior structural admission but uses the inherited
+unindexed range search. This bounds cumulative carrying cost rather than only
+per-member metadata; it is not a measured RSS claim or a file-format limit. An unavailable
+module, rejected native proof, or native exception falls back through the old
+native scanner and ultimately the unchanged Python strict validator. A successfully
+admitted map is a search hint for selective chunk reads, **not** a substitute for
+authenticated bytes or member-level SHA checks. On unindexed archives, the old
+per-reference path remains in place.
+
+This mechanism is **research pending full exact-source acceptance**. In particular,
+the public Reader exposes mutable Python index/list objects after construction.
+Mutation of those in-memory objects by a caller after admission can make a
+cached prefix map stale. No immutable-index or mutation-detection contract is
+established yet. Additionally, correctness under hostile raw metadata, Python 3.10
+without ABI3, Windows/macOS packaging, RSS, same-archive released-Reader
+economics, extraction/recovery and complete CI require original independent
+results. The preregistration is
+`docs/v031-research/2026-10-28-j24c13-fused-abi3-range-prereg.md`.
+An experimental win must not authorize release, weaken preflight, or rewrite
+the frozen comparator; the published r24 reader remains unchanged.
+
 ## Revision rule
 
 No format revision bump is required for this increment because it writes **no new field, record, codec, transform or storage semantic**. If later hardening requires a reader-visible on-disk rule, that change must follow the repository's normal revision/spec/history/current-state/conformance gate.

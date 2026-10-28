@@ -15,6 +15,13 @@ except Exception:
     _scan_refs = None
 
 
+try:
+    from ._fastscan_abi3 import scan_refs_index as _scan_refs_index
+except Exception:
+    # Older ABI3 wheels still expose scan_refs; preserve their admission speed.
+    _scan_refs_index = None
+
+
 def native_chunk_ok(storage, blobs, size) -> bool:
     """True only for a fully native-proven exact built-in fixed-chunk map."""
     scanner = _scan_refs
@@ -25,3 +32,45 @@ def native_chunk_ok(storage, blobs, size) -> bool:
     except Exception:
         # A native failure must never make an untrusted archive admissible.
         return False
+
+
+def native_chunk_proof(storage, blobs, size):
+    """Positive-only admission result: True (no map), tuple (bounded map), or False.
+
+    The native proof alone may supply checkpoint offsets, only after validating
+    *all* signed chunk lengths. Absent/unknown native helpers use the exact
+    previous native predicate or the Reader's inherited strict Python fallback.
+    """
+    if (
+        type(storage) is not list or len(storage) != 2
+        or type(storage[1]) is not list
+    ):
+        return False
+    # Preserve the inherited short-member native call and its external test surface.
+    if len(storage[1]) < 512:
+        return native_chunk_ok(storage, blobs, size)
+    if _scan_refs_index is not None:
+        try:
+            proof = _scan_refs_index(storage[1], blobs, size)
+            if proof is True:
+                return True
+            if type(proof) is tuple:
+                # A native extension is optional, not a licence to install
+                # malformed search metadata. Shape-check only O(N/256) hints,
+                # never repeat its mandatory complete O(N) descriptor scan.
+                expected=(len(storage[1])+255)//256
+                if not (512 <= len(storage[1]) <= 4*1024*1024):
+                    return native_chunk_ok(storage,blobs,size)
+                if len(proof)==expected and proof and type(proof[0]) is int and proof[0]==0:
+                    previous=0
+                    for prefix in proof:
+                        if type(prefix) is not int or prefix<previous or prefix>size:
+                            break
+                        previous=prefix
+                    else:
+                        return proof
+                # Corrupt/unknown proof is never an admission grant.
+                return native_chunk_ok(storage,blobs,size)
+        except Exception:
+            pass
+    return native_chunk_ok(storage, blobs, size)
