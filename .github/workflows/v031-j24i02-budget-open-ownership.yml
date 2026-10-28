@@ -1,0 +1,88 @@
+# ci-lane: fast
+name: v0.31 J24I02 installed signed-budget and failed-open custody
+
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_j24b06_signed_budget.py'
+      - 'tests/test_v031_reader_open_failure_resource_ownership.py'
+      - '.github/workflows/v031-j24i02-budget-open-ownership.yml'
+      - 'docs/v031-research/2026-10-28-j24i02-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i02-open-budget-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  installed-owner-union:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - name: Checkout exact combined source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source ancestry, copied test, and byte-identical non-constructor Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse HEAD:tests/test_v031_reader_open_failure_resource_ownership.py)" = "7e75fffaa4e7337463390299edbd18ef3bb7fe7b"
+          python - <<'PY'
+          import subprocess
+          def show(spec):
+              return subprocess.check_output(["git", "show", spec])
+          parent=show("4de43609046ceaba93902e6680af3b4059aee49f:src/cmpct/reader.py")
+          combined=show("HEAD:src/cmpct/reader.py")
+          start=b"    def __init__(self,path:Path):"
+          stop=b"    def close(self):"
+          def pieces(source):
+              a=source.index(start)
+              b=source.index(stop,a)
+              return source[:a], source[a:b], source[b:]
+          previous, sealed=pieces(parent), pieces(combined)
+          assert previous[0] == sealed[0] and previous[2] == sealed[2], "Reader changed outside constructor"
+          assert b"except BaseException" in sealed[1] and b"self.mm.close()" in sealed[1] and b"self.f.close()" in sealed[1], "failed-open cleanup missing"
+          assert b"max_bytes is not None" in sealed[2] and b"negative" in sealed[2], "inherited signed-budget guard missing"
+          print("J24I02_EXACT_UNION_SOURCE_CUSTODY_PASS")
+          PY
+          git rev-parse HEAD | tee j24i02-head.txt
+          git hash-object src/cmpct/reader.py | tee j24i02-reader-blob.txt
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine wheel and pytest
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip setuptools setuptools-rust wheel
+          python -m pip install . pytest
+      - name: Exercise retained-traceback failure ownership and B06 on the same installed Reader
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest --noconftest -vv tests/test_v031_reader_open_failure_resource_ownership.py tests/test_j24b06_signed_budget.py 2>&1 | tee j24i02-tests.txt
+      - name: Retain source and test evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i02-installed-${{ matrix.os }}-${{ github.run_id }}
+          path: |
+            j24i02-head.txt
+            j24i02-reader-blob.txt
+            j24i02-tests.txt
+          if-no-files-found: warn
+          retention-days: 30

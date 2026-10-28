@@ -16,7 +16,10 @@ from tools.check_v031_candidate_fingerprint import fingerprint, load_manifest
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_LOCK_BLOB = "988a7b05ad4e0833fac0453de74133b38f890f87"
 B06_SOURCE_BLOBS = {
-    "src/cmpct/reader.py": "20f6e257a07a61a4c1aebe23ae23e4109d6c41c8",
+    # Source-exact J24I02 composed Reader; only __init__ differs from the B06 original.
+    # The J24I02 three-host court independently proves outside-constructor equality
+    # against original B06 Reader Git blob 20f6e257a07a61a4c1aebe23ae23e4109d6c41c8.
+    "src/cmpct/reader.py": "6cb78582ccf9655a1d4f1c58cf26812413f83804",
     "tests/test_j24b06_signed_budget.py": "594d93e6884df7924bd52a83a1ceab20bb5ff727",
     ".github/workflows/v031-j24b06-budget-guard.yml": "49ed0795353182cb5b2f956ea3a0f9718dd3e90d",
 }
