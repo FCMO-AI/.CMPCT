@@ -35,6 +35,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$J24G18_HEAD"
           git merge-base --is-ancestor 06617f194c45ebb38dda0592ff5e5196e204af80 HEAD
           git merge-base --is-ancestor 45fe006e1009da92d9db17a8e1684c488619ce77 HEAD
+          git merge-base --is-ancestor 63ee7c53aa524a0945f0d33fdbab44e82bf067c6 HEAD
+          test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
           python - <<'PY'
           import hashlib,json,os,pathlib,subprocess
@@ -43,6 +45,7 @@ jobs:
                  "research/j24g18_native_reader_court.py",
                  "research/j24g18_independent_physical_referee.py",
                  "docs/v031-research/2026-10-28-j24g18-native-signed-recovery-prereg.md",
+                 "docs/v031-research/2026-10-28-j24g18-released-reader-control-addendum.md",
                  "src/cmpct/reader.py", "src/cmpct/transactions.py", "src/cmpct/codec.py"]
           records={}
           for name in names:
