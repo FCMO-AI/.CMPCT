@@ -6,47 +6,48 @@
     "canonical_main": "main@80c358f8824ec1b20d349c92ed94c898090969b0",
     "experimental_frontier": "agent/v031-development@4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b; product candidates live on separate stacked unmerged PR branches",
     "released_product_source": "94f3309011ca6f6014b1f61ce6058e8ce01ca00f",
-    "observed_at_utc": "2026-10-27T05:42:00Z",
-    "note": "Snapshot pointers only: re-read current commits, PRs, and exact-head checks. Old v0.30 admission/fingerprint receipts are historical, not v0.31 authority. v0.30 release does not require 15/15; the 15/15 goal is for v1.0."
+    "observed_at_utc": "2026-10-28T15:44:52Z",
+    "note": "Volatile cross-lane snapshot after J24C15-J24C19, J24G16-G17, A15-O1/A16-O1. Actual HEADs, PR ownership and exact-head checks must be refreshed before writes. Released v0.30.0/r24 remains main@80c358f8; no J24 science is merged or authorized for release. Old v0.30 fingerprints and gates are historical."
   },
   "active_product_bottleneck": {
-    "id": "v031-reader-source-integrity-and-admission-economics",
-    "observation": "Source-exact O212/#560, O214/#564, O215/#568 reject inconsistent sparse, CDC, fixed-chunk geometry on one Reader index; the composed J24C02/#569 correctness court is green but fixed-chunk admission creates a measured +25.56ms/27.253x at 65,536 refs and +102.05ms/28.505x at 262,144. No product promotion. O216/#570 improves isolated validation ~4x but fails remaining material overhead gate.",
-    "next_discriminator": "Within #569 owner lane, compare genuinely different batch/native/representation-bound admission mechanisms against the strongest *composed Reader*, using authentic r24 positive and hostile controls and full cold-open/RSS evidence; do not merge a cheaper but weaker gate. In parallel, #572 demonstrates released sparse extraction integrity/data-loss risk and has existing owners #255/#270/#573."
+    "id": "v031-reader-q1-vs-batched-read-and-authenticated-owner-custody",
+    "observation": "Draft fused ABI3 checkpoint #662 passes authentic installed Q6/Q64 research transfer versus v0.30.0 (#665/#669: 4.94–49.11x on heterogeneous small-owner Q6/Q64), but early Q1 is 2.13–2.66x slower and one exact-source 262k run crosses the fixed +5%/+3ms veto. #672 proves cached checkpoints can return wrong bytes after public in-memory reference mutation. #676 seals that specific flaw on three hosts but slows all 12 paired cases in two runs by 13–24%; #679 C-fused freeze and #682 tuple-first admission fail their prospective economic tests. All remain unmerged.",
+    "next_discriminator": "Apply mandatory frame review: no nearby tuple/list/freeze microvariant without new information. Resolve authenticated reference ownership, exposed API, mutable generation replay and native ABI in one source- and semantics-exact design proof before implementation; price published-Q1, safeguarded-Q6/Q64, cold-open/RSS, recovery, and hostile mutation together. Alternatively move capacity to already-owned P0 correctness integration rather than another speculative Reader patch."
   },
   "primary_question": {
-    "id": "v031-reader-integrity-convergence",
+    "id": "v031-reader-owned-authenticated-reference-model",
     "family": "reader-exactness-and-physical-execution",
-    "hypothesis": "Existing independently proven same-index geometry and source-custody safeguards can be composed without forfeiting legitimate large-archive open-time and recovery contracts; a different execution/representation frame is needed, not another Python per-reference micro-fastpath.",
-    "kill": "Do not promote a composition that regresses inherited exact reconstruction, hostile admission, source/destination custody, portability or confirmed full Reader performance outside allowed gates; discard bounded implementation attempts that cannot preserve these simultaneously.",
+    "hypothesis": "A representation/ownership boundary could preserve the demonstrated batched-range acceleration and exact signed-reference semantics without postvalidation O(N) freezing cost or stale mutable checkpoints; it must coexist with current native validator, transaction journal and public Reader descriptors.",
+    "kill": "Any wrong byte under admissible metadata mutation, weakening hostile admission or generation recovery, breaking documented public semantics, unbounded RSS/decode work, or material early-Q1 published-release regression vetoes promotion. #679/#682 already retire the two narrow copy/tuple hypotheses; a further nearby mechanism without new causal evidence is not justified.",
     "status": "BLOCKED",
     "evidence": [
-      "Owner #569 head c5e13bb3fbb4cdade8b64246658ce7c7818de41f reports full Reader open-cost debt; #570 head 6989b25640be2c82436bb77ec545dd15816f698b confirms a 4x isolated fastpath is still insufficient. Both are unmerged drafts as of 2026-10-27.",
-      "Independent S_SPARSE/S_CDC/S_CHUNKS source-admission candidates #560/#564/#568 and fd-owned publication #567 are separate unmerged branches; preserve exact original controls and source owners.",
-      "Broader sparse output integrity negative #572 (J24X01 #571, 3-host shipping Reader) has already discovered a preexisting solution direction in #255/#270, now portable Windows derivative #573; avoid a duplicate fix."
+      "J24C14 #665, J24C15 #669: signed installed Reader Q6/Q64 positive (4.94–49.11x on measured small-owner regimes), early Q1 2.13–2.66x slower; runs 40675424786 / 40675417832 and complete result dossier. Scope excludes large real CDC owners.",
+      "J24C16 #672 installed signed in-memory descriptor mutation yields wrong bytes on #662; run 40683558265. Not a malicious-on-disk archive claim.",
+      "J24C17 #676 contains that precise mutation on 3 hosts, but two direct economic runs 40692132713 / 40692140648 show +13–24% full-session cost and exposed list-to-tuple API risk. Cannot claim performance product floor.",
+      "J24C18 #679 3-host C-fused freeze loses vs CPython tuple (run 40701073699). J24C19 #682 tuple-first decoding fails 3/4 large prospective >5% improvement cases (run 40709133246), incompatible with PyList_CheckExact and mutable journal. Do not repeat threshold gardening."
     ]
   },
   "frontier_candidates": [
     {
-      "id": "sparse-extraction-integrity-productization",
+      "id": "signed-sparse-publication-integrity",
       "family": "integrity-publication",
-      "question": "Can #255/#270/#573 preserve an existing destination on physical corruption and enforce whole-file sparse SHA without an unacceptable hole-hashing extraction penalty, under the actually stated namespace threat model?",
+      "question": "Can owned #255/#270/#573 reconstruct and publish signed sparse members safely on corruption while preserving preexisting destination bytes, SHA integrity, Windows portability and measured hole-hash CPU floor?",
       "status": "BLOCKED",
-      "evidence": "#572 / #571 records 3-host released r24 corruption and destination-loss negatives; #573 owns Windows fchmod portability; #270 reports +101.6ms sparse 128MiB runtime debt. Current PR heads must be rechecked before composition."
+      "evidence": "Released three-host safety negative issue #572; existing fix/product owners #255/#270/#573 and inherited +101.6ms sparse-128MiB CPU debt. Coordinate rather than fork."
     },
     {
-      "id": "bounded-zstd-physical-decode",
-      "family": "decode-unit-memory",
-      "question": "Can native bounded Zstd streaming retain the ~111MiB RSS saving seen in J24Z01 while repairing the 1.4-2.4x CPU/wall debt of the exact product path, or should that family be retired?",
-      "status": "QUEUED",
-      "evidence": "O209 #548 physical-frame RSS amplification; native streaming J24Z01 #550 and pooled buffer J24Z02 #553 are existing owner/negative evidence. Reopen only for materially different mechanism with complete product accounting."
+      "id": "native-msgpack-predecode-recovery-boundary",
+      "family": "reader-resource-recovery",
+      "question": "Can a cheap native structural predecode avoid malformed/oversized MsgPack object allocation without changing which signed checkpoint/delta tails Reader can recover, and without CPU/RSS regressions on valid inputs?",
+      "status": "BLOCKED",
+      "evidence": "#681 Python predecode fails 6.3756x CPU on 10k valid map despite ~36.6MiB RSS refusal saving; #684 native predecode ~1.064x CPU/wall, ~36,888KiB refusal RSS saving on isolated component; Reader signed-tail recovery is unmeasured. Phased2 owns #681/#684; no duplicate."
     },
     {
-      "id": "v031-create-search-execution-owner",
-      "family": "compression-search-execution",
-      "question": "Can speculative r25/G04 search work be eliminated or reused on the authorized full matrix while retaining exact archive bytes and no extra RAM/temp I/O, rather than reopening local threshold variants?",
+      "id": "cross-member-physical-ownership-headroom",
+      "family": "information-representation",
+      "question": "Can any owner-coalescing representation materially beat compact fixed-CHUNKREF and direct-encoding controls while preserving held-out nontransitive sharing, decoder work, member exactness and bounded physical cost?",
       "status": "QUEUED",
-      "evidence": "Preserve historical PR #189 external 4/15 strict joint scoreboard, compact-r24 execution owner PR #217 and wrapper custody PR #218; these are research/evidence routes, not active release gates or result-bearing current-fingerprint promotion."
+      "evidence": "A15-O1 #680 specialty CHUNKREF exposes cross-member owner gap; A16-O0/O1 #683 binary-class SEGREF only -0.9768% bytes vs stronger fixed control (misses 1% prereg), and 7.855x storage loss on incompatible co-owner sets. Phased1 owner; unclaimed future frame only if materially different semantics."
     }
   ],
   "saturated_families": [
@@ -77,6 +78,18 @@
     {
       "family": "python-loop-only-fixed-chunk-admission-fastpath",
       "reason": "O216 #570 authentic controlled alternative ~4x faster still left +5.34ms/+21.36ms at 65,536/262,144 references versus intentionally unsafe timing floor; do not repeat nearby Python per-ref variants without new architecture."
+    },
+    {
+      "family": "postvalidation-list-to-tuple-microoptimizations",
+      "reason": "J24C17 #676 contains mutation but incurs +13–24% full-session cost; J24C18 #679 per-element native construction loses to CPython tuple; J24C19 #682 tuple-first MessagePack misses 3/4 frozen economic gates and conflicts with native Python list/journal ABI. Reopen only on a genuinely different end-to-end ownership model."
+    },
+    {
+      "family": "pure-python-msgpack-structural-predecode",
+      "reason": "J24G16 #681 runs 6.3756x CPU on normal 10k-map metadata, despite saving ~36.6MiB only by refusing over-budget inputs. #684 moved question to native token admission; stop Python threshold variants."
+    },
+    {
+      "family": "unconditional-binary-class-sharing-run-segments",
+      "reason": "A16-O0/O1 #683 improves decode component but misses 1% full-byte criterion against compact fixed chunk and incurs 7.855x storage regression with incompatible co-owner sets. Avoid more friendly synthetic variants."
     }
   ],
   "decision_evidence": {
@@ -86,7 +99,10 @@
     "sparse_extraction": "Issue #572 new 3-host authenticated sparse extraction data-loss finding, candidate #255/#270 and portability derivative #573; full performance/gate not yet settled.",
     "reader_open_cost": "J24C02 #569 +25.56ms at 65536 and +102.05ms at 262144 references; O216 #570 narrow micro improvement not promotable.",
     "deflate_scope": "O211 #555 complete authentic mixed ZIP64 attribution 4.4482% median CPU, below 5% gate, no product changes.",
-    "pending_work_note": "No CI/compute was dispatched by this reconciliation PR. Independently running owner checks and branch heads are volatile; inspect live GitHub before declaring results."
+    "pending_work_note": "No CI/compute was dispatched by this reconciliation PR. Independently running owner checks and branch heads are volatile; inspect live GitHub before declaring results.",
+    "fused_reader_q1_qmany": "Signed installed small-owner Q6/Q64 research acceleration #665/#669 is valid in measured regimes; early Q1 signed larger-index admission veto on #669; original #662 wrong byte after exposed in-memory refs mutate #672; fix #676 adds 13–24% cost, rejected narrow attempts #679/#682. No product or release credit.",
+    "native_msgpack_rss_predecode": "J24G16 #681 Python full predecode is 6.3756x admitted CPU; #684 native predecode reduces it to ~1.064x in component test, but changes rejection policy and signed-tail recovery not tested. This evidence is an independent different-family hypothesis, not a Reader promotion.",
+    "foundry_cross_owner": "A15-O1 #680 demonstrates member-local typed grammar lacks REF ownership; A16-O0/O1 #683 fails improved complete-byte fixed control and nontransitive co-owner hostile. No format or release implication."
   },
   "process_lessons": [
     {
@@ -112,10 +128,14 @@
     {
       "lesson": "Do not infer cheap large-index admission from local validator microbench; whole Reader cold-open and structural-case generality control promotion.",
       "evidence": "J24C02 #569 exact Reader open-cost debt and O216 #570 4x isolated fastpath failing materiality."
+    },
+    {
+      "lesson": "A large authenticated-Qmany win can coexist with a published-Q1 veto and an index mutation correctness failure. Use released whole-session short-query and public-reference lifetime falsifiers before freezing a new Reader representation; J24C14/#665, J24C15/#669, J24C16/#672 and J24C17/#676. This is a transfer lesson, not a normative policy/evaluator change.",
+      "evidence": "#665/#669 measurable published Q1/Qmany tradeoff; #672 exposed mutable-ref inconsistency; #676 regressions; #679/#682 rejected micro-remedies."
     }
   ],
   "pending_jobs": [],
-  "next_action": "First re-read #569/#570 and #255/#270/#573 live ownership/CI. Keep the existing source-integrity fixes under their owners. The cheapest decision-changing unclaimed action is a new architecture-class bound/charged test for fixed-chunk validation on the exact #569 Reader (or independent replication), not another copy of the Python fastpath; if unavailable, advance the separate sparse integrity/performance custody gate without duplicate patches. Do not merge or release from this cache.",
+  "next_action": "Live-read #574 plus #662/#676/#669 and independent #681/#684/#683 before any claim. Hold new tuple/freeze Reader variants under the three-attempt frame review. Cheapest unclaimed decision: compose a source-exact immutable-reference ownership and transaction/public-API compatibility bound (no code) against real #662/#676, or advance existing signed sparse integrity owner path #572/#255/#270/#573 with an independently measured published-floor control. Keep #684 native token/recovery court with Phased2 and information ownership #683 with Phased1. No merge/release from state.",
   "release_policy": {
     "effective_date": "2026-10-04",
     "pre1_mode": "rolling material checkpoints",
