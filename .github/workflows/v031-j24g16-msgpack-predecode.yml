@@ -1,0 +1,70 @@
+# ci-lane: fast
+name: CMPCT v031 J24G16 MessagePack structural admission falsifier
+on:
+  pull_request:
+    paths:
+      - 'research/j24g16_*'
+      - 'docs/v031-research/2026-10-28-j24g16-*'
+      - '.github/workflows/v031-j24g16-msgpack-predecode.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  no-materialization-token-budget:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      J24G16_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.J24G16_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Bind source, prereg and inherited Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g16-artifacts
+          test "$(git rev-parse HEAD)" = "$J24G16_HEAD"
+          git merge-base --is-ancestor 8c5c8cf8c588936b5dd4b856f35e5e0f282ed56d HEAD
+          git merge-base --is-ancestor 2ecabb35f3d6e4897080bd4bc29f74119d202005 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f13c5492f5acfa1cfcfec97cdbe0da71e41e327b
+          python - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          files={}
+          for name in ('src/cmpct/reader.py',
+              'research/j24g16_msgpack_predecode_court.py',
+              'research/j24g16_independent_referee.py',
+              'docs/v031-research/2026-10-28-j24g16-msgpack-structural-admission-prereg.md'):
+              expected=subprocess.check_output(['git','show','HEAD:'+name])
+              actual=pathlib.Path(name).read_bytes()
+              assert actual == expected, name
+              files[name]={'sha256':hashlib.sha256(actual).hexdigest()}
+          pathlib.Path('j24g16-artifacts/source.json').write_text(
+              json.dumps({'head':os.environ['J24G16_HEAD'],
+                          'reader_product_unchanged':True,'files':files},indent=2)+'\n')
+          PY
+      - name: Execute original semantic decoder and bounded-token alternatives
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install msgpack==1.1.2
+          python -m py_compile research/j24g16_msgpack_predecode_court.py research/j24g16_independent_referee.py
+          python research/j24g16_msgpack_predecode_court.py --selftest | tee j24g16-artifacts/selftest.log
+          python research/j24g16_msgpack_predecode_court.py --court j24g16-artifacts --repeats 3 | tee j24g16-artifacts/court.log
+          python research/j24g16_independent_referee.py j24g16-artifacts | tee j24g16-artifacts/referee.log
+      - name: Preserve exact-head evidence including negative outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g16-predecode-${{ github.sha }}
+          path: j24g16-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
