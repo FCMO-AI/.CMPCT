@@ -42,6 +42,7 @@ jobs:
           names=['research/j24g19_certified_subset.c',
                  'research/j24g19_certified_projection.py',
                  'research/j24g19_signed_reader_court.py',
+                 'research/j24g19_independent_referee.py',
                  'src/cmpct/reader.py','src/cmpct/transactions.py','src/cmpct/codec.py']
           sha={}
           for name in names:
@@ -72,7 +73,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m py_compile research/j24g19_certified_projection.py research/j24g19_signed_reader_court.py
+          python -m py_compile research/j24g19_certified_projection.py research/j24g19_signed_reader_court.py research/j24g19_independent_referee.py
           python research/j24g19_certified_projection.py selftest | tee j24g19-artifacts/selftest.log
       - name: Charged component A/B and authentic signed Reader physical court
         shell: bash
@@ -80,6 +81,7 @@ jobs:
           set -euo pipefail
           python research/j24g19_certified_projection.py court j24g19-artifacts/component | tee j24g19-artifacts/component.log
           python research/j24g19_signed_reader_court.py --out j24g19-artifacts --repeats 3 | tee j24g19-artifacts/signed.log
+          python research/j24g19_independent_referee.py j24g19-artifacts | tee j24g19-artifacts/referee.log
       - name: Preserve physical signed archives, raw observations and failed evidence
         if: always()
         uses: actions/upload-artifact@v4
