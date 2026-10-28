@@ -15,6 +15,13 @@ except Exception:
     _scan_refs = None
 
 
+try:
+    from ._fastscan_abi3 import scan_refs_index as _scan_refs_index
+except Exception:
+    # Older ABI3 wheels still expose scan_refs; preserve their admission speed.
+    _scan_refs_index = None
+
+
 def native_chunk_ok(storage, blobs, size) -> bool:
     """True only for a fully native-proven exact built-in fixed-chunk map."""
     scanner = _scan_refs
@@ -25,3 +32,25 @@ def native_chunk_ok(storage, blobs, size) -> bool:
     except Exception:
         # A native failure must never make an untrusted archive admissible.
         return False
+
+
+def native_chunk_proof(storage, blobs, size):
+    """Positive-only admission result: True (no map), tuple (bounded map), or False.
+
+    The native proof alone may supply checkpoint offsets, only after validating
+    *all* signed chunk lengths. Absent/unknown native helpers use the exact
+    previous native predicate or the Reader's inherited strict Python fallback.
+    """
+    if (
+        type(storage) is not list or len(storage) != 2
+        or type(storage[1]) is not list
+    ):
+        return False
+    if _scan_refs_index is not None:
+        try:
+            proof = _scan_refs_index(storage[1], blobs, size)
+            if proof is True or type(proof) is tuple:
+                return proof
+        except Exception:
+            pass
+    return native_chunk_ok(storage, blobs, size)
