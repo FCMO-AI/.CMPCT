@@ -11,6 +11,7 @@ import binascii
 import hashlib
 import json
 import os
+import statistics
 import shutil
 import struct
 import tempfile
@@ -179,6 +180,35 @@ def run() -> dict:
         good_zip = valid_export.read_bytes()
         assert good_zip == published_export.read_bytes(), (
             "candidate changed valid ZIP bytes vs source-exact historical fast endpoint")
+
+        # Warm end-to-end ZIP export A/B. Alternate authentic released fast
+        # method and candidate on the same installed Reader, physical archive,
+        # output filesystem and process. Keep *all* raw observations. These
+        # are research-sized 128-KiB member measurements, not a release gate.
+        bench = {"historical": [], "candidate": []}
+        with CMPCT(archive_path) as measured:
+            old_method = types.MethodType(released_fast_deflate_stream, measured)
+            new_method = types.MethodType(CMPCT._direct_deflate_stream, measured)
+            output = root / "timing.zip"
+            for iteration in range(16):
+                order = ("historical", "candidate") if iteration % 2 == 0 else ("candidate", "historical")
+                for label in order:
+                    measured._direct_deflate_stream = old_method if label == "historical" else new_method
+                    wall = time.perf_counter_ns()
+                    cpu = time.process_time_ns()
+                    measured.export_zip(output)
+                    cpu_elapsed = time.process_time_ns() - cpu
+                    wall_elapsed = time.perf_counter_ns() - wall
+                    assert output.read_bytes() == good_zip
+                    bench[label].append({"wall_ns": wall_elapsed, "cpu_ns": cpu_elapsed})
+        perf = {
+            "raw": bench,
+            "median_historical_wall_ns": statistics.median(x["wall_ns"] for x in bench["historical"]),
+            "median_candidate_wall_ns": statistics.median(x["wall_ns"] for x in bench["candidate"]),
+            "median_historical_cpu_ns": statistics.median(x["cpu_ns"] for x in bench["historical"]),
+            "median_candidate_cpu_ns": statistics.median(x["cpu_ns"] for x in bench["candidate"]),
+            "boundary": "warm same-host end-to-end export, physical 128-KiB Deflate member",
+        }
         bad_zip = damaged_export.read_bytes() if damaged_export.exists() else b""
         zip_diff = []
         report = {
@@ -194,6 +224,7 @@ def run() -> dict:
             "raw_member_sha256": digest(raw),
             "raw_member_bytes": len(raw),
             "candidate_valid_zip_sha256": digest(good_zip),
+            "performance": perf,
             "historical_valid_zip_sha256": digest(published_export.read_bytes()),
             "same_host_historical_candidate_byte_identity": True,
             "baseline": reference,
