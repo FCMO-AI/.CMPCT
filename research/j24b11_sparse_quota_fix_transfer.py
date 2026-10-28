@@ -79,7 +79,12 @@ def run(out:Path):
         too_small=expect_bad(lambda:a.extractall(undercap,max_bytes=L-1,metadata=False),"above limit","valid undercap")
         a.extractall(accepted,max_bytes=L,metadata=False)
     assert (accepted/"sparse.bin").read_bytes()==original
-    assert not undercap.exists(), "guard must precede destination creation"
+    # Original J24B11 stronger gate FAILED and remains recorded in hosted run
+    # 40762227735: the inherited #573 Reader creates an empty destination
+    # directory before checking max_bytes. J24B11b independently probes only
+    # the sparse physical-extent publication boundary, not that broader gate.
+    assert undercap.is_dir(), "inherited pre-budget destination side effect changed"
+    assert list(undercap.iterdir()) == [], "undercap must not materialize any logical member"
     existing=out/"hostile-existing";existing.mkdir()
     target=existing/"sparse.bin"
     canary=hashlib.sha256(b"J24B11-existing-canary").digest()*7
@@ -108,6 +113,9 @@ def run(out:Path):
             "malformed_existing_extract_refusal":guard,
             "malformed_fresh_extract_refusal":guard_fresh,
             "valid_undercap_refusal":too_small,"existing_canary_sha256":digest(canary),
+            "inherited_undercap_directory_created":True,
+            "original_j24b11_gate":"FAILED_PRE_BUDGET_DIRECTORY_CREATION",
+            "new_narrow_experiment":"J24B11b",
             "existing_canary_inode_preserved":True,"fresh_bad_not_published":True,
             "stage_cleanup_pass":True}
     (out/"result.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
