@@ -37,7 +37,7 @@ jobs:
           test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
           python - <<'PY'
           import hashlib, json, os, pathlib, subprocess
-          paths = ['research/j24g20_cold_rss_court.py','research/j24g19_certified_projection.py',
+          paths = ['research/j24g20_cold_rss_court.py','research/j24g20_peak_inheritance.py','research/j24g19_certified_projection.py',
                    'research/j24g19_certified_subset.c','src/cmpct/reader.py']
           hashes = {}
           for path in paths:
@@ -65,6 +65,10 @@ jobs:
         run: |
           set -euo pipefail
           python research/j24g20_cold_rss_court.py --out j24g20-artifacts --repeats 3 | tee j24g20-artifacts/result.log
+      - name: Independent subprocess high-watermark inheritance replay
+        run: |
+          set -euo pipefail
+          python research/j24g20_peak_inheritance.py | tee j24g20-artifacts/peak-inheritance.json
       - name: Original component economics control (unaltered J24G19)
         run: |
           set -euo pipefail
