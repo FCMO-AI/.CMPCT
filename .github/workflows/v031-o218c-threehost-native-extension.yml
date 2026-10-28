@@ -93,3 +93,41 @@ jobs:
           path: o218c-evidence/
           if-no-files-found: warn
           retention-days: 30
+
+
+  cross_host:
+    name: Independent three-platform source and archive parity verdict
+    needs: portable
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: o218c-*-${{ github.event.pull_request.head.sha || github.sha }}
+          merge-multiple: false
+          path: o218c-all
+      - name: Cross-check all three distinct original archive images and diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python research/o218c_threehost_crosshost_referee.py o218c-all \
+            --output o218c-crosshost-result.json | tee o218c-crosshost.log
+          grep -q 'O218C_CROSS_HOST_REPLAY=PASS' o218c-crosshost.log
+      - name: Preserve independent three-platform verdict
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: o218c-crosshost-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            o218c-crosshost-result.json
+            o218c-crosshost.log
+          retention-days: 30
+          if-no-files-found: warn
