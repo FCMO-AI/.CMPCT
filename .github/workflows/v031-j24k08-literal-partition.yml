@@ -1,0 +1,99 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT v031 J24K08 signed equal-total VZIP literal proof boundary
+
+on:
+  pull_request:
+    paths:
+      - 'tests/test_j24k08_signed_literal_partition.py'
+      - 'docs/v031-research/2026-10-28-j24k08-*'
+      - '.github/workflows/v031-j24k08-literal-partition.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24k08-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-vs-semantic-proof:
+    name: J24K08 index projection / literal partition - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prove original product and golden custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "b37b786966ac1506a0439567d4a58eea472d85f8"
+          test "$(git rev-parse HEAD:src/cmpct/codec.py)" = "a5e5fd0cdaff9001d4d00e131c163c8768adc2b0"
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = "0614723549403f398a43552a7c5ad3f00fbec688"
+          test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip-deflate-mode0.json)" = "663b9fdb4df560fb9572fa14bf003928a2379e5e"
+          mkdir -p j24k08-evidence
+          git rev-parse HEAD > j24k08-evidence/head.txt
+          git ls-tree HEAD src/cmpct/reader.py src/cmpct/codec.py src/cmpct/validation.py tests/conformance/v24-virtual-zip-deflate-mode0.json > j24k08-evidence/immutable-blobs.txt
+          python -m py_compile tests/test_j24k08_signed_literal_partition.py
+      - name: Install CMPCT wheel, not editable
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+      - name: Run real independent signed-source proof case
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_HOME="$RUNNER_TEMP/j24k08-tests"
+          mkdir -p "$TEST_HOME/conformance"
+          cp tests/test_j24k08_signed_literal_partition.py "$TEST_HOME/"
+          cp tests/conformance/v24-virtual-zip-deflate-mode0.json "$TEST_HOME/conformance/"
+          cd "$TEST_HOME"
+          python -m pytest --noconftest -q -s test_j24k08_signed_literal_partition.py 2>&1 | tee "$GITHUB_WORKSPACE/j24k08-evidence/court.txt"
+      - name: Bind outcome to actual signed test receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = Path("j24k08-evidence/court.txt").read_text(encoding="utf-8")
+          rows = [json.loads(line.split("J24K08_RECEIPT=",1)[1])
+                  for line in s.splitlines() if "J24K08_RECEIPT=" in line]
+          assert len(rows) == 1
+          r = rows[0]
+          assert r["source_sha"] == Path("j24k08-evidence/head.txt").read_text().strip()
+          assert r["original_literals"] == [39,77] and r["reallocated_literals"] == [40,76]
+          assert r["preflight"] == "ACCEPT"
+          assert r["whole_read"] == r["verify"] == "REJECT"
+          assert any(x.get("offset") == 39 and x.get("length") == 1 and x.get("mismatch")
+                     for x in r["ranges"])
+          Path("j24k08-evidence/receipt.json").write_text(json.dumps(r,indent=2,sort_keys=True)+"\n",encoding="utf-8")
+          print("J24K08_STRICT_GEOMETRY_NOT_SEMANTIC_PROOF",flush=True)
+          PY
+      - name: Check workflow topology on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: python tools/check_ci_topology.py .github/workflows/v031-j24k08-literal-partition.yml
+      - name: Upload all raw receipts, even scientific negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24k08-${{ matrix.os }}-${{ env.SOURCE_SHA }}
+          path: j24k08-evidence/
+          retention-days: 30
+          if-no-files-found: warn
