@@ -6,7 +6,9 @@ on:
   pull_request:
     paths:
       - 'tests/test_j24k07_signed_nonmode2_suffix.py'
+      - 'tests/test_j24k07b_signed_canonical_suffix.py'
       - 'docs/v031-research/2026-10-28-j24k07-*'
+      - 'docs/v031-research/2026-10-28-j24k07b-*'
       - '.github/workflows/v031-j24k07-nonmode2-suffix.yml'
   workflow_dispatch:
 
@@ -46,10 +48,11 @@ jobs:
           test "$(git rev-parse HEAD:src/cmpct/validation.py)" = "0614723549403f398a43552a7c5ad3f00fbec688"
           test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip.json)" = "1f199cafb40ca487263ed421e0d0908402ae6c3f"
           test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip-deflate-mode1.json)" = "06381fab57609252bfb9b887e33c2bdd480de681"
+          test "$(git rev-parse HEAD:tests/conformance/v24-virtual-zip-deflate-mode0.json)" = "663b9fdb4df560fb9572fa14bf003928a2379e5e"
           mkdir -p j24k07-evidence
           git rev-parse HEAD > j24k07-evidence/head.txt
           git ls-tree HEAD src/cmpct/codec.py src/cmpct/reader.py src/cmpct/validation.py tests/conformance/v24-virtual-zip.json tests/conformance/v24-virtual-zip-deflate-mode1.json > j24k07-evidence/original-blobs.txt
-          python -m py_compile tests/test_j24k07_signed_nonmode2_suffix.py
+          python -m py_compile tests/test_j24k07_signed_nonmode2_suffix.py tests/test_j24k07b_signed_canonical_suffix.py
       - name: Install real CMPCT wheel, not editable
         shell: bash
         run: |
@@ -82,13 +85,16 @@ jobs:
           TEST_HOME="$RUNNER_TEMP/j24k07-tests"
           mkdir -p "$TEST_HOME/conformance"
           cp tests/test_j24k07_signed_nonmode2_suffix.py "$TEST_HOME/"
+          cp tests/test_j24k07b_signed_canonical_suffix.py "$TEST_HOME/"
           cp tests/test_j24k06_mode2_prefix_projection.py "$TEST_HOME/"
           cp tests/test_j24c07c_signed_mode2_regeneration.py "$TEST_HOME/"
           cp tests/conformance/v24-virtual-zip.json "$TEST_HOME/conformance/"
           cp tests/conformance/v24-virtual-zip-deflate-mode1.json "$TEST_HOME/conformance/"
+          cp tests/conformance/v24-virtual-zip-deflate-mode0.json "$TEST_HOME/conformance/"
           cd "$TEST_HOME"
           python -m pytest --noconftest -q -s \
             test_j24k07_signed_nonmode2_suffix.py \
+            test_j24k07b_signed_canonical_suffix.py \
             test_j24k06_mode2_prefix_projection.py \
             test_j24c07c_signed_mode2_regeneration.py \
             2>&1 | tee "$GITHUB_WORKSPACE/j24k07-evidence/court.txt"
@@ -111,6 +117,19 @@ jobs:
               assert r["preflight"] == "REJECT"
               assert r["full_read"] == "REJECT" and r["verify"] == "REJECT"
               assert r["wrong_byte_count"] >= 1 and r["truncated_probes"] == 0
+          heldout = [json.loads(line.split("J24K07B_RECEIPT=", 1)[1])
+                     for line in path.read_text(encoding="utf-8").splitlines()
+                     if "J24K07B_RECEIPT=" in line]
+          assert len(heldout) == 2, ("missing canonical-mode0 cells", len(heldout))
+          assert {r["delta"] for r in heldout} == {-1, 1}
+          for r in heldout:
+              assert r["source_sha"] == Path("j24k07-evidence/head.txt").read_text().strip()
+              assert r["case"] == "canonical" and r["preflight"] == "REJECT"
+              assert r["full_read"] == "REJECT" and r["verify"] == "REJECT"
+              assert r["wrong_byte_count"] >= 1 and r["truncated_probes"] == 0
+          Path("j24k07-evidence/heldout-canonical.json").write_text(
+              json.dumps(heldout, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          print("J24K07B_CANONICAL_TWO_SIGNED_CELLS_CONFIRMED", flush=True)
           Path("j24k07-evidence/receipts.json").write_text(
               json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           print("J24K07_ALL_FOUR_SIGNED_CELLS_CONFIRMED", flush=True)
