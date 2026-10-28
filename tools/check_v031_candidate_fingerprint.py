@@ -139,14 +139,17 @@ def assert_git_head_custody(
     # entries as "H path"; both "h" (assume-unchanged) and "S" (skip-worktree)
     # must fail closed even when git diff reports no modifications.
     flagged: list[str] = []
-    selected = set(rows)
+    # Inspect the entire tracked index, not just already-discovered worktree
+    # rows. A skip-worktree entry can make a formerly tracked *optional*
+    # source disappear from the glob and hide its deletion from git diff.
+    # A partial/sparse checkout cannot serve as full-source evidence here.
     for entry in git_bytes("ls-files", "-v", "-z", "--").split(b"\0"):
         if not entry:
             continue
         if len(entry) < 3 or entry[1:2] != b" ":
             raise ValueError("unparseable Git index status for candidate source")
         relative = entry[2:].decode("utf-8")
-        if relative in selected and entry[:1] != b"H":
+        if entry[:1] != b"H":
             flagged.append(relative)
     if flagged:
         raise ValueError(
