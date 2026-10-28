@@ -27,6 +27,7 @@ jobs:
       - name: Checkout immutable experiment source
         uses: actions/checkout@v6
         with:
+          ref: ${{ env.EVIDENCE_SHA }}
           persist-credentials: false
       - name: Python 3.11
         uses: actions/setup-python@v6
