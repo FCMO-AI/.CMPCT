@@ -29,7 +29,9 @@ def restore_codec(candidate: str) -> str:
     newsig = "def range_vzip(recipe,get_content,get_stream,start:int,length:int,stream_size=None)->bytes:"
     assert candidate.count(newsig) == 1
     candidate = candidate.replace(newsig, oldsig)
-    start = "        elif outpos<end:\n            # A skipped physical stream determines every later logical offset."
+    start = ("        elif outpos<end and (stream_size is not None or\\n"
+             "                             (method==zipfile.ZIP_DEFLATED and stream_mode==2)):\\n"
+             "            # A skipped physical stream determines every later logical offset.")
     end = "        outpos+=csize"
     i = candidate.index(start)
     j = candidate.index(end, i)
