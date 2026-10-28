@@ -46,7 +46,12 @@ def singlepass_read_range(reader, name, start, length):
     if type(start) is not int or type(length) is not int:
         return reader.read_range(name, start, length)
     end = start + length
-    if start < 0 or length < 0 or end > want_size:
+    # Preserve the published member-level bound as well as the VZIP recipe
+    # bound. A reauthenticated row can disagree with the recipe without
+    # changing physical records, and the normal Reader rejects that view.
+    member_size = reader.by[name][4]
+    if (type(member_size) is not int or start < 0 or length < 0 or
+            end > member_size or end > want_size):
         return reader.read_range(name, start, length)
     if length == 0:
         return b""
