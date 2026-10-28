@@ -66,6 +66,13 @@ def _publish_unnamed_chunk_fd(fd:int,parentfd:int,leaf:str)->str:
         checked(-100,os.fsencode('/proc/self/fd/%d'%fd),0x400)  # AT_SYMLINK_FOLLOW.
         return 'PROC_SELF_FD_FOLLOW'
 
+# Global per-Reader carrying-cost limit, not a fixture-dependent admission threshold.
+# Each mark owns one tuple pointer and a Python int (roughly 36–44 bytes on a
+# 64-bit host). At most 65,536 retained marks keep the optional resident index
+# on the order of 3 MiB across ALL members, not 3 MiB per member.
+# Eligible files beyond this cap remain valid via the old linear range walk.
+_MAX_CHUNK_RANGE_HINTS=65536
+
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
     def __init__(self,path:Path):
@@ -85,6 +92,7 @@ class CMPCT:
             canonical_seen=set()
             # Only fully admitted native chunk lists receive a bounded, in-memory range hint.
             self._chunk_range_marks={}
+            self._chunk_range_hint_count=0
             storage_validator=None
             for row in self.files:
                 try:
@@ -101,8 +109,13 @@ class CMPCT:
                     if storage[0]==S_CHUNKS:
                         proof=native_chunk_proof(storage,self.index['blobs'],row[4])
                         if proof is not False:
-                            if type(proof) is tuple:
+                            if type(proof) is tuple and (
+                                self._chunk_range_hint_count+len(proof) <= _MAX_CHUNK_RANGE_HINTS
+                            ):
+                                # Bound all retained checkpoints for this Reader,
+                                # not only each individual signed member.
                                 self._chunk_range_marks[row[0]]=proof
+                                self._chunk_range_hint_count+=len(proof)
                             continue
                     if storage_validator is None:
                         from .validation import _validate_storage
