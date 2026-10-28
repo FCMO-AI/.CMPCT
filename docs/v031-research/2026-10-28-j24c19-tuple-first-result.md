@@ -51,3 +51,17 @@ The hosted court used bounded synthetic lists of low-cardinality refs with tiny 
 ## Explicit unchanged boundaries
 
 Released v0.30.0/r24 untouched; no Builder/Reader/native/format/release/benchmarks/Discovery state changes, no merge. Owner PRs #662, #676, #679, #681 and Foundry #680 were not edited. CI success on the *measured source* `95f34c5` is established; later documentation-only HEAD requires its own exact-head checks before a full green claim.
+
+## Architecture frame review: economical proof and separate product obligations
+
+This episode closes the **tuple-first-plus-minimal-thaw** mechanism, not every possible immutable index architecture. A product-worthy alternative would need independent evidence for each boundary, and should not be attempted by silently changing the strict validator's accepted representation:
+
+| Boundary | Existing exact contract | Cost/risk that must be measured |
+| --- | --- | --- |
+| Binary admission | `msgpack.unpackb(raw=False)`; strict malformed-map policy at preflight | Object count, nesting, untrusted memory, equivalent accept/reject semantics |
+| Chunk proof | ABI3 accepts exact Python lists and returns exact logical prefix checkpoints | New tuple-aware native ABI must check the same every-ref indices and blob lengths; no proof bypass |
+| Journal recovery | `files` and `blobs` are mutated by put/del/ren/replay | Thaw must preserve every historical committed generation, not only one single-file index |
+| Public Reader metadata | `Reader.index/files/by/blobs` expose Python containers | Snapshot mutation must fail-closed or be authenticated; changing public types is a compatibility decision |
+| Product economics | Published v0.30.0 and #662/#676 are real historical controls | Same authenticated archive, Q1/Q6/Q64, create/extract/verify, complete memory and cross-platform wheels |
+
+The *cheap* scientific fork has already been answered negatively at CPython3.11 by the source-exact hosted test. No new C branch or parser policy is justified by the current data; either find a truly different owner boundary with measurable general leverage or advance another independent CMPCT frontier. The most useful counterfactual from this activation is to verify source/ABI structural compatibility **before** investing in microbench gains.
