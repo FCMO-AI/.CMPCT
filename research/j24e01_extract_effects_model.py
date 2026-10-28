@@ -54,6 +54,7 @@ def planned_logical_bytes(index: dict) -> int:
         by_name[name] = row
 
     resolved = {}
+    roots = {}
     for name, row in by_name.items():
         kind, size, storage = row[1], row[4], row[6]
         if kind == K_HARDLINK:
@@ -64,6 +65,7 @@ def planned_logical_bytes(index: dict) -> int:
             if size or storage is not None:
                 raise UnprovedEffect(f"{name}: directory effect")
             resolved[name] = 0
+            roots[name] = None
             continue
         if not isinstance(storage, list) or not storage:
             raise UnprovedEffect(f"{name}: storage")
@@ -122,6 +124,7 @@ def planned_logical_bytes(index: dict) -> int:
         else:
             raise UnprovedEffect(f"{name}: unknown storage mode")
         resolved[name] = size
+        roots[name] = name if kind == K_FILE else None
 
     # Iterative memoized graph walk: forward hardlinks and 50k-deep chains use
     # O(members + links) operations and no Python recursive stack.
@@ -139,12 +142,16 @@ def planned_logical_bytes(index: dict) -> int:
                 raise UnprovedEffect(f"{name}: missing/nonfile hardlink owner")
             chain.append(cursor)
             cursor = row[6][0]
-        if by_name[cursor][1] != K_FILE and chain:
+        # The memoized cursor can itself be an alias. Proof requires its
+        # ultimate regular-file root, never merely the cursor's row kind.
+        owner = roots[cursor]
+        if owner is None:
             raise UnprovedEffect(f"{name}: hardlink to nonregular")
         physical = resolved[cursor]
         for alias in reversed(chain):
             if by_name[alias][4] != physical:
                 raise UnprovedEffect(f"{alias}: alias size != owner")
             resolved[alias] = physical
+            roots[alias] = owner
 
     return sum(resolved.values())
