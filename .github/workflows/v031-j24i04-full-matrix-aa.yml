@@ -89,6 +89,13 @@ jobs:
           sha256sum benchmarks/zip_parity_bench.py benchmarks/universal_bench.py \
             tools/aggregate_parity_runs.py tools/check_performance_regression.py \
             >j24i04-artifacts/unchanged-evaluator-sha256.txt
+          # Bind the inherited full evaluator to #704's actual source, not a
+          # research-branch variant or the current working tree by label alone.
+          for path in benchmarks/zip_parity_bench.py benchmarks/universal_bench.py \
+                      tools/aggregate_parity_runs.py tools/check_performance_regression.py \
+                      tools/materialize_performance_base_native.py; do
+            test "$(git hash-object "$path")" = "$(git show 293aa161a4a13b4c1f4fd0f5089aa62e4dbeedef:"$path" | git hash-object --stdin)"
+          done
 
       - uses: actions/setup-python@v6
         with:
@@ -106,6 +113,14 @@ jobs:
           sudo apt-get install -y zstd xz-utils libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
+
+      - name: Verify experimental source parses under the exact Python interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile benchmarks/v031_j24i04_full_matrix_aa.py \
+            research/j24i04_independent_receipt_referee.py \
+            research/test_j24i04_referee.py
 
       - name: Require independent referee neutral/red controls and forged-receipt rejection
         shell: bash
