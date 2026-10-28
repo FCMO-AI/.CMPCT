@@ -47,7 +47,11 @@ def check(payload):
                 assert result["strict_median_cpu_ns"]==sc
                 assert result["witness_median_cpu_ns"]==wc
                 assert abs(result["ratio_strict_over_witness"]-ratio)<1e-10
-                assert abs(result["cpu_ratio"]-sc/wc)<1e-10
+                if wc:
+                    assert result["cpu_ratio"] is not None
+                    assert abs(result["cpu_ratio"]-sc/wc)<1e-10
+                else:
+                    assert result["cpu_ratio"] is None
                 if all(x["rss_raw"] is not None for a in arms.values() for x in a):
                     rss_strict=statistics.median(x["rss_raw"] for x in arms["strict"])
                     rss_witness=statistics.median(x["rss_raw"] for x in arms["witness"])
@@ -60,12 +64,14 @@ def check(payload):
     late=[summaries[f"{n}/{family}/late"] for n in (65536,262144)
           for family in ("one","owners256")]
     wall=all(x["ratio_strict_over_witness"]>=2.0 for x in late)
-    cpu=all(x["cpu_ratio"]>1.0 for x in late)
+    cpu_measured=all(x["cpu_ratio"] is not None for x in late)
+    cpu=cpu_measured and all(x["cpu_ratio"]>1.0 for x in late)
     negatives=[v for k,v in summaries.items() if k.endswith("/early") or "/ragged/" in k]
     no_debt=all(x["ratio_strict_over_witness"]>=1/1.05 for x in negatives)
     rss_measured=all(x["peak_rss_delta_mib"] is not None for x in summaries.values())
     rss_gate=rss_measured and all(x["peak_rss_delta_mib"]<=8.0 for x in summaries.values())
     assert payload["late_four_profile_wall_gate"] is wall
+    assert payload["late_four_profile_cpu_measured"] is cpu_measured
     assert payload["late_four_profile_cpu_direction"] is cpu
     assert payload["early_ragged_no_gt5pct_debt"] is no_debt
     assert payload["rss_measured"] is rss_measured
@@ -74,7 +80,7 @@ def check(payload):
     assert payload["scientific_gate_all_preregistered"] is decision
     return {"status":"PASS_RECEIPT_ARITHMETIC",
             "scientific_wall_gate":"PASS" if wall else "FAIL",
-            "all_preregistered":"PASS" if decision else ("INCOMPLETE_RSS" if not rss_measured else "FAIL"),
+            "all_preregistered":"PASS" if decision else ("INCOMPLETE_CPU" if not cpu_measured else ("INCOMPLETE_RSS" if not rss_measured else "FAIL")),
             "cpu_direction":cpu,"early_ragged_no_debt":no_debt,
             "samples":len(rows),"groups":len(summaries),
             "min_late_ratio":min(x["ratio_strict_over_witness"] for x in late),
