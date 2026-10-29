@@ -162,7 +162,6 @@ pub fn decode_wav_flac(
     Ok(out)
 }
 
-
 /// Complete logical identity for one direct codec-2 member without materializing
 /// the WAV or copying its encoded FLAC payload. The caller owns the already-open
 /// CMPCT source File, authenticates its index/CMA4 bounds, and supplies an
@@ -191,13 +190,15 @@ pub fn digest_wav_flac_stream<R: std::io::Read>(
     let fixed = prefix_size
         .checked_add(suffix_size)
         .ok_or(WavFlacError::Limit)?;
-    let expected_pcm = logical_size.checked_sub(fixed).ok_or(WavFlacError::Length)?;
+    let expected_pcm = logical_size
+        .checked_sub(fixed)
+        .ok_or(WavFlacError::Length)?;
     let width = u64::from(metadata.bits_per_sample / 8);
     if expected_pcm % width != 0 {
         return Err(WavFlacError::Length);
     }
-    let mut flac = FlacReader::new(BufReader::new(encoded))
-        .map_err(|e| WavFlacError::Flac(e.to_string()))?;
+    let mut flac =
+        FlacReader::new(BufReader::new(encoded)).map_err(|e| WavFlacError::Flac(e.to_string()))?;
     let info = flac.streaminfo();
     if info.channels != metadata.channels
         || info.sample_rate != metadata.sample_rate
