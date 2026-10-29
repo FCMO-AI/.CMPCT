@@ -48,7 +48,7 @@ jobs:
         if: steps.scope.outputs.run == 'true'
         with:
           components: rustfmt
-      - run: python -m pip install . zstandard
+      - run: python -m pip install . zstandard numpy soundfile
         if: steps.scope.outputs.run == 'true'
       - run: python research/j24i36/generate_fixed_crc.py --vectors tests/conformance/v24-direct-codecs.json --output j24i36-cases
         if: steps.scope.outputs.run == 'true'
