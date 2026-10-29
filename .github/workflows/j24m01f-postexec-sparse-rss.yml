@@ -41,7 +41,7 @@ jobs:
           test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
           test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = c383c86982b8c7fe48ecc41c893b575b96eaeb06
           test "$(git rev-parse HEAD:tests/test_j24m01f_postexec_rss_custody.py)" = 8e5878020110af3d20bdbe4b2c0a179c374857a9
-          test "$(git rev-parse HEAD:tools/j24m01g_junit_custody.py)" = 7caf4d0ff6ff2fba5d4d9c9e84f2434ec9540f7f
+          test "$(git rev-parse HEAD:tools/j24m01g_junit_custody.py)" = afaf46f832d2b83a488feff213ed7b29d23718e0
           test "$(git rev-parse HEAD:tests/test_j24m01g_junit_custody.py)" = 2444f143f0a5a44254f118385bd9ee3ff8179589
           mkdir -p "$EVIDENCE_DIR"
           git rev-parse HEAD > "$EVIDENCE_DIR/exact-head.txt"
@@ -53,6 +53,8 @@ jobs:
         run: |
           python -m pip install -e '.[test,audio]'
           python -m pip freeze | sort > "$EVIDENCE_DIR/pip-freeze.txt"
+      - name: Compile scientific JUnit auditor before expensive hosted tests
+        run: python -m py_compile tools/j24m01g_junit_custody.py
       - name: Execute CMPCT-independent hostile high-water control and genuine sparse verifier
         shell: bash
         run: |
@@ -113,6 +115,8 @@ jobs:
           printf '%s\n' "$code" > "$EVIDENCE_DIR/pytest-exit-code.txt"
           echo "REAL_FULL_SUITE_EXIT=$code; workflow scientific SUCCESS must not be confused with product PASS"
           exit 0
+      - name: Compile JUnit custody auditor independently of pytest suite results
+        run: python -m py_compile tools/j24m01g_junit_custody.py
       - name: Verify sparse test is not red; retain any historical suite reds
         shell: bash
         run: |
