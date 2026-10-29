@@ -1,0 +1,108 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Candidate acceptance: green means repaired Reader/preflight signed-journal semantics,
+# NOT release promotion or retrospective alteration of J24G54 negative evidence.
+name: CMPCT J24G55 shared journal replay fixed-candidate court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g55-shared-journal-preflight-replay-20261029
+  pull_request:
+    branches:
+      - agent/phased2-v031-j24g52-hardlink-xattr-inode-preflight-20261029
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24g55-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  shared-journal-replay:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G55_EVIDENCE_DIR: evidence/physical
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact head and frozen preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/physical
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor a95f2ee99bd7e15f63be23c88293a685dac7d5a7 HEAD
+          git merge-base --is-ancestor 47ddedbeb844a8d59e9d142910c6705301214ce0 HEAD
+          test -s src/cmpct/journal_replay.py
+          git rev-parse HEAD > evidence/head.txt
+          for path in src/cmpct/reader.py src/cmpct/validation.py src/cmpct/journal_replay.py src/cmpct/transactions.py; do
+            git rev-parse "HEAD:$path" >> evidence/source-blobs.txt
+          done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact source and independent decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'pytest>=8' 'zstandard>=0.22'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import cmpct.reader as reader
+          import cmpct.validation as validation
+          import cmpct.transactions as transactions
+          import cmpct.builder as builder
+          import cmpct.journal_replay as journal_replay
+          for path, module in (
+              ('src/cmpct/reader.py', reader),
+              ('src/cmpct/validation.py', validation),
+              ('src/cmpct/journal_replay.py', journal_replay),
+              ('src/cmpct/transactions.py', transactions),
+              ('src/cmpct/builder.py', builder),
+          ):
+              source = Path(path).read_bytes().replace(b'\r\n', b'\n')
+              installed = Path(module.__file__).read_bytes().replace(b'\r\n', b'\n')
+              assert source == installed, path
+              print('SOURCE_EXACT', path, hashlib.sha256(source).hexdigest())
+          assert reader._apply_journal_ops is journal_replay._apply_journal_ops
+          assert validation._apply_journal_ops is journal_replay._apply_journal_ops
+          PY
+      - name: Shared replay model, invalid journal, real signed update and strict native readback
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest --noconftest -q -s --junitxml=evidence/pytest.xml \
+            tests/test_v031_j24g55_shared_journal_replay.py \
+            tests/test_v031_j24g55_physical_signed_delete_acceptance.py \
+            tests/test_v031_j24g55_inrange_signed_owner_acceptance.py \
+            2>&1 | tee evidence/pytest.log
+      - name: Independent signed wire/footer/ordinal and tamper oracle
+        if: always() && runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s evidence/physical/both_survivors-before.cmpct
+          test -s evidence/physical/both_survivors-after.cmpct
+          python research/j24g55/independent_journal_referee.py evidence/physical 2>&1 | tee evidence/referee.log
+          test -s evidence/physical/independent-referee.json
+          test -s evidence/physical/inrange_xattr-after.cmpct
+          python research/j24g55/independent_inrange_referee.py evidence/physical 2>&1 | tee evidence/inrange-referee.log
+          test -s evidence/physical/independent-inrange-referee.json
+      - name: Preserve source exact identity, original physical archives and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g55-shared-replay-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
