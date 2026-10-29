@@ -397,6 +397,93 @@ def _validate_storage(path: str, kind: int, size: int, storage, blobs, recipes) 
         raise ValidationError(f"file {path!r} uses unknown storage kind {tag!r}")
 
 
+
+def validate_hardlink_inode_xattrs(index: dict) -> None:
+    """Reject incompatible explicit xattrs describing the same physical hardlink inode.
+
+    Footnote: revision-24 fsmeta is sparse by file-row ordinal, while a hardlink
+    tree is physically owned by its terminal regular-file inode. Two *explicit*
+    and different values for one (inode, xattr-key) cannot both be reconstructed.
+    An omitted sparse xattr record is not assumed to be an explicit absence:
+    that stronger historical-format contract requires separate proof. The graph
+    walk is iterative and memoized so deep alias chains cannot recurse or
+    repeatedly traverse the same long tail.
+    """
+    files = index["files"]
+    fsmeta = index.get("fsmeta") or {}
+    records = fsmeta.get("xattrs", [])
+    if not records or not any(row[1] == K_HARDLINK for row in files):
+        return
+
+    entries = {}
+    links = {}
+    for ordinal, row in enumerate(files):
+        try:
+            path, _ = canonical_logical_path(row[0])
+            if path in entries:
+                raise ValidationError(f"duplicate canonical file path {path!r}")
+            entries[path] = (ordinal, row)
+            if row[1] == K_HARDLINK:
+                target, _ = canonical_logical_path(row[6][0])
+                links[path] = target
+        except (TypeError, ValueError, IndexError, UnicodeError) as exc:
+            raise ValidationError("invalid hardlink inode metadata path") from exc
+
+    terminal_cache = {}
+
+    def terminal(path: str) -> str:
+        if path in terminal_cache:
+            return terminal_cache[path]
+        trail = []
+        visited = set()
+        current = path
+        while current in links:
+            if current in terminal_cache:
+                current = terminal_cache[current]
+                break
+            if current in visited:
+                raise ValidationError(f"hardlink cycle at {path!r}")
+            visited.add(current)
+            trail.append(current)
+            current = links[current]
+        if current not in entries:
+            raise ValidationError(f"hardlink target missing: {current!r}")
+        if trail and entries[current][1][1] != K_FILE:
+            raise ValidationError(f"hardlink owner not a regular file: {current!r}")
+        for alias in trail:
+            terminal_cache[alias] = current
+        terminal_cache[path] = current
+        return current
+
+    requirements = {}
+    for record in records:
+        if not isinstance(record, list) or len(record) != 2:
+            raise ValidationError("fsmeta xattrs record must be [ordinal, attributes]")
+        ordinal, attributes = record
+        if type(ordinal) is not int or ordinal < 0 or ordinal >= len(files):
+            raise ValidationError("invalid fsmeta xattrs ordinal")
+        if not isinstance(attributes, list):
+            raise ValidationError("fsmeta xattrs attributes must be an array")
+        path, _ = canonical_logical_path(files[ordinal][0])
+        inode = terminal(path)
+        for item in attributes:
+            if not isinstance(item, list) or len(item) != 2:
+                raise ValidationError("fsmeta xattr must be [name, value]")
+            name, value = item
+            if not isinstance(name, (str, bytes)) or not isinstance(value, (bytes, bytearray)):
+                raise ValidationError("invalid fsmeta xattr name or value")
+            try:
+                key = os.fsencode(name)
+            except (UnicodeError, ValueError) as exc:
+                raise ValidationError("invalid fsmeta xattr key") from exc
+            marker = (inode, key)
+            if marker in requirements and requirements[marker] != value:
+                raise ValidationError(
+                    f"conflicting hardlink inode xattr for {inode!r}, {name!r}"
+                )
+            requirements[marker] = value
+
+
 def _validate_index(index: dict, record_base: int, archive_size: int, limits: ParserLimits) -> None:
     if index.get("v") != VERSION:
         raise ValidationError(f"index revision is not {VERSION}")
@@ -500,6 +587,7 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
             if not isinstance(row, list) or not row:
                 raise ValidationError(f"fsmeta {label} row is malformed")
             _ref(row[0], len(files), f"fsmeta {label} file")
+    validate_hardlink_inode_xattrs(index)
 
 
 def _validate_blob_headers(f, index: dict, record_base: int, archive_size: int, limits: ParserLimits) -> None:

@@ -11,6 +11,7 @@ from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
 from .path_policy import canonical_logical_path
+from .validation import validate_hardlink_inode_xattrs
 from . import _xattrs  # preserve O69 strict and portable modes through native Darwin provider
 
 def _safe_output_path(dest:Path,rel:str)->Path:
@@ -470,6 +471,11 @@ class CMPCT:
         directory tree once, then writes members using plain OS paths. This changes no archive
         semantics; it only removes Python/filesystem bookkeeping from the hot loop.
         """
+        # Incompatible *explicit* xattrs on two hardlink aliases cannot be restored
+        # to one inode. Reject before dest.mkdir() even in portable metadata mode;
+        # preflight and strong verify share the same non-recursive proof.
+        if metadata and self.fsmeta.get('xattrs'):
+            validate_hardlink_inode_xattrs(self.index)
         # Explicit metadata fidelity must not silently degrade to the portable default. Check
         # contradictions and a missing host API before creating the destination; per-path errors
         # can still occur later and do not imply transactional whole-tree publication.
@@ -571,6 +577,8 @@ class CMPCT:
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
                 except (OSError, NotImplementedError):pass
     def verify(self):
+        if self.fsmeta.get('xattrs'):
+            validate_hardlink_inode_xattrs(self.index)
         n=0
         for row in self.files:
             if row[1]==K_DIR:continue
