@@ -31,10 +31,24 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Scope this exact HEAD to the research question
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i41/|docs/v031-research/.*j24i41|[.]github/workflows/v031-j24i41-wav-capability[.]yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            echo 'Latest commit changes no J24I41 research; skipping expensive hosted court.'
+          fi
       - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           python-version: '3.11'
       - name: Assert exact product and original control identities
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -51,6 +65,7 @@ jobs:
           git -C ../j24i41-parent rev-parse HEAD > j24i41-work/control-head.txt
           git status --short > j24i41-work/checkout-status.txt
       - name: Install identical environment for candidate and control
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -62,6 +77,7 @@ jobs:
                             "zstandard":zstandard.__version__},default=str))
           PY
       - name: Bind the same installed package-owned native codec to both exact source trees
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -90,6 +106,7 @@ jobs:
                 hashlib.sha256(source.read_bytes()).hexdigest(), source.stat().st_size)
           PY
       - name: Freeze same input tree and run candidate full Builder verification
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -99,6 +116,7 @@ jobs:
           J24I41_SOURCE_ROOT="$PWD/src" PYTHONPATH="$PWD/src" python "$COURT" evaluate \
             --root "$ROOT/input" --out "$ROOT/candidate" --side candidate
       - name: Execute unchanged v0.31 predecessor and compare physical archives
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -110,6 +128,7 @@ jobs:
           python "$COURT" compare --parent "$ROOT/control" --candidate "$ROOT/candidate" \
             --out "$ROOT/decision.json"
       - name: Independent physical artifact custody and manifest
+        if: steps.scope.outputs.run == 'true'
         if: always()
         shell: bash
         run: |
@@ -130,7 +149,7 @@ jobs:
           print("J24I41 artifact SHA256",hashlib.sha256(b).hexdigest(),"bytes",len(b))
           PY
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.scope.outputs.run == 'true'
         with:
           name: j24i41-${{ matrix.os }}-${{ github.sha }}
           path: j24i41-evidence.tgz
