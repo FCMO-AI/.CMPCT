@@ -70,7 +70,15 @@ class Audit:
     def execute(self,root):
         src=root/'j30-physical-original.zip'
         hosts={k:root/f'j30-{k}-original.zip' for k in ('linux','mac','win')}
-        for p in [src,*hosts.values()]:self.yes(p.exists(),f'artifact exists: {p.name}')
+        expected_transport_sha={
+            'j30-physical-original.zip':'856777ebf5dcc1c2a7e85a4bb7b0fd5e7a15b3dbcbf6f94ab8eb4ddf68a7082a',
+            'j30-linux-original.zip':'9a25d1ed4cf94c01b575d9cb21d0e91bc7632d86ceee4ac779a7e7d5743c840e',
+            'j30-mac-original.zip':'989b9cba84c1555d208a9864e63778ce5c47e08d8358025fc355a2b509767f8c',
+            'j30-win-original.zip':'c13352d9f9c7e4ac88073888c40b20ce4cbb09770e07f2a3bc8a45771dbc84d0',
+        }
+        for p in [src,*hosts.values()]:
+            self.yes(p.exists(),f'artifact exists: {p.name}')
+            self.yes(SHA(p.read_bytes())==expected_transport_sha[p.name],f'original GitHub Actions artifact digest: {p.name}')
         with zipfile.ZipFile(src) as z:
             m=json.loads(z.read('manifest.json'))
             cases=m['cases']
