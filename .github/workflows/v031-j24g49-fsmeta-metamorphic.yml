@@ -76,7 +76,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m pytest -q --noconftest tests/test_v031_j24g49_fsmeta_metamorphic.py --junitxml=evidence/pytest.xml > evidence/pytest.log 2>&1
+          python -m pytest -q -s --noconftest tests/test_v031_j24g49_fsmeta_metamorphic.py --junitxml=evidence/pytest.xml > evidence/pytest.log 2>&1
           rc=$?
           cat evidence/pytest.log
           printf '%s\n' "$rc" > evidence/pytest-exit-code.txt
