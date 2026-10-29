@@ -22,6 +22,70 @@ def _safe_output_path(dest:Path,rel:str)->Path:
     if pp.is_absolute() or any(x in ('..','') for x in pp.parts):raise IOError(f'unsafe archive path: {rel!r}')
     return dest/pp
 
+def _apply_journal_ops(index: dict, ops: list) -> dict:
+    """Apply r24 journal ops while binding positional fsmeta to logical path identity.
+
+    The signed r24 base index stores xattrs and owner overrides by sorted file-row ordinal.
+    Journal operations may change those ordinals; retaining the old numbers would silently
+    attach verified metadata to the wrong file. Both replay and checkpoint creation must
+    use this same transformation, or the 64-delta checkpoint resurrects the defect.
+
+    New journal members carry no xattr/owner override fields, so they inherit the
+    original archive's common owner but never another member's sparse overrides.
+    A same-path put retains preexisting metadata; rename transfers it; delete removes it.
+    """
+    rows = index['files']
+    old_names = [row[0] for row in rows]
+    # Lineage maps a current path to its original file-row identity. An inserted name
+    # has no preexisting metadata, even if an earlier op deleted a homonymous path.
+    lineage = {name: name for name in old_names}
+    for op in ops:
+        kind = op[0]
+        if kind == 'put':
+            row = op[1]
+            for i, prior in enumerate(rows):
+                if prior[0] == row[0]:
+                    rows[i] = row
+                    break
+            else:
+                rows.append(row)
+        elif kind == 'del':
+            path = op[1]
+            rows[:] = [row for row in rows if row[0] != path]
+            lineage.pop(path, None)
+        elif kind == 'ren':
+            old, new = op[1], op[2]
+            for row in rows:
+                if row[0] == old:
+                    row[0] = new
+                    if old in lineage:
+                        lineage[new] = lineage.pop(old)
+                    break
+    rows.sort(key=lambda row: row[0])
+    new_names = [row[0] for row in rows]
+    fsmeta = index.get('fsmeta')
+    if fsmeta and new_names != old_names:
+        old_positions = {name: i for i, name in enumerate(old_names)}
+        for field in ('owner_overrides', 'xattrs'):
+            if field not in fsmeta:
+                continue
+            by_old_ordinal = {}
+            for record in fsmeta[field]:
+                ordinal = record[0]
+                # Never transfer an ambiguous or out-of-range authenticated ordinal.
+                if (type(ordinal) is not int or ordinal < 0
+                        or ordinal >= len(old_names) or ordinal in by_old_ordinal):
+                    raise ValueError(f'invalid signed fsmeta {field} ordinal: {ordinal!r}')
+                by_old_ordinal[ordinal] = record[1:]
+            fsmeta[field] = [
+                [new_ordinal, *by_old_ordinal[old_positions[lineage[path]]]]
+                for new_ordinal, path in enumerate(new_names)
+                if path in lineage
+                and old_positions[lineage[path]] in by_old_ordinal
+            ]
+    return index
+
+
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
     def __init__(self,path:Path):
@@ -68,17 +132,12 @@ class CMPCT:
                 idx=msgpack.unpackb(payload,raw=False)
                 for delta in reversed(chain):
                     for b in delta.get('blobs',[]):idx['blobs'].append(b)
-                    for op in delta.get('ops',[]):
-                        if op[0]=='put':
-                            row=op[1];done=False
-                            for i,x in enumerate(idx['files']):
-                                if x[0]==row[0]:idx['files'][i]=row;done=True;break
-                            if not done:idx['files'].append(row)
-                        elif op[0]=='del':idx['files']=[x for x in idx['files'] if x[0]!=op[1]]
-                        elif op[0]=='ren':
-                            for x in idx['files']:
-                                if x[0]==op[1]:x[0]=op[2];break
-                    idx['files'].sort(key=lambda x:x[0])
+                    try:
+                        _apply_journal_ops(idx, delta.get('ops', []))
+                    except (ValueError, TypeError, KeyError, IndexError):
+                        # A malformed committed candidate cannot silently rebind metadata.
+                        # Preserve the inherited ability to recover an older valid footer.
+                        return None
                 return idx,depth
             if kind!=1:return None
             chain.append(msgpack.unpackb(payload,raw=False));depth+=1;pos=prev
