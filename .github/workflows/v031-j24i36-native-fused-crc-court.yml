@@ -65,8 +65,7 @@ jobs:
           J24I36_SYMLINK_CASE_DIR: ${{ github.workspace }}/j24i36-symlink
         run: |
           python research/j24i30/generate_symlink_wire.py --output j24i36-symlink
-          python research/j24i35/generate_crc_variant.py --case-dir j24i36-symlink
-          python research/j24i35/audit_crc_wire.py --case-dir j24i36-symlink
+          python research/j24i36/generate_and_audit_symlink_crc.py --case-dir j24i36-symlink
           cargo test --locked --manifest-path native/cmpct-core/Cargo.toml --test j24i36_fused_crc_court j24i36_real_symlink_reject_crc_only_mutation -- --ignored --nocapture
       - name: Preserve actual physical files and independent audit
         if: always()
