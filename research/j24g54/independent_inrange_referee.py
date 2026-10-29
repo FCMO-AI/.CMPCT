@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 import msgpack
+import zstandard as zstd
 
 from independent_journal_referee import HDR, FTR, BHDR, decode_payload, footer, sha
 
@@ -86,7 +87,7 @@ def main(root: Path):
         assert altered.startswith(altered_before)
         try:
             physical(bytes(altered_before), bytes(altered), "inrange_xattr")
-        except (AssertionError, ValueError, KeyError, TypeError, msgpack.UnpackException):
+        except (AssertionError, ValueError, KeyError, TypeError, msgpack.UnpackException, zstd.ZstdError):
             mutations[label] = True
         else:
             mutations[label] = False
