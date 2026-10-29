@@ -1,0 +1,46 @@
+{
+  "schema": "j24i40b-physical-reader-court-v1",
+  "date_utc": "2026-10-29",
+  "pr": 779,
+  "preregistration_commit": "a539165e21cb0eeef19cdba0977a64d46ad42555",
+  "source_commit": "ef6d9da937ad9fe02252e798e4226c29fe39b012",
+  "run_id": 40944926964,
+  "job_id": 123697697276,
+  "run_url": "https://github.com/FCMO-AI/.CMPCT/actions/runs/40944926964",
+  "run_conclusion": "success",
+  "job_conclusion": "success",
+  "artifact_id": 12929725111,
+  "artifact_url": "https://github.com/FCMO-AI/.CMPCT/actions/runs/40944926964/artifacts/12929725111",
+  "artifact_zip_sha256": "709654f72ce1ebdc97c88047800c8065c705a0268e944ccc91a64835bfc663bf",
+  "inner_tar_sha256": "f377530de9c5018fb9e42bb9f4975aae6dd8084294a3bf6578ef880ef5269c28",
+  "physical_archive_bytes": 3983501,
+  "original_archive_sha256": "9250964815f67891c3e106c9d87aadc67d4f2c3dce8b3e4e1873813a13a6fac7",
+  "mutant_archive_sha256": "09d3ed612329cfd39bb7d1385507bbec2f326461cd529915fe3e18534c6e5f40",
+  "mutated_absolute_offset": 555,
+  "mutated_flac_offset": 26,
+  "flac_payload_start": 529,
+  "changed_byte_count": 1,
+  "changed_bit_xor": 1,
+  "original_flac_sha256": "d2126c870dcba10ad7f9d7b6caf83ca0c0df2815b9e47be343f3ed3b3b1355e8",
+  "mutant_flac_sha256": "90fbfa3f1bad9b4e91b364b03348e18242f08cda5ddabb2ada0ae938dc44bdc8",
+  "original_logical_wav_sha256": "626fe0fd569bc6de01277e7dc71053ef2ef10506ab06a429dcc93ce9e78fe3a5",
+  "original_logical_crc32": 1619711029,
+  "unchanged_cma4_header": true,
+  "unchanged_primary_tail_index": true,
+  "unchanged_footer": true,
+  "changed_pcm_frames": false,
+  "verdicts": {
+    "original": {
+      "python_complete_verify_exit": 0,
+      "rust_complete_verify_exit": 0
+    },
+    "mutant": {
+      "python_complete_verify_exit": 0,
+      "rust_complete_verify_exit": 0
+    }
+  },
+  "classification": "BOTH_ACCEPT_LOGICAL_SHA_INTACT",
+  "independent_reference": "Earlier J24I40 split-FLAC Xiph flac -t rejected the exact same one-bit STREAMINFO MD5 mutation",
+  "scope": "Actual physical CMA4 revision-24 archive; strong verification only; not all Reader APIs, resource limits, provenance authentication, end-to-end performance, platform portability or release permission.",
+  "negative": "The codec-private MD5 mismatch is intentionally not a logical SHA/CRC failure; do not label it a corrupted content acceptance or security bug."
+}
