@@ -167,6 +167,10 @@ pub fn decode_wav_flac(
 /// CMPCT source File, authenticates its index/CMA4 bounds, and supplies an
 /// encoded-length-limited Read view. Ordinary selective read APIs still use
 /// `decode_wav_flac` and retain their existing semantics.
+// Some packaging conformance executables include this module via an independent
+// #[path] declaration without calling the private verification fast path.
+// The production Archive::verify_complete caller uses this primitive.
+#[allow(dead_code)]
 pub fn digest_wav_flac_stream<R: std::io::Read>(
     encoded: R,
     meta: &[u8],
