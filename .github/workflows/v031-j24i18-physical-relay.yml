@@ -1,0 +1,51 @@
+name: J24I18 r24 Physical Relay Research
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24i18/**'
+      - 'docs/v031-research/*j24i18*'
+      - '.github/workflows/v031-j24i18-physical-relay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i18-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  genuine-r24-relay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Source and environment receipt
+        run: |
+          git rev-parse HEAD | tee head.txt
+          git hash-object research/j24i18/physical_relay.py | tee relay-source-blob.txt
+          git hash-object research/j24i18/live_blob_relay.py | tee pruned-source-blob.txt
+          python --version
+      - name: Install exact-head CMPCT
+        run: python -m pip install -e .
+      - name: Run source-generated authentic Builder, journal and Reader witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24i18/test_relay.py 2>&1 | tee court.log
+      - name: Retain original source, court and outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i18-r24-physical-relay-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            head.txt
+            relay-source-blob.txt
+            pruned-source-blob.txt
+            court.log
