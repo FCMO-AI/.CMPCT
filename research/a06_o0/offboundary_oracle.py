@@ -91,7 +91,8 @@ def profile(label,inputs,z):
         literal+=b[position:];rebuild+=b[position:]
         assert rebuild==b, "reconstruction mismatch"
         charged+=z.size(literal)+16+16*len(matches)
-        meta.update({"root":False,"reference_count":len(matches),"copy_bytes":sum(end-a for a,end,_,_ in matches),\n                     "references":[{"start":a,"end":end,"source":src,"source_start":s} for a,end,src,s in matches]})
+        meta.update({"root":False,"reference_count":len(matches),"copy_bytes":sum(end-a for a,end,_,_ in matches),
+                     "references":[{"start":a,"end":end,"source":src,"source_start":s} for a,end,src,s in matches]})
         per.append(meta)
     full_seen=set();whole_dup=0;blocks={};fixed4=0
     for i,b in enumerate(blobs):
