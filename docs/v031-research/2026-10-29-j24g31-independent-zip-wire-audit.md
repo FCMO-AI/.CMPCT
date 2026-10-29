@@ -67,3 +67,10 @@ python research/j24g31_fs_metadata_parity.py --artifacts ./downloaded
 ## Handoff
 
 Keep #727 DRAFT, the Reader source unchanged. Check actual inherited generic CI reds separately (they are not erased by this positive wire audit). For a decision-changing next experiment prefer real ZIP64 >=4GiB or a distinct adversarial filesystem path-custody experiment owned by its existing integration PR. Do not fork another calendar algorithm or infer release readiness.
+
+
+## Hosted source-bound independent replay — pending decision
+
+Exact research HEAD at dispatch `82e88feae0fbd5c3ae585cd76e7cd91bc8642cee`; product Reader blob stays `cd6a2971396d6fe02a1d7f460d850107b3dcc397`. GitHub [Actions #40818570398](https://github.com/FCMO-AI/.CMPCT/actions/runs/40818570398) is the **new** independent Ubuntu replay, distinct from original three-host production experiment #40812726789. It downloads the four original GitHub artifact ZIPs by immutable ID under `actions:read`, verifies provider SHA-256, checks source Git blob, and executes the seven repository-committed independent auditors.
+
+At initial dispatch the job is **IN PROGRESS, result/receipt not yet observed**; no claim of exact-head J24G31 hosted green is allowed until the original run and JSON are inspected. Expected named artifact: `j24g31-independent-receipts` containing `r24.json`, `zip-wire.json`, `infozip.json`, `fs-metadata.json` and three negative-test receipts. Distinguish network/provider permission or artifact expiration from product correctness. This is a reproduction instrument, not a release gate and not proof of all r24 or ZIP64 formats.
