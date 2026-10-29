@@ -100,7 +100,7 @@ jobs:
     env:
       EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       CMPCT_J24I11_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      CMPCT_J24I11_ORIGINAL_BUILDER: ${{ runner.temp }}/j24i11_original_builder.py
+      CMPCT_J24I11_ORIGINAL_BUILDER: ${{ github.workspace }}/j24i11_original_builder.py
       CMPCT_J24I11_COST_RECEIPT: ${{ github.workspace }}/j24i11-cost/abba.json
     steps:
       - uses: actions/checkout@v4
