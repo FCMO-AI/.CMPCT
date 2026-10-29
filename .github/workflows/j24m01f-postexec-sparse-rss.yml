@@ -40,7 +40,7 @@ jobs:
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
           test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
           test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = c383c86982b8c7fe48ecc41c893b575b96eaeb06
-          test "$(git rev-parse HEAD:tests/test_j24m01f_postexec_rss_custody.py)" = 8e5878020110af3d20bdbe4b2c0a179c374857a9
+          test "$(git rev-parse HEAD:tests/test_j24m01f_postexec_rss_custody.py)" = 0d5ea7387fff41c2246e5b79a1013b053ace77f0
           test "$(git rev-parse HEAD:tools/j24m01g_junit_custody.py)" = afaf46f832d2b83a488feff213ed7b29d23718e0
           test "$(git rev-parse HEAD:tests/test_j24m01g_junit_custody.py)" = 2444f143f0a5a44254f118385bd9ee3ff8179589
           mkdir -p "$EVIDENCE_DIR"
