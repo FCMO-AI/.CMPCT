@@ -99,14 +99,13 @@ def main() -> None:
                     saved_inode = stage / "already-verified.cmpct"
                     # A separate same-UID process does the namespace mutation.
                     # The owner process only schedules it at the real rename boundary.
-                    actor_code = (
-                        "import os,sys\\n"
-                        "from pathlib import Path\\n"
-                        "src,dst,kind,sentinel=sys.argv[1:]\\n"
-                        "os.replace(src,dst)\\n"
-                        "if kind=='symlink':os.symlink(sentinel,src)\\n"
-                        "else:Path(src).write_bytes(b'J24G39-UNVERIFIED-REGULAR-REPLACEMENT')\\n"
-                    )
+                    actor_code = """import os,sys
+from pathlib import Path
+src,dst,kind,sentinel=sys.argv[1:]
+os.replace(src,dst)
+if kind=='symlink':os.symlink(sentinel,src)
+else:Path(src).write_bytes(b'J24G39-UNVERIFIED-REGULAR-REPLACEMENT')
+"""
                     actor = subprocess.run(
                         [sys.executable, "-c", actor_code, str(payload),
                          str(saved_inode), kind, str(outside)],
