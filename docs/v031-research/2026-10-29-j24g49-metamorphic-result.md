@@ -23,3 +23,6 @@ Observed 2026-10-29 UTC; this is **research/test infrastructure only** and has *
 
 ## Next action
 Reconcile exact-head three-host J24G49 results, record real pytest/JUnit pass and failing scenario if any, and deliver the source-bound verdict to #773. Do not confuse scientific success with release authority.
+
+## Exact-head engineering evidence correction (no scientific threshold change)
+The first PR-head engineering-evidence CI failed on a missing `Future leverage` section. After that section was added, the next exact-head run [#40938582332](https://github.com/FCMO-AI/.CMPCT/actions/runs/40938582332) failed because the PR body omitted the explicit `disproof` / `quality-ratchet` markers. Those required markers were subsequently included with the original prospective kill criteria and an explicit preservation of the inherited physical and release gates. These failures are CI dossier/instrument classification, not test-pass evidence or product regressions. The current subsequent CI run must be checked at its **own exact HEAD** before any affirmative label; no prior run is silently reclassified green.
