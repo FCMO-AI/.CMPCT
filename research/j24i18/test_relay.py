@@ -16,13 +16,13 @@ class PhysicalRelayCourt(unittest.TestCase):
             home=pathlib.Path(td);root=home/'tree';root.mkdir()
             old=b'FROZEN-BASE-OWNER-'*1024
             new=b'NEW-OWNER-CONTENT-'*1024
-            (root/'b-owner.bin').write_bytes(old)
+            (root/'a-owner.bin').write_bytes(old)
             (root/'note.txt').write_text('real metadata and archive data',encoding='utf8')
-            os.link(root/'b-owner.bin',root/'alias.bin')
+            os.link(root/'a-owner.bin',root/'z-alias.bin')
             archive=home/'original.cmpct'
             Builder(root,reproducible=True).build(archive)
             changed=home/'changed.bin';changed.write_bytes(new)
-            append_update(archive,'b-owner.bin',changed)
+            append_update(archive,'a-owner.bin',changed)
             result_dir=home/'out';result_dir.mkdir()
             script=pathlib.Path(__file__).with_name('live_blob_relay.py')
             proc=subprocess.run([sys.executable,str(script),'--output-dir',str(result_dir),str(archive)],
@@ -33,8 +33,8 @@ class PhysicalRelayCourt(unittest.TestCase):
                 self.assertEqual([row[0] for row in a.files],[row[0] for row in b.files])
                 self.assertEqual(a.index['fsmeta'],b.index['fsmeta'])
                 self.assertEqual(a.index['features'],b.index['features'])
-                self.assertEqual(a.read('b-owner.bin'),new)
-                self.assertEqual(a.read('alias.bin'),new)
+                self.assertEqual(a.read('a-owner.bin'),new)
+                self.assertEqual(a.read('z-alias.bin'),new)
                 for row in a.files:
                     self.assertEqual(row[:6],b.by[row[0]][:6],'preserve signed member metadata and topology')
                     if row[1]==3:self.assertEqual(row[6],b.by[row[0]][6],'preserve hardlink target')
