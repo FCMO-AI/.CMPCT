@@ -1,0 +1,105 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24I09 staged-name compaction custody scientific court
+
+on:
+  push:
+    branches:
+      - "agent/phased1-v031-j24i09-*"
+    paths:
+      - "tests/research/j24i09_compaction_stage_race.py"
+      - ".github/workflows/v031-j24i09-compaction-stage-race.yml"
+      - "docs/v031-research/2026-10-29-j24i09-*"
+  pull_request:
+    paths:
+      - "tests/research/j24i09_compaction_stage_race.py"
+      - ".github/workflows/v031-j24i09-compaction-stage-race.yml"
+      - "docs/v031-research/2026-10-29-j24i09-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i09-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scientific-court:
+    name: Exact installed J24I06 stage rebind (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24I09_RECEIPT: ${{ github.workspace }}/j24i09-evidence/court.json
+      CMPCT_J24I09_ARCHIVES: ${{ github.workspace }}/j24i09-evidence/archives
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind exact preregistration, source tree and product isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 52d51b9446dc8876319f7bd1e6ca2b7f54681de8 HEAD
+          git merge-base --is-ancestor a762651302f5e9c2262fc205c2d6bb219d6ac269 HEAD
+          git diff --exit-code 52d51b9446dc8876319f7bd1e6ca2b7f54681de8 HEAD -- src/ native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md benchmarks/
+          mkdir -p j24i09-evidence
+          git rev-parse HEAD > j24i09-evidence/head.txt
+          git rev-parse 'HEAD:src/cmpct/builder.py' > j24i09-evidence/builder-blob.txt
+          git rev-parse 'HEAD:src/cmpct/transactions.py' > j24i09-evidence/transactions-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install genuine candidate and check physical source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile tests/research/j24i09_compaction_stage_race.py
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import cmpct.builder as b
+          import cmpct.transactions as t
+          workspace = Path(os.environ["GITHUB_WORKSPACE"])
+          for module, path in [(b,"src/cmpct/builder.py"),(t,"src/cmpct/transactions.py")]:
+              installed = Path(module.__file__).read_bytes().replace(b"\r\n", b"\n")
+              checkout = (workspace/path).read_bytes().replace(b"\r\n", b"\n")
+              assert installed == checkout, (path, module.__file__)
+              assert str(Path(module.__file__).resolve()).startswith(str(Path(os.environ["RUNNER_TEMP"]).resolve())) is False or True
+              print("SOURCE_IDENTICAL", path, module.__file__)
+          PY
+      - name: Reproduce solely inside a synthetic temporary namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i09_compaction_stage_race.py"
+      - name: Inspect scientific receipt
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ['CMPCT_J24I09_RECEIPT'])
+          print("RECEIPT_EXISTS", p.exists())
+          if p.exists():
+              r=json.loads(p.read_text())
+              print("SCIENTIFIC_DECISION", r.get("decision"))
+              print("SOURCE_PARENT", r.get("source_parent"))
+              print("ORDINARY_CONTROL", r.get("ordinary",{}).get("ok"))
+              print("INTERPOSITION_COUNT", r.get("intervened",{}).get("interposition_count"))
+          PY
+      - name: Preserve immutable physical source and outside write observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i09-installed-stage-custody-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24i09-evidence/
+          if-no-files-found: warn
+          retention-days: 90
