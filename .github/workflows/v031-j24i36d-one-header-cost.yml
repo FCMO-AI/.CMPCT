@@ -1,0 +1,130 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I36d one-header exact-source native cost
+on:
+  pull_request:
+    paths:
+      - 'native/cmpct-core/src/lib.rs'
+      - 'native/cmpct-core/src/vzip_dispatch.rs'
+      - 'research/j24i36/**'
+      - 'docs/v031-research/*j24i36d*'
+      - '.github/workflows/v031-j24i36d-one-header-cost.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i36d-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-exact-header-custody:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Freeze single installed same-input archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . zstandard
+          python research/j24i36/generate_cost_corpus.py --output j24i36d-cost
+          git rev-parse HEAD > j24i36d-head.txt
+          git rev-parse 09ee165f3c74de7df65372a63a93b82115e3f695 > j24i36d-control.txt
+      - name: Compile old CRC implementation and one-header candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/j24i36d-previous" 09ee165f3c74de7df65372a63a93b82115e3f695
+          install -D research/j24i36/native_verify_cost_probe.rs "$RUNNER_TEMP/j24i36d-previous/native/cmpct-core/src/bin/j24i36_perf.rs"
+          install -D research/j24i36/native_verify_cost_probe.rs native/cmpct-core/src/bin/j24i36_perf.rs
+          cargo build --release --locked --manifest-path "$RUNNER_TEMP/j24i36d-previous/native/cmpct-core/Cargo.toml" --bin j24i36_perf
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i36_perf
+      - name: ABBA BAAB in-process same-archive verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          A="$RUNNER_TEMP/j24i36d-previous/native/cmpct-core/target/release/j24i36_perf"
+          B="native/cmpct-core/target/release/j24i36_perf"
+          archive="$PWD/j24i36d-cost/same-input.cmpct"
+          : > j24i36d-abba-raw.txt
+          for lane in A B B A B A A B; do
+            if [ "$lane" = "A" ]; then binary="$A"; else binary="$B"; fi
+            "$binary" "$archive" | sed "s/^/$lane /" | tee -a j24i36d-abba-raw.txt
+          done
+          python - <<'PY'
+          import json
+          import pathlib
+          import re
+          import statistics
+          raw = pathlib.Path("j24i36d-abba-raw.txt").read_text().splitlines()
+          rows = []
+          for line in raw:
+              match = re.fullmatch(r"([AB]) J24I36_PERF iteration=(\d+) verified=(\d+) wall_ns=(\d+)", line)
+              assert match, f"unexpected probe line {line}"
+              arm, iteration, count, nanos = match.groups()
+              assert int(count) == 64
+              rows.append((arm, int(iteration), int(nanos)))
+          assert len(rows) == 56
+          arms = {"A": [], "B": []}
+          for arm, iteration, nanos in rows:
+              if iteration:
+                  arms[arm].append(nanos)
+          assert len(arms["A"]) == len(arms["B"]) == 24
+          a = statistics.median(arms["A"])
+          b = statistics.median(arms["B"])
+          # Preserve four temporal-neighbor comparisons; never hide a losing pair.
+          call_blocks = []
+          for offset in range(0, len(rows), 7):
+              call = rows[offset:offset+7]
+              assert len(call) == 7
+              arm = call[0][0]
+              assert all(x[0] == arm for x in call)
+              call_blocks.append((arm, statistics.median(n for _, iteration, n in call if iteration)))
+          assert "".join(x[0] for x in call_blocks) == "AB BABAAB".replace(" ", "")
+          # Pair adjacent A and B calls in their ordered ABBA/BAAB blocks.
+          pairs = [
+              {"control_ns": call_blocks[i][1], "candidate_ns": call_blocks[j][1],
+               "candidate_over_control": call_blocks[j][1] / call_blocks[i][1]}
+              for i, j in [(0, 1), (3, 2), (5, 4), (6, 7)]
+          ]
+          # The control's own early vs late calls form an A/A drift sham.
+          a_early = statistics.median(arms["A"][:12])
+          a_late = statistics.median(arms["A"][12:])
+          report = {
+              "schema": "j24i36d-header-custody-abba-v1",
+              "control_source_sha": "09ee165f3c74de7df65372a63a93b82115e3f695",
+              "candidate_source_sha": pathlib.Path("j24i36d-head.txt").read_text().strip(),
+              "archive_sha256": json.loads(pathlib.Path("j24i36d-cost/source-custody.json").read_text())["archive_sha256"],
+              "baseline_median_ns": a,
+              "candidate_median_ns": b,
+              "candidate_over_control": b / a,
+              "repetitions_per_arm": 24,
+              "warmup_excluded": True,
+              "pairs": pairs,
+              "control_AA_sham_late_over_early": a_late / a_early,
+              "raw_ns": arms,
+              "scope": "native in-process component cost; NOT full-product/release/CPU/RSS evidence"
+          }
+          pathlib.Path("j24i36d-cost-observation.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+          print(json.dumps({key: value for key, value in report.items() if key != "raw_ns"}, sort_keys=True))
+          PY
+      - name: Preserve source and raw observation even on negative result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i36d-header-cost-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24i36d-cost/source-custody.json
+            j24i36d-head.txt
+            j24i36d-control.txt
+            j24i36d-abba-raw.txt
+            j24i36d-cost-observation.json
