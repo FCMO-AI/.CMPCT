@@ -1,0 +1,130 @@
+# ci-lane: fast
+name: CMPCT J24G28 signed-timestamp ZIP portability product court
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g28-zip-dos-signed-time-guard-20261029
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/research/j24g28_signed_zip_time_product_court.py'
+      - '.github/workflows/v031-j24g28-signed-zip-time.yml'
+      - 'docs/v031-research/2026-10-29-j24g28-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g28-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  physical-vector:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check exact source and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e0521023411c01d1b1ef30ed5ee5085f6d19347c
+          test -e docs/v031-research/2026-10-29-j24g28-signed-zip-timestamp-product-prereg.md
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j28-installed" "$GITHUB_WORKSPACE"
+          echo "PYTHONPATH=$RUNNER_TEMP/j28-installed" >> "$GITHUB_ENV"
+          echo "EXPECTED_READER_BLOB=e0521023411c01d1b1ef30ed5ee5085f6d19347c" >> "$GITHUB_ENV"
+      - name: Create physical first-party revision-24 signed input
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/research/j24g28_signed_zip_time_product_court.py generate --output "$RUNNER_TEMP/j28-physical"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j28-fixed-physical-r24
+          path: |
+            ${{ runner.temp }}/j28-physical/*.cmpct
+            ${{ runner.temp }}/j28-physical/manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+  old-vs-candidate:
+    needs: physical-vector
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check exact branch lineage, Reader SHA, baseline SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor ca01d885fedc8ffc343b9c3c624eddd134158452 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e0521023411c01d1b1ef30ed5ee5085f6d19347c
+          test "$(git rev-parse ca01d885fedc8ffc343b9c3c624eddd134158452:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install full independent source trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/j28-parent-tree" ca01d885fedc8ffc343b9c3c624eddd134158452
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j28-old" "$RUNNER_TEMP/j28-parent-tree"
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j28-new" "$GITHUB_WORKSPACE"
+      - uses: actions/download-artifact@v4
+        with:
+          name: j28-fixed-physical-r24
+          path: ${{ runner.temp }}/j28-input
+      - name: Compare old and new Readers on physically identical archives, twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/j28-old-out" "$RUNNER_TEMP/j28-new-out"
+          for rep in 1 2; do
+            PYTHONPATH="$RUNNER_TEMP/j28-old" EXPECTED_READER_BLOB=496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332 \
+              python tests/research/j24g28_signed_zip_time_product_court.py court --input "$RUNNER_TEMP/j28-input" --output "$RUNNER_TEMP/j28-old-out" --mode baseline --repeat "$rep"
+            PYTHONPATH="$RUNNER_TEMP/j28-new" EXPECTED_READER_BLOB=e0521023411c01d1b1ef30ed5ee5085f6d19347c \
+              python tests/research/j24g28_signed_zip_time_product_court.py court --input "$RUNNER_TEMP/j28-input" --output "$RUNNER_TEMP/j28-new-out" --mode candidate --repeat "$rep"
+          done
+          cmp "$RUNNER_TEMP/j28-old-out/ordinary_2020.zip" "$RUNNER_TEMP/j28-new-out/ordinary_2020.zip"
+      - name: Inherited direct-Deflate integrity regression (candidate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$RUNNER_TEMP/j28-new" python -m pytest -q tests/test_v031_deflate_export_verified.py
+      - name: Original per-host raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j28-${{ matrix.os }}-evidence
+          path: |
+            ${{ runner.temp }}/j28-old-out/*
+            ${{ runner.temp }}/j28-new-out/*
+          if-no-files-found: warn
+          retention-days: 30
