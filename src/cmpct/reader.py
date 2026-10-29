@@ -35,6 +35,14 @@ def _apply_journal_ops(index: dict, ops: list) -> dict:
     A same-path put retains preexisting metadata; rename transfers it; delete removes it.
     """
     rows = index['files']
+    # The frequent replace-in-place journal op never changes row ordinals. Avoid
+    # allocating a per-file lineage map or sorting a large index for that case.
+    if len(ops) == 1 and ops[0][0] == 'put':
+        replacement = ops[0][1]
+        for i, prior in enumerate(rows):
+            if prior[0] == replacement[0]:
+                rows[i] = replacement
+                return index
     old_names = [row[0] for row in rows]
     # Lineage maps a current path to its original file-row identity. An inserted name
     # has no preexisting metadata, even if an earlier op deleted a homonymous path.
