@@ -17,7 +17,7 @@ import zstandard as zstd
 HDR = struct.Struct("<8sHHQQQ32s")
 # Use the public revision-24 footer tuple layout from FORMAT / fixed test vectors.
 # The footer is decoded independently and the primary/tail payload bytes must agree.
-FTR = struct.Struct("<8sBBHIQQQ32s")
+FTR = struct.Struct("<8sBBBBQQQ32s")
 MAGIC = b"CMPCT24\0"
 FMAGIC = b"CMPTF24\0"
 
