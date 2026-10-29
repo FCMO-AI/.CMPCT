@@ -205,6 +205,10 @@ def test_j24g45_borrowed_zero_encoded_pointer_is_length_preserving(monkeypatch) 
     assert native_codec.decompress(_empty_frame(), 0) == b""
     with pytest.raises((RuntimeError, IOError, ValueError)):
         native_codec.decompress(_corrupt_magic(_empty_frame()), 0)
+    # The borrowed pointer contains embedded NULs: only the explicit byte length
+    # can reject a valid Zstd-empty prefix followed by a trailing zero byte.
+    with pytest.raises((RuntimeError, IOError, ValueError)):
+        native_codec.decompress(_empty_frame() + bytes((0,)), 0)
 
 
 def test_j24g45_borrowed_zero_encoded_input_does_not_allocate_payload_copy() -> None:
