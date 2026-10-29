@@ -1,0 +1,125 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: J24M01d same-archive child provenance and original-suite sidecar
+on:
+  pull_request:
+    paths:
+      - 'docs/v031-research/2026-10-29-j24m01d-*'
+      - 'tests/research/j24m01d_*'
+      - 'tests/research/fixtures/j24m01c_fullsuite_failure_r24.b64'
+      - 'j24m01d_pytest_probe.py'
+      - '.github/workflows/j24m01d-samearchive-provenance.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24m01d-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-failing-archive-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24M01D_OUT: ${{ github.workspace }}/j24m01d-isolated
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Authenticate source and immutable preregistration
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 56a3a27bcf98a87b0ef4e6c9194fab2ae608991b HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
+          test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = dc31bd4a46c117e6621a76a91b7bdeef85579ebf
+          mkdir -p "$J24M01D_OUT"
+          git rev-parse HEAD > "$J24M01D_OUT/exact-head.txt"
+          git rev-parse HEAD:tests/research/j24m01d_same_archive_court.py > "$J24M01D_OUT/court-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install unchanged full product and tests
+        run: |
+          python -m pip install -e '.[test,audio]'
+          python -m pip freeze | sort > "$J24M01D_OUT/pip-freeze.txt"
+      - name: Run immutable captured-wire ABBA control
+        run: |
+          python tests/research/j24m01d_same_archive_court.py | tee "$J24M01D_OUT/terminal.jsonl"
+      - name: Upload all raw scientific observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24m01d-captured-wire-${{ env.EXACT_HEAD }}
+          path: j24m01d-isolated/
+          retention-days: 30
+          if-no-files-found: warn
+
+  full-suite-original-child-sidecar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24M01D_OUT: ${{ github.workspace }}/j24m01d-full-suite
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Authenticate inherited Reader, Builder, sparse test, preregistration
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 56a3a27bcf98a87b0ef4e6c9194fab2ae608991b HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
+          test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = dc31bd4a46c117e6621a76a91b7bdeef85579ebf
+          mkdir -p "$J24M01D_OUT"
+          git rev-parse HEAD > "$J24M01D_OUT/exact-head.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install unchanged suite dependency profile
+        run: |
+          python -m pip install -e '.[test,audio]'
+          python -m pip freeze | sort > "$J24M01D_OUT/pip-freeze.txt"
+      - name: Run original full suite with opt-in sidecar and retain real exit
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          python -m pytest -q -p j24m01d_pytest_probe 2>&1 | tee "$J24M01D_OUT/full-suite.log"
+          code="${PIPESTATUS[0]}"
+          printf '%s\n' "$code" > "$J24M01D_OUT/original-test-exit-code.txt"
+          echo "ORIGINAL_PYTEST_EXIT=$code; SCIENTIFIC JOB SUCCESS IS NOT PRODUCT TEST SUCCESS"
+          exit 0
+      - name: Authenticate original intercepted child receipt, if available
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$J24M01D_OUT/original-child-plus-sidecar.jsonl"
+          python - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ["J24M01D_OUT"])/"original-child-plus-sidecar.jsonl"
+          rows=[json.loads(x) for x in p.read_text().splitlines() if x]
+          assert len(rows)==1, f"expected exactly one real intercepted child, got {len(rows)}"
+          r=rows[0]
+          print(json.dumps({"original_stdout":r["original_stdout"],"sidecar":r.get("sidecar_provenance"),
+            "physical_sha":r.get("physical_archive_sha256"),"original_exit":r["original_exit"]},sort_keys=True))
+          PY
+      - name: Upload unchanged original outcome and distinct sidecar evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24m01d-full-suite-sidecar-${{ env.EXACT_HEAD }}
+          path: j24m01d-full-suite/
+          retention-days: 30
+          if-no-files-found: warn
