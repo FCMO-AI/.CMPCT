@@ -72,6 +72,8 @@ fn j24i34b_reject_index_hash_that_matches_corrupt_payload_not_cma4() {
             println!("J24I34B_REJECTED_dual-commit-corrupt:reason=MemberHash");
         }
         Err(other) => panic!("different native failure type: {other}"),
-        Ok(count) => panic!("native incorrectly trusted re-signed logical row after {count} proofs"),
+        Ok(count) => {
+            panic!("native incorrectly trusted re-signed logical row after {count} proofs")
+        }
     }
 }
