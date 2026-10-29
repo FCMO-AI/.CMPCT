@@ -1,0 +1,113 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I40b Physical CMPCT FLAC MD5 Transfer Court
+on:
+  pull_request:
+    paths:
+      - 'research/j24i40/**'
+      - 'docs/v031-research/*j24i40*'
+      - '.github/workflows/v031-j24i40b-physical-md5.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i40b-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  physical-cma4-md5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin exact parent product and scientific instruments
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee j24i40b-head.txt
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "46fa87930a9229f42233594816330f35f0505e71"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "27e4d7962ccfed6a822010383158d98e20d823dd"
+          test "$(git hash-object native/cmpct-core/src/wavflac.rs)" = "8e5d22539d0afa89f5be3bc20f536376e44b7dd6"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          test "$(git hash-object research/j24i39/native_file_flac_digest.rs)" = "dad8fe7b4c3f7e8c02be7d842fea6451da0c574f"
+          test "$(git hash-object research/j24i38/audit_builder_wav.py)" = "1d4c04ab1d534e10504d71794bd12492827fc49c"
+          git diff --name-only 0047e45e92793ca58a50251847e3cf1adb9c6d90 HEAD | tee j24i40b-changed.txt
+          if grep -Eq '^(native/|src/cmpct/|tests/conformance/|benchmarks/|docs/discovery/)' j24i40b-changed.txt; then
+            echo "No product/frozen source edits allowed"; exit 1
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate genuine Builder source and physically reassemble one-bit r24 mutant
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . numpy soundfile msgpack zstandard
+          python research/j24i38/generate_builder_wav.py --output j24i40b-cases
+          python research/j24i38/audit_builder_wav.py --case-dir j24i40b-cases
+          python research/j24i39/extract_signed_wav_flac.py --case-dir j24i40b-cases
+          python research/j24i40/mutate_flac_streaminfo_md5.py --case-dir j24i40b-cases
+          python research/j24i40/mutate_physical_cma4_md5.py --case-dir j24i40b-cases
+      - name: Compile exact inherited Rust Archive strong verifier research driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native/cmpct-core/src/bin
+          cp research/j24i39/native_file_flac_digest.rs native/cmpct-core/src/bin/j24i39_perf.rs
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i39_perf
+      - name: Observe real canonical Python and Rust complete verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > j24i40b-raw.txt
+          exe=native/cmpct-core/target/release/j24i39_perf
+          meta="$PWD/j24i40b-cases/oracle-8m.meta"
+          flac="$PWD/j24i40b-cases/oracle-8m.flac"
+          manifest="$PWD/j24i40b-cases/stream-manifest.json"
+          for variant in valid md5_flip; do
+            archive="$PWD/j24i40b-cases/md5-physical-${variant/md5_flip/flip}.cmpct"
+            if [ "$variant" = valid ]; then archive="$PWD/j24i40b-cases/md5-physical-valid.cmpct"; fi
+            set +e
+            python - "$archive" > "j24i40b-${variant}-python.log" 2>&1 <<'PY'
+import sys
+from cmpct.reader import CMPCT
+with CMPCT(sys.argv[1]) as archive:
+    assert archive.verify() == 1
+PY
+            pyrc=$?
+            "$exe" "$archive" "$meta" "$flac" "$manifest" 8 native >"j24i40b-${variant}-native.log" 2>&1
+            nrc=$?
+            set -e
+            echo "archive=$variant engine=python exit=$pyrc" | tee -a j24i40b-raw.txt
+            echo "archive=$variant engine=native exit=$nrc" | tee -a j24i40b-raw.txt
+          done
+          python research/j24i40/summarize_physical_md5.py \
+            --case-dir j24i40b-cases --raw j24i40b-raw.txt --output j24i40b-result.json
+      - name: Preserve independent source and actual outcomes, fail closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s j24i40b-result.json
+          test -s j24i40b-head.txt
+          test -s j24i40b-cases/physical-md5-manifest.json
+          for variant in valid md5_flip; do
+            test -f "j24i40b-${variant}-python.log"
+            test -f "j24i40b-${variant}-native.log"
+          done
+          tar -czf j24i40b-physical-md5-evidence.tar.gz \
+            j24i40b-head.txt j24i40b-changed.txt j24i40b-result.json j24i40b-raw.txt \
+            j24i40b-cases j24i40b-valid-python.log j24i40b-valid-native.log \
+            j24i40b-md5_flip-python.log j24i40b-md5_flip-native.log
+          test -s j24i40b-physical-md5-evidence.tar.gz
+          sha256sum j24i40b-physical-md5-evidence.tar.gz | tee j24i40b-artifact-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j24i40b-physical-cma4-md5-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: error
+          path: ./j24i40b-physical-md5-evidence.tar.gz
