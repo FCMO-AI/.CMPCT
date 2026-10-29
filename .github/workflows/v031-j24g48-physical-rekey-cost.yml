@@ -1,0 +1,89 @@
+# ci-lane: fast
+# J24G48 research-only source-bound physical Reader open economics.
+# Success is measurement, not release/benchmark promotion.
+name: CMPCT J24G48 source-exact physical journal rekey economics
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g48-physical-journal-rekey-economics-20261029
+  workflow_dispatch:
+concurrency:
+  group: cmpct-j24g48-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  signed-reader-cost-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CAND_SHA: 893aac3f6b7b54e89d71af6970405ff5fc71aef7
+      PRIOR_SHA: 78b9dd2d148350898c95a0cdbeefe760de2e567e
+    steps:
+      - name: Exact instrument checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Exact repaired product checkout
+        uses: actions/checkout@v4
+        with:
+          path: product-candidate
+          ref: 893aac3f6b7b54e89d71af6970405ff5fc71aef7
+          persist-credentials: false
+      - name: Exact preceding defective product checkout
+        uses: actions/checkout@v4
+        with:
+          path: product-defective
+          ref: 78b9dd2d148350898c95a0cdbeefe760de2e567e
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install same product dependencies in single controlled Python environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install . zstandard
+          # The product deliberately requires its package-owned Rust cdylib beside
+          # native_codec.py. Both source-exact checkouts use the SAME wheel-built
+          # native .so, avoiding accidental ambient libzstd and binary drift.
+          python - <<'PY'
+          import hashlib, shutil
+          from pathlib import Path
+          from cmpct.native_codec import _library_path
+          native = _library_path()
+          for name in ('product-candidate', 'product-defective'):
+              dest = Path(name) / 'src/cmpct' / native.name
+              assert not dest.exists(), 'unexpected untracked native binary'
+              shutil.copy2(native, dest)
+              assert hashlib.sha256(dest.read_bytes()).digest() == hashlib.sha256(native.read_bytes()).digest()
+              print(name, 'shared package-owned native codec SHA256', hashlib.sha256(dest.read_bytes()).hexdigest())
+          PY
+          test "$(git -C product-candidate rev-parse HEAD)" = "$CAND_SHA"
+          test "$(git -C product-defective rev-parse HEAD)" = "$PRIOR_SHA"
+          git diff --no-index --exit-code product-candidate/src/cmpct/reader.py src/cmpct/reader.py
+          git diff --no-index --exit-code product-candidate/src/cmpct/transactions.py src/cmpct/transactions.py
+      - name: Produce identical signed input and repeated interleaved direct measurements
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$PWD/product-candidate/src"
+          python research/j24g48/physical_rekey_cost.py run \
+            --candidate product-candidate \
+            --defective product-defective \
+            --output evidence/j24g48 2>&1 | tee j24g48-hosted.log
+      - name: Independently reconcile physical SHA, source controls and all raw repeated measurements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g48/audit_raw_cost.py             evidence/j24g48/raw-results.json             evidence/j24g48/independent-referee.json             2>&1 | tee evidence/j24g48/independent-referee.log
+      - name: Preserve raw evidence even on source, correctness, or run errors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g48-physical-cost
+          path: |
+            evidence/j24g48/
+            j24g48-hosted.log
+          if-no-files-found: warn
