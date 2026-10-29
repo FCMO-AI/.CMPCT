@@ -166,3 +166,68 @@ def test_real_rename_delete_and_64th_generation_checkpoint(tmp_path):
     assert (restored / "b-renamed.bin").read_bytes() == original.read_bytes()
     if NATIVE_XATTRS:
         assert _get_native(restored / "b-renamed.bin") == VALUE
+
+
+def test_seeded_path_identity_state_machine():
+    """Independent name-keyed state model across 500 mixed signed journal mutations.
+
+    This is deliberately not another implementation of the positional remap:
+    the oracle's ground truth never uses file ordinals.
+    """
+    import random
+
+    rng = random.Random(20261029)
+    names = [f"file-{n:04d}.bin" for n in (30, 70, 110, 150, 190)]
+    rows = [[name, 0] for name in names]
+    expected_attrs = {name: [["user.seed", name.encode()]] for name in names if name in (names[0], names[-1])}
+    expected_owner = {name: [100 + i, 200 + i] for i, name in enumerate(names) if i % 2}
+    idx = {
+        "files": rows,
+        "fsmeta": {
+            "owner": [7, 8],
+            "owner_overrides": [[names.index(name), *values] for name, values in expected_owner.items()],
+            "xattrs": [[names.index(name), records] for name, records in expected_attrs.items()],
+        },
+    }
+    next_serial = 1
+    for step in range(500):
+        available = sorted(r[0] for r in idx["files"])
+        action = rng.choice(("insert", "replace", "delete", "rename", "delete_recreate"))
+        if not available or (action == "delete" and len(available) == 1):
+            action = "insert"
+        if action == "insert":
+            name = f"new-{next_serial:06d}.bin"
+            next_serial += 1
+            ops = [["put", [name, 0]]]
+        elif action == "replace":
+            name = rng.choice(available)
+            ops = [["put", [name, step]]]
+        elif action == "delete":
+            name = rng.choice(available)
+            ops = [["del", name]]
+            expected_attrs.pop(name, None)
+            expected_owner.pop(name, None)
+        elif action == "rename":
+            old = rng.choice(available)
+            name = f"renamed-{next_serial:06d}.bin"
+            next_serial += 1
+            ops = [["ren", old, name]]
+            if old in expected_attrs:
+                expected_attrs[name] = expected_attrs.pop(old)
+            if old in expected_owner:
+                expected_owner[name] = expected_owner.pop(old)
+        else:
+            name = rng.choice(available)
+            ops = [["del", name], ["put", [name, step]]]
+            expected_attrs.pop(name, None)
+            expected_owner.pop(name, None)
+
+        _apply_journal_ops(idx, ops)
+        new_names = [r[0] for r in idx["files"]]
+        assert new_names == sorted(new_names), (step, action)
+        assert len(new_names) == len(set(new_names)), (step, action)
+        actual_attrs = {new_names[rec[0]]: rec[1] for rec in idx["fsmeta"]["xattrs"]}
+        actual_owner = {new_names[rec[0]]: rec[1:] for rec in idx["fsmeta"]["owner_overrides"]}
+        assert actual_attrs == expected_attrs, (step, action, actual_attrs, expected_attrs)
+        assert actual_owner == expected_owner, (step, action, actual_owner, expected_owner)
+        assert idx["fsmeta"]["owner"] == [7, 8]
