@@ -1,3 +1,5 @@
+# ci-lane: fast
+# A specialized fast science court, not a release or benchmark receipt.
 name: J24I31 fixed PACK present-row SHA scientific court
 
 on:
@@ -10,6 +12,10 @@ on:
       - docs/v031-research/*j24i31*
       - .github/workflows/v031-j24i31-pack-row-sha.yml
   workflow_dispatch:
+
+concurrency:
+  group: j24i31-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   installed-three-host:
