@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 25
     env:
       EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      J24G33_ARTIFACT_DIR: ${{ runner.temp }}/j24g33-artifacts
+      J24G33_ARTIFACT_DIR: ${{ github.workspace }}/j24g33-artifacts
     steps:
       - name: Checkout exact PR HEAD (no synthetic merge)
         uses: actions/checkout@v4
