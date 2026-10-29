@@ -227,9 +227,9 @@ def main() -> dict:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 5 and sys.argv[1] == "--child":
+    if len(sys.argv) == 6 and sys.argv[1] == "--child":
         child(sys.argv[2], Path(sys.argv[3]), Path(sys.argv[4]), Path(sys.argv[5]))
-    elif len(sys.argv) == 5 and sys.argv[1] == "--negative":
+    elif len(sys.argv) == 6 and sys.argv[1] == "--negative":
         negative_child(sys.argv[2], Path(sys.argv[3]), Path(sys.argv[4]), Path(sys.argv[5]))
     elif len(sys.argv) == 1:
         main()
