@@ -23,7 +23,11 @@ concurrency:
 
 jobs:
   installed-cma4-crc-court:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +86,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: j24i35-cma4-crc-ubuntu-${{ github.run_id }}-${{ github.run_attempt }}
+          name: j24i35-cma4-crc-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           retention-days: 30
           if-no-files-found: warn
           path: |
