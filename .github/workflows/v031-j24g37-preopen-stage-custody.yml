@@ -1,0 +1,108 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24G37 pre-open stage namespace product falsifier
+
+on:
+  push:
+    branches:
+      - "agent/phased2-v031-j24g37-*"
+    paths:
+      - "tests/research/j24g37_preopen_stage_custody.py"
+      - ".github/workflows/v031-j24g37-preopen-stage-custody.yml"
+      - "docs/v031-research/2026-10-29-j24g37-*"
+  pull_request:
+    paths:
+      - "tests/research/j24g37_preopen_stage_custody.py"
+      - ".github/workflows/v031-j24g37-preopen-stage-custody.yml"
+      - "docs/v031-research/2026-10-29-j24g37-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g37-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-locked-court:
+    name: Product pre-open negative witness - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Freeze parent and product identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor a2f4804c203caeb5d4b81c24456517fa2f398349 HEAD
+          git diff --exit-code a2f4804c203caeb5d4b81c24456517fa2f398349 HEAD -- src/ native/ docs/FORMAT.md benchmarks/ pyproject.toml
+          mkdir -p j24g37-evidence
+          git rev-parse HEAD > j24g37-evidence/source-head.txt
+          for f in src/cmpct/builder.py src/cmpct/reader.py src/cmpct/transactions.py; do
+            git rev-parse "HEAD:$f" >> j24g37-evidence/source-blobs.txt
+          done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install real candidate and prove detached import/source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile tests/research/j24g37_preopen_stage_custody.py
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import cmpct.builder as b,cmpct.reader as r,cmpct.transactions as t
+          root=Path(os.environ["GITHUB_WORKSPACE"])
+          for mod,rel in ((b,"src/cmpct/builder.py"),(r,"src/cmpct/reader.py"),(t,"src/cmpct/transactions.py")):
+              assert Path(mod.__file__).resolve() != (root/rel).resolve()
+              assert Path(mod.__file__).read_bytes().replace(b"\r\n",b"\n") == (root/rel).read_bytes().replace(b"\r\n",b"\n")
+              print("INSTALLED_SOURCE_EXACT",rel)
+          PY
+      - name: Run installed CMPCT hostile pre-open court
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24g37_preopen_stage_custody.py" > "$GITHUB_WORKSPACE/j24g37-evidence/witness.json"
+      - name: Independent classify negative evidence, do not call product secure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path("j24g37-evidence/witness.json").read_text())
+          assert d["decision"]=="PREOPEN_NAMESPACE_REJECTION_BUT_UNOWNED_STAGE_LEAF_DELETION_ON_FAILURE"
+          rows={r["case"]:r for r in d["results"]}
+          assert len(rows)==6
+          assert rows["symlink-rebind"]["operation_accepted"] is False
+          assert rows["mode-0755"]["operation_accepted"] is False
+          assert rows["same-uid-0700"]["operation_accepted"] is True
+          assert rows["mode-0755-planted"]["actor_preplanted_leaf_preserved"] is False
+          assert rows["same-uid-0700-planted"]["actor_preplanted_leaf_preserved"] is False
+          assert all(r["source_unchanged"] and r["outside_unchanged"] for r in rows.values())
+          print("NEGATIVE_REPRODUCED__NOT_PRODUCT_PASS")
+          PY
+      - name: Preserve exact-head evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g37-preopen-${{ matrix.os }}-${{ github.run_id }}
+          path: j24g37-evidence/
+          retention-days: 30
+          if-no-files-found: warn
