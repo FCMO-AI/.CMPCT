@@ -128,8 +128,7 @@ jobs:
           python "$COURT" compare --parent "$ROOT/control" --candidate "$ROOT/candidate" \
             --out "$ROOT/decision.json"
       - name: Independent physical artifact custody and manifest
-        if: steps.scope.outputs.run == 'true'
-        if: always()
+        if: always() && steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
