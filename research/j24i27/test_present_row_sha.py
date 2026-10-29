@@ -10,6 +10,7 @@ import base64
 import binascii
 import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -21,6 +22,8 @@ from cmpct.codec import (
     BHDR, BMAGIC, CODEC_RAW, CODEC_ZSTD, CODEC_DEFLATE,
     FMAGIC, FTR, HDR, MAGIC, S_BLOB, VERSION, sha, zc, zd,
 )
+from cmpct.builder import Builder
+from cmpct.codec import K_SYMLINK
 from cmpct.reader import CMPCT
 from cmpct.validation import preflight_archive
 
@@ -147,6 +150,37 @@ class PresentRowDirectSHA(unittest.TestCase):
                 _, changed_physical, _ = source_parts(changed)
                 self.assertEqual(original_physical, changed_physical)
                 self._run_archive(changed, vec, expected_failure=True)
+
+    def test_genuine_symlink_preserves_present_sha_on_strong_verify(self):
+        """Secondary *Builder-produced* topology regression, never a golden oracle."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "tree"
+            root.mkdir()
+            target = "relative-target.txt"
+            try:
+                os.symlink(target, root / "link")
+            except (OSError, NotImplementedError):
+                self.skipTest("host cannot construct a genuine symlink")
+            archive = Path(td) / "symlink.cmpct"
+            Builder(root, workers=1, reproducible=True).build(archive)
+            original = archive.read_bytes()
+            idx, physical, raw = source_parts(original)
+            self.assertEqual(idx["files"][0][1], K_SYMLINK)
+            self.assertEqual(raw, target.encode())
+            vec = {
+                "name": "link",
+                "logical_sha256": hashlib.sha256(raw).hexdigest(),
+                "range": {"offset": 1, "length": 5, "hex": raw[1:6].hex()},
+            }
+            self._run_archive(original, vec)
+            correct = hashlib.sha256(raw).digest()
+            self._run_archive(with_row_hash(original, correct), vec)
+            self._run_archive(with_row_hash(original, b""), vec)
+            wrong = hashlib.sha256(b"wrong-symlink-literal").digest()
+            self.assertNotEqual(correct, wrong)
+            mutated = with_row_hash(original, wrong)
+            self.assertEqual(source_parts(mutated)[1], physical)
+            self._run_archive(mutated, vec, expected_failure=True)
 
     def test_physical_header_sha_remains_an_independent_required_check(self):
         for vec in self.vectors:
