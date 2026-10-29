@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -59,6 +60,14 @@ def run() -> dict:
                 failure = type(exc).__name__ + ": " + str(exc)
             assert sha(src) == src_hash, "compaction mutated source archive"
             assert sha(sentinel) == sentinel_sha, "external sentinel was modified"
+            # Preserve the genuine r24 source/output bytes so a detached auditor can
+            # verify physical index and logical-target identity without trusting this Reader.
+            if os.environ.get("CMPCT_J24I05_ARCHIVE_DIR"):
+                artifacts = Path(os.environ["CMPCT_J24I05_ARCHIVE_DIR"])
+                artifacts.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, artifacts / (name + "-source.cmpct"))
+                if dst.exists():
+                    shutil.copyfile(dst, artifacts / (name + "-compacted.cmpct"))
             if expected_rejection:
                 assert failure is not None, f"{name}: restricted target unexpectedly compacted"
                 assert "unsafe symlink target" in failure, (name, failure)
