@@ -61,7 +61,8 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install -e . 'zstandard>=0.22'
-          J24I29_RESULTS=j24i29-results.json python research/j24i29/test_hardlink_alias_sha.py 2>&1 | tee j24i29-court.log
+          J24I29_RESULTS=j24i29-results.json J24I29_WIRE_SAMPLES=j24i29-wire-samples python research/j24i29/test_hardlink_alias_sha.py 2>&1 | tee j24i29-court.log
+          python research/j24i29/audit_wire_samples.py j24i29-wire-samples j24i29-results.json | tee j24i29-referee.json
       - name: Retain original result/negative evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,3 +77,5 @@ jobs:
             j24i29-test-blob.txt
             j24i29-court.log
             j24i29-results.json
+            j24i29-referee.json
+            j24i29-wire-samples/**
