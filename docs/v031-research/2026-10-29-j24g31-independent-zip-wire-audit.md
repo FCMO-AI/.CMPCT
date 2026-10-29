@@ -48,6 +48,14 @@ This verifies **tiny, single-member, normal ZIP32 outputs** only. A second, sepa
 
 The cheapest decisive control was inspecting the 188-byte physical ZIP wire objects already produced by #727 rather than authoring another ZIP exporter, editing source or re-running an expensive matrix. Result: extra confidence in the narrow calendar composition claim, **no change to product-selection policy or shared `docs/discovery/STATE.json`**.
 
+### Independent mature ZIP consumer (04:31 UTC)
+
+A third, externally rooted consumer path uses **Info-ZIP UnZip 6.00** (Debian build; 20 April 2009), not CMPCT and not Python's ZIP reader. `research/j24g31_external_zip_interop.py` extracts each original 188-byte ZIP directly from the four original Actions transport archives; runs both `unzip -tq` (physical CRC acceptance) and `unzip -p` (logical reconstruction) against the actual ZIP file; checks the reconstructed bytes with independent SHA-256 against the separately audited r24 physical payload identity. **All 41/41 physical ZIP exports passed Info-ZIP and reconstructed exactly the original 833-byte logical member** (14 Ubuntu, 14 macOS, 13 Windows; original Windows negative-epoch ZIP does not exist and is properly excluded). The consumer test does not claim preservation of future extreme ZIP filesystem mtimes; Info-ZIP's 2107 restoration limitation remains a distinct compatibility issue, nor does it certify ZIP64, directories, links or large archives.
+
+```sh
+python research/j24g31_external_zip_interop.py --artifacts ./downloaded
+```
+
 ## Handoff
 
 Keep #727 DRAFT, the Reader source unchanged. Check actual inherited generic CI reds separately (they are not erased by this positive wire audit). For a decision-changing next experiment prefer real ZIP64 >=4GiB or a distinct adversarial filesystem path-custody experiment owned by its existing integration PR. Do not fork another calendar algorithm or infer release readiness.
