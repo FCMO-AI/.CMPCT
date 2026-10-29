@@ -1,0 +1,75 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24I15 Windows nonfollowing source handle court
+
+on:
+  push:
+    branches:
+      - "agent/phased3-v031-j24i15-*"
+    paths:
+      - "tests/research/j24i15_win32_nofollow_handle.py"
+      - ".github/workflows/v031-j24i15-win32-nofollow-handle.yml"
+      - "docs/v031-research/2026-10-29-j24i15-*.md"
+  pull_request:
+    paths:
+      - "tests/research/j24i15_win32_nofollow_handle.py"
+      - ".github/workflows/v031-j24i15-win32-nofollow-handle.yml"
+      - "docs/v031-research/2026-10-29-j24i15-*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i15-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-handle-court:
+    name: Installed Win32 nofollow handle semantics plus ABBA
+    runs-on: windows-2022
+    timeout-minutes: 18
+    env:
+      CMPCT_J24I15_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24I15_CHECKOUT: ${{ github.workspace }}
+      CMPCT_J24I15_RECEIPT: ${{ github.workspace }}/j24i15-evidence/receipt.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CMPCT_J24I15_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact inherited product and release authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CMPCT_J24I15_HEAD"
+          git merge-base --is-ancestor 73961bdf991553ce27c74418a72bc9f394155257 HEAD
+          git diff --exit-code 73961bdf991553ce27c74418a72bc9f394155257 HEAD -- src/ native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md docs/PRE1_RELEASE_POLICY.md benchmarks/
+          mkdir -p "$GITHUB_WORKSPACE/j24i15-evidence"
+          git rev-parse HEAD > "$GITHUB_WORKSPACE/j24i15-evidence/head.txt"
+          git rev-parse HEAD:src/cmpct/builder.py > "$GITHUB_WORKSPACE/j24i15-evidence/unchanged-builder-blob.txt"
+          git hash-object tests/research/j24i15_win32_nofollow_handle.py > "$GITHUB_WORKSPACE/j24i15-evidence/instrument-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install real CMPCT without checkout import
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile tests/research/j24i15_win32_nofollow_handle.py
+      - name: Hostile source topology and repeated A/A plus A/B
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i15_win32_nofollow_handle.py"
+      - name: Persist original receipt regardless of verdict
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i15-windows-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24i15-evidence/
+          if-no-files-found: warn
+          retention-days: 90
