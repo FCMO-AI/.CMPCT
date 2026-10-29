@@ -67,8 +67,8 @@ jobs:
               ('src/cmpct/transactions.py', transactions),
               ('src/cmpct/builder.py', builder),
           ):
-              source = Path(path).read_bytes().replace(b'\\r\\n', b'\\n')
-              installed = Path(module.__file__).read_bytes().replace(b'\\r\\n', b'\\n')
+              source = Path(path).read_bytes().replace(b'\r\n', b'\n')
+              installed = Path(module.__file__).read_bytes().replace(b'\r\n', b'\n')
               assert source == installed, path
               print('SOURCE_EXACT', path, hashlib.sha256(source).hexdigest())
           PY
