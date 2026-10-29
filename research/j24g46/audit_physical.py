@@ -6,11 +6,43 @@ it is not a product security/correctness SUCCESS.
 from __future__ import annotations
 import hashlib
 import json
+import struct
 from pathlib import Path
 import sys
 
 MAGIC = b"CMPCT24\x00"
 FOOTER = b"CMPTF24\x00"
+
+HEADER_STRUCT = struct.Struct("<8sHHQQQ32s")
+FOOTER_STRUCT = struct.Struct("<8sBBBBQQQ32s")
+
+def wire_integrity(raw: bytes, label: str) -> list[str]:
+    """Independent r24 framing/counter check; no codec library or CMPCT import."""
+    bad = []
+    if len(raw) < HEADER_STRUCT.size + FOOTER_STRUCT.size:
+        return ["r24 header/footer truncated: " + label]
+    magic, version, flags, primary_cs, primary_us, _dictsize, _ih = HEADER_STRUCT.unpack_from(raw, 0)
+    if magic != MAGIC or version != 24:
+        bad.append("non-r24 header: " + label)
+    if primary_cs > len(raw) - HEADER_STRUCT.size - FOOTER_STRUCT.size:
+        bad.append("primary index extends beyond archive: " + label)
+    footer_pos = len(raw) - FOOTER_STRUCT.size
+    fm, kind, codec, fflags, reserved, cs, us, prev, payload_sha = FOOTER_STRUCT.unpack_from(raw, footer_pos)
+    if fm != FOOTER or kind not in (0, 1) or codec not in (0, 1):
+        bad.append("invalid tail footer: " + label)
+    if cs > footer_pos:
+        bad.append("footer claims payload outside archive: " + label)
+    elif codec == 0 and sha(raw[footer_pos - cs:footer_pos]) != payload_sha.hex():
+        bad.append("uncompressed journal footer SHA mismatch: " + label)
+    if prev and not (HEADER_STRUCT.size < prev < footer_pos):
+        bad.append("invalid journal parent pointer: " + label)
+    expected_journal = label in ("stable_archive", "shifted_archive")
+    if expected_journal and not prev:
+        bad.append("journal update did not retain prior footer: " + label)
+    if not expected_journal and prev:
+        bad.append("compacted/Builder baseline unexpectedly retains journal: " + label)
+    return bad
+
 ORIGINAL = b"z-owner authentic CMPCT content\x00" * 73
 INSERTED = b"a-inserted distinct authentic CMPCT payload\x01" * 51
 
@@ -43,8 +75,7 @@ def main(receipt_file: Path, output: Path) -> None:
         if sha(raw) != item["sha256"] or len(raw) != item["bytes"]:
             errors.append("artifact digest/length mismatch: " + label)
         if "archive" in label:
-            if not raw.startswith(MAGIC) or FOOTER not in raw:
-                errors.append("bad r24 header/footer: " + label)
+            errors.extend(wire_integrity(raw, label))
             snapshot_key = {
                 "initial_archive": "base",
                 "stable_archive": "stable_update",
