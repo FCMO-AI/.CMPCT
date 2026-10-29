@@ -25,6 +25,7 @@ jobs:
     env:
       EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       OUT_DIR: ${{ github.workspace }}/j24i05-evidence
+      CMPCT_J24I05_ARCHIVE_DIR: ${{ github.workspace }}/j24i05-evidence/archives
     steps:
       - uses: actions/checkout@v4
         with:
