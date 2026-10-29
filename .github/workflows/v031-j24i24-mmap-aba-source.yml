@@ -1,0 +1,66 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I24 r24 Shared-mmap ABA Source Custody Science
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24i24/**'
+      - 'docs/v031-research/*j24i24*'
+      - '.github/workflows/v031-j24i24-mmap-aba-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: j24i24-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mmap-aba-scientific-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify source and exact head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git rev-parse HEAD | tee j24i24-head.txt
+          git hash-object research/j24i24/test_mmap_aba_relay.py | tee j24i24-source-blob.txt
+          git hash-object research/j24i22/bounded_fd_relay.py | tee j24i22-donor-blob.txt
+          git hash-object src/cmpct/reader.py | tee j24i24-reader-blob.txt
+          python --version
+          uname -a
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic source and execute independent A/B/ABA tribunal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          PYTHONPATH=research/j24i18:research/j24i22:research/j24i24 \
+            python -m unittest discover -s research/j24i24 -p 'test_mmap_aba_relay.py' -v 2>&1 | tee j24i24-court.log
+      - name: Persist observations including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i24-mmap-aba-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            j24i24-head.txt
+            j24i24-source-blob.txt
+            j24i22-donor-blob.txt
+            j24i24-reader-blob.txt
+            j24i24-court.log
