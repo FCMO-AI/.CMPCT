@@ -1,0 +1,122 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24G39 verified-inode versus published stage-leaf court
+
+on:
+  push:
+    branches:
+      - "agent/phased2-v031-j24g39-*"
+    paths:
+      - "tests/research/j24g39_publish_leaf_rebind_court.py"
+      - "docs/v031-research/2026-10-29-j24g39-*"
+      - ".github/workflows/v031-j24g39-publish-leaf-identity.yml"
+  pull_request:
+    paths:
+      - "tests/research/j24g39_publish_leaf_rebind_court.py"
+      - "docs/v031-research/2026-10-29-j24g39-*"
+      - ".github/workflows/v031-j24g39-publish-leaf-identity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g39-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-physical-negative:
+    name: Authentic r24 publish-leaf attack witness - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin exact product candidate without changing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 3e6b1c75a303ba638d420e49b658b90c7b573773 HEAD
+          git diff --exit-code 3e6b1c75a303ba638d420e49b658b90c7b573773 HEAD -- src/ native/ docs/FORMAT.md docs/PRE1_RELEASE_POLICY.md benchmarks/ pyproject.toml
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = "37aef271fc2f29ebf2f3867f68bd3f2db9eae518"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = "e4bb7a940b1e2a525c5d2ddaa9de448c6ed27c6a"
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = "2040f8f91c47f228e3aa4c62b13557d982ba465e"
+          mkdir -p j24g39-evidence
+          git rev-parse HEAD > j24g39-evidence/exact-head.txt
+          git rev-parse HEAD:src/cmpct/builder.py > j24g39-evidence/builder-blob.txt
+          git rev-parse HEAD:src/cmpct/reader.py > j24g39-evidence/reader-blob.txt
+          git rev-parse HEAD:src/cmpct/transactions.py > j24g39-evidence/transactions-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install exact source and verify detached product identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile tests/research/j24g39_publish_leaf_rebind_court.py
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import cmpct.builder as builder
+          import cmpct.reader as reader
+          import cmpct.transactions as transactions
+          root=Path(os.environ["GITHUB_WORKSPACE"])
+          for mod,rel in (
+              (builder,"src/cmpct/builder.py"),
+              (reader,"src/cmpct/reader.py"),
+              (transactions,"src/cmpct/transactions.py"),
+          ):
+              installed=Path(mod.__file__).resolve()
+              source=(root/rel).resolve()
+              assert installed != source
+              assert installed.read_bytes().replace(b"\r\n",b"\n") == source.read_bytes().replace(b"\r\n",b"\n")
+              print("EXACT_INSTALLED_SOURCE",rel)
+          PY
+      - name: Run source-locked physical publication attack and control
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          CMPCT_J24G39_ARTIFACTS="$GITHUB_WORKSPACE/j24g39-evidence/physical" python "$GITHUB_WORKSPACE/tests/research/j24g39_publish_leaf_rebind_court.py" > "$GITHUB_WORKSPACE/j24g39-evidence/physical-negative.json"
+      - name: Independent receipt-level classification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path("j24g39-evidence/physical-negative.json").read_text())
+          assert data["evidence_class"]=="UNRELEASED_CANDIDATE_NEGATIVE_RESEARCH"
+          assert data["parent_candidate"]=="3e6b1c75a303ba638d420e49b658b90c7b573773"
+          assert data["decision"]=="MUTABLE_STAGE_LEAF_PUBLISHES_UNVERIFIED_INODE"
+          rows={row["case"]:row for row in data["results"]}
+          assert set(rows)=={"symlink","regular"}
+          for row in rows.values():
+              assert row["published_unverified_entry"]
+              assert row["verified_inode_still_valid"]
+              assert row["source_unchanged"] and row["outside_sentinel_unchanged"]
+              assert row["operation_error"] is None
+          assert rows["symlink"]["destination_is_symlink"] is True
+          assert rows["regular"]["destination_is_symlink"] is False
+          print("NEGATIVE_WITNESS_REPRODUCED__PRODUCT_SECURITY_NOT_PASSED")
+          PY
+      - name: Upload exact-head receipts even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g39-stage-publish-${{ matrix.os }}-${{ github.run_id }}
+          path: j24g39-evidence/
+          retention-days: 30
+          if-no-files-found: warn
