@@ -11,11 +11,13 @@ fn case_path(root: &Path, stem: &str, suffix: &str) -> PathBuf {
 }
 
 fn run_case(root: &Path, stem: &str) {
-    let genuine = Archive::open(&case_path(root, stem, "original"))
-        .expect("immutable r24 golden must parse");
+    let genuine =
+        Archive::open(&case_path(root, stem, "original")).expect("immutable r24 golden must parse");
     assert_eq!(genuine.entries().len(), 1);
     assert_eq!(
-        genuine.verify_complete().expect("original direct must verify"),
+        genuine
+            .verify_complete()
+            .expect("original direct must verify"),
         1,
         "{stem}"
     );
@@ -58,7 +60,10 @@ fn j24i36_real_symlink_reject_crc_only_mutation() {
     let payload_mutant =
         Archive::open(&root.join("physical-wrong.cmpct")).expect("physical payload mutant");
     assert!(
-        matches!(payload_mutant.verify_complete(), Err(CmpctError::MemberHash)),
+        matches!(
+            payload_mutant.verify_complete(),
+            Err(CmpctError::MemberHash)
+        ),
         "physical payload mutation must retain SHA-based refusal"
     );
     println!("J24I36_REAL_SYMLINK_CRC_REJECTED");
