@@ -1,0 +1,101 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I37 Direct-Zstd Native Verify Work Court
+on:
+  pull_request:
+    paths:
+      - 'research/j24i37/**'
+      - 'docs/v031-research/*j24i37*'
+      - '.github/workflows/v031-j24i37-direct-verify-amplification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i37-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  research-amplification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify latest HEAD narrow scientific mutation
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i37/|docs/v031-research/.*j24i37|[.]github/workflows/v031-j24i37-direct-verify-amplification[.]yml)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
+      - name: Lock actual research head and unchanged native/frozen source
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee j24i37-head.txt
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "46fa87930a9229f42233594816330f35f0505e71"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "27e4d7962ccfed6a822010383158d98e20d823dd"
+          test "$(git hash-object tests/conformance/v24-direct-codecs.json)" = "d10b7dab9126d39e819a74279c186363a163f2ef"
+          git diff --name-only 9ef1644d8c6129de4d7d8008bfdadad5fffcbe06 HEAD | tee j24i37-changed.txt
+          if grep -Eq '^(native/|src/cmpct/|tests/conformance/|benchmarks/)' j24i37-changed.txt; then
+            echo "Changed product or frozen source is disallowed"; exit 1
+          fi
+      - name: Frame research archives and run installed Python oracle
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . msgpack zstandard
+          python research/j24i37/generate_direct_zstd.py --output j24i37-cases
+          python research/j24i37/audit_direct_zstd.py --case-dir j24i37-cases
+      - name: Build native code unchanged, with standalone ephemeral scientific probe
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native/cmpct-core/src/bin
+          cp research/j24i37/native_verify_amplification.rs native/cmpct-core/src/bin/j24i37_perf.rs
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i37_perf
+      - name: Same archive ABBA/BAAB process-isolated with in-process wall/io measurement
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=native/cmpct-core/target/release/j24i37_perf
+          manifest="$PWD/j24i37-cases/manifest.json"
+          : > j24i37-raw.txt
+          for lane in A B B A B A A B; do
+            if [ "$lane" = A ]; then mode=verify; else mode=oneshot; fi
+            for mib in 8 32 64; do
+              "$exe" "$PWD/j24i37-cases/direct-zstd-${mib}m.cmpct" "$mode" "$mib" "$manifest" \
+                | sed "s/^/$lane /" | tee -a j24i37-raw.txt
+            done
+          done
+          python research/j24i37/summarize_amplification.py \
+            --manifest "$manifest" --raw j24i37-raw.txt --output j24i37-result.json
+      - name: Preserve exact-head physics, original bytes and independent audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i37-direct-zstd-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24i37-head.txt
+            j24i37-changed.txt
+            j24i37-cases/
+            j24i37-raw.txt
+            j24i37-result.json
