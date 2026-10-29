@@ -86,6 +86,7 @@ jobs:
             tests/test_v031_j24g55_physical_signed_delete_acceptance.py \
             tests/test_v031_j24g55_inrange_signed_owner_acceptance.py \
             tests/test_v031_j24g55_physical_checkpoint64.py \
+            tests/test_v031_j24g55_committed_footer_recovery.py \
             2>&1 | tee evidence/pytest.log
       - name: Independent signed wire/footer/ordinal and tamper oracle
         if: always() && runner.os != 'Windows'
