@@ -1,0 +1,97 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24I12 sparse compaction exact resource court
+
+on:
+  pull_request:
+    paths:
+      - "tests/research/j24i12_sparse_compaction_cost.py"
+      - ".github/workflows/v031-j24i12-sparse-compaction-cost.yml"
+      - "docs/v031-research/2026-10-29-j24i12-*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i12-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-resource-court:
+    name: Installed J24I12 sparse logical RSS / disk evidence (Ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      OUT_DIR: ${{ github.workspace }}/j24i12-evidence
+      CMPCT_J24I12_ARTIFACT_DIR: ${{ github.workspace }}/j24i12-evidence
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin source and immutable prospective decision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 52d51b9446dc8876319f7bd1e6ca2b7f54681de8 HEAD
+          git merge-base --is-ancestor ec5b538ac537417576a33944e2a3be340fcdf1fc HEAD
+          git diff --exit-code 52d51b9446dc8876319f7bd1e6ca2b7f54681de8 HEAD -- src/cmpct/reader.py src/cmpct/builder.py src/cmpct/transactions.py native/ tests/conformance/ benchmarks/
+          mkdir -p "$OUT_DIR"
+          git rev-parse HEAD > "$OUT_DIR/head.txt"
+          git rev-parse 52d51b9446dc8876319f7bd1e6ca2b7f54681de8 > "$OUT_DIR/base-head.txt"
+          for file in src/cmpct/builder.py src/cmpct/reader.py src/cmpct/transactions.py tests/research/j24i12_sparse_compaction_cost.py; do
+              printf "%s %s\n" "$(git rev-parse "HEAD:$file")" "$file" >> "$OUT_DIR/git-blobs.txt"
+          done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Verify installed source identities outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import pathlib, os, hashlib, cmpct.builder, cmpct.reader, cmpct.transactions
+          root=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          norm=lambda data:data.replace(b"\r\n",b"\n")
+          for mod in [cmpct.builder,cmpct.reader,cmpct.transactions]:
+              installed=pathlib.Path(mod.__file__).resolve()
+              checkout=root/"src/cmpct"/installed.name
+              assert not installed.is_relative_to(root),installed
+              assert norm(installed.read_bytes())==norm(checkout.read_bytes()),installed
+              print("INSTALLED_EXACT",installed,hashlib.sha256(norm(installed.read_bytes())).hexdigest())
+          PY
+      - name: Execute genuine three-size sparse compaction court
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i12_sparse_compaction_cost.py" | tee "$OUT_DIR/stdout.txt"
+          python - <<'PY'
+          import json,os,pathlib
+          r=json.loads((pathlib.Path(os.environ["OUT_DIR"])/"court.json").read_text())
+          assert r["sizes"]==[2<<20,32<<20,128<<20]
+          assert len(r["cases"])==3 and r["release_credit"] is False
+          assert r["decision"] in {"SPARSE_LOGICAL_RSS_COST_SUPPORTED","SPARSE_LOGICAL_RSS_COST_FALSIFIED","SPARSE_LOGICAL_RSS_COST_AMBIGUOUS"}
+          assert all(c["compaction"]["sparse_data_fidelity"] for c in r["cases"])
+          assert all(c["input_archive_bytes"] < c["logical_sparse_bytes"]//8 for c in r["cases"])
+          assert all(c["compaction"]["output_bytes"] < c["logical_sparse_bytes"]//8 for c in r["cases"])
+          print("J24I12_COURT_DECISION",r["decision"],r["large_minus_small_peak_rss_mib"])
+          PY
+      - name: Always preserve receipts and exact physical archives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i12-sparse-economics-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24i12-evidence/
+          if-no-files-found: warn
+          retention-days: 90
