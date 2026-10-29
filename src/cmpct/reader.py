@@ -11,6 +11,7 @@ from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz
 from .native_codec import DictDecoder
 from .path_policy import canonical_logical_path
+from . import _xattrs  # preserve O69 strict and portable modes through native Darwin provider
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -376,11 +377,11 @@ class CMPCT:
                 try:os.chown(full,uid,gid,follow_symlinks=False)
                 except (OSError,PermissionError):pass
             if i in xam:
-                if not hasattr(os,'setxattr'):
+                if not _xattrs.can_set():
                     if require_xattrs:raise IOError(f'xattr restoration unsupported for {row[0]!r}')
                     continue
                 for name,value in xam[i]:
-                    try:os.setxattr(full,name,value,follow_symlinks=False)
+                    try:_xattrs.setxattr(full,name,value,follow_symlinks=False)
                     except OSError as exc:
                         if require_xattrs:
                             raise IOError(f'xattr restoration failed for {row[0]!r}, {name!r}: {exc}') from exc
@@ -402,7 +403,7 @@ class CMPCT:
         # can still occur later and do not imply transactional whole-tree publication.
         if require_xattrs:
             if not metadata:raise ValueError('require_xattrs=True requires metadata=True')
-            if self.fsmeta.get('xattrs') and not hasattr(os,'setxattr'):
+            if self.fsmeta.get('xattrs') and not _xattrs.can_set():
                 raise IOError('xattr restoration unsupported by destination host')
         dest=Path(dest);dest.mkdir(parents=True,exist_ok=True);dest_s=os.fspath(dest)
         total=sum(x[4] for x in self.files if x[1]!=K_DIR)
