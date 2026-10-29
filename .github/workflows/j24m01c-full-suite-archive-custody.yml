@@ -1,0 +1,120 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: J24M01c unchanged full-suite sparse physical artifact capture
+on:
+  pull_request:
+    paths:
+      - 'docs/v031-research/2026-10-29-j24m01c-*'
+      - '.github/workflows/j24m01c-full-suite-archive-custody.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24m01c-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-suite-source-capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24M01C_OUT: ${{ github.workspace }}/j24m01c-evidence
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Authenticate exact inherited source and before-result protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor ec112a87ea34349b63885f3f0bea4689f192bd2f HEAD
+          git merge-base --is-ancestor f03367f494e22f798e82cd0ba0ff9d988b4cfb19 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
+          test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = dc31bd4a46c117e6621a76a91b7bdeef85579ebf
+          mkdir -p "$J24M01C_OUT"
+          git rev-parse HEAD > "$J24M01C_OUT/exact-head.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$J24M01C_OUT/reader-blob.txt"
+          git rev-parse HEAD:src/cmpct/builder.py > "$J24M01C_OUT/builder-blob.txt"
+          git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py > "$J24M01C_OUT/test-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exactly the full general-suite dependency profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip freeze | sort > "$J24M01C_OUT/pip-freeze.txt"
+      - name: Run unchanged full suite with original exit retained
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          python -m pytest -q 2>&1 | tee "$J24M01C_OUT/full-suite.log"
+          code="${PIPESTATUS[0]}"
+          printf '%s\n' "$code" > "$J24M01C_OUT/full-suite-exit-code.txt"
+          printf 'ORIGINAL_PYTEST_EXIT=%s (scientific-capture-job status is not the suite outcome)\n' "$code"
+          exit 0
+      - name: Preserve actual retained 256MiB sparse archive and physical geometry
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          python - <<'PY'
+          import hashlib, json, os, pathlib, shutil, subprocess
+          root=pathlib.Path(os.environ["J24M01C_OUT"])
+          root.mkdir(parents=True,exist_ok=True)
+          def sha_file(path):
+              h=hashlib.sha256()
+              with path.open('rb') as f:
+                  for chunk in iter(lambda:f.read(1024*1024),b''):
+                      h.update(chunk)
+              return h.hexdigest()
+          paths=sorted(pathlib.Path('/tmp').glob('pytest-of-*/pytest-*/test_real_256m_sparse_verifica*/large.cmpct'))
+          report={'schema':'cmpct-j24m01c-full-suite-retention-v1','exact_head':os.environ['EXACT_HEAD'],
+                  'found_archives':len(paths),'archives':[],'original_test_unchanged':True,'release_credit':0}
+          for i,p in enumerate(paths):
+              row={'path':str(p),'archive_bytes':p.stat().st_size,'archive_sha256':sha_file(p)}
+              src=p.parent/'tree'/'large.bin'
+              if src.exists():
+                  st=src.stat()
+                  row['source_bytes']=st.st_size
+                  row['source_st_blocks']=st.st_blocks
+                  row['source_allocated_bytes']=st.st_blocks*512
+                  row['source_sha256']=sha_file(src)
+              try:
+                  from cmpct.reader import CMPCT
+                  with CMPCT(p) as ar:
+                      logical=ar.by['large.bin']
+                      row['logical_size']=logical[4]
+                      row['indexed_logical_sha256']=bytes(logical[5]).hex()
+                      row['storage_tag']=logical[6][0]
+                      if isinstance(logical[6][1],list):
+                          row['sparse_extents']=[{'offset':off,'logical_data_bytes':ln,'blobs':len(ids)}
+                                                 for off,ln,ids in logical[6][1]]
+                      row['physical_extent_bytes']=sum(e['logical_data_bytes'] for e in row.get('sparse_extents',[]))
+              except Exception as e:row['reader_inspection_error']=repr(e)
+              if p.stat().st_size<=10*1024*1024:
+                  target=root/f'actual-full-suite-{i}.cmpct'
+                  shutil.copy2(p,target)
+                  row['stored_artifact']=target.name
+              report['archives'].append(row)
+          (root/'physical-archive-report.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(report,sort_keys=True))
+          PY
+          exit 0
+      - name: Upload original negative, physical archive and exact-source receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24m01c-full-suite-${{ env.EXACT_HEAD }}
+          path: j24m01c-evidence/
+          retention-days: 30
+          if-no-files-found: warn
