@@ -1,0 +1,90 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24I11 installed Win32 hardlink census and exact extraction topology
+
+on:
+  push:
+    branches:
+      - "agent/phased3-v031-j24i11-*"
+    paths:
+      - "src/cmpct/builder.py"
+      - "tests/research/j24i11_win32_hardlink_census.py"
+      - ".github/workflows/v031-j24i11-hardlink-census.yml"
+      - "docs/v031-research/2026-10-29-j24i11-*.md"
+  pull_request:
+    paths:
+      - "src/cmpct/builder.py"
+      - "tests/research/j24i11_win32_hardlink_census.py"
+      - ".github/workflows/v031-j24i11-hardlink-census.yml"
+      - "docs/v031-research/2026-10-29-j24i11-*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i11-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-topology:
+    name: Exact installed source / topology (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 28
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24I11_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24I11_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24I11_CHECKOUT: ${{ github.workspace }}
+      CMPCT_J24I11_ARTIFACT_DIR: ${{ github.workspace }}/j24i11-evidence/archives
+      CMPCT_J24I11_RECEIPT: ${{ github.workspace }}/j24i11-evidence/court.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind exact-source donor, format and unchanged Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 65d8b1681bc9ae00d48c3c362f2ab1dc9e2ed91d HEAD
+          git diff --exit-code 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD -- src/cmpct/reader.py src/cmpct/transactions.py src/cmpct/codec.py native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md benchmarks/
+          test "$(git diff --name-only 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD -- src/)" = "src/cmpct/builder.py"
+          mkdir -p "$GITHUB_WORKSPACE/j24i11-evidence"
+          git rev-parse HEAD > "$GITHUB_WORKSPACE/j24i11-evidence/head.txt"
+          git rev-parse HEAD:src/cmpct/builder.py > "$GITHUB_WORKSPACE/j24i11-evidence/builder-blob.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$GITHUB_WORKSPACE/j24i11-evidence/reader-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install actual candidate and compile independent test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile tests/research/j24i11_win32_hardlink_census.py
+      - name: Run exact source, compaction and materialized inode test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i11_win32_hardlink_census.py"
+      - name: Preserve receipt even on real failure
+        if: always()
+        shell: bash
+        run: |
+          python -c "import json,os,pathlib; p=pathlib.Path(os.environ['CMPCT_J24I11_RECEIPT']); print('EXISTS',p.exists()); print('DECISION',json.loads(p.read_text()).get('status') if p.exists() else 'NO_RECEIPT')"
+      - name: Upload physical archives and source custody
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i11-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24i11-evidence/
+          if-no-files-found: warn
+          retention-days: 90
