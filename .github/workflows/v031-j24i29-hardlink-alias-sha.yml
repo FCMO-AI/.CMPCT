@@ -1,0 +1,69 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I29 Frozen-Wire Hardlink Alias SHA Scientific Court
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24i29/**'
+      - 'docs/v031-research/*j24i29*'
+      - '.github/workflows/v031-j24i29-hardlink-alias-sha.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: j24i29-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-three-host:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Source/frozen-vector identity witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git rev-parse HEAD | tee j24i29-head.txt
+          git hash-object src/cmpct/reader.py | tee j24i29-reader-blob.txt
+          git hash-object tests/conformance/v24-direct-codecs.json | tee j24i29-golden-blob.txt
+          git hash-object research/j24i29/test_hardlink_alias_sha.py | tee j24i29-test-blob.txt
+          test "$(git hash-object tests/conformance/v24-direct-codecs.json)" = 'd10b7dab9126d39e819a74279c186363a163f2ef'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run frozen physical-wire hardlink proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          J24I29_RESULTS=j24i29-results.json python research/j24i29/test_hardlink_alias_sha.py 2>&1 | tee j24i29-court.log
+      - name: Retain original result/negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i29-hardlink-alias-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            j24i29-head.txt
+            j24i29-reader-blob.txt
+            j24i29-golden-blob.txt
+            j24i29-test-blob.txt
+            j24i29-court.log
+            j24i29-results.json
