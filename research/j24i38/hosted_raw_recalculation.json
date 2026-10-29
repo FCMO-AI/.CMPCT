@@ -1,0 +1,561 @@
+{
+  "schema": "j24i38-raw-result-v1",
+  "classification": "Research only; one-shot comparator exports RSS",
+  "published_at": "2026-10-29",
+  "source_sha": "6eee048dad0850d7494bae2123d9e6b88e5576be",
+  "provider_run_id": 40924016677,
+  "provider_job_id": 123624585094,
+  "artifact_id": 12919642471,
+  "provenance_url": "https://github.com/FCMO-AI/.CMPCT/actions/runs/40924016677",
+  "modes": {
+    "A": "native verify_complete",
+    "B": "one-shot read_range full-size + SHA + CRC"
+  },
+  "sources": {
+    "builder_blob": "663ef0922992b1fbb8f19e6eea88d55c10a56044",
+    "native_lib_blob": "46fa87930a9229f42233594816330f35f0505e71",
+    "native_dispatch_blob": "27e4d7962ccfed6a822010383158d98e20d823dd"
+  },
+  "results": {
+    "8": {
+      "nA": 12,
+      "nB": 12,
+      "verify_wall_ns": 153378166.5,
+      "control_wall_ns": 87966726.5,
+      "ratio_wall": 1.7435929766012153,
+      "verify_rchar": 7965522,
+      "control_rchar": 3982778,
+      "ratio_rchar": 1.9999914632450013,
+      "verify_vmhwm_kib": 22810,
+      "control_vmhwm_kib": 22766,
+      "rss_delta_kib": -44
+    },
+    "32": {
+      "nA": 12,
+      "nB": 12,
+      "verify_wall_ns": 1492749611.5,
+      "control_wall_ns": 344629511,
+      "ratio_wall": 4.331461943489802,
+      "verify_rchar": 79395070,
+      "control_rchar": 15879081,
+      "ratio_rchar": 4.999978903061203,
+      "verify_vmhwm_kib": 59010,
+      "control_vmhwm_kib": 83586,
+      "rss_delta_kib": 24576
+    }
+  },
+  "samples": [
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 0,
+      "wall_ns": 161417156,
+      "rchar": 7965516,
+      "vmhwm_kib": 22892
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 1,
+      "wall_ns": 149387889,
+      "rchar": 7965520,
+      "vmhwm_kib": 22936
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 2,
+      "wall_ns": 156896198,
+      "rchar": 7965522,
+      "vmhwm_kib": 22936
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 3,
+      "wall_ns": 151321250,
+      "rchar": 7965522,
+      "vmhwm_kib": 22936
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 0,
+      "wall_ns": 1508557103,
+      "rchar": 79395063,
+      "vmhwm_kib": 58880
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 1,
+      "wall_ns": 1492701593,
+      "rchar": 79395068,
+      "vmhwm_kib": 58880
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 2,
+      "wall_ns": 1489163435,
+      "rchar": 79395070,
+      "vmhwm_kib": 58880
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 3,
+      "wall_ns": 1490550284,
+      "rchar": 79395071,
+      "vmhwm_kib": 58880
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 0,
+      "wall_ns": 88200551,
+      "rchar": 3982773,
+      "vmhwm_kib": 18924
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 1,
+      "wall_ns": 87800628,
+      "rchar": 3982777,
+      "vmhwm_kib": 22756
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 2,
+      "wall_ns": 88078357,
+      "rchar": 3982778,
+      "vmhwm_kib": 22756
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 3,
+      "wall_ns": 87991015,
+      "rchar": 3982779,
+      "vmhwm_kib": 22756
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 0,
+      "wall_ns": 355413579,
+      "rchar": 15879075,
+      "vmhwm_kib": 68080
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 1,
+      "wall_ns": 351293547,
+      "rchar": 15879080,
+      "vmhwm_kib": 83560
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 2,
+      "wall_ns": 344324961,
+      "rchar": 15879081,
+      "vmhwm_kib": 83580
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 3,
+      "wall_ns": 344398663,
+      "rchar": 15879081,
+      "vmhwm_kib": 83580
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 0,
+      "wall_ns": 88337016,
+      "rchar": 3982773,
+      "vmhwm_kib": 18936
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 1,
+      "wall_ns": 88251107,
+      "rchar": 3982777,
+      "vmhwm_kib": 22768
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 2,
+      "wall_ns": 87940103,
+      "rchar": 3982778,
+      "vmhwm_kib": 22768
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 3,
+      "wall_ns": 87991616,
+      "rchar": 3982779,
+      "vmhwm_kib": 22768
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 0,
+      "wall_ns": 354004410,
+      "rchar": 15879075,
+      "vmhwm_kib": 67936
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 1,
+      "wall_ns": 353934444,
+      "rchar": 15879080,
+      "vmhwm_kib": 83416
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 2,
+      "wall_ns": 347183837,
+      "rchar": 15879081,
+      "vmhwm_kib": 83416
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 3,
+      "wall_ns": 344199872,
+      "rchar": 15879081,
+      "vmhwm_kib": 83416
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 0,
+      "wall_ns": 161402638,
+      "rchar": 7965516,
+      "vmhwm_kib": 22764
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 1,
+      "wall_ns": 150293037,
+      "rchar": 7965520,
+      "vmhwm_kib": 22808
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 2,
+      "wall_ns": 155865970,
+      "rchar": 7965522,
+      "vmhwm_kib": 22808
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 3,
+      "wall_ns": 155710366,
+      "rchar": 7965522,
+      "vmhwm_kib": 22808
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 0,
+      "wall_ns": 1511060974,
+      "rchar": 79395063,
+      "vmhwm_kib": 59132
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 1,
+      "wall_ns": 1494645340,
+      "rchar": 79395068,
+      "vmhwm_kib": 59132
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 2,
+      "wall_ns": 1488103626,
+      "rchar": 79395070,
+      "vmhwm_kib": 59132
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 3,
+      "wall_ns": 1492797630,
+      "rchar": 79395071,
+      "vmhwm_kib": 59132
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 0,
+      "wall_ns": 87691729,
+      "rchar": 3982773,
+      "vmhwm_kib": 19028
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 1,
+      "wall_ns": 86767873,
+      "rchar": 3982777,
+      "vmhwm_kib": 22860
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 2,
+      "wall_ns": 87751950,
+      "rchar": 3982778,
+      "vmhwm_kib": 22860
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 3,
+      "wall_ns": 87942438,
+      "rchar": 3982779,
+      "vmhwm_kib": 22860
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 0,
+      "wall_ns": 355171642,
+      "rchar": 15879075,
+      "vmhwm_kib": 68112
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 1,
+      "wall_ns": 352697392,
+      "rchar": 15879080,
+      "vmhwm_kib": 83592
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 2,
+      "wall_ns": 344860359,
+      "rchar": 15879081,
+      "vmhwm_kib": 83612
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 3,
+      "wall_ns": 344175895,
+      "rchar": 15879081,
+      "vmhwm_kib": 83612
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 0,
+      "wall_ns": 161894883,
+      "rchar": 7965516,
+      "vmhwm_kib": 22768
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 1,
+      "wall_ns": 149789350,
+      "rchar": 7965520,
+      "vmhwm_kib": 22812
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 2,
+      "wall_ns": 155742316,
+      "rchar": 7965522,
+      "vmhwm_kib": 22812
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 3,
+      "wall_ns": 154821355,
+      "rchar": 7965522,
+      "vmhwm_kib": 22812
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 0,
+      "wall_ns": 1512455026,
+      "rchar": 79395063,
+      "vmhwm_kib": 59016
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 1,
+      "wall_ns": 1490481529,
+      "rchar": 79395068,
+      "vmhwm_kib": 59016
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 2,
+      "wall_ns": 1498049772,
+      "rchar": 79395070,
+      "vmhwm_kib": 59016
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 3,
+      "wall_ns": 1492368073,
+      "rchar": 79395071,
+      "vmhwm_kib": 59016
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 0,
+      "wall_ns": 161848772,
+      "rchar": 7965516,
+      "vmhwm_kib": 22760
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 1,
+      "wall_ns": 149646302,
+      "rchar": 7965520,
+      "vmhwm_kib": 22804
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 2,
+      "wall_ns": 155987239,
+      "rchar": 7965522,
+      "vmhwm_kib": 22804
+    },
+    {
+      "arm": "A",
+      "mib": 8,
+      "iter": 3,
+      "wall_ns": 151934978,
+      "rchar": 7965522,
+      "vmhwm_kib": 22804
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 0,
+      "wall_ns": 1502596512,
+      "rchar": 79395063,
+      "vmhwm_kib": 59004
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 1,
+      "wall_ns": 1493000208,
+      "rchar": 79395068,
+      "vmhwm_kib": 59004
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 2,
+      "wall_ns": 1498607557,
+      "rchar": 79395070,
+      "vmhwm_kib": 59004
+    },
+    {
+      "arm": "A",
+      "mib": 32,
+      "iter": 3,
+      "wall_ns": 1495412377,
+      "rchar": 79395071,
+      "vmhwm_kib": 59004
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 0,
+      "wall_ns": 90865776,
+      "rchar": 3982773,
+      "vmhwm_kib": 18932
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 1,
+      "wall_ns": 92020830,
+      "rchar": 3982777,
+      "vmhwm_kib": 22764
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 2,
+      "wall_ns": 90137716,
+      "rchar": 3982778,
+      "vmhwm_kib": 22764
+    },
+    {
+      "arm": "B",
+      "mib": 8,
+      "iter": 3,
+      "wall_ns": 84762729,
+      "rchar": 3982779,
+      "vmhwm_kib": 22764
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 0,
+      "wall_ns": 348149086,
+      "rchar": 15879075,
+      "vmhwm_kib": 68212
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 1,
+      "wall_ns": 351925449,
+      "rchar": 15879080,
+      "vmhwm_kib": 83692
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 2,
+      "wall_ns": 336180842,
+      "rchar": 15879081,
+      "vmhwm_kib": 83712
+    },
+    {
+      "arm": "B",
+      "mib": 32,
+      "iter": 3,
+      "wall_ns": 343202585,
+      "rchar": 15879081,
+      "vmhwm_kib": 83712
+    }
+  ]
+}
