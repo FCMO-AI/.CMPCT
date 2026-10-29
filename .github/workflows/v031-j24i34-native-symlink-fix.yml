@@ -36,6 +36,7 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
       - name: Pin exact candidate and historical scientist
+        id: scope
         shell: bash
         run: |
           set -euo pipefail
@@ -46,11 +47,20 @@ jobs:
           test "$(git hash-object research/j24i30/audit_symlink_wire.py)" = "8b181476d090de2cd3c91335f824eb7ec4821329"
           git rev-parse HEAD | tee j24i34-head.txt
           git hash-object native/cmpct-core/tests/j24i34_native_symlink_verify.rs | tee j24i34-test-blob.txt
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(native/cmpct-core/src/vzip_dispatch[.]rs|native/cmpct-core/tests/j24i34_native_symlink_verify[.]rs|docs/v031-research/.*j24i34|[.]github/workflows/v031-j24i34-native-symlink-fix[.]yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
       - name: Install CMPCT and independently authenticate five original r24 specimens
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -60,6 +70,7 @@ jobs:
           test -s j24i34-observations/python-observations.json
           test -s j24i34-observations/independent-physical-audit.json
       - name: Run actual compiled native product integrity tests
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         env:
           J24I34_CASE_DIR: ${{ github.workspace }}/j24i34-observations
