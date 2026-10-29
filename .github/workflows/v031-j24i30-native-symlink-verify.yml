@@ -33,8 +33,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
           persist-credentials: false
       - name: Source identity and owner fixture commitments
+        id: scope
         shell: bash
         run: |
           set -euo pipefail
@@ -45,11 +47,20 @@ jobs:
           git rev-parse HEAD | tee j24i30-head.txt
           git hash-object native/cmpct-core/tests/j24i30_symlink_verify.rs | tee j24i30-rust-test-blob.txt
           git hash-object research/j24i30/generate_symlink_wire.py | tee j24i30-python-test-blob.txt
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i30/|native/cmpct-core/tests/j24i30_symlink_verify\\.rs|docs/v031-research/.*j24i30|\\.github/workflows/v031-j24i30-native-symlink-verify\\.yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
       - name: Install actual CMPCT source and generate physically authenticated r24 cases
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -59,6 +70,7 @@ jobs:
           python research/j24i30/audit_symlink_wire.py --case-dir j24i30-observations 2>&1 | tee j24i30-referee.log
           test -s j24i30-observations/independent-physical-audit.json
       - name: Run real native core full-verification court
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         env:
           J24I30_CASE_DIR: ${{ github.workspace }}/j24i30-observations
