@@ -1,0 +1,107 @@
+# ci-lane: fast
+# J24E05 is a small independent wire transfer court; no release/feature-branch push fan-out.
+name: J24E05 signed-wire extraction effects transfer
+
+on:
+  pull_request:
+    paths:
+      - "research/test_j24e05_authentic_wire_effects.py"
+      - "research/data/j24e05_v24_link_tree.json"
+      - "research/j24e01_extract_effects_model.py"
+      - ".github/workflows/v031-j24e05-authentic-wire-effects.yml"
+      - "docs/v031-research/2026-10-28-j24e05-*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24e05-wire-effects-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-real-wire:
+    name: Source-exact installed r24 / unchanged effect model (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EVIDENCE_PATH: ${{ github.workspace }}/j24e05-evidence
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Source-bind existing J24E01 model and exact independent donor before install
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor abbb3fd6840266d57f6a5d931ca6abfb04de76a6 HEAD
+          git merge-base --is-ancestor 54403b255052fb31cfe1c81d40f623a722c01bbe HEAD
+          test -z "$(git diff --name-only 54403b255052fb31cfe1c81d40f623a722c01bbe HEAD -- src/ native/ research/j24e01_extract_effects_model.py)"
+          test "$(git rev-parse HEAD:research/data/j24e05_v24_link_tree.json)" = "7b0743274987b904d695d9e280883ed66b930519"
+          test "$(git rev-parse HEAD:research/j24e01_extract_effects_model.py)" = "549583948f1d34cf9136d95f308332dbce72105b"
+          mkdir -p "$EVIDENCE_PATH"
+          git rev-parse HEAD > "$EVIDENCE_PATH/head.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$EVIDENCE_PATH/reader-git-blob.txt"
+          git rev-parse HEAD:research/j24e01_extract_effects_model.py > "$EVIDENCE_PATH/model-git-blob.txt"
+          git rev-parse HEAD:research/data/j24e05_v24_link_tree.json > "$EVIDENCE_PATH/donor-git-blob.txt"
+          python - <<'PY'
+          import base64, hashlib, json
+          from pathlib import Path
+          data=json.loads(Path("research/data/j24e05_v24_link_tree.json").read_text(encoding="utf-8"))
+          refs={
+              "links-raw":(934,"1d1e102349095151312cc3efa49a8da7848453d1a322c95a537e3d0307c0e03c"),
+              "links-zstd":(952,"afaea969c1cd1bf185c730adfd1d1d31e36449dbc2c1f3a5f45b1ac5d7a96b1f")
+          }
+          assert {v["name"] for v in data["vectors"]}==set(refs)
+          for v in data["vectors"]:
+              b=base64.b64decode(v["archive_base64"],validate=True)
+              assert (len(b),hashlib.sha256(b).hexdigest())==refs[v["name"]]
+              assert b.startswith(b"CMPCT24\0")
+          vzip=json.loads(Path("tests/conformance/v24-virtual-zip.json").read_text(encoding="utf-8"))["vector"]
+          b=base64.b64decode(vzip["archive_base64"],validate=True)
+          assert (len(b),hashlib.sha256(b).hexdigest())==(642,"bed3a5d3bf3987f4c123e782effe9cc21a5d7253a9b2eca8a9af7b2522f4d839")
+          print("J24E05 THREE FROZEN WIRE INPUTS IDENTIFIED")
+          PY
+      - name: Install ordinary CMPCT wheel from this exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . zstandard
+      - name: Verify actual installed Reader matches source before court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import cmpct.reader,os,pathlib
+          r=pathlib.Path(cmpct.reader.__file__).resolve()
+          s=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()/"src/cmpct/reader.py"
+          normalize=lambda b:b.replace(b"\r\n",b"\n")
+          assert normalize(r.read_bytes())==normalize(s.read_bytes()),(r,s)
+          assert not r.is_relative_to(s.parent.parent.parent), "checkout imported in place, not installed wheel"
+          print("INSTALLED_READER_SOURCE_EXACT",r)
+          PY
+      - name: Run builder-independent real-wire effect/model court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B -m unittest -v research.test_j24e05_authentic_wire_effects 2>&1 | tee "$EVIDENCE_PATH/court.log"
+          grep -q "OK" "$EVIDENCE_PATH/court.log"
+      - name: Preserve source-bound evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24e05-wire-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24e05-evidence/
+          if-no-files-found: warn
+          retention-days: 90
