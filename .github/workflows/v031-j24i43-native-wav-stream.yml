@@ -131,8 +131,8 @@ jobs:
             j24i43-evidence.tar.gz
 
   native-wav-cross-host-court:
-    name: native-wav-integrity (\${{ matrix.os }})
-    runs-on: \${{ matrix.os }}
+    name: native-wav-integrity (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -141,7 +141,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: \${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -179,16 +179,16 @@ jobs:
           set -euo pipefail
           suffix=''
           if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; fi
-          exe="$PWD/native/cmpct-core/target/release/j24i43_probe\${suffix}"
+          exe="$PWD/native/cmpct-core/target/release/j24i43_probe${suffix}"
           test -f "$exe"
           : > j24i43-crosshost-positive.txt
           : > j24i43-crosshost-negative.txt
           for mib in 8 32; do
-            "$exe" "$PWD/j24i43-port-cases/builder-wav-\${mib}m.cmpct" expected-pass "$mib" | tee -a j24i43-crosshost-positive.txt
+            "$exe" "$PWD/j24i43-port-cases/builder-wav-${mib}m.cmpct" expected-pass "$mib" | tee -a j24i43-crosshost-positive.txt
             for kind in crc-only flac-mid; do
-              "$exe" "$PWD/j24i43-port-cases/j24i43-\${kind}-\${mib}m.cmpct" expected-fail "$mib" | tee -a j24i43-crosshost-negative.txt
+              "$exe" "$PWD/j24i43-port-cases/j24i43-${kind}-${mib}m.cmpct" expected-fail "$mib" | tee -a j24i43-crosshost-negative.txt
             done
-            "$exe" "$PWD/j24i43-port-cases/badmagic-original-container-\${mib}m.cmpct" expected-fail "$mib" | tee -a j24i43-crosshost-negative.txt
+            "$exe" "$PWD/j24i43-port-cases/badmagic-original-container-${mib}m.cmpct" expected-fail "$mib" | tee -a j24i43-crosshost-negative.txt
           done
           test "$(grep -c '^J24I43_REJECTED' j24i43-crosshost-negative.txt)" -eq 6
           test "$(grep -c '^J24I43 iter=' j24i43-crosshost-positive.txt)" -eq 8
@@ -223,7 +223,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: j24i43-crosshost-\${{ matrix.os }}-\${{ github.run_id }}
+          name: j24i43-crosshost-${{ matrix.os }}-${{ github.run_id }}
           if-no-files-found: error
           retention-days: 30
           path: |
