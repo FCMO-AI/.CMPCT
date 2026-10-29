@@ -146,13 +146,96 @@ def recover_blob_records(archive:Path):
         p=i+1
     return out
 
+def _private_compaction_guard(rows):
+    """Check archive-controlled filesystem relationships before lifting symlink *target* restrictions.
+
+    Footnote: a literal absolute/parent-relative symlink target is safe to store as
+    an inert link in a private scratch tree ONLY when no archived child can traverse
+    the link as an ancestor. Ordinary user-destination extraction remains guarded.
+    """
+    from .path_policy import canonical_logical_path
+    paths={};symlinks=set()
+    for row in rows:
+        try:key,parts=canonical_logical_path(row[0])
+        except ValueError as exc:raise IOError(f'unsafe compaction path: {row[0]!r}') from exc
+        if key in paths:raise IOError(f'duplicate compaction path: {row[0]!r}')
+        paths[key]=(row,parts)
+        if row[1]==K_SYMLINK:symlinks.add(key)
+    for key,(row,parts) in paths.items():
+        if any('/'.join(parts[:i]) in symlinks for i in range(1,len(parts))):
+            raise IOError(f'compaction symlink parent path: {row[0]!r}')
+        if row[1]==K_HARDLINK:
+            try:owner_key,_=canonical_logical_path(row[6][0])
+            except (ValueError,TypeError,IndexError) as exc:
+                raise IOError(f'unsafe compaction hardlink target: {row[0]!r}') from exc
+            owner=paths.get(owner_key)
+            # Never create an external or symlink-owned hardlink in private staging.
+            if owner is None or owner[0][1]!=K_FILE:
+                raise IOError(f'compaction hardlink has nonregular owner: {row[0]!r}')
+    return paths
+
+
+def _compaction_source_metadata(ar):
+    """Expand indexed UID/GID and xattrs per path, not per host scratch inode."""
+    common=tuple(ar.fsmeta.get('owner',(0,0)))
+    if len(common)!=2:raise IOError('invalid compaction common owner')
+    owners={i:(u,g) for i,u,g in ar.fsmeta.get('owner_overrides',[])}
+    xattrs={i:dict(items) for i,items in ar.fsmeta.get('xattrs',[])}
+    return {
+        row[0]:(row[1],row[2],row[3],*owners.get(i,common),xattrs.get(i,{}))
+        for i,row in enumerate(ar.files)
+    }
+
+
+def _compaction_assert_equivalent(source,reconstructed,source_metadata):
+    """Require exact logical table and authenticated bytes, not equal compressed layout."""
+    if len(source.files)!=len(reconstructed.files):
+        raise IOError('compaction changed number of logical entries')
+    if _compaction_source_metadata(reconstructed)!=source_metadata:
+        raise IOError('compaction changed archive ownership or xattrs')
+    for a,b in zip(source.files,reconstructed.files):
+        if a[:5]!=b[:5]:
+            raise IOError(f'compaction changed logical row: {a[0]}')
+        if a[1]==K_HARDLINK and a[6]!=b[6]:
+            raise IOError(f'compaction changed hardlink ownership: {a[0]}')
+        if a[1]!=K_DIR and source.file_sha256(a[0])!=reconstructed.file_sha256(a[0]):
+            raise IOError(f'compaction changed logical content hash: {a[0]}')
+    # Both complete logical streams must actually reconstruct and match their hashes;
+    # comparing only metadata-supplied hashes would be circular evidence.
+    source.verify()
+    reconstructed.verify()
+
+
 def compact_archive(src:Path,dst:Path):
-    # Compaction is deliberately simple and conservative in the prototype: reconstruct the exact
-    # live filesystem view into a temporary tree, then rebuild. Dead generations/blobs disappear.
-    with tempfile.TemporaryDirectory(prefix='cmpct-compact-') as td:
-        root=Path(td)/'tree'
-        with CMPCT(src) as ar:ar.extractall(root,metadata=True)
-        return Builder(root).build(dst)
+    """Rebuild a verified logical snapshot, preserving source archive semantics.
+
+    Footnote: scratch symlink targets are inert only after whole-tree parent/link
+    preflight and only inside a freshly allocated private directory. Do not weaken
+    public extractall's safe_symlinks default. Rebuild into an exclusive sibling
+    temporary file and publish with a single replace after semantic verification.
+    """
+    src=Path(src);dst=Path(dst);stage=None
+    try:
+        with tempfile.TemporaryDirectory(prefix='cmpct-compact-') as td:
+            root=Path(td)/'tree'
+            with CMPCT(src) as ar:
+                _private_compaction_guard(ar.files)
+                metadata=_compaction_source_metadata(ar)
+                ar.extractall(root,metadata=True,safe_symlinks=False)
+                fd,name=tempfile.mkstemp(prefix=f'.{dst.name}.compact-',suffix='.tmp',dir=dst.parent)
+                stage=Path(name);os.close(fd)
+                result=Builder(root,_preserve_archive_meta=metadata).build(stage)
+                with CMPCT(stage) as rebuilt:
+                    _compaction_assert_equivalent(ar,rebuilt,metadata)
+                with open(stage,'rb') as stream:os.fsync(stream.fileno())
+        # The source Reader is closed before replacement, including on Windows.
+        # os.replace replaces a destination symlink rather than following it.
+        os.replace(stage,dst)
+        return result
+    finally:
+        if stage is not None:
+            try:stage.unlink()
+            except FileNotFoundError:pass
 
 def tree_digest(root:Path):
     h=hashlib.sha256();root=Path(root)
