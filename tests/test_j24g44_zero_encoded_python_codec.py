@@ -47,11 +47,14 @@ def test_zero_output_codec_api_validates_real_encoded_frame() -> None:
 
     assert native_codec.decompress(frame, 0) == b""
     assert native_codec.decompress_using_dict(frame, 0, dictionary) == b""
-    with native_codec.DictDecoder(dictionary) as decoder:
+    decoder = native_codec.DictDecoder(dictionary)
+    try:
         assert decoder.decompress(b"", 0) == b""
         assert decoder.decompress(frame, 0) == b""
         with pytest.raises((RuntimeError, IOError, ValueError)):
             decoder.decompress(broken, 0)
+    finally:
+        decoder.close()
 
     with pytest.raises((RuntimeError, IOError, ValueError)):
         native_codec.decompress(broken, 0)
