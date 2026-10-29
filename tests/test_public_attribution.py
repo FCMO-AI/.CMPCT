@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tomllib
 from pathlib import Path
 
@@ -17,7 +18,17 @@ def read(path: str) -> str:
 
 
 def test_surface_revision_records_attribution_campaign() -> None:
-    assert read("SURFACE_REVISION").strip() == "0.29.k"
+    # The source epoch, package line and public README receipt must agree; never pin an obsolete epoch.
+    surface = read("SURFACE_REVISION").strip()
+    match = re.fullmatch(r"(\d+)\.(\d+)\.([a-z]+)", surface)
+    assert match is not None
+    with (ROOT / "pyproject.toml").open("rb") as handle:
+        numeric = tomllib.load(handle)["project"]["version"]
+    major, minor, _patch = numeric.split(".")
+    assert (match.group(1), match.group(2)) == (major, minor)
+    first_section = read("README.md").split("\n---", 1)[0]
+    labels = re.findall(r"\bsurface (\d+\.\d+\.[a-z]+)\b", first_section, flags=re.IGNORECASE)
+    assert labels == [surface], "repository facade and canonical surface receipt must agree"
 
 
 def test_repository_facade_preserves_quiet_maker_credit() -> None:
