@@ -34,7 +34,7 @@ def decode_payload(raw: bytes, codec: int, usize: int) -> bytes:
 def footer(data: bytes, pos: int) -> tuple[dict, int, int]:
     assert 0 <= pos <= len(data) - FTR.size
     magic, kind, codec, flags, reserved, csize, usize, previous, digest = FTR.unpack_from(data, pos)
-    assert (magic, flags, reserved) == (b"CMPTF24\\x00", 0, 0)
+    assert (magic, flags, reserved) == (b"CMPTF24\x00", 0, 0)
     assert kind in (0, 1) and codec in (0, 1)
     assert 0 < csize <= pos and 0 < usize < 8 * 1024 * 1024
     payload = decode_payload(data[pos - csize:pos], codec, usize)
@@ -48,7 +48,7 @@ def inspect(before: bytes, after: bytes, expected_case: str) -> dict:
     assert before and after.startswith(before)
     assert len(after) > len(before) + FTR.size
     magic, revision, flags, csize, usize, body_span, digest = HDR.unpack_from(before)
-    assert (magic, revision, flags) == (b"CMPCT24\\x00", 24, 0)
+    assert (magic, revision, flags) == (b"CMPCT24\x00", 24, 0)
     assert 0 < csize and 0 < usize < 8 * 1024 * 1024
     raw_primary = decode_payload(before[HDR.size:HDR.size + csize], 1, usize)
     assert sha(raw_primary) == digest
@@ -150,7 +150,7 @@ def main(root: Path) -> None:
         "result": "SIGNED_JOURNAL_DELETE_EXPOSES_STALE_PREFLIGHT_XATTR_ORDINALS",
         "limits": "source-exact unmerged candidate; distinct from release evidence",
     }
-    (root / "independent-referee.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\\n")
+    (root / "independent-referee.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     print(json.dumps(result, sort_keys=True))
 
 
