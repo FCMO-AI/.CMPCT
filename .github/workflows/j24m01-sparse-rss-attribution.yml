@@ -1,0 +1,101 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: J24M01 source-locked sparse RSS stage attribution
+on:
+  pull_request:
+    paths:
+      - 'tests/research/j24m01_sparse_rss_attribution.py'
+      - 'docs/v031-research/2026-10-29-j24m01-*'
+      - '.github/workflows/j24m01-sparse-rss-attribution.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24m01-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-stage-attribution:
+    strategy:
+      fail-fast: false
+      matrix:
+        installation: [editable-full, wheel-full, wheel-minimal]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 23
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24M01_ARTIFACT_DIR: ${{ github.workspace }}/j24m01-${{ matrix.installation }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact immutable product source and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor ec112a87ea34349b63885f3f0bea4689f192bd2f HEAD
+          git merge-base --is-ancestor c620c02784dcea42687f99e059f84fe91b68cbc6 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
+          test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = dc31bd4a46c117e6621a76a91b7bdeef85579ebf
+          mkdir -p "$J24M01_ARTIFACT_DIR"
+          git rev-parse HEAD > "$J24M01_ARTIFACT_DIR/source-head.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$J24M01_ARTIFACT_DIR/reader-blob.txt"
+          git rev-parse HEAD:src/cmpct/builder.py > "$J24M01_ARTIFACT_DIR/builder-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install source with disclosed environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.installation }}" in
+            editable-full) python -m pip install -e '.[test,audio]' ;;
+            wheel-full) python -m pip install '.[test,audio]' ;;
+            wheel-minimal) python -m pip install .; python -m pip install pytest ;;
+            *) exit 4 ;;
+          esac
+          python -m pip freeze | sort > "$J24M01_ARTIFACT_DIR/pip-freeze.txt"
+      - name: Fresh-process stage and physical-extent court
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24m01_sparse_rss_attribution.py" \
+            --receipt "$J24M01_ARTIFACT_DIR/receipt.json" \
+            2>&1 | tee "$J24M01_ARTIFACT_DIR/stage-court.log"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          r = json.loads((Path(os.environ["J24M01_ARTIFACT_DIR"]) / "receipt.json").read_text())
+          assert len(r["cases"]) == 3 and len(r["measurements"]) == 9
+          for case in r["cases"]:
+              arms = [m for m in r["measurements"] if m["case_mib"] == case["mib"]]
+              assert len(arms) == 3
+              assert len({m["archive_sha256"] for m in arms}) == 1
+              assert all(m["verified"] == 1 for m in arms)
+              assert all(m["imported_reader_git_blob"] == r["source_reader_git_blob"] for m in arms)
+          print("J24M01_VALID_SOURCE_EXACT_STAGE_RECEIPTS_ONLY; product gates unchanged")
+          PY
+      - name: Preserve unchanged inherited 256-MiB test outcome, not a substitute gate
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          cd "$RUNNER_TEMP"
+          python -m pytest -q --noconftest "$GITHUB_WORKSPACE/tests/test_j24v01_sparse_verify_streamed.py" -k real_256m 2>&1 | tee "$J24M01_ARTIFACT_DIR/inherited-test-noconftest.log"
+          echo "${PIPESTATUS[0]}" > "$J24M01_ARTIFACT_DIR/inherited-test-noconftest-exit.txt"
+          python -m pytest -q "$GITHUB_WORKSPACE/tests/test_j24v01_sparse_verify_streamed.py" -k real_256m 2>&1 | tee "$J24M01_ARTIFACT_DIR/inherited-test-default.log"
+          echo "${PIPESTATUS[0]}" > "$J24M01_ARTIFACT_DIR/inherited-test-default-exit.txt"
+          exit 0
+      - name: Preserve all raw receipt and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24m01-${{ matrix.installation }}-${{ env.EXACT_HEAD }}
+          path: j24m01-${{ matrix.installation }}/
+          retention-days: 30
+          if-no-files-found: warn
