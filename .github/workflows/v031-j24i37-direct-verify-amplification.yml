@@ -23,11 +23,25 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Classify latest HEAD narrow scientific mutation
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i37/|docs/v031-research/.*j24i37|[.]github/workflows/v031-j24i37-direct-verify-amplification[.]yml)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
       - name: Lock actual research head and unchanged native/frozen source
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -40,6 +54,7 @@ jobs:
             echo "Changed product or frozen source is disallowed"; exit 1
           fi
       - name: Frame research archives and run installed Python oracle
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -47,6 +62,7 @@ jobs:
           python research/j24i37/generate_direct_zstd.py --output j24i37-cases
           python research/j24i37/audit_direct_zstd.py --case-dir j24i37-cases
       - name: Build native code unchanged, with standalone ephemeral scientific probe
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -54,6 +70,7 @@ jobs:
           cp research/j24i37/native_verify_amplification.rs native/cmpct-core/src/bin/j24i37_perf.rs
           cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i37_perf
       - name: Same archive ABBA/BAAB process-isolated with in-process wall/io measurement
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
