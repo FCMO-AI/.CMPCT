@@ -1,0 +1,19 @@
+{
+  "cases": 5000,
+  "categories": {
+    "appended-nul": 714,
+    "magic-flip": 714,
+    "random": 714,
+    "skippable": 714,
+    "truncated": 714,
+    "valid-empty": 715,
+    "valid-one": 715
+  },
+  "comparison": "ctypes copied vs borrowed input pointers; 1-byte capacity; error name/status/output equivalent",
+  "input_stream_sha256": "4962b843b1f9fea652399e0b56330260ccbea65efbd5a0818acd597e10e4934a",
+  "libzstd": "libzstd.so.1",
+  "schema": "cmpct-j24g45-independent-libzstd-pointer-fuzz-v1",
+  "scope": "local system C codec boundary only, not CMPCT product or its package-native Rust ABI",
+  "seed": 45045,
+  "successful_decode_cases": 2223
+}
