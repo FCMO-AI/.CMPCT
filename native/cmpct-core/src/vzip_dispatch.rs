@@ -19,6 +19,7 @@ pub use projection::{execute_range, VirtualZipDispatchError};
 
 use crate::{Archive, CmpctError, Storage};
 use sha2::{Digest, Sha256};
+use std::io::{Read, Seek, SeekFrom};
 
 const VERIFY_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 
@@ -92,8 +93,33 @@ impl Archive {
                 continue;
             }
             let expected = self.complete_member_identity(entry_index)?;
+            // Physical CMA4 CRC32 is a separately stored field, not superseded by SHA.
+            // Only a direct member spans its own physical blob exactly: composite member
+            // CRCs cannot be inferred from the concatenated logical stream.
+            let physical_crc = if let Storage::Direct(blob_id) = &entry.storage {
+                let blob = self.blobs.get(*blob_id).ok_or_else(|| {
+                    CmpctError::Schema("direct member references missing blob".into())
+                })?;
+                if blob.usize != entry.size {
+                    return Err(CmpctError::BlobHeader);
+                }
+                let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
+                self.checked_blob_layout(blob, &mut file)?;
+                let crc_pos = self
+                    .data_base
+                    .checked_add(blob.offset)
+                    .and_then(|pos| pos.checked_add(28))
+                    .ok_or(CmpctError::BlobHeader)?;
+                file.seek(SeekFrom::Start(crc_pos))?;
+                let mut encoded_crc = [0u8; 4];
+                file.read_exact(&mut encoded_crc)?;
+                Some(u32::from_le_bytes(encoded_crc))
+            } else {
+                None
+            };
 
             let mut digest = Sha256::new();
+            let mut crc = physical_crc.map(|_| crc32fast::Hasher::new());
             let mut offset = 0u64;
             let mut buffer = vec![
                 0u8;
@@ -107,6 +133,10 @@ impl Archive {
                     .map_err(|_| CmpctError::MemberLimit)?;
                 self.read_range(entry_index, offset, &mut buffer[..take])?;
                 digest.update(&buffer[..take]);
+                if let Some(crc) = crc.as_mut() {
+                    // Feed the same decoded bytes once: no second payload traversal.
+                    crc.update(&buffer[..take]);
+                }
                 offset = offset
                     .checked_add(take as u64)
                     .ok_or(CmpctError::MemberLimit)?;
@@ -114,6 +144,11 @@ impl Archive {
             let got: [u8; 32] = digest.finalize().into();
             if got != expected {
                 return Err(CmpctError::MemberHash);
+            }
+            if let (Some(expected_crc), Some(crc)) = (physical_crc, crc) {
+                if crc.finalize() != expected_crc {
+                    return Err(CmpctError::BlobHeader);
+                }
             }
             verified = verified.checked_add(1).ok_or(CmpctError::MemberLimit)?;
         }
