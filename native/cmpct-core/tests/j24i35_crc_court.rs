@@ -17,7 +17,12 @@ fn j24i35_same_bytes_sha_valid_crc_altered_scientific_falsifier() {
     let genuine = Archive::open(&case_path("original")).expect("real r24 symlink must open");
     assert_eq!(genuine.entries().len(), 1);
     assert_eq!(genuine.entries()[0].kind, 2);
-    assert_eq!(genuine.verify_complete().expect("genuine SHA-valid archive"), 1);
+    assert_eq!(
+        genuine
+            .verify_complete()
+            .expect("genuine SHA-valid archive"),
+        1
+    );
     println!("J24I35_GENUINE:verified_payload_count=1");
 
     let crc_only = Archive::open(&case_path("crc-wrong"))
