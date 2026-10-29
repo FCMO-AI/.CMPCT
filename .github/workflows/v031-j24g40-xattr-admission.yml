@@ -71,6 +71,10 @@ jobs:
               assert installed == committed, rel
               print('SOURCE_IDENTICAL',rel,mod.__file__)
           PY
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            python "$GITHUB_WORKSPACE/research/j24g40/probe_macos_native_xattr.py" | tee "$GITHUB_WORKSPACE/j24g40-evidence/macos-native-xattr.json"
+            python -m json.tool "$GITHUB_WORKSPACE/j24g40-evidence/macos-native-xattr.json" >/dev/null
+          fi
           python "$GITHUB_WORKSPACE/research/j24g40/test_xattr_native_fixture.py" | tee "$GITHUB_WORKSPACE/j24g40-evidence/xattr-court.json"
           python -m json.tool "$GITHUB_WORKSPACE/j24g40-evidence/xattr-court.json" >/dev/null
       - name: Retain exact-head diagnostics, including honest reds
