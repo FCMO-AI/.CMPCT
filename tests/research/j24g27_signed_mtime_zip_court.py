@@ -36,10 +36,19 @@ def git_blob_sha(b: bytes) -> str:
 def installed_identity() -> dict:
     path = Path(inspect.getfile(CMPCT))
     data = path.read_bytes()
-    blob = git_blob_sha(data)
+    raw_blob = git_blob_sha(data)
+    # Git-for-Windows checkout may translate LF to CRLF before pip copies source.
+    # Require *only* this reversible newline transform; all semantic source bytes
+    # and the exact immutable Git blob must still match. Never ignore a real drift.
+    normalized = data.replace(b"\r\n", b"\n")
+    blob = git_blob_sha(normalized)
     if blob != PUBLISHED_READER_BLOB:
-        raise AssertionError(f"installed Reader drifted: {blob} != {PUBLISHED_READER_BLOB}")
-    return {"reader_git_blob": blob, "reader_sha256": digest(data), "reader_path": str(path)}
+        raise AssertionError(f"installed Reader drifted: raw={raw_blob}, normalized={blob} != {PUBLISHED_READER_BLOB}")
+    if raw_blob != blob and (b"\r\n" not in data or b"\r" in normalized):
+        raise AssertionError("installed Reader has non-newline source drift")
+    return {"reader_git_blob": blob, "reader_raw_git_blob": raw_blob,
+            "source_newlines": "CRLF_ONLY" if raw_blob != blob else "LF",
+            "reader_sha256": digest(data), "reader_path": str(path)}
 
 
 def generate(output: Path) -> None:
