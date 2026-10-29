@@ -46,7 +46,7 @@ def main() -> None:
         assert len(original) == vector["archive_bytes"]
         assert hashlib.sha256(original).hexdigest() == vector["archive_sha256"]
         magic, version, flags, index_csize, _, span, _ = H.unpack_from(original)
-        assert (magic, version, flags) == (b"CMPCT24\\0", 24, 0)
+        assert (magic, version, flags) == (b"CMPCT24" + bytes([0]), 24, 0)
         record = H.size + index_csize
         blob = B.unpack_from(original, record)
         assert blob[0] == b"CMA4" and blob[1] == codec
