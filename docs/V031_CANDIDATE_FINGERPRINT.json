@@ -17,6 +17,7 @@
     "native/**/*.h",
     "experiments/**/*.py",
     "tools/**/*.py",
+    "research/**/*.py",
     "tests/**/*.py",
     "tests/conformance/**/*",
     "benchmarks/**/*.py",
@@ -103,6 +104,9 @@
     "integrations/windows/cmpct-file-association.reg",
     "site/tests/browser-writer-smoke.mjs",
     "benchmarks/native/v030_cdc_boundaries.c",
-    "docs/V030_CONVERGENCE_STATUS.json"
+    "docs/V030_CONVERGENCE_STATUS.json",
+    "research/j24g44/detached_zero_encoded_wire_audit.py",
+    "research/j24g47/audit_signed_rekey.py",
+    "research/j24g50/independent_audit.py"
   ]
 }
