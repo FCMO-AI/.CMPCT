@@ -17,6 +17,7 @@ from cmpct.builder import Builder
 from cmpct.codec import BHDR, K_FILE, K_HARDLINK, K_SYMLINK, S_BLOB
 from cmpct.reader import CMPCT
 from cmpct.transactions import (
+    append_update,
     _compaction_source_metadata,
     _private_compaction_guard,
     compact_archive,
@@ -48,7 +49,7 @@ def run() -> dict:
         sentinel = external / "sentinel"
         sentinel.write_bytes(b"J24I06 NEVER MUTATE OUTSIDE SCRATCH\n")
         sentinel_hash = digest(sentinel)
-        for name in ("plain", "safe-relative", "absolute", "parent-relative", "hardlink", "sparse", "xattrs"):
+        for name in ("plain", "safe-relative", "absolute", "parent-relative", "hardlink", "sparse", "xattrs", "delta-update"):
             root = work / (name + "-root")
             root.mkdir()
             payload = b"J24I06 exact owner bytes\n" * 5
@@ -74,6 +75,10 @@ def run() -> dict:
             source = work / (name + ".cmpct")
             output = work / (name + ".compacted.cmpct")
             Builder(root, reproducible=(name != "xattrs"), workers=1).build(source)
+            if name == "delta-update":
+                replacement = work / "replacement.bin"
+                replacement.write_bytes(bytes(range(256)) * 64)
+                append_update(source, "b-owner.bin", replacement)
             original = snapshot(source)
             if name == "xattrs":
                 assert any(v[5] for v in original["metadata"].values()), "xattr source control not captured"
@@ -104,6 +109,8 @@ def run() -> dict:
             if target is not None:
                 with CMPCT(output) as reader:
                     assert reader.read("link") == os.fsencode(target)
+            if name == "delta-update":
+                assert result["digests"]["b-owner.bin"] == hashlib.sha256(bytes(range(256)) * 64).hexdigest()
             if os.environ.get("CMPCT_J24I06_ARCHIVE_DIR"):
                 out = Path(os.environ["CMPCT_J24I06_ARCHIVE_DIR"])
                 out.mkdir(parents=True, exist_ok=True)
@@ -122,6 +129,20 @@ def run() -> dict:
                 "metadata_exact": True,
                 "sentinel_unchanged": True,
             })
+
+        # Replacing an existing destination symlink must not write through it.
+        redirection = work / "redirected-output.cmpct"
+        redirection.symlink_to(sentinel)
+        compact_archive(work / "plain.cmpct", redirection)
+        assert not redirection.is_symlink()
+        assert digest(sentinel) == sentinel_hash
+
+        # Compaction may safely replace its own closed source inode.
+        in_place = work / "in-place.cmpct"
+        shutil.copyfile(work / "plain.cmpct", in_place)
+        before_in_place = snapshot(in_place)
+        compact_archive(in_place, in_place)
+        assert snapshot(in_place) == before_in_place
 
         # Archive-controlled parents may never traverse an inert literal symlink.
         bad_parent = [
@@ -167,6 +188,8 @@ def run() -> dict:
         "schema": "j24i06-compaction-candidate-court-v1",
         "cases": cases,
         "guards": guards,
+        "destination_symlink_not_followed": True,
+        "in_place_compaction_exact": True,
         "corrupt_source_failure": failure,
         "decision": "CANDIDATE_NARROW_EXACTNESS_PASS_NOT_RELEASE",
     }
