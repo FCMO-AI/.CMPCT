@@ -10,7 +10,7 @@ import msgpack
 
 from .codec import *
 from .builder import Builder
-from .reader import CMPCT
+from .reader import CMPCT, _apply_journal_ops
 
 def _encode_update_blob(raw:bytes,hint:str,dictionary:bytes|None):
     wf=wavflac_compress(raw) if hint=='.wav' else None
@@ -80,11 +80,8 @@ def append_update(archive:Path,member:str,source:Path):
     checkpoint=None
     if depth>=63:
         index['blobs'].extend(newblobs)
-        done=False
-        for i,x in enumerate(index['files']):
-            if x[0]==member:index['files'][i]=row;done=True;break
-        if not done:index['files'].append(row)
-        index['files'].sort(key=lambda x:x[0]);checkpoint=index
+        _apply_journal_ops(index, [['put', row]])
+        checkpoint=index
     if checkpoint is not None:
         payload=msgpack.packb(checkpoint,use_bin_type=True);kind=0
     else:
@@ -101,11 +98,8 @@ def append_update(archive:Path,member:str,source:Path):
             'generation_bytes':len(record)+len(enc)+FTR.size,'member':member,'checkpoint':checkpoint is not None}
 
 def _index_after_op(index:dict,op:list):
-    if op[0]=='del':index['files']=[x for x in index['files'] if x[0]!=op[1]]
-    elif op[0]=='ren':
-        for x in index['files']:
-            if x[0]==op[1]:x[0]=op[2];break
-    index['files'].sort(key=lambda x:x[0]);return index
+    # Same metadata identity law as Reader journal replay, including depth-64 snapshots.
+    return _apply_journal_ops(index, [op])
 
 def append_delete(archive:Path,member:str):
     archive=Path(archive)
