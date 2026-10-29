@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import resource
 import os
 from pathlib import Path
 import subprocess
@@ -23,9 +24,14 @@ STAGE_SCRIPT = """
 import hashlib,json,os,pathlib,resource,sys
 def hwm():return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 before=hwm()
+def proc_status():
+ s=pathlib.Path('/proc/self/status').read_text()
+ return {k.strip(): int(v.strip().split()[0]) for k,v in (line.split(':',1) for line in s.splitlines() if line.startswith(('VmHWM:','VmRSS:')))}
+before_proc=proc_status()
 from cmpct.reader import CMPCT
 import cmpct.reader as imported
 after_import=hwm()
+after_import_proc=proc_status()
 p=pathlib.Path(imported.__file__).resolve()
 s=p.read_bytes()
 blob=hashlib.sha1(b'blob '+str(len(s)).encode()+b'\\0'+s).hexdigest()
@@ -33,9 +39,12 @@ with CMPCT(sys.argv[1]) as reader:
   after_open=hwm()
   count=reader.verify()
   after_verify=hwm()
+  after_verify_proc=proc_status()
   row=reader.by['large.bin']
   result={'verified':count,'before_import_kib':before,'after_import_kib':after_import,
     'after_open_kib':after_open,'peak_kib':after_verify,'reader_git_blob':blob,
+    'before_proc_status_kib':before_proc,'after_import_proc_status_kib':after_import_proc,
+    'after_verify_proc_status_kib':after_verify_proc,
     'reader_path':str(p),'storage_tag':row[6][0],
     'logical_bytes':row[4],'logical_sha256':bytes(row[5]).hex(),
     'extent_bytes':sum(int(x[1]) for x in row[6][1]),
@@ -69,6 +78,8 @@ def pytest_configure(config):
 
         # The original command+kwargs must be passed byte-for-byte unchanged.
         started = time.perf_counter_ns()
+        # Record parent high-water immediately before original unmodified fork+exec.
+        parent_rusage_peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         env = _fingerprint_env()
         raw = ORIGINAL_RUN(*args, **kwargs)
         report = {
@@ -77,6 +88,7 @@ def pytest_configure(config):
             "original_child_command_sha256":
                 hashlib.sha256(command[2].encode()).hexdigest(),
             "original_duration_ms": (time.perf_counter_ns()-started)/1e6,
+            "parent_ru_maxrss_before_original_child_kib": parent_rusage_peak,
             "original_exit": raw.returncode,
             "original_stdout": str(raw.stdout)[-4096:],
             "original_stderr": str(raw.stderr)[-4096:],
