@@ -489,10 +489,18 @@ class CMPCT:
             n+=1
         return n
     def _zip_dos_time(self,mtime_ns:int):
-        # ZIP timestamps are DOS-local-time with two-second resolution. The native CMPCT metadata
-        # remains nanosecond precision; only this legacy endpoint accepts ZIP's timestamp ceiling.
-        t=time.localtime(mtime_ns/1_000_000_000 if mtime_ns else 315532800)
-        y=min(2107,max(1980,t.tm_year));mo=min(12,max(1,t.tm_mon));d=min(31,max(1,t.tm_mday))
+        # ZIP timestamps are local DOS time (1980..2107), not the signed nanosecond timestamp
+        # stored in CMPCT. Check the unrepresentable early epoch *before* time.localtime:
+        # Windows CRT rejects pre-1970 seconds rather than returning an old calendar date.
+        # Clamp to the earliest representable DOS date, not a synthetic 1980 month/day.
+        if mtime_ns < 315532800_000_000_000:
+            return 0, 33  # 1980-01-01 00:00:00
+        t=time.localtime(mtime_ns/1_000_000_000)
+        if t.tm_year < 1980:
+            return 0, 33
+        if t.tm_year > 2107:
+            return (23<<11)|(59<<5)|29, (127<<9)|(12<<5)|31  # 2107-12-31 23:59:58
+        y=t.tm_year;mo=min(12,max(1,t.tm_mon));d=min(31,max(1,t.tm_mday))
         zdate=((y-1980)<<9)|(mo<<5)|d;ztime=(t.tm_hour<<11)|(t.tm_min<<5)|(t.tm_sec//2)
         return ztime,zdate
 
