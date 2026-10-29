@@ -125,3 +125,22 @@ def test_native_name_is_lossless_or_rejected():
         _xattrs._name_bytes(b"invalid-\xff")
     with pytest.raises(ValueError):
         _xattrs._name_bytes("bad\x00name")
+
+
+def test_missing_darwin_provider_symbol_is_fail_closed_not_no_xattr(monkeypatch):
+    # An ABI-loading failure is NOT ENOSYS from the user's filesystem.
+    # O65 historically accepts ENOSYS as unsupported xattr enumeration,
+    # so accidentally returning ENOSYS here would silently erase metadata.
+    class MissingNativeSymbols:
+        pass
+
+    with monkeypatch.context() as patch:
+        patch.setattr(_xattrs, "_DARWIN", True)
+        patch.setattr(_xattrs.ctypes, "CDLL", lambda *_a, **_kw: MissingNativeSymbols())
+        _xattrs._darwin_api.cache_clear()
+        try:
+            with pytest.raises(OSError) as err:
+                _xattrs._darwin_api()
+            assert err.value.errno == errno.EIO
+        finally:
+            _xattrs._darwin_api.cache_clear()
