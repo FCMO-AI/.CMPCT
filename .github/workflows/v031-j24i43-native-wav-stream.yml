@@ -1,0 +1,101 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: J24I43 Native WAV Streaming Product Court
+on:
+  pull_request:
+    paths:
+      - 'native/cmpct-core/src/wavflac.rs'
+      - 'native/cmpct-core/src/vzip_dispatch.rs'
+      - 'research/j24i43/**'
+      - 'docs/v031-research/*j24i43*'
+      - '.github/workflows/v031-j24i43-native-wav-stream.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i43-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+jobs:
+  direct-wav-product-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact source and comparison control
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee j24i43-head.txt
+          git diff --name-only 0faa25827e7393f927252876d40e9f6cb53e5a24 HEAD | tee j24i43-diff.txt
+          if grep -Eq '^(src/cmpct/|native/cmpct-core/src/lib[.]rs|native/cmpct-core/Cargo|tests/conformance/|benchmarks/)' j24i43-diff.txt; then
+            echo 'Out-of-scope source change'; exit 1
+          fi
+          git worktree add --detach "$RUNNER_TEMP/j24i43-old-src" 0faa25827e7393f927252876d40e9f6cb53e5a24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build exact baseline and candidate probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          old="$RUNNER_TEMP/j24i43-old-src"
+          mkdir -p "$old/native/cmpct-core/src/bin" native/cmpct-core/src/bin
+          cp research/j24i43/native_verify_probe.rs "$old/native/cmpct-core/src/bin/j24i43_probe.rs"
+          cp research/j24i43/native_verify_probe.rs native/cmpct-core/src/bin/j24i43_probe.rs
+          CARGO_TARGET_DIR="$RUNNER_TEMP/j24i43-old-target" cargo build --release --locked --manifest-path "$old/native/cmpct-core/Cargo.toml" --bin j24i43_probe
+          CARGO_TARGET_DIR="$RUNNER_TEMP/j24i43-new-target" cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i43_probe
+      - name: Authentic WAV corpus and detached physical audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . numpy soundfile msgpack zstandard
+          python research/j24i38/generate_builder_wav.py --output j24i43-cases
+          python research/j24i38/audit_builder_wav.py --case-dir j24i43-cases
+          python research/j24i39/extract_signed_wav_flac.py --case-dir j24i43-cases
+          python research/j24i42/derive_spans.py --case-dir j24i43-cases > j24i43-span-audit.json
+          python research/j24i43/physical_mutants.py --case-dir j24i43-cases > j24i43-mutation-audit.json
+      - name: Run native product-versus-product A/B and negatives
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > j24i43-raw.txt
+          : > j24i43-hostile.txt
+          for lane in A B B A B A A B; do
+            if [ "$lane" = A ]; then exe="$RUNNER_TEMP/j24i43-old-target/release/j24i43_probe"; else exe="$RUNNER_TEMP/j24i43-new-target/release/j24i43_probe"; fi
+            for mib in 8 32; do
+              "$exe" "$PWD/j24i43-cases/builder-wav-${mib}m.cmpct" expected-pass "$mib" | sed "s/^/$lane /" | tee -a j24i43-raw.txt
+            done
+          done
+          for lane in A B; do
+            if [ "$lane" = A ]; then exe="$RUNNER_TEMP/j24i43-old-target/release/j24i43_probe"; else exe="$RUNNER_TEMP/j24i43-new-target/release/j24i43_probe"; fi
+            for mib in 8 32; do
+              for kind in crc-only flac-mid; do
+                "$exe" "$PWD/j24i43-cases/j24i43-${kind}-${mib}m.cmpct" expected-fail "$mib" | sed "s/^/$lane /" | tee -a j24i43-hostile.txt
+              done
+              "$exe" "$PWD/j24i43-cases/badmagic-original-container-${mib}m.cmpct" expected-fail "$mib" | sed "s/^/$lane /" | tee -a j24i43-hostile.txt
+            done
+          done
+          test "$(grep -c 'J24I43_REJECTED' j24i43-hostile.txt)" = 12
+          test "$(grep -c '^B J24I43 iter=' j24i43-raw.txt)" = 32
+          test "$(grep -c '^A J24I43 iter=' j24i43-raw.txt)" = 32
+          find j24i43-cases -type f -print0 | sort -z | xargs -0 sha256sum > j24i43-files.sha256
+          sha256sum j24i43-head.txt j24i43-raw.txt j24i43-hostile.txt > j24i43-receipt.sha256
+          tar -czf j24i43-evidence.tar.gz j24i43-cases j24i43-head.txt j24i43-diff.txt j24i43-raw.txt j24i43-hostile.txt j24i43-files.sha256 j24i43-receipt.sha256
+      - name: Preserve scientific evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i43-product-court-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            j24i43-*.txt
+            j24i43-*.json
+            j24i43-*.sha256
+            j24i43-evidence.tar.gz
