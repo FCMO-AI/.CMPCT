@@ -21,9 +21,13 @@ fn j24i34_real_symlink_and_present_correct_strongly_verified() {
         assert_eq!(archive.entries().len(), 1);
         assert_eq!(archive.entries()[0].kind, 2);
         assert_eq!(archive.entries()[0].path, "link");
-        let count = archive.verify_complete()
+        let count = archive
+            .verify_complete()
             .unwrap_or_else(|e| panic!("{case}: complete verification unexpectedly rejected: {e}"));
-        assert_eq!(count, 1, "{case}: symlink must count as one verified payload");
+        assert_eq!(
+            count, 1,
+            "{case}: symlink must count as one verified payload"
+        );
         println!("J24I34_GOOD_{case}:verified_payload_count={count}");
     }
 }
