@@ -21,6 +21,15 @@ jobs:
         os: [ubuntu-24.04, macos-14, windows-2022]
     steps:
       - uses: actions/checkout@v4
+      - name: Restore byte-identical repository blobs on Windows
+        shell: bash
+        run: |
+          # Windows checkout can apply autocrlf before wheel installation.
+          # Re-materialize from the Git INDEX with LF so installed Python and
+          # source Git object identity remain exactly equal. No test weakening.
+          git config core.autocrlf false
+          git config core.eol lf
+          git -c core.autocrlf=false checkout-index --all --force
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
