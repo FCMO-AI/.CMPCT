@@ -1,0 +1,98 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24I06 compaction representation and metadata custody
+
+on:
+  pull_request:
+    paths:
+      - "src/cmpct/builder.py"
+      - "src/cmpct/transactions.py"
+      - "tests/research/j24i06_compaction_product_court.py"
+      - ".github/workflows/v031-j24i06-compaction-custody.yml"
+      - "docs/v031-research/2026-10-29-j24i06-*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i06-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-product:
+    name: Installed r24 compaction candidate (Ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      OUT_DIR: ${{ github.workspace }}/j24i06-evidence
+      CMPCT_J24I06_ARCHIVE_DIR: ${{ github.workspace }}/j24i06-evidence/archives
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind exact HEAD, prior negative and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor b316440eced8f3023e4a26f7b05c02dcd26ad86a HEAD
+          git merge-base --is-ancestor 3be4181cb682302ba124048115a5ed4569332b1d HEAD
+          git diff --exit-code b316440eced8f3023e4a26f7b05c02dcd26ad86a HEAD -- src/cmpct/reader.py native/ tests/conformance/ benchmarks/
+          mkdir -p "$OUT_DIR"
+          git rev-parse HEAD > "$OUT_DIR/head.txt"
+          for file in src/cmpct/builder.py src/cmpct/transactions.py src/cmpct/reader.py tests/research/j24i06_compaction_product_court.py; do
+              printf "%s %s\n" "$(git rev-parse "HEAD:$file")" "$file" >> "$OUT_DIR/git-blobs.txt"
+          done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build and install product package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Verify imported package is installed exact checkout source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import cmpct.builder,cmpct.reader,cmpct.transactions,os,pathlib
+          root=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          norm=lambda x:x.replace(b"\r\n",b"\n")
+          for m in (cmpct.builder,cmpct.reader,cmpct.transactions):
+              installed=pathlib.Path(m.__file__).resolve()
+              checkout=root/"src/cmpct"/installed.name
+              assert not installed.is_relative_to(root)
+              assert norm(installed.read_bytes())==norm(checkout.read_bytes()),installed
+              print("INSTALLED_EXACT",installed)
+          PY
+      - name: Physical source/output, link-parent, hardlink and failed destination court
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          export CMPCT_J24I06_RECEIPT="$OUT_DIR/court.json"
+          python "$GITHUB_WORKSPACE/tests/research/j24i06_compaction_product_court.py" | tee "$OUT_DIR/court.log"
+          python - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ["OUT_DIR"])
+          x=json.loads((root/"court.json").read_text())
+          assert x["decision"]=="CANDIDATE_NARROW_EXACTNESS_PASS_NOT_RELEASE"
+          assert len(x["cases"])==6 and len(x["guards"])==2
+          assert all(c["metadata_exact"] and c["sentinel_unchanged"] for c in x["cases"])
+          assert len(list((root/"archives").glob("*.cmpct")))==12
+          print("J24I06 SIX PHYSICAL CASES, TWO HOSTILE GUARDS, ONE FAILURE-ATOMICITY PASS")
+          PY
+      - name: Preserve exact-head physical inputs and outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i06-compaction-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24i06-evidence/
+          if-no-files-found: warn
+          retention-days: 90
