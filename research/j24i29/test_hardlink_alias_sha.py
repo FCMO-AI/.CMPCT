@@ -18,10 +18,11 @@ import unittest
 import zlib
 
 import msgpack
+import zstandard as zstd
 
 from cmpct.codec import (
     BHDR, BMAGIC, CODEC_RAW, CODEC_ZSTD, CODEC_DEFLATE, FMAGIC, FTR,
-    HDR, K_HARDLINK, MAGIC, S_BLOB, VERSION, sha, zc, zd,
+    HDR, K_HARDLINK, MAGIC, S_BLOB, VERSION, sha,
 )
 from cmpct.reader import CMPCT
 from cmpct.validation import preflight_archive
@@ -29,6 +30,13 @@ from cmpct.validation import preflight_archive
 ROOT = Path(__file__).resolve().parents[2]
 GOLDEN = ROOT / "tests" / "conformance" / "v24-direct-codecs.json"
 CASES = []
+
+
+def independent_decode(compressed: bytes, expected: int) -> bytes:
+    """Use the independent Python Zstandard binding, not CMPCT native_codec."""
+    raw = zstd.ZstdDecompressor().decompress(compressed, max_output_size=expected)
+    assert len(raw) == expected
+    return raw
 
 
 def physical_and_index(archive: bytes):
@@ -41,7 +49,7 @@ def physical_and_index(archive: bytes):
     assert (m, v, flags) == (MAGIC, VERSION, 0)
     index_start = HDR.size
     compressed = archive[index_start:index_start + cs]
-    wire = zd(compressed, us)
+    wire = independent_decode(compressed, us)
     assert len(wire) == us and sha(wire) == digest
     index = msgpack.unpackb(wire, raw=False)
     physical = archive[index_start + cs:index_start + cs + span]
@@ -65,7 +73,7 @@ def physical_and_index(archive: bytes):
     if blob_codec == CODEC_RAW:
         raw = data
     elif blob_codec == CODEC_ZSTD:
-        raw = zd(data, size)
+        raw = independent_decode(data, size)
     elif blob_codec == CODEC_DEFLATE:
         raw = zlib.decompress(data, -15)
     else:
@@ -85,7 +93,7 @@ def add_hardlink_alias(original: bytes, alias: str, digest):
     index["files"].append([alias, K_HARDLINK, owner[2], owner[3], owner[4], digest, [owner[0]]])
     index["files"].sort(key=lambda row: row[0])
     encoded_index = msgpack.packb(index, use_bin_type=True)
-    compressed = zc(encoded_index, 12)
+    compressed = zstd.ZstdCompressor(level=12).compress(encoded_index)
     digest_index = sha(encoded_index)
     header = HDR.pack(MAGIC, VERSION, 0, len(compressed), len(encoded_index),
                       len(physical), digest_index)
