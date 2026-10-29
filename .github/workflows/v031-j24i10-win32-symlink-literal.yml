@@ -1,0 +1,85 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-branch-check
+name: J24I10 installed three-host symlink literal custody
+
+on:
+  push:
+    branches:
+      - "agent/phased3-v031-j24i10-*"
+    paths:
+      - "tests/research/j24i10_win32_symlink_literal.py"
+      - ".github/workflows/v031-j24i10-win32-symlink-literal.yml"
+      - "docs/v031-research/2026-10-29-j24i10-*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i10-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-literal-court:
+    name: Exact-installed symlink bytes (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXACT_HEAD: ${{ github.sha }}
+      CMPCT_J24I10_CHECKOUT: ${{ github.workspace }}
+      CMPCT_J24I10_HEAD: ${{ github.sha }}
+      CMPCT_J24I10_EXPECTED_HEAD: ${{ github.sha }}
+      CMPCT_J24I10_ARTIFACT_DIR: ${{ github.workspace }}/j24i10-evidence/archives
+      CMPCT_J24I10_RECEIPT: ${{ github.workspace }}/j24i10-evidence/host-court.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind immutable source lineage and product isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD
+          git merge-base --is-ancestor 8d825a2f5cb3b6527e0e43d8b38a33269d38cb93 HEAD
+          git diff --exit-code 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD -- src/ native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md benchmarks/
+          mkdir -p j24i10-evidence/archives
+          git rev-parse HEAD > j24i10-evidence/source-head.txt
+          git rev-parse HEAD:src/cmpct/reader.py > j24i10-evidence/reader-blob.txt
+          git rev-parse HEAD:src/cmpct/builder.py > j24i10-evidence/builder-blob.txt
+          git rev-parse HEAD:src/cmpct/transactions.py > j24i10-evidence/transactions-blob.txt
+          git rev-parse HEAD:tests/research/j24i10_win32_symlink_literal.py > j24i10-evidence/court-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install exact candidate wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile tests/research/j24i10_win32_symlink_literal.py
+      - name: Compare OS readlink, archive, and compacted target bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i10_win32_symlink_literal.py"
+      - name: Preserve outcome classification even when falsified
+        if: always()
+        shell: bash
+        run: |
+          python -c "import json,os,pathlib; p=pathlib.Path(os.environ['CMPCT_J24I10_RECEIPT']); print('RECEIPT_EXISTS',p.exists()); x=json.loads(p.read_text()) if p.exists() else {}; print('DECISION',x.get('status')); print('LAST_STAGE',x.get('stage')); print('CASE_COUNT',len(x.get('cases',[]))); print('ERROR',x.get('error'))"
+      - name: Upload physical source, rebuilt archives, and raw target witnesses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i10-${{ matrix.os }}-${{ github.sha }}
+          path: j24i10-evidence/
+          if-no-files-found: warn
+          retention-days: 90
