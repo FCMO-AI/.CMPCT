@@ -64,7 +64,12 @@ def _apply_journal_ops(index: dict, ops: list) -> dict:
     rows.sort(key=lambda row: row[0])
     new_names = [row[0] for row in rows]
     fsmeta = index.get('fsmeta')
-    if fsmeta and new_names != old_names:
+    # A delete followed by a fresh put of the same name may leave the sorted
+    # filenames unchanged while replacing the underlying file identity. Dropping
+    # that lineage must remove the deleted file's authenticated metadata too.
+    needs_rekey = (new_names != old_names or len(lineage) != len(new_names)
+                   or any(lineage.get(name) != name for name in new_names))
+    if fsmeta and needs_rekey:
         old_positions = {name: i for i, name in enumerate(old_names)}
         for field in ('owner_overrides', 'xattrs'):
             if field not in fsmeta:
