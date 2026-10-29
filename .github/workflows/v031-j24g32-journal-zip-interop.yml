@@ -1,0 +1,90 @@
+# ci-lane: fast
+name: CMPCT J24G32 exact released journal to legacy ZIP interop court
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g32-journal-zip-cross-boundary-20261029
+  pull_request:
+    paths:
+      - 'tests/research/j24g32_journal_zip.py'
+      - '.github/workflows/v031-j24g32-journal-zip-interop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g32-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  journal-to-zip-three-host:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin product source, historic comparison and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor d1e37c2ce319b9c08bacffa8c6148b95eebb7af9 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = cd6a2971396d6fe02a1d7f460d850107b3dcc397
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c
+          test "$(git rev-parse 80c358f8824ec1b20d349c92ed94c898090969b0:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          test -f docs/v031-research/2026-10-29-j24g32-journal-zip-cross-boundary-prereg.md
+          git worktree add --detach "$RUNNER_TEMP/j32-release" 80c358f8824ec1b20d349c92ed94c898090969b0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Independently install historic and candidate Python packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j32-release-installed" "$RUNNER_TEMP/j32-release"
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j32-candidate-installed" "$GITHUB_WORKSPACE"
+      - name: Genuine Builder+Writer three-delta source and two isolated Reader exports
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/j32-results"
+          export J32_SCRIPT="$GITHUB_WORKSPACE/tests/research/j24g32_journal_zip.py"
+          export J32_ROOT="$RUNNER_TEMP/j32-results"
+          PYTHONPATH="$RUNNER_TEMP/j32-release-installed" python "$J32_SCRIPT" prepare "$J32_ROOT" 2>&1 | tee "$RUNNER_TEMP/j32-prepare.log"
+          PYTHONPATH="$RUNNER_TEMP/j32-release-installed" python "$J32_SCRIPT" export "$J32_ROOT" released 2>&1 | tee "$RUNNER_TEMP/j32-released.log"
+          PYTHONPATH="$RUNNER_TEMP/j32-candidate-installed" python "$J32_SCRIPT" export "$J32_ROOT" candidate 2>&1 | tee "$RUNNER_TEMP/j32-candidate.log"
+          python "$J32_SCRIPT" audit "$J32_ROOT" 2>&1 | tee "$RUNNER_TEMP/j32-audit.log"
+          if command -v unzip >/dev/null 2>&1; then
+            for f in "$J32_ROOT"/*.zip; do
+              unzip -t "$f" >/dev/null || exit 1
+            done
+            echo J24G32_INDEPENDENT_INFOZIP_ALL_PASS
+          else
+            echo J24G32_INFOZIP_UNAVAILABLE_NOT_CREDITED
+          fi
+      - name: Preserve raw physical archives, ZIPs, receipts and failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g32-journal-zip-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/j32-results/*.cmpct
+            ${{ runner.temp }}/j32-results/*.zip
+            ${{ runner.temp }}/j32-results/*.json
+            ${{ runner.temp }}/j32-prepare.log
+            ${{ runner.temp }}/j32-released.log
+            ${{ runner.temp }}/j32-candidate.log
+            ${{ runner.temp }}/j32-audit.log
+          if-no-files-found: warn
+          retention-days: 30
