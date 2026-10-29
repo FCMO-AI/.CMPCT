@@ -86,6 +86,24 @@ jobs:
               "EXPECTED_POLICY_REJECTION","EXPECTED_POLICY_REJECTION"]
           print("J24I05 RESEARCH RESULT VERIFIED; NO PRODUCT CREDIT")
           PY
+      - name: Independently decode every physical archive without importing CMPCT
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install msgpack
+          python - <<'PY'
+          import os,pathlib,zipfile
+          d=pathlib.Path(os.environ["OUT_DIR"])
+          out=pathlib.Path(os.environ["RUNNER_TEMP"])/"j24i05-wire-independent.zip"
+          with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED) as z:
+              z.write(d/"cases.json",arcname="cases.json")
+              inputs=sorted((d/"archives").glob("*.cmpct"))
+              assert len(inputs)==6
+              for p in inputs:z.write(p,arcname="archives/"+p.name)
+          print("INDEPENDENT_PHYSICAL_INPUT_ARCHIVES",len(inputs),out)
+          PY
+          python "$GITHUB_WORKSPACE/research/j24i05_external_wire_audit.py" "$RUNNER_TEMP/j24i05-wire-independent.zip" | tee "$OUT_DIR/detached-physical-referee.log"
+          grep -q '"status": "PASS"' "$OUT_DIR/detached-physical-referee.log"
       - name: Preserve evidence on both success and failure
         if: always()
         uses: actions/upload-artifact@v4
