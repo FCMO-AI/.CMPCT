@@ -110,6 +110,13 @@ def main() -> int:
             "output_bytes": destination.stat().st_size,
             "output_sha": digest(destination),
         })
+        if os.environ.get("CMPCT_J24G36_ARCHIVES"):
+            archive_dir = Path(os.environ["CMPCT_J24G36_ARCHIVES"])
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, archive_dir / "source.cmpct")
+            shutil.copyfile(normal, archive_dir / "normal.cmpct")
+            shutil.copyfile(destination, archive_dir / "rebound.cmpct")
+            shutil.copyfile(sentinel, archive_dir / "outside-sentinel.bin")
         # Clean up adversary-created names only after all observations are taken.
         for p in destdir.iterdir():
             if p.is_symlink():p.unlink()
