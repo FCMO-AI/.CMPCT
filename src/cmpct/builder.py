@@ -18,7 +18,7 @@ class Candidate:
     raw:bytes; hints:set; deflates:dict
 
 class Builder:
-    def __init__(self,root:Path, deflate_reuse_min:int|None=None, *, workers:int|None=None, reproducible:bool=False, reproducible_epoch_ns:int|None=None):
+    def __init__(self,root:Path, deflate_reuse_min:int|None=None, *, workers:int|None=None, reproducible:bool=False, reproducible_epoch_ns:int|None=None, _preserve_archive_meta:dict|None=None):
         self.root=Path(root);self.cands:{}={};self.files=[];self.recipes=[];self.dictionary=b'';self.dict_hash=None;self.canonical_deflate={};self.secondary_stream_hashes=set();self.inode_first={};self.meta_by_rel={}
         # Exact Deflate streams below this size are regenerated from raw data + a one-byte zlib level.
         # 0 reproduces v0.17's maximum-speed policy; a huge value is the compact policy.
@@ -28,6 +28,8 @@ class Builder:
         default_workers=max(1,min(8,os.cpu_count() or 1))
         self.encode_workers=max(1,int(os.environ.get('CMPCT_ENCODE_WORKERS',str(default_workers)))) if workers is None else max(1,int(workers))
         self.reproducible=bool(reproducible)
+        # Private compaction-only input: original indexed metadata, independent of host chown/xattr permissions.
+        self._preserve_archive_meta=_preserve_archive_meta
         if reproducible_epoch_ns is None:
             source_epoch=int(os.environ.get('SOURCE_DATE_EPOCH','0') or '0')
             reproducible_epoch_ns=max(0,source_epoch)*1_000_000_000
@@ -261,7 +263,23 @@ class Builder:
         if best and best[0]+16 < len(raw):return best[1],best[2],best[3]
         return CODEC_RAW,raw,b''
     def build(self,out:Path):
-        self.scan();self._build_micro_packs();self._prepare_deflate_reuse();self._train_dictionary()
+        self.scan()
+        if self._preserve_archive_meta is not None:
+            # Compaction is an archive-to-archive logical rewrite. The materialized scratch
+            # tree is not authoritative for ownership, xattrs, mode or symlink mtime: an
+            # unprivileged runner cannot chown arbitrary source owners, and filesystem
+            # symlinks may not permit chmod. Fail closed if it could not reproduce every
+            # original member and kind; never publish a silently altered filesystem.
+            expected=self._preserve_archive_meta
+            if set(expected)!={row[0] for row in self.files}:
+                raise IOError('compaction materialization changed indexed member paths')
+            for row in self.files:
+                kind,mode,mtime,uid,gid,xattrs=expected[row[0]]
+                if row[1]!=kind:
+                    raise IOError(f'compaction materialization changed indexed kind: {row[0]}')
+                row[2]=mode;row[3]=mtime
+                self.meta_by_rel[row[0]]=(uid,gid,dict(xattrs))
+        self._build_micro_packs();self._prepare_deflate_reuse();self._train_dictionary()
         # Candidate compression is parallel but materialization is not. ``Executor.map`` yields results
         # in the exact sorted-hash input order, so worker scheduling cannot perturb blob ids, offsets or
         # final bytes. A one-worker build is therefore a byte-for-byte oracle for the multithreaded path.
