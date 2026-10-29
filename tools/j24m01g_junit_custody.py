@@ -20,7 +20,8 @@ def verify_target_pass(xml_path: Path) -> str:
     root = ET.parse(xml_path).getroot()
     if root.tag not in {"testsuites", "testsuite"}:
         raise ValueError(f"unexpected JUnit document root: {root.tag!r}")
-    # A same-basename decoy in another module is not evidence the genuine test ran.\n    matches = [
+    # A same-basename decoy in another module is not evidence the genuine test ran.
+    matches = [
         c for c in root.iter("testcase")
         if c.get("name") == TEST_NAME
         and c.get("classname", "") == TEST_CLASS
