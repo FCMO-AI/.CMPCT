@@ -131,6 +131,11 @@ class FixedWireHardlinkAliasSHA(unittest.TestCase):
                 with tempfile.TemporaryDirectory(prefix="j24i29-") as td:
                     source = Path(td) / "original.cmpct"
                     source.write_bytes(original)
+                    evidence_dir = os.environ.get("J24I29_WIRE_SAMPLES")
+                    if evidence_dir:
+                        sample_dir = Path(evidence_dir)
+                        sample_dir.mkdir(parents=True, exist_ok=True)
+                        (sample_dir / f"{vec['codec']}-original.cmpct").write_bytes(original)
                     with CMPCT(source) as ar:
                         assert ar.verify() == 1
                     for label, row_sha in (
@@ -142,6 +147,8 @@ class FixedWireHardlinkAliasSHA(unittest.TestCase):
                         archive = add_hardlink_alias(original, alias, row_sha)
                         out = Path(td) / (label + ".cmpct")
                         out.write_bytes(archive)
+                        if evidence_dir:
+                            (sample_dir / f"{vec['codec']}-{label}.cmpct").write_bytes(archive)
                         pre = preflight_archive(out)
                         assert pre["version"] == 24 and pre["files"] == 2
                         with CMPCT(out) as ar:
