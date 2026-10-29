@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install .
+          python -m pip install . zstandard
       - name: Authenticate head and physically installed Python implementation
         shell: bash
         run: |
@@ -85,6 +85,16 @@ jobs:
             exit 1
           fi
           python research/j24g46/audit_physical.py evidence/physical.json evidence/audit.json 2>&1 | tee evidence/audit.log
+      - name: Independently authenticate the two indexes and signed journal ancestry
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test ! -f evidence/physical.json; then
+            echo "No physical experiment receipt for authenticated wire audit" >&2
+            exit 1
+          fi
+          python research/j24g46/audit_signed_index.py evidence/physical.json evidence/signed-index-audit.json 2>&1 | tee evidence/signed-index-audit.log
       - name: Retain raw source-exact positive/negative archives and failure logs
         if: always()
         uses: actions/upload-artifact@v4
