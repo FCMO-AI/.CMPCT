@@ -226,6 +226,9 @@ jobs:
           name: j24i43-crosshost-${{ matrix.os }}-${{ github.run_id }}
           if-no-files-found: error
           retention-days: 30
+          # GitHub checks out this repository into a dot-prefixed .CMPCT path.
+          # Upload-artifact excludes hidden path components unless explicitly enabled.
+          include-hidden-files: true
           path: |
             j24i43-crosshost-*.txt
             j24i43-crosshost-*.json
