@@ -512,12 +512,48 @@ class CMPCT:
         if digest.digest()!=bytes(want):
             raise IOError(f'SHA-256 verification failure: {rel}')
 
+    def _verify_hardlink_owner(self,row,terminal_cache):
+        """Resolve a hardlink graph once per verify pass, including every intermediate alias.
+
+        Signed aliases must agree with their terminal regular-file owner about logical size.
+        Cache only the graph resolution, not verification results: each logical entry still
+        receives its own explicit content SHA check.
+        """
+        initial=row[0];trail=[];seen=set();current=row
+        while current[1]==K_HARDLINK:
+            name=current[0]
+            cached=terminal_cache.get(name)
+            if cached is not None:
+                current=cached
+                break
+            if name in seen:raise IOError(f'hardlink cycle: {initial}')
+            seen.add(name);trail.append(current)
+            storage=current[6]
+            if not isinstance(storage,(list,tuple)) or len(storage)!=1 or not isinstance(storage[0],str):
+                raise IOError(f'malformed hardlink target: {name}')
+            current=self.by.get(storage[0])
+            if current is None:raise IOError(f'missing hardlink target: {name}')
+        if current[1]!=K_FILE:raise IOError(f'hardlink target is not a regular file: {initial}')
+        for alias in trail:
+            # A link names the SAME inode; it cannot have an independent logical EOF.
+            if type(alias[4]) is not int or alias[4]!=current[4]:
+                raise IOError(f'hardlink alias size failure: {alias[0]}')
+            terminal_cache[alias[0]]=current
+        return current
+
     def verify(self):
-        n=0
+        n=0;terminal_cache={}
         for row in self.files:
             if row[1]==K_DIR:continue
+            if row[1]==K_HARDLINK:
+                owner=self._verify_hardlink_owner(row,terminal_cache)
+                if owner[6][0]==S_SPARSE:
+                    # J24V01's bounded-memory sparse proof applies to aliases too. Calling
+                    # read(alias) would materialize the entire sparse logical owner again.
+                    self._verify_sparse_streamed(owner)
+                    n+=1
+                    continue
             if row[1]==K_FILE and row[6][0]==S_SPARSE:
-                # Hardlink aliases retain their prior path; this change covers regular sparse owners.
                 self._verify_sparse_streamed(row)
             else:
                 raw=self.read(row[0]);want=self.file_sha256(row[0])
