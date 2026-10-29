@@ -1,0 +1,66 @@
+{
+  "schema": "cmpct-j24i37-independent-artifact-audit-v1",
+  "audited_at_utc": "2026-10-29T16:56:51Z",
+  "classification": "Independent local decoding of original GitHub Actions physical artifact; not a second hosted benchmark or promotion gate.",
+  "original_run_id": 40916036285,
+  "artifact_id": 12915264466,
+  "original_artifact_sha256": "22c8863af9bbe85cfe4cfe07f68a6cc2c4c58dfaa83a2f1c66687e75df5c8b7e",
+  "original_test_head": "1286300197793f1776c785d257cf0d0125ed52ce",
+  "auditor": "Fresh Python ctypes call to system libzstd, msgpack, hashlib, zlib; does not import CMPCT; reauthenticates both index copies, footer, CMA4 record, SHA256, CRC32 and all 96 raw timing/rchar lines.",
+  "result": "INDEPENDENT_PASS",
+  "physical": {
+    "8": {
+      "archive_sha256": "2ee79e6fb49c7ebe9bc783da12aec10861594a8e333c9dd2b49d4ea7037b5131",
+      "logical_sha256": "d9dfad8131bc98f3ce85d0f6e286bfa62a88fac78020b8b961e052883ae3d499",
+      "crc32": 554660302,
+      "physical_encoded_bytes": 272756
+    },
+    "32": {
+      "archive_sha256": "b1ee826363c837f806321c59b49cdf5a323e5d3df20d3d7ae47a72f94c0391c2",
+      "logical_sha256": "0e5ea938ecba760a2d009cf03c5dba9aba0da63cfcc11796b84fa2bc87a94ea1",
+      "crc32": 71579378,
+      "physical_encoded_bytes": 306548
+    },
+    "64": {
+      "archive_sha256": "43a63c2d5f60d22d928616616399ed392b3a66d35bd66b9b5ed2e7aee5435ae8",
+      "logical_sha256": "238febbf42aab0f9123f31f7903aad81006ca1e33c89ad2eb11f8641e5c68b34",
+      "crc32": 3502557053,
+      "physical_encoded_bytes": 351604
+    }
+  },
+  "recomputed": {
+    "8": {
+      "rchar_ratio": 1.000234502671132,
+      "wall_ratio": 0.9715134170139328,
+      "verify_wall_ms": 16.5034195,
+      "control_wall_ms": 16.9873305,
+      "verify_rchar": 272982,
+      "control_rchar": 272918,
+      "verify_vmhwm_kib": 21626,
+      "control_vmhwm_kib": 21620
+    },
+    "32": {
+      "rchar_ratio": 3.9992533663721432,
+      "wall_ratio": 2.2482576532772596,
+      "verify_wall_ms": 147.0773735,
+      "control_wall_ms": 65.41838,
+      "verify_rchar": 1226611,
+      "control_rchar": 306710,
+      "verify_vmhwm_kib": 46370,
+      "control_vmhwm_kib": 70784
+    },
+    "64": {
+      "rchar_ratio": 7.998234621879318,
+      "wall_ratio": 4.2438116381080135,
+      "verify_wall_ms": 539.733114,
+      "control_wall_ms": 127.1812135,
+      "verify_rchar": 2813507,
+      "control_rchar": 351766,
+      "verify_vmhwm_kib": 79122,
+      "control_vmhwm_kib": 136390
+    }
+  },
+  "read_char_not_disk_io": true,
+  "control_not_rss_equivalent": true,
+  "product_impact_unmeasured": true
+}
