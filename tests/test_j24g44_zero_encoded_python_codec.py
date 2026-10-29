@@ -166,3 +166,66 @@ def test_signed_r24_zero_output_strong_verify_rejects_only_malformed_frame(tmp_p
             "expected": "source and signed-valid accepted; magic-corrupt encoded stream rejected by installed Python verifier and independent zstandard decoder",
         }
         (target / "receipt.json").write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+
+
+def test_j24g45_borrowed_zero_encoded_pointer_is_length_preserving(monkeypatch) -> None:
+    """A native pointer must retain immutable bytes, including embedded NULs.
+
+    The signed physical archive test above independently checks actual decoder
+    acceptance/rejection. This test guards the extra-copy ownership mechanism.
+    """
+    import ctypes
+    import gc
+    import platform
+
+    specimen = b"source\\x00with\\x00NUL\\xff"  # explicitly bounded, not a C-string
+    expected = specimen
+    borrowed = native_codec._borrowed_zero_encoded_src(specimen)
+    assert ctypes.string_at(borrowed, len(specimen)) == expected
+
+    if platform.python_implementation() == "CPython":
+        assert borrowed._objects is specimen  # pins bytes until native call returns
+        raw_pointer = ctypes.pythonapi.PyBytes_AsString
+        raw_pointer.argtypes = [ctypes.py_object]
+        raw_pointer.restype = ctypes.c_void_p
+        assert ctypes.cast(borrowed, ctypes.c_void_p).value == raw_pointer(specimen)
+
+    # The borrowed wrapper, not a caller local variable, must own lifetime.
+    del specimen
+    gc.collect()
+    assert ctypes.string_at(borrowed, len(expected)) == expected
+
+    # If a future refactor silently reinstates the copying helper for this
+    # specific zero-output case, the otherwise-valid native path must fail.
+    def unexpected_source_copy(_payload: bytes):
+        raise AssertionError("zero-output encoded frame copied through _src")
+
+    monkeypatch.setattr(native_codec, "_src", unexpected_source_copy)
+    assert native_codec.decompress(_empty_frame(), 0) == b""
+    with pytest.raises((RuntimeError, IOError, ValueError)):
+        native_codec.decompress(_corrupt_magic(_empty_frame()), 0)
+
+
+def test_j24g45_borrowed_zero_encoded_input_does_not_allocate_payload_copy() -> None:
+    """16 MiB immutable source allocation comparison; not full archive RSS."""
+    import tracemalloc
+
+    payload = (b"A\\x00B\\xff" * (4 * 1024 * 1024))
+    assert len(payload) == 16 * 1024 * 1024
+    tracemalloc.start()
+    try:
+        old_copy = native_codec._src(payload)
+        copied_peak = tracemalloc.get_traced_memory()[1]
+        del old_copy
+        tracemalloc.reset_peak()
+        borrowed = native_codec._borrowed_zero_encoded_src(payload)
+        borrowed_peak = tracemalloc.get_traced_memory()[1]
+        assert borrowed.value is not None  # starts before the embedded zero
+        # A copied Python ctypes buffer must cost at least 8 MiB more than
+        # constructing the borrowed source. Do not infer process-wide peak RSS.
+        assert copied_peak - borrowed_peak >= 8 * 1024 * 1024, (
+            f"source copy reduction disappeared: copied={copied_peak}, borrowed={borrowed_peak}"
+        )
+        assert borrowed_peak < 1024 * 1024, f"borrowed creation allocated {borrowed_peak} bytes"
+    finally:
+        tracemalloc.stop()
