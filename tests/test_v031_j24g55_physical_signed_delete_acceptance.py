@@ -145,6 +145,8 @@ def test_firstparty_committed_delete_preflight_matches_reader(
             "marked_names": sorted(original_attrs), "survivor_names": [A, Z],
             "reader_verify": 2, "native_xattr_readback": True,
             "preflight_before": base_validation, "preflight_after": final_validation,
+            "preflight_remapped_owners": sorted(mapped),
+            "reader_remapped_owners": sorted(corrected_attrs),
             "preflight_exception": error, "expected_falsifier": expected_falsifier,
             "source": "installed real Builder and transaction Writer; unmodified branch product",
         }
