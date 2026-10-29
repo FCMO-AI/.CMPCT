@@ -1,0 +1,87 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+# Every PR head executes source-locked physical court; never skip docs-only or latest commit.
+name: J24G40 POSIX xattr fixture/admission versus compaction fidelity
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24g40/**'
+      - 'docs/v031-research/*j24g40*'
+      - '.github/workflows/v031-j24g40-xattr-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: j24g40-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  os-native-xattr:
+    name: Physical xattr fixture admission - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin unchanged inherited product and original historical evaluator
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 3e6b1c75a303ba638d420e49b658b90c7b573773 HEAD
+          git diff --exit-code 3e6b1c75a303ba638d420e49b658b90c7b573773 HEAD -- src/ native/ tests/research/j24i06_compaction_product_court.py docs/FORMAT.md pyproject.toml
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 2040f8f91c47f228e3aa4c62b13557d982ba465e
+          mkdir -p j24g40-evidence
+          git rev-parse HEAD > j24g40-evidence/source-head.txt
+          for f in research/j24g40/test_xattr_native_fixture.py src/cmpct/builder.py src/cmpct/reader.py src/cmpct/transactions.py tests/research/j24i06_compaction_product_court.py; do
+            git rev-parse "HEAD:$f" >> j24g40-evidence/git-blobs.txt
+          done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual source, verify wheel source identity and run two-key court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          cd "$RUNNER_TEMP"
+          python - <<'PY' | tee "$GITHUB_WORKSPACE/j24g40-evidence/installed-source.txt"
+          from pathlib import Path
+          import os
+          import cmpct.builder as b
+          import cmpct.reader as r
+          import cmpct.transactions as t
+          source=Path(os.environ['GITHUB_WORKSPACE'])
+          for mod,rel in ((b,'src/cmpct/builder.py'),(r,'src/cmpct/reader.py'),(t,'src/cmpct/transactions.py')):
+              installed=Path(mod.__file__).read_bytes().replace(b'\r\n',b'\n')
+              committed=(source/rel).read_bytes().replace(b'\r\n',b'\n')
+              assert installed == committed, rel
+              print('SOURCE_IDENTICAL',rel,mod.__file__)
+          PY
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            python "$GITHUB_WORKSPACE/research/j24g40/probe_macos_native_xattr.py" | tee "$GITHUB_WORKSPACE/j24g40-evidence/macos-native-xattr.json"
+            python -m json.tool "$GITHUB_WORKSPACE/j24g40-evidence/macos-native-xattr.json" >/dev/null
+          fi
+          python "$GITHUB_WORKSPACE/research/j24g40/test_xattr_native_fixture.py" | tee "$GITHUB_WORKSPACE/j24g40-evidence/xattr-court.json"
+          python -m json.tool "$GITHUB_WORKSPACE/j24g40-evidence/xattr-court.json" >/dev/null
+      - name: Retain exact-head diagnostics, including honest reds
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g40-xattr-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: j24g40-evidence/
+          retention-days: 30
+          if-no-files-found: warn
