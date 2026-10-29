@@ -34,8 +34,10 @@ def main() -> None:
     assert source.is_file() and source.stat().st_size < 16 * 1024 * 1024
     original_sha = digest(source)
     runners = {
-        "A_baseline": Path(os.environ["J24G34_BASE_PYTHON"]).resolve(),
-        "B_candidate": Path(os.environ["J24G34_CAND_PYTHON"]).resolve(),
+        # NEVER Path.resolve() a venv python symlink: that dereferences to the
+        # global base interpreter and silently erases A/B source provenance.
+        "A_baseline": Path(os.environ["J24G34_BASE_PYTHON"]).absolute(),
+        "B_candidate": Path(os.environ["J24G34_CAND_PYTHON"]).absolute(),
     }
     src_script = Path(__file__).with_name("j24g34_sparse_alias_product_court.py")
     assert src_script.is_file()
@@ -43,6 +45,7 @@ def main() -> None:
     for index, label in enumerate(("A_baseline", "B_candidate", "B_candidate", "A_baseline")):
         python = runners[label]
         assert python.is_file(), python
+        assert (python.parent.parent / "pyvenv.cfg").is_file(), ("lost venv entry point", python)
         output = root / f"samewire-{index}-{label}.cmpct"
         receipt = root / f"samewire-{index}-{label}.json"
         proc = subprocess.run(
