@@ -1,0 +1,94 @@
+# ci-lane: fast
+# Research-only physical r24 journal xattr identity; an admitted negative
+# experiment is not a CMPCT product-correctness success.
+name: CMPCT J24G46 native journal xattr positional identity
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g46-native-xattr-compact-physical-20261029
+  pull_request:
+    branches:
+      - agent/phased2-v031-j24g41-darwin-xattr-provider-20261029
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g46-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-physical-replay:
+    name: real r24 xattr journal+compact / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact tested candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Authenticate head and physically installed Python implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --exit-code -- src/cmpct/reader.py src/cmpct/builder.py src/cmpct/transactions.py src/cmpct/_xattrs.py
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import cmpct.builder as builder
+          import cmpct.reader as reader
+          import cmpct.transactions as transactions
+          import cmpct._xattrs as xattrs
+          for path, module in (
+              ("src/cmpct/builder.py", builder),
+              ("src/cmpct/reader.py", reader),
+              ("src/cmpct/transactions.py", transactions),
+              ("src/cmpct/_xattrs.py", xattrs),
+          ):
+              actual = Path(module.__file__).read_bytes()
+              expected = Path(path).read_bytes()
+              assert actual == expected, f"installed wheel != source HEAD: {path}"
+              print(path, hashlib.sha256(actual).hexdigest())
+          PY
+      - name: Execute prospective authentic archive/journal/xattr physical experiment
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python research/j24g46/probe_journal_xattr_identity.py evidence/physical.json 2>&1 | tee evidence/probe.log
+      - name: Independent wire, bytes, and decision audit
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test ! -f evidence/physical.json; then
+            echo "No physical experiment receipt; no evidence credit" >&2
+            exit 1
+          fi
+          python research/j24g46/audit_physical.py evidence/physical.json evidence/audit.json 2>&1 | tee evidence/audit.log
+      - name: Retain raw source-exact positive/negative archives and failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g46-${{ matrix.os }}-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
