@@ -59,3 +59,19 @@ fn j24i34_legacy_empty_optional_hash_parity_is_still_unresolved() {
     );
     println!("J24I34_SEPARATE_DEBT_empty_optional_sha=native_rejected");
 }
+
+#[test]
+#[ignore = "requires physically authenticated J24I34_CASE_DIR; execute from dedicated CI"]
+fn j24i34b_reject_index_hash_that_matches_corrupt_payload_not_cma4() {
+    // A matching optional row hash must not supersede the distinct physical CMA4 hash.
+    // This is the adversarial counterexample missing from the first J24I34 cohort.
+    let archive = Archive::open(&case_path("dual-commit-corrupt"))
+        .expect("independently signed r24 index must be structurally admissible");
+    match archive.verify_complete() {
+        Err(CmpctError::MemberHash) => {
+            println!("J24I34B_REJECTED_dual-commit-corrupt:reason=MemberHash");
+        }
+        Err(other) => panic!("different native failure type: {other}"),
+        Ok(count) => panic!("native incorrectly trusted re-signed logical row after {count} proofs"),
+    }
+}
