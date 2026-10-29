@@ -26,7 +26,19 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Classify actual latest HEAD (not accumulated PR paths)
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff-tree --no-commit-id --name-only -r HEAD > j24i43-scope.txt
+          if grep -Eq '^(native/cmpct-core/src/(wavflac|vzip_dispatch)[.]rs|research/j24i43/|docs/v031-research/.*j24i43|[.]github/workflows/v031-j24i43-native-wav-stream[.]yml)' j24i43-scope.txt; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
       - name: Exact source and comparison control
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -37,10 +49,13 @@ jobs:
           fi
           git worktree add --detach "$RUNNER_TEMP/j24i43-old-src" 0faa25827e7393f927252876d40e9f6cb53e5a24
       - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
       - name: Build exact baseline and candidate probes
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -53,6 +68,7 @@ jobs:
           CARGO_TARGET_DIR="$RUNNER_TEMP/j24i43-new-target" cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i43_probe
           CARGO_TARGET_DIR="$RUNNER_TEMP/j24i43-new-target" cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i43_rebind
       - name: Authentic WAV corpus and detached physical audit
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -63,6 +79,7 @@ jobs:
           python research/j24i42/derive_spans.py --case-dir j24i43-cases > j24i43-span-audit.json
           python research/j24i43/physical_mutants.py --case-dir j24i43-cases > j24i43-mutation-audit.json
       - name: Run native product-versus-product A/B and negatives
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -96,13 +113,16 @@ jobs:
           test -s j24i43-product-ab.json
           find j24i43-cases -type f -print0 | sort -z | xargs -0 sha256sum > j24i43-files.sha256
           sha256sum j24i43-head.txt j24i43-raw.txt j24i43-hostile.txt j24i43-product-ab.json > j24i43-receipt.sha256
-          tar -czf j24i43-evidence.tar.gz j24i43-cases j24i43-head.txt j24i43-diff.txt j24i43-raw.txt j24i43-hostile.txt j24i43-product-ab.json j24i43-product-summary.txt j24i43-rebind.txt j24i43-files.sha256 j24i43-receipt.sha256
+          tar -czf j24i43-evidence.tar.gz j24i43-cases j24i43-head.txt j24i43-scope.txt j24i43-diff.txt j24i43-raw.txt j24i43-hostile.txt j24i43-product-ab.json j24i43-product-summary.txt j24i43-rebind.txt j24i43-files.sha256 j24i43-receipt.sha256
+          test -s j24i43-evidence.tar.gz
+          ls -lh j24i43-evidence.tar.gz j24i43-raw.txt j24i43-product-ab.json
       - name: Preserve scientific evidence including failures
-        if: always()
+        if: ${{ always() && steps.scope.outputs.run == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: j24i43-product-court-${{ github.run_id }}
-          if-no-files-found: warn
+          if-no-files-found: error
+          include-hidden-files: true
           retention-days: 30
           path: |
             j24i43-*.txt
