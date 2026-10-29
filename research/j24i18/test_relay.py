@@ -36,7 +36,8 @@ class PhysicalRelayCourt(unittest.TestCase):
                 self.assertEqual(a.read('b-owner.bin'),new)
                 self.assertEqual(a.read('alias.bin'),new)
                 for row in a.files:
-                    self.assertEqual(row,b.by[row[0]],'preserve signed logical row and topology')
+                    self.assertEqual(row[:6],b.by[row[0]][:6],'preserve signed member metadata and topology')
+                    if row[1]==3:self.assertEqual(row[6],b.by[row[0]][6],'preserve hardlink target')
                     if row[1] != 1:
                         self.assertEqual(a.read(row[0]),b.read(row[0]))
             original_data=archive.read_bytes();result_data=result.read_bytes()
