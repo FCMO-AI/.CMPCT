@@ -1,0 +1,98 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I33 Authenticated r24 Native Directory Sentinel Court
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24i33/**'
+      - 'native/cmpct-core/tests/j24i33_directory_sentinel.rs'
+      - 'docs/v031-research/*j24i33*'
+      - '.github/workflows/v031-j24i33-native-directory.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: j24i33-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-native-directory:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Exact source custody and latest-head-commit gate
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "463c50633be74423e92a074b7d7577db6a4b0cf9"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "60e53b1e85c30d413e379052bb288ed3b51ec30d"
+          git rev-parse HEAD | tee j24i33-head.txt
+          git hash-object research/j24i33/generate_directory_wire.py | tee j24i33-generator-sha.txt
+          git hash-object research/j24i33/audit_directory_wire.py | tee j24i33-auditor-sha.txt
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\\n' "$changed" | grep -Eq '^(research/j24i33/|native/cmpct-core/tests/j24i33_directory_sentinel[.]rs|docs/v031-research/.*j24i33|[.]github/workflows/v031-j24i33-native-directory[.]yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
+      - name: Install current CMPCT and create genuine source-bound directory tree
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . zstandard
+          python research/j24i33/generate_directory_wire.py --output j24i33-observations 2>&1 | tee j24i33-python.log
+          test -s j24i33-observations/python-observations.json
+          python research/j24i33/audit_directory_wire.py --case-dir j24i33-observations 2>&1 | tee j24i33-referee.log
+          test -s j24i33-observations/independent-physical-audit.json
+      - name: Execute actual native Rust current-Builder versus derived-sentinel falsifier
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        env:
+          J24I33_CASE_DIR: ${{ github.workspace }}/j24i33-observations
+        run: |
+          set -euo pipefail
+          cargo test --manifest-path native/cmpct-core/Cargo.toml --test j24i33_directory_sentinel -- --ignored --nocapture 2>&1 | tee j24i33-native.log
+          grep -q 'J24I33_AUTHENTIC_NATIVE_nested=true;verified_regular=1' j24i33-native.log
+          grep -q 'J24I33_AUTHENTIC_NATIVE_flat=true;verified_regular=1' j24i33-native.log
+          grep -q 'J24I33_NATIVE_REFUSAL_inserted-empty=' j24i33-native.log
+          grep -q 'J24I33_NATIVE_REFUSAL_invalid-one-byte=' j24i33-native.log
+      - name: Preserve exact-head original physical specimens and controls
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i33-native-directory-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24i33-head.txt
+            j24i33-generator-sha.txt
+            j24i33-auditor-sha.txt
+            j24i33-python.log
+            j24i33-referee.log
+            j24i33-native.log
+            j24i33-observations/
