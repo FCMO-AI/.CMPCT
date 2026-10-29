@@ -48,13 +48,13 @@ def zstd_decoder():
 def wire(raw: bytes, zdec) -> dict:
     assert len(raw) >= HEADER.size + FOOTER.size
     magic, version, flags, compressed_n, logical_n, data_n, index_hash = HEADER.unpack_from(raw)
-    assert magic == b"CMPCT24\\0".replace(b"\\0",b"\\x00") and version == 24
+    assert magic == b"CMPCT24\0" and version == 24
     packed = raw[HEADER.size : HEADER.size + compressed_n]
     index_bytes = zdec(packed, logical_n)
     assert sha(index_bytes) == index_hash
     index = msgpack.unpackb(index_bytes, raw=False)
     fm, kind, codec, flags, reserved, footer_comp, footer_raw, prev, footer_hash = FOOTER.unpack_from(raw, len(raw)-FOOTER.size)
-    assert fm == b"CMPTF24\\0".replace(b"\\0",b"\\x00") and kind == 0 and footer_hash == index_hash
+    assert fm == b"CMPTF24\0" and kind == 0 and footer_hash == index_hash
     assert footer_comp == compressed_n and footer_raw == logical_n
     assert raw[len(raw)-FOOTER.size-footer_comp:len(raw)-FOOTER.size] == packed
     datastart = HEADER.size + compressed_n
@@ -132,4 +132,4 @@ if __name__ == "__main__":
     result = audit_zip(Path(sys.argv[1]))
     print(json.dumps(result,sort_keys=True,indent=2))
     if len(sys.argv) > 2:
-        Path(sys.argv[2]).write_text(json.dumps(result,sort_keys=True,indent=2)+"\\n", encoding="utf-8")
+        Path(sys.argv[2]).write_text(json.dumps(result,sort_keys=True,indent=2)+"\n", encoding="utf-8")
