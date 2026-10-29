@@ -88,3 +88,53 @@ jobs:
           path: j24i11-evidence/
           if-no-files-found: warn
           retention-days: 90
+
+  source-exact-cost-control:
+    name: Identical ordinary-file Builder A/B cost (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 28
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24I11_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24I11_ORIGINAL_BUILDER: ${{ runner.temp }}/j24i11_original_builder.py
+      CMPCT_J24I11_COST_RECEIPT: ${{ github.workspace }}/j24i11-cost/abba.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin historical Builder source and unchanged semantic controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git show 96989c923ed8a01f6cd6a6ca8bf69002a2409685:src/cmpct/builder.py > "$CMPCT_J24I11_ORIGINAL_BUILDER"
+          test "$(git hash-object "$CMPCT_J24I11_ORIGINAL_BUILDER")" = "387192edd783e02bf7a44a38945214bf9d6c183e"
+          git diff --exit-code 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD -- src/cmpct/codec.py src/cmpct/reader.py native/ docs/FORMAT.md
+          mkdir -p "$GITHUB_WORKSPACE/j24i11-cost"
+          git rev-parse HEAD > "$GITHUB_WORKSPACE/j24i11-cost/head.txt"
+          git rev-parse HEAD:src/cmpct/builder.py > "$GITHUB_WORKSPACE/j24i11-cost/candidate-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install current candidate and run full source-exact ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile tests/research/j24i11_builder_cost_abba.py
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i11_builder_cost_abba.py"
+      - name: Preserve physical measurement receipt including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i11-cost-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24i11-cost/
+          if-no-files-found: warn
+          retention-days: 90
