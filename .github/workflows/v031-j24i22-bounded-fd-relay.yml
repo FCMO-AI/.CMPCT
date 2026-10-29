@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: J24I22 r24 Bounded FD Physical Relay Science
 on:
   pull_request:
