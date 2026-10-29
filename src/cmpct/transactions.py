@@ -4,7 +4,7 @@ from __future__ import annotations
 # complicate basic archive parsing. The footer remains the atomic commit marker; incomplete tails must
 # always leave the last committed generation readable.
 
-import binascii, hashlib, os, stat, struct, tempfile, zipfile, zlib
+import binascii, hashlib, os, secrets, stat, struct, tempfile, zipfile, zlib
 from pathlib import Path
 import msgpack
 
@@ -211,10 +211,17 @@ def compact_archive(src:Path,dst:Path):
 
     Footnote: scratch symlink targets are inert only after whole-tree parent/link
     preflight and only inside a freshly allocated private directory. Do not weaken
-    public extractall's safe_symlinks default. Rebuild into an exclusive sibling
-    temporary file and publish with a single replace after semantic verification.
+    public extractall's safe_symlinks default. Stage outside the scratch tree
+    on the destination filesystem and verify before atomic publication.
+
+    On POSIX, the staged Builder, Reader and publisher must use the *same owned
+    inode*. A private 0700 staging directory alone is insufficient because its
+    name can be rebound by a writer in dst.parent; both directory FDs stay pinned.
+    This is a research candidate, not a Windows pathname-custody solution.
     """
     src=Path(src);dst=Path(dst);stage=None
+    parent_fd=stage_dir_fd=write_fd=None
+    stage_dir_name=None
     try:
         with tempfile.TemporaryDirectory(prefix='cmpct-compact-') as td:
             root=Path(td)/'tree'
@@ -222,20 +229,68 @@ def compact_archive(src:Path,dst:Path):
                 _private_compaction_guard(ar.files)
                 metadata=_compaction_source_metadata(ar)
                 ar.extractall(root,metadata=True,safe_symlinks=False)
-                fd,name=tempfile.mkstemp(prefix=f'.{dst.name}.compact-',suffix='.tmp',dir=dst.parent)
-                stage=Path(name);os.close(fd)
-                result=Builder(root,_preserve_archive_meta=metadata).build(stage)
-                with CMPCT(stage) as rebuilt:
-                    _compaction_assert_equivalent(ar,rebuilt,metadata)
-                with open(stage,'rb') as stream:os.fsync(stream.fileno())
-        # The source Reader is closed before replacement, including on Windows.
-        # os.replace replaces a destination symlink rather than following it.
-        os.replace(stage,dst)
+                if os.name=='posix' and hasattr(os,'O_DIRECTORY') and hasattr(os,'O_NOFOLLOW'):
+                    # Source and destination parents are pinned before stage creation.
+                    # Avoid any subsequent write/verify through their mutable pathnames.
+                    parent_fd=os.open(dst.parent,os.O_RDONLY|os.O_DIRECTORY)
+                    for _ in range(8):
+                        candidate=f'.{dst.name}.compact-private-{secrets.token_hex(12)}'
+                        try:os.mkdir(candidate,0o700,dir_fd=parent_fd)
+                        except FileExistsError:continue
+                        stage_dir_name=candidate
+                        break
+                    if stage_dir_name is None:raise IOError('could not allocate exclusive compact stage')
+                    stage_dir_fd=os.open(stage_dir_name,
+                        os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent_fd)
+                    stage_stat=os.fstat(stage_dir_fd)
+                    if stage_stat.st_uid!=os.geteuid() or stat.S_IMODE(stage_stat.st_mode)!=0o700:
+                        raise IOError('compaction stage ownership/mode mismatch')
+                    write_fd=os.open('payload.cmpct',
+                        os.O_RDWR|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
+                        0o600,dir_fd=stage_dir_fd)
+                    stage=dst.parent/stage_dir_name/'payload.cmpct'  # diagnostic only
+                    result=Builder(root,_preserve_archive_meta=metadata).build(
+                        stage,_out_fd=write_fd)
+                    with CMPCT(stage,_fd=write_fd) as rebuilt:
+                        _compaction_assert_equivalent(ar,rebuilt,metadata)
+                    os.fsync(write_fd)
+                else:
+                    # Windows requires a separately proven HANDLE-based solution.
+                    # Keep inherited behavior, but do NOT promote this partial fix.
+                    fd,name=tempfile.mkstemp(
+                        prefix=f'.{dst.name}.compact-',suffix='.tmp',dir=dst.parent)
+                    stage=Path(name);os.close(fd)
+                    result=Builder(root,_preserve_archive_meta=metadata).build(stage)
+                    with CMPCT(stage) as rebuilt:
+                        _compaction_assert_equivalent(ar,rebuilt,metadata)
+                    with open(stage,'rb') as stream:os.fsync(stream.fileno())
+        # Source Reader closed; no stage pathname is reopened for POSIX publish.
+        if stage_dir_fd is not None:
+            os.replace('payload.cmpct',dst.name,
+                src_dir_fd=stage_dir_fd,dst_dir_fd=parent_fd)
+        else:
+            os.replace(stage,dst)
         return result
     finally:
-        if stage is not None:
+        if write_fd is not None:os.close(write_fd)
+        if stage_dir_fd is not None:
+            try:os.unlink('payload.cmpct',dir_fd=stage_dir_fd)
+            except FileNotFoundError:pass
+            if stage_dir_name is not None:
+                try:
+                    # Never recursively clean a substituted symlink/directory.
+                    current=os.stat(stage_dir_name,dir_fd=parent_fd,
+                                    follow_symlinks=False)
+                    pinned=os.fstat(stage_dir_fd)
+                    if (current.st_dev,current.st_ino)==(pinned.st_dev,pinned.st_ino):
+                        os.rmdir(stage_dir_name,dir_fd=parent_fd)
+                except OSError:pass
+            os.close(stage_dir_fd)
+        elif stage is not None:
             try:stage.unlink()
             except FileNotFoundError:pass
+        if parent_fd is not None:os.close(parent_fd)
+
 
 def tree_digest(root:Path):
     h=hashlib.sha256();root=Path(root)

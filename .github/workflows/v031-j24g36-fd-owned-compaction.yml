@@ -1,0 +1,128 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24G36 pinned-FD compaction product-candidate court
+
+on:
+  push:
+    branches:
+      - "agent/phased2-v031-j24g36-*"
+    paths:
+      - "src/cmpct/builder.py"
+      - "src/cmpct/reader.py"
+      - "src/cmpct/transactions.py"
+      - "tests/research/j24g36_fd_owned_compaction_product_court.py"
+      - ".github/workflows/v031-j24g36-fd-owned-compaction.yml"
+      - "docs/v031-research/2026-10-29-j24g36-*"
+  pull_request:
+    paths:
+      - "src/cmpct/builder.py"
+      - "src/cmpct/reader.py"
+      - "src/cmpct/transactions.py"
+      - "tests/research/j24g36_fd_owned_compaction_product_court.py"
+      - ".github/workflows/v031-j24g36-fd-owned-compaction.yml"
+      - "docs/v031-research/2026-10-29-j24g36-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g36-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-owned-stage:
+    name: Genuine r24 compaction, POSIX pinned stage - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24G36_ARCHIVES: ${{ github.workspace }}/j24g36-evidence/archives
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Freeze exact parent, source and promotion boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor ec112a87ea34349b63885f3f0bea4689f192bd2f HEAD
+          git merge-base --is-ancestor fa0de6b82b5b9fce1490db5aec74711e79f73b57 HEAD
+          git diff --exit-code ec112a87ea34349b63885f3f0bea4689f192bd2f HEAD -- native/ docs/FORMAT.md docs/PRE1_RELEASE_POLICY.md benchmarks/
+          mkdir -p j24g36-evidence
+          git rev-parse HEAD > j24g36-evidence/head.txt
+          for f in src/cmpct/builder.py src/cmpct/reader.py src/cmpct/transactions.py; do
+            git rev-parse "HEAD:$f" >> j24g36-evidence/product-source-blobs.txt
+          done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install candidate and verify it is not importing from checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile src/cmpct/builder.py src/cmpct/reader.py src/cmpct/transactions.py tests/research/j24g36_fd_owned_compaction_product_court.py
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import cmpct.builder as b, cmpct.reader as r, cmpct.transactions as t
+          source=Path(os.environ['GITHUB_WORKSPACE'])
+          for mod,rel in [(b,'src/cmpct/builder.py'),(r,'src/cmpct/reader.py'),(t,'src/cmpct/transactions.py')]:
+              assert Path(mod.__file__).resolve() != (source/rel).resolve()
+              assert Path(mod.__file__).read_bytes().replace(b'\r\n',b'\n') == (source/rel).read_bytes().replace(b'\r\n',b'\n')
+              print('SOURCE_IDENTICAL',rel,mod.__file__)
+          PY
+      - name: Execute real Builder Reader and hostile directory rename
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24g36_fd_owned_compaction_product_court.py" > "$GITHUB_WORKSPACE/j24g36-evidence/product-court.json"
+      - name: Run inherited untouched private-compaction conformance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i06_compaction_product_court.py" > "$GITHUB_WORKSPACE/j24g36-evidence/inherited-court.json"
+      - name: Independent receipt and physical-artifact integrity check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          root=Path('j24g36-evidence')
+          d=json.loads((root/'product-court.json').read_text())
+          assert d['decision']=='FD_CUSTODY_SURVIVES_DETERMINISTIC_PARENT_REBIND'
+          assert d['evidence_class']=='PRODUCT_CANDIDATE_NOT_RELEASE'
+          assert len(d['results'])==2
+          result={x['case']:x for x in d['results']}
+          assert result['ancestor-stage-directory-rebound']['outside_sentinel_unchanged']
+          assert result['ancestor-stage-directory-rebound']['destination_is_regular']
+          assert result['ancestor-stage-directory-rebound']['source_sha_unchanged']
+          assert result['ancestor-stage-directory-rebound']['logical_identity_exact']
+          for case,file in [('no-rebind','normal.cmpct'),('ancestor-stage-directory-rebound','rebound.cmpct')]:
+              raw=(root/'archives'/file).read_bytes()
+              assert raw[:8]==b'CMPCT24\x00'
+              assert hashlib.sha256(raw).hexdigest()==result[case]['output_sha']
+          assert hashlib.sha256((root/'archives/source.cmpct').read_bytes()).hexdigest()==result['no-rebind']['source_sha']
+          assert hashlib.sha256((root/'archives/outside-sentinel.bin').read_bytes()).hexdigest()==hashlib.sha256(b'OUTSIDE MUST REMAIN INTACT').hexdigest()
+          print('PRODUCT_COURT_RECEIPTS_AND_PHYSICAL_ARCHIVES_PASS')
+          PY
+      - name: Preserve raw physical samples and source-bound receipts on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g36-fd-compaction-${{ matrix.os }}-${{ github.run_id }}
+          path: j24g36-evidence/
+          retention-days: 30
+          if-no-files-found: warn

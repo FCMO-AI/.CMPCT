@@ -262,7 +262,7 @@ class Builder:
             dc=zcd(raw,self.dictionary,12);consider(CODEC_ZSTDDICT,dc,msgpack.packb([12],use_bin_type=True))
         if best and best[0]+16 < len(raw):return best[1],best[2],best[3]
         return CODEC_RAW,raw,b''
-    def build(self,out:Path):
+    def build(self,out:Path,*,_out_fd:int|None=None):
         self.scan()
         if self._preserve_archive_meta is not None:
             # Compaction is an archive-to-archive logical rewrite. The materialized scratch
@@ -336,5 +336,15 @@ class Builder:
         ib=msgpack.packb(index,use_bin_type=True);ic=zc(ib,12);ih=sha(ib);data=b''.join(records)
         header=HDR.pack(MAGIC,VERSION,0,len(ic),len(ib),len(data),ih)
         footer=FTR.pack(FMAGIC,0,1,0,0,len(ic),len(ib),0,ih)
-        out=Path(out);out.write_bytes(header+ic+data+ic+footer)
-        return {'bytes':out.stat().st_size,'logical_bytes':sum(x[4] for x in files if x[1]!=K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':len(data),'encode_workers':self.encode_workers,'reproducible':self.reproducible}
+        if _out_fd is None:
+            out=Path(out);out.write_bytes(header+ic+data+ic+footer)
+            stored_bytes=out.stat().st_size
+        else:
+            # Private compaction custody: do not reopen an attacker-rebindable
+            # pathname after the exclusive staging inode has been selected.
+            with os.fdopen(os.dup(_out_fd),'wb') as owned_stream:
+                owned_stream.seek(0);owned_stream.truncate()
+                owned_stream.write(header+ic+data+ic+footer)
+                owned_stream.flush()
+            stored_bytes=os.fstat(_out_fd).st_size
+        return {'bytes':stored_bytes,'logical_bytes':sum(x[4] for x in files if x[1]!=K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':len(data),'encode_workers':self.encode_workers,'reproducible':self.reproducible}
