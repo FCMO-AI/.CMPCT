@@ -7,6 +7,8 @@ on:
       - 'docs/v031-research/2026-10-29-j24m01f-*'
       - 'tests/test_j24v01_sparse_verify_streamed.py'
       - 'tests/test_j24m01f_postexec_rss_custody.py'
+      - 'tests/test_j24m01g_junit_custody.py'
+      - 'tools/j24m01g_junit_custody.py'
       - '.github/workflows/j24m01f-postexec-sparse-rss.yml'
   workflow_dispatch:
 permissions:
@@ -38,6 +40,8 @@ jobs:
           test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
           test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = c383c86982b8c7fe48ecc41c893b575b96eaeb06
           test "$(git rev-parse HEAD:tests/test_j24m01f_postexec_rss_custody.py)" = 8e5878020110af3d20bdbe4b2c0a179c374857a9
+          test "$(git rev-parse HEAD:tools/j24m01g_junit_custody.py)" = e7abc6cd21f2d39a78a8dd88bb0e18391c07062f
+          test "$(git rev-parse HEAD:tests/test_j24m01g_junit_custody.py)" = ceba51d96275d5d250cefc7c4a219664de4c8b3f
           mkdir -p "$EVIDENCE_DIR"
           git rev-parse HEAD > "$EVIDENCE_DIR/exact-head.txt"
       - uses: actions/setup-python@v5
@@ -54,6 +58,7 @@ jobs:
           set -euo pipefail
           python -m pytest -q \
             tests/test_j24m01f_postexec_rss_custody.py \
+            tests/test_j24m01g_junit_custody.py \
             tests/test_j24v01_sparse_verify_streamed.py \
             2>&1 | tee "$EVIDENCE_DIR/focused-pytest.log"
       - name: Persist exact-head positive and original source evidence
@@ -101,7 +106,7 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          python -m pytest -q 2>&1 | tee "$EVIDENCE_DIR/full-suite.log"
+          python -m pytest -q --junitxml="$EVIDENCE_DIR/full-suite.xml" 2>&1 | tee "$EVIDENCE_DIR/full-suite.log"
           code="${PIPESTATUS[0]}"
           printf '%s\n' "$code" > "$EVIDENCE_DIR/pytest-exit-code.txt"
           echo "REAL_FULL_SUITE_EXIT=$code; workflow scientific SUCCESS must not be confused with product PASS"
@@ -111,6 +116,8 @@ jobs:
         run: |
           set -euo pipefail
           test -s "$EVIDENCE_DIR/full-suite.log"
+          test -s "$EVIDENCE_DIR/full-suite.xml"
+          python tools/j24m01g_junit_custody.py "$EVIDENCE_DIR/full-suite.xml"
           if grep -E '^FAILED tests/test_j24v01_sparse_verify_streamed.py::test_real_256m' "$EVIDENCE_DIR/full-suite.log"; then
             echo 'REAL_SPARSE_RESOURCE_TEST_STILL_FAILS; do not change the ceiling' >&2
             exit 1
