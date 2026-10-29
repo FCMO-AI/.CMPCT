@@ -65,6 +65,7 @@ jobs:
           J24I36_EXTRA_CASE_DIR: ${{ github.workspace }}/j24i36-extra
         run: |
           python research/j24i36/generate_additional_direct_crc.py --output j24i36-extra
+          python research/j24i36/audit_additional_direct_crc.py --case-dir j24i36-extra
           cargo test --locked --manifest-path native/cmpct-core/Cargo.toml --test j24i36_fused_crc_court j24i36_heldout_direct_codecs_reject_crc_only_mutation -- --ignored --nocapture
       - name: Real symlink and payload SHA adversarial control
         if: steps.scope.outputs.run == 'true' && runner.os != 'Windows'
