@@ -1,0 +1,73 @@
+# ci-lane: fast
+name: CMPCT J24G27b opt-in tree digest conformance
+
+on:
+  pull_request:
+    paths:
+      - "src/cmpct/transactions.py"
+      - "src/cmpct/core.py"
+      - "tests/test_j24g27_tree_digest_topology.py"
+      - ".github/workflows/v031-j24g27b-tree-topology-conformance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g27b-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  filesystem-conformance:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    steps:
+      - name: Check out exact result-bearing source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Verify exact head and source path
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch src/cmpct/transactions.py src/cmpct/core.py tests/test_j24g27_tree_digest_topology.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install only tested package and pytest
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+
+      - name: Execute source-bound independent filesystem witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-artifacts
+          python -m pytest -q -rs tests/test_j24g27_tree_digest_topology.py --junitxml=test-artifacts/j24g27b.xml 2>&1 | tee test-artifacts/j24g27b.txt
+
+      - name: Preserve raw witness result even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g27b-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: test-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+# The public v1 tree_digest must remain byte-identical. The opt-in v2 helper must
+# distinguish symlink and hardlink topology on hosts that support the relevant
+# entry kinds. Skips are recorded, never treated as platform conformance passes.
+# This is a focused API/evidence test, not a product-release or archive-format gate.
