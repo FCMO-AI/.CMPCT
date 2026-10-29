@@ -1,0 +1,67 @@
+{
+  "schema": "j24i22-local-physical-source-independent-court-v1",
+  "date_utc": "2026-10-29",
+  "input_origin": "J24I18 original eight physical r24 fixture sources, archived public CI evidence for #723/J24I06; SHA identities below",
+  "oracle": "J24I18b strict full-buffer relay (unchanged) vs bounded FD relay",
+  "evidence_tier": "offline research; not CI/prod",
+  "cases": [
+    {
+      "name": "absolute-source.cmpct",
+      "bytes": 1061,
+      "output": 1061,
+      "sha256": "75beb7689ea2841eec09e44945c3072011f58c348bd251e720a0634c329c3d2a",
+      "match_reference_exact_bytes": true
+    },
+    {
+      "name": "delta-update-source.cmpct",
+      "bytes": 1382,
+      "output": 1176,
+      "sha256": "9e95d3c3ca00d7a2ca71a486c94e2a004903e5fa2f174118537e86b75c0b17ea",
+      "match_reference_exact_bytes": true
+    },
+    {
+      "name": "hardlink-source.cmpct",
+      "bytes": 941,
+      "output": 941,
+      "sha256": "df03db1904856e7fe242efd3fba18069fe0fd9eccd90065752db7ef226bcea12",
+      "match_reference_exact_bytes": true
+    },
+    {
+      "name": "parent-relative-source.cmpct",
+      "bytes": 1035,
+      "output": 1035,
+      "sha256": "e70e76c962151a62702780d69e01f7de27268bce35475f4081abb697c16754e6",
+      "match_reference_exact_bytes": true
+    },
+    {
+      "name": "plain-source.cmpct",
+      "bytes": 909,
+      "output": 909,
+      "sha256": "45e4bc7e42636a77ae6b3809043b57a4edd3cdf9be4f96c6bfcdca1214485ba0",
+      "match_reference_exact_bytes": true
+    },
+    {
+      "name": "safe-relative-source.cmpct",
+      "bytes": 1028,
+      "output": 1028,
+      "sha256": "e3e828e80cf5e2cc0937cb7c66c1d4ffcf10cbdbdf8b382df6348a14d764116b",
+      "match_reference_exact_bytes": true
+    },
+    {
+      "name": "sparse-source.cmpct",
+      "bytes": 1253,
+      "output": 1253,
+      "sha256": "e957dc2dc19a88f56522294bfb0ee1ef422052833cd8522918578ad035b849f9",
+      "match_reference_exact_bytes": true
+    },
+    {
+      "name": "xattrs-source.cmpct",
+      "bytes": 1011,
+      "output": 1011,
+      "sha256": "bf9e50edbbef3318619c851006013bbcb9027b193a7566b82e1643c70234b117",
+      "match_reference_exact_bytes": true
+    }
+  ],
+  "decision": "8/8 byte-exact outputs vs unchanged J24I18b; 1 real dead-blob compaction, 7 identity controls",
+  "limits": "Offline evidence only. Exact hosted head J24I22 uses synthetic installed Builder and real journal, not these external fixture inputs."
+}

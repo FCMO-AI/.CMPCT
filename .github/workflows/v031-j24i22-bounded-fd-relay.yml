@@ -1,0 +1,80 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I22 r24 Bounded FD Physical Relay Science
+on:
+  pull_request:
+    paths:
+      - 'research/j24i22/**'
+      - 'docs/v031-research/*j24i22*'
+      - '.github/workflows/v031-j24i22-bounded-fd-relay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: j24i22-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-fd-relay-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Classify exact latest head change
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i22/|docs/v031-research/.*j24i22|\.github/workflows/v031-j24i22-bounded-fd-relay\.yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - name: Exact source identity
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          git rev-parse HEAD | tee head.txt
+          git hash-object research/j24i22/bounded_fd_relay.py | tee relay-source-blob.txt
+          git hash-object research/j24i22/test_bounded_fd_relay.py | tee court-source-blob.txt
+          python --version
+      - name: Install current CMPCT and run original J24I18 invariant court
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          PYTHONPATH=research/j24i18 python research/j24i18/test_relay.py 2>&1 | tee inherited.log
+      - name: Run installed J24I22 resource, hostile and physical courts
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=research/j24i18:research/j24i22 python research/j24i22/test_bounded_fd_relay.py -v 2>&1 | tee court.log
+      - name: Preserve exact-head source and raw observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i22-bounded-fd-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            head.txt
+            relay-source-blob.txt
+            court-source-blob.txt
+            inherited.log
+            court.log
