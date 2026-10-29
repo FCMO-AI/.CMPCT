@@ -74,19 +74,33 @@ def test_real_256m_sparse_verification_does_not_materialize_holes(tmp_path: Path
         row = ar.by["large.bin"]
         assert row[1] == K_FILE and row[6][0] == S_SPARSE, "genuine sparse admission required"
         assert row[4] == logical_size
-        # No eager logical member read: memory is measured inside a fresh process, not pytest.
+        # No eager logical member read: actual post-exec VmHWM is measured in the fresh verifier child, not pytest.
     script = """
 import json,resource,sys
+from pathlib import Path
 from cmpct.reader import CMPCT
 with CMPCT(sys.argv[1]) as reader:
     count=reader.verify()
-    peak=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    print(json.dumps({'verified':count,'peak_kib':peak}))
+    # Linux ru_maxrss can inherit the PARENT's pre-exec high-water through fork/exec.
+    # /proc/self/status:VmHWM belongs to THIS exec'd verifier and includes native RSS.
+    hwm_line=next((line for line in Path('/proc/self/status').read_text().splitlines()
+                   if line.startswith('VmHWM:')), None)
+    if hwm_line is None:
+        raise RuntimeError('post-exec VmHWM missing: cannot claim bounded verification')
+    parts=hwm_line.split()
+    if len(parts) != 3 or parts[2] != 'kB':
+        raise RuntimeError('invalid post-exec VmHWM: '+repr(hwm_line))
+    peak=int(parts[1])
+    if peak <= 0:
+        raise RuntimeError('nonpositive post-exec VmHWM')
+    print(json.dumps({'verified':count,'peak_kib':peak,
+        'inherited_ru_maxrss_kib':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}))
 """
     proc = subprocess.run([sys.executable, "-c", script, str(archive)],
                           capture_output=True, text=True, check=True, timeout=50)
     result = json.loads(proc.stdout)
     assert result["verified"] == 1
     # The published read() path first allocated a 256-MiB bytearray, then copied it to
-    # bytes. Keep this threshold generous for Python+native package startup variation.
+    # bytes. Preserve the strict original 128-MiB ceiling; only the Linux process-local
+    # peak attribution was corrected (ru_maxrss could carry the parent pre-exec peak).
     assert result["peak_kib"] < 128 * 1024, result
