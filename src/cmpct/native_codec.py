@@ -56,6 +56,16 @@ def _src(data: bytes):
     return ctypes.create_string_buffer(data) if data else None
 
 
+def _borrowed_zero_encoded_src(data: bytes):
+    """Borrow immutable encoded bytes during a zero-output native Zstd call.
+
+    c_char_p retains the original bytes object, including while ctypes releases
+    the GIL; the native ABI uses the explicit length, never C-string termination.
+    Keep the historical copying path for nonzero outputs and compression.
+    """
+    return ctypes.c_char_p(data)
+
+
 def compress(data: bytes, level: int) -> bytes:
     if not data:
         return b""
@@ -73,10 +83,12 @@ def compress_using_dict(data: bytes, dictionary: bytes, level: int) -> bytes:
 
 
 def decompress(data: bytes, usize: int) -> bytes:
-    if usize == 0:
-        return b""
-    src = _src(data); dst = ctypes.create_string_buffer(usize); out = _sz()
-    _check(_core.cmpct_codec_zstd_decompress(src, len(data), dst, usize, ctypes.byref(out)), "Zstd decompress")
+    if usize == 0 and not data:
+        return b""  # Historical empty encoded sentinel: no physical frame exists.
+    # A nonempty encoded frame must be authenticated even when decoded size is zero.
+    # The package-owned Zstd ABI can write 0 bytes into a non-null, 1-byte capacity.
+    src = _borrowed_zero_encoded_src(data) if usize == 0 else _src(data); cap = 1 if usize == 0 else usize; dst = ctypes.create_string_buffer(cap); out = _sz()
+    _check(_core.cmpct_codec_zstd_decompress(src, len(data), dst, cap, ctypes.byref(out)), "Zstd decompress")
     if out.value != usize:
         raise IOError(f"Zstd size mismatch: {out.value} != {usize}")
     return dst.raw[: out.value]
@@ -84,10 +96,11 @@ def decompress(data: bytes, usize: int) -> bytes:
 
 def decompress_using_dict(data: bytes, usize: int, dictionary: bytes) -> bytes:
     """Compatibility helper for callers that need one-shot dictionary decode."""
-    if usize == 0:
-        return b""
-    src = _src(data); db = _src(dictionary); dst = ctypes.create_string_buffer(usize); out = _sz()
-    _check(_core.cmpct_codec_zstd_decompress_using_dict(src, len(data), db, len(dictionary), dst, usize, ctypes.byref(out)), "Zstd dictionary decompress")
+    if usize == 0 and not data:
+        return b""  # Preserve legacy zero-byte encoded dictionary payload.
+    # Do not skip codec validation when zero logical bytes have a physical frame.
+    src = _borrowed_zero_encoded_src(data) if usize == 0 else _src(data); db = _src(dictionary); cap = 1 if usize == 0 else usize; dst = ctypes.create_string_buffer(cap); out = _sz()
+    _check(_core.cmpct_codec_zstd_decompress_using_dict(src, len(data), db, len(dictionary), dst, cap, ctypes.byref(out)), "Zstd dictionary decompress")
     if out.value != usize:
         raise IOError(f"Zstd dictionary size mismatch: {out.value} != {usize}")
     return dst.raw[: out.value]
@@ -104,12 +117,13 @@ class DictDecoder:
         self._handle = handle
 
     def decompress(self, data: bytes, usize: int) -> bytes:
-        if usize == 0:
-            return b""
+        if usize == 0 and not data:
+            return b""  # Preserve historically empty encoded members.
         if not self._handle:
             raise RuntimeError("Zstd dictionary decoder is closed")
-        src = _src(data); dst = ctypes.create_string_buffer(usize); out = _sz()
-        _check(_core.cmpct_codec_zstd_dict_decoder_decompress(self._handle, src, len(data), dst, usize, ctypes.byref(out)), "Zstd dictionary decompress")
+        # A compressed frame claiming zero logical bytes is still codec input.
+        src = _borrowed_zero_encoded_src(data) if usize == 0 else _src(data); cap = 1 if usize == 0 else usize; dst = ctypes.create_string_buffer(cap); out = _sz()
+        _check(_core.cmpct_codec_zstd_dict_decoder_decompress(self._handle, src, len(data), dst, cap, ctypes.byref(out)), "Zstd dictionary decompress")
         if out.value != usize:
             raise IOError(f"Zstd dictionary size mismatch: {out.value} != {usize}")
         return dst.raw[: out.value]

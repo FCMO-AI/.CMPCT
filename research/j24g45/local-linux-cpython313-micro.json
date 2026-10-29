@@ -1,0 +1,113 @@
+{
+  "schema": "cmpct-j24g45-standalone-borrowed-input-v1",
+  "source_sha256": "341aacac661ccb210720bedaa9ead5d668fe5ea41a73532fc147c71e34040df1",
+  "source_size_bytes": 16777216,
+  "source_contains_nul": true,
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "python": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]",
+  "implementation": "CPython",
+  "scope": "isolated CPython/ctypes source construction, not installed CMPCT RSS",
+  "traced_allocation_median_reduction_bytes": 16780962,
+  "copy_wall_median_ns": 2594873,
+  "borrow_wall_median_ns": 29318,
+  "copy_cpu_median_ns": 2547402.5,
+  "borrow_cpu_median_ns": 17170,
+  "raw_samples": [
+    {
+      "mode": "copy",
+      "cpu_ns": 48392361,
+      "wall_ns": 48424894,
+      "peak_traced_allocation_bytes": 16781514
+    },
+    {
+      "mode": "borrow",
+      "cpu_ns": 16905,
+      "wall_ns": 27360,
+      "peak_traced_allocation_bytes": 328
+    },
+    {
+      "mode": "borrow",
+      "cpu_ns": 19339,
+      "wall_ns": 32287,
+      "peak_traced_allocation_bytes": 328
+    },
+    {
+      "mode": "copy",
+      "cpu_ns": 5909242,
+      "wall_ns": 5930110,
+      "peak_traced_allocation_bytes": 16781290
+    },
+    {
+      "mode": "copy",
+      "cpu_ns": 2568659,
+      "wall_ns": 2590687,
+      "peak_traced_allocation_bytes": 16781290
+    },
+    {
+      "mode": "borrow",
+      "cpu_ns": 12268,
+      "wall_ns": 22904,
+      "peak_traced_allocation_bytes": 328
+    },
+    {
+      "mode": "borrow",
+      "cpu_ns": 17435,
+      "wall_ns": 44325,
+      "peak_traced_allocation_bytes": 328
+    },
+    {
+      "mode": "copy",
+      "cpu_ns": 2526146,
+      "wall_ns": 2547253,
+      "peak_traced_allocation_bytes": 16781290
+    },
+    {
+      "mode": "copy",
+      "cpu_ns": 2408190,
+      "wall_ns": 2427186,
+      "peak_traced_allocation_bytes": 16781290
+    },
+    {
+      "mode": "borrow",
+      "cpu_ns": 12098,
+      "wall_ns": 23655,
+      "peak_traced_allocation_bytes": 328
+    },
+    {
+      "mode": "borrow",
+      "cpu_ns": 18097,
+      "wall_ns": 31276,
+      "peak_traced_allocation_bytes": 328
+    },
+    {
+      "mode": "copy",
+      "cpu_ns": 2439136,
+      "wall_ns": 2722341,
+      "peak_traced_allocation_bytes": 16781450
+    },
+    {
+      "mode": "copy",
+      "cpu_ns": 2302404,
+      "wall_ns": 2321619,
+      "peak_traced_allocation_bytes": 16781290
+    },
+    {
+      "mode": "borrow",
+      "cpu_ns": 12668,
+      "wall_ns": 23594,
+      "peak_traced_allocation_bytes": 328
+    },
+    {
+      "mode": "borrow",
+      "cpu_ns": 23895,
+      "wall_ns": 183210,
+      "peak_traced_allocation_bytes": 328
+    },
+    {
+      "mode": "copy",
+      "cpu_ns": 2580226,
+      "wall_ns": 2599059,
+      "peak_traced_allocation_bytes": 16781290
+    }
+  ]
+}

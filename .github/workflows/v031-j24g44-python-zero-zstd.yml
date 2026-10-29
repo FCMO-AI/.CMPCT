@@ -1,0 +1,90 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24G44 Python zero-output Zstd physical integrity
+
+on:
+  pull_request:
+    paths:
+      - "src/cmpct/native_codec.py"
+      - "tests/test_j24g44_zero_encoded_python_codec.py"
+      - "research/j24g44/**"
+      - "research/j24g45/**"
+      - "docs/v031-research/*j24g44*"
+      - ".github/workflows/v031-j24g44-python-zero-zstd.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: cmpct-j24g44-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-physical-verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 29
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build and install real shipping Python+native package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pip install . "pytest>=8" "zstandard>=0.22"
+          mkdir -p j24g44-evidence
+          git rev-parse HEAD | tee j24g44-evidence/exact-head.txt
+          git hash-object src/cmpct/native_codec.py | tee j24g44-evidence/source-blob.txt
+          git hash-object tests/test_j24g44_zero_encoded_python_codec.py | tee j24g44-evidence/test-blob.txt
+          python - <<'PY'
+          import hashlib, pathlib, cmpct.native_codec as native
+          source=pathlib.Path("src/cmpct/native_codec.py").read_bytes()
+          installed=pathlib.Path(native.__file__).read_bytes()
+          assert hashlib.sha256(source).digest()==hashlib.sha256(installed).digest(), "installed runtime source differs from exact checkout"
+          print("installed-sha256",hashlib.sha256(installed).hexdigest())
+          print("installed-path",native.__file__)
+          PY
+      - name: Run exact signed-r24 physical positive/negative and frozen direct-codec controls
+        shell: bash
+        env:
+          J24G44_EVIDENCE_DIR: j24g44-evidence/physical
+        run: |
+          set -euo pipefail
+          python -m pytest --noconftest -q -rA tests/test_j24g44_zero_encoded_python_codec.py tests/test_conformance_direct_codecs.py tests/test_conformance_zstd_dictionary.py 2>&1 | tee j24g44-evidence/pytest.log
+          test -s j24g44-evidence/physical/receipt.json
+          test -s j24g44-evidence/physical/valid.cmpct
+          test -s j24g44-evidence/physical/invalid.cmpct
+      - name: Independently parse signed r24 wire and decode physical frame
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g44/detached_zero_encoded_wire_audit.py --artifacts j24g44-evidence --output j24g44-evidence/detached-wire-result.json 2>&1 | tee j24g44-evidence/detached-wire.log
+          test -s j24g44-evidence/detached-wire-result.json
+      - name: Independent borrowed-input source allocation probe (research-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g45/borrowed_input_oracle.py j24g44-evidence/borrowed-input-oracle.json 2>&1 | tee j24g44-evidence/borrowed-input-oracle.log
+          test -s j24g44-evidence/borrowed-input-oracle.json
+      - name: Preserve exact-host binary archive specimens and diagnosis, even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g44-physical-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: j24g44-evidence/
+          retention-days: 30
+          if-no-files-found: warn
