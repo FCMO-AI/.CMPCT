@@ -1,0 +1,215 @@
+# ci-lane: release
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: J24I04 full-matrix same-source A/A (research only)
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24i04-full-matrix-aa-sham-20261028
+    paths:
+      - benchmarks/v031_j24i04_full_matrix_aa.py
+      - research/j24i04_independent_receipt_referee.py
+      - research/test_j24i04_referee.py
+      - .github/workflows/v031-j24i04-full-matrix-aa.yml
+      - docs/v031-research/2026-10-28-j24i04-full-matrix-aa-preregistration.md
+  pull_request:
+    paths:
+      - benchmarks/v031_j24i04_full_matrix_aa.py
+      - research/j24i04_independent_receipt_referee.py
+      - research/test_j24i04_referee.py
+      - .github/workflows/v031-j24i04-full-matrix-aa.yml
+      - docs/v031-research/2026-10-28-j24i04-full-matrix-aa-preregistration.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i04-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  CMPCT_PARITY_REPS: "7"
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_research: ${{ steps.scope.outputs.run_research }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Admit expensive full court only on explicitly source-bound workflow trigger
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_research=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -qx '.github/workflows/v031-j24i04-full-matrix-aa.yml' /tmp/latest-head-files.txt; then
+            echo 'run_research=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_research=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  research:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_research == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+
+      - name: Bind exact experimental source and untouched official evaluator
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f benchmarks/v031_j24i04_full_matrix_aa.py
+          test -f docs/v031-research/2026-10-28-j24i04-full-matrix-aa-preregistration.md
+          git show 19babf93938af73d86f2e1b2806115efddc4dbf0:docs/v031-research/2026-10-28-j24i04-full-matrix-aa-preregistration.md >/tmp/j24i04-frozen-prereg.md
+          cmp -s /tmp/j24i04-frozen-prereg.md docs/v031-research/2026-10-28-j24i04-full-matrix-aa-preregistration.md
+          mkdir -p j24i04-artifacts
+          printf 'research_head=%s\nsource_exact=%s\n' "$EVIDENCE_HEAD" "293aa161a4a13b4c1f4fd0f5089aa62e4dbeedef" >j24i04-artifacts/source-lock.txt
+          sha256sum benchmarks/zip_parity_bench.py benchmarks/universal_bench.py \
+            tools/aggregate_parity_runs.py tools/check_performance_regression.py \
+            >j24i04-artifacts/unchanged-evaluator-sha256.txt
+          # Bind the inherited full evaluator to #704's actual source, not a
+          # research-branch variant or the current working tree by label alone.
+          for path in benchmarks/zip_parity_bench.py benchmarks/universal_bench.py \
+                      tools/aggregate_parity_runs.py tools/check_performance_regression.py \
+                      tools/materialize_performance_base_native.py; do
+            test "$(git hash-object "$path")" = "$(git show 293aa161a4a13b4c1f4fd0f5089aa62e4dbeedef:"$path" | git hash-object --stdin)"
+          done
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install same canonical benchmark dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! sudo apt-get update; then
+            sudo find /etc/apt/sources.list.d -maxdepth 1 -type f \
+              \( -name 'microsoft*.list' -o -name 'azure-cli*.list' \) -delete
+            sudo apt-get update
+          fi
+          sudo apt-get install -y zstd xz-utils libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+
+      - name: Verify experimental source parses under the exact Python interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile benchmarks/v031_j24i04_full_matrix_aa.py \
+            research/j24i04_independent_receipt_referee.py \
+            research/test_j24i04_referee.py
+
+      - name: Require independent referee neutral/red controls and forged-receipt rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest -v research.test_j24i04_referee |& tee j24i04-artifacts/referee-selftest.stdout.txt
+
+      - name: Execute original full correctness precondition, separately from timed court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q | tee j24i04-artifacts/correctness-precondition.stdout.txt
+
+      - name: Create two physical worktrees at IDENTICAL #704 source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/cmpct-j24i04-A 293aa161a4a13b4c1f4fd0f5089aa62e4dbeedef
+          git worktree add --detach /tmp/cmpct-j24i04-B 293aa161a4a13b4c1f4fd0f5089aa62e4dbeedef
+          test "$(git -C /tmp/cmpct-j24i04-A rev-parse HEAD)" = "293aa161a4a13b4c1f4fd0f5089aa62e4dbeedef"
+          test "$(git -C /tmp/cmpct-j24i04-B rev-parse HEAD)" = "293aa161a4a13b4c1f4fd0f5089aa62e4dbeedef"
+          git -C /tmp/cmpct-j24i04-A diff --quiet
+          git -C /tmp/cmpct-j24i04-B diff --quiet
+
+      - name: Materialize one historical native payload and copy byte-identically to second worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/materialize_performance_base_native.py /tmp/cmpct-j24i04-A \
+            --receipt j24i04-artifacts/native-build-source.json | tee j24i04-artifacts/native-build.stdout.txt
+          python - <<'PY'
+          import hashlib, json, shutil
+          from pathlib import Path
+          a = Path('/tmp/cmpct-j24i04-A/src/cmpct')
+          b = Path('/tmp/cmpct-j24i04-B/src/cmpct')
+          payloads = [p for p in a.glob('cmpct_core*') if p.is_file() and p.suffix in {'.so','.pyd','.dll','.dylib'}]
+          if len(payloads) != 1:
+              raise SystemExit(f'one native payload required: {payloads}')
+          src = payloads[0]
+          dst = b / src.name
+          shutil.copy2(src,dst)
+          sha = lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+          if sha(src) != sha(dst):raise SystemExit('native payload copy drift')
+          shutil.copy2(src, Path('j24i04-artifacts/native-source-cmpct-core.so'))
+          Path('j24i04-artifacts/native-identity.json').write_text(json.dumps({
+              'source':str(src),'copy':str(dst),'source_sha256':sha(src),
+              'copy_sha256':sha(dst),'bytes':src.stat().st_size},indent=2)+'\n')
+          PY
+
+      - name: Log host/runner environment separately from product time
+        shell: bash
+        run: |
+          {
+            date -u +'%FT%TZ'
+            python --version
+            uname -a
+            lscpu | sed -n '1,20p'
+            free -h
+            df -T .
+            uptime
+            zstd --version
+          } > j24i04-artifacts/environment.txt
+
+      - name: Execute unchanged FULL eight-row ABBA gate as identical-source A/A diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          python benchmarks/v031_j24i04_full_matrix_aa.py \
+            --harness . \
+            --engine-a /tmp/cmpct-j24i04-A \
+            --engine-b /tmp/cmpct-j24i04-B \
+            --output j24i04-artifacts | tee j24i04-artifacts/scientific.stdout.txt
+
+      - name: Independent third-root receipt referee, including seven adversarial forgeries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24i04_independent_receipt_referee.py --folder j24i04-artifacts | tee j24i04-artifacts/referee.stdout.txt
+
+      - name: Upload raw outcomes, even if scientific court fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i04-source-bound-full-aa-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 90
+          if-no-files-found: warn
+          path: |
+            j24i04-artifacts/*.json
+            j24i04-artifacts/*.txt
+            j24i04-artifacts/*.md
+            j24i04-artifacts/*.cmpct
+            j24i04-artifacts/*.so
