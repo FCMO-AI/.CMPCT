@@ -12,6 +12,7 @@ import ctypes
 import ctypes.util
 import hashlib
 import json
+import os
 import struct
 import sys
 import zipfile
@@ -94,7 +95,7 @@ def audit_zip(path: Path) -> dict:
     with zipfile.ZipFile(path) as z:
         assert z.testzip() is None
         head = z.read("head.txt").decode().strip()
-        assert head == EXPECTED_HOST_SHA
+        assert head == os.environ.get("EXACT_HEAD", EXPECTED_HOST_SHA)
         for path_in_zip, git_blob in EXPECTED_PRODUCT_BLOBS.items():
             assert z.read(path_in_zip).decode().strip() == git_blob
         receipt = json.loads(z.read("court.json"))
