@@ -58,6 +58,14 @@ jobs:
         if: steps.scope.outputs.run == 'true'
         env:
           J24I36_CASE_DIR: ${{ github.workspace }}/j24i36-cases
+      - name: Unchanged held-out WAV/FLAC and Zstd-dictionary physical CRC control
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        env:
+          J24I36_EXTRA_CASE_DIR: ${{ github.workspace }}/j24i36-extra
+        run: |
+          python research/j24i36/generate_additional_direct_crc.py --output j24i36-extra
+          cargo test --locked --manifest-path native/cmpct-core/Cargo.toml --test j24i36_fused_crc_court j24i36_heldout_direct_codecs_reject_crc_only_mutation -- --ignored --nocapture
       - name: Real symlink and payload SHA adversarial control
         if: steps.scope.outputs.run == 'true' && runner.os != 'Windows'
         shell: bash
@@ -77,6 +85,7 @@ jobs:
           path: |
             j24i36-head.txt
             j24i36-cases/
+            j24i36-extra/
             j24i36-symlink/
 
   cost-diagnostic:
