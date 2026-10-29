@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
 
-TEST_CLASS = "test_j24v01_sparse_verify_streamed"
+TEST_CLASS = "tests.test_j24v01_sparse_verify_streamed"
 TEST_NAME = "test_real_256m_sparse_verification_does_not_materialize_holes"
 BAD_CHILDREN = {"failure", "error", "skipped"}
 
@@ -20,10 +20,10 @@ def verify_target_pass(xml_path: Path) -> str:
     root = ET.parse(xml_path).getroot()
     if root.tag not in {"testsuites", "testsuite"}:
         raise ValueError(f"unexpected JUnit document root: {root.tag!r}")
-    matches = [
+    # A same-basename decoy in another module is not evidence the genuine test ran.\n    matches = [
         c for c in root.iter("testcase")
         if c.get("name") == TEST_NAME
-        and c.get("classname", "").split(".")[-1] == TEST_CLASS
+        and c.get("classname", "") == TEST_CLASS
     ]
     if len(matches) != 1:
         raise ValueError(
