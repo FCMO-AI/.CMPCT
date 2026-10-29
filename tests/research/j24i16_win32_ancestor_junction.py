@@ -69,6 +69,7 @@ def result_on_windows() -> dict:
         assert not outside.is_relative_to(root)
         outside_info = os.stat(external)
         inside_info = os.stat(inner)
+        inside_info_nofollow = os.stat(inner, follow_symlinks=False)
         if (inside_info.st_dev, inside_info.st_ino) == (outside_info.st_dev, outside_info.st_ino):
             raise AssertionError("inside/outside fixtures alias the same source object")
 
@@ -104,8 +105,10 @@ def result_on_windows() -> dict:
         # then swap only its *ancestor* path, not the file content. A consumer
         # later using leaf-only nofollow opens the same textual pathname.
         pre_pivot = os.stat(inner, follow_symlinks=False)
-        if (int(pre_pivot.st_dev), int(pre_pivot.st_ino)) != initial_os["inside"]:
-            raise AssertionError("pre-pivot source identity drift")
+        if (int(pre_pivot.st_dev), int(pre_pivot.st_ino)) != (
+            int(inside_info_nofollow.st_dev), int(inside_info_nofollow.st_ino)
+        ):
+            raise AssertionError("pre-pivot same-API nofollow source identity drift")
         parent.rename(parked)
         junction_message = mkjunction(parent, outside)
         parent_stat = os.lstat(parent)
@@ -155,6 +158,12 @@ def result_on_windows() -> dict:
                 "after_ancestor_pivot": len(pivot_raw),
             },
             "source_physical_ids": initial_os,
+            "windows_os_stat_api_custody": {
+                "inside_default_stat": initial_os["inside"],
+                "inside_nofollow_stat": [int(inside_info_nofollow.st_dev), int(inside_info_nofollow.st_ino)],
+                "pre_pivot_nofollow_stat": [int(pre_pivot.st_dev), int(pre_pivot.st_ino)],
+                "api_identity_equal": initial_os["inside"] == [int(inside_info_nofollow.st_dev), int(inside_info_nofollow.st_ino)]
+            },
             "post_pivot_os_identity": [int(after_os.st_dev), int(after_os.st_ino)],
             "handle_identities": {
                 "before": list(stable_info["identity"]),
