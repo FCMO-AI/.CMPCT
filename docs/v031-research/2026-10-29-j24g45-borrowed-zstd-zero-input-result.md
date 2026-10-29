@@ -23,6 +23,11 @@ Median peak traced allocation reduction: **16,780,962 bytes**. Local timing is a
 
 A separate Linux system-libzstd.so.1 oracle accepted a nine-byte compressed-empty frame (hex 28b52ffd2000010000), rejected a single-byte magic corruption, and rejected an appended NUL when passed via borrowed pointers with explicit lengths. System libzstd also accepted a valid **16,777,224-byte Zstd skippable frame** decoding to zero logical bytes and rejected its truncations. The large-frame observation shows physical bytes can substantially exceed zero logical bytes; it is **not evidence** that a particular CMPCT archive with that frame is admitted or safe in every runtime.
 
+## Independent binary-input differential
+A separate seeded, reproducible system-libzstd pointer-parity instrument was added as research/j24g45/independent_libzstd_pointer_fuzz.py, with the observed run in research/j24g45/local-libzstd-pointer-fuzz-result.json. The fixed seed is 45045, with 5,000 physical inputs: 715 valid empty frames, 715 valid one-byte frames and 714 each of skippable frames, magic-flipped frames, truncated frames, appended-NUL frames and random bytes. The SHA-256 of the length-prefixed input stream is 4962b843b1f9fea652399e0b56330260ccbea65efbd5a0818acd597e10e4934a.
+
+**5,000/5,000** direct system-C-call outcomes agreed between copied and borrowed ctypes pointers on error state, error name, decoded length and content, including **2,223** successfully decoded cases. This is a zero-difference *lower-rung independent C pointer semantics* check, not evidence for a packaged CMPCT, and does not prove universal memory safety, hostile input resource bounds or a release gate.
+
 ## Installed and adversarial evidence boundary
 The existing signed authentic r24 valid/corrupt frame court, contradictory decoded-one-byte specimen, detached independent physical auditor, and unchanged direct-codec/dictionary golden vectors remain mandatory. Additional tests check embedded-NUL explicit lengths, borrowed-object lifetime after caller release, no accidental old-copy fallback and an isolated 16-MiB allocation comparison. A valid encoded-empty prefix plus trailing zero must fail.
 
