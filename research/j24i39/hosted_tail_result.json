@@ -1,0 +1,46 @@
+{
+  "schema": "j24i39b-hostile-tail-hosted-result-v1",
+  "date_utc": "2026-10-29",
+  "source_head": "55d672272a48413a9ef9dd97eadb3ee5b71cebe5",
+  "provider": "GitHub Actions ubuntu-24.04",
+  "run_id": 40934324693,
+  "job_id": 123660723525,
+  "workflow_conclusion": "success",
+  "artifact_status": "MISSING: upload-artifact warned no files found despite executed controls; result preserved from original job log",
+  "exact_source_archive_sha256": "9250964815f67891c3e106c9d87aadc67d4f2c3dce8b3e4e1873813a13a6fac7",
+  "original_flac_sha256": "d2126c870dcba10ad7f9d7b6caf83ca0c0df2815b9e47be343f3ed3b3b1355e8",
+  "tail_hex": "ff4a32344933395f545241494c494e475f54455354",
+  "tests": [
+    {
+      "case": "valid",
+      "bytes": 3982561,
+      "sha256": "d2126c870dcba10ad7f9d7b6caf83ca0c0df2815b9e47be343f3ed3b3b1355e8",
+      "reference_flac_exit": 0,
+      "claxon_oracle_exit": 0
+    },
+    {
+      "case": "trailer",
+      "bytes": 3982582,
+      "sha256": "308578fd7e366cede8bc6c8cd3d530f31903d6c42412ae06296bc75d218e29ef",
+      "reference_flac_exit": 1,
+      "claxon_oracle_exit": 101
+    },
+    {
+      "case": "truncated",
+      "bytes": 3982497,
+      "sha256": "cba312a6042bb5629233f9968066c86f1a3989a4959f1247ad2155c8b157b37a",
+      "reference_flac_exit": 1,
+      "claxon_oracle_exit": 101
+    },
+    {
+      "case": "concatenated",
+      "bytes": 7965122,
+      "sha256": "84cfdef534d457818f4c6355b9b581fd8100600344a9a3368b525c2d2477b1aa",
+      "reference_flac_exit": 1,
+      "claxon_oracle_exit": 101
+    }
+  ],
+  "decision": "TRAILER_GAP_NOT_DEMONSTRATED",
+  "no_product_credit": true,
+  "limitations": "Only exit status from actual compiled Claxon original oracle and reference FLAC -t; need log artifact for failure classification; not a physically re-signed CMPCT mutant; one PCM16 input/4 variants; no general full encoded coverage."
+}
