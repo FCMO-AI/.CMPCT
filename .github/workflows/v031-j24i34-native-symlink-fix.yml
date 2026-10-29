@@ -1,0 +1,105 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I34 Native r24 Symlink Strong-Verification Repair Court
+
+on:
+  pull_request:
+    paths:
+      - 'native/cmpct-core/src/vzip_dispatch.rs'
+      - 'native/cmpct-core/tests/j24i34_native_symlink_verify.rs'
+      - 'research/j24i34/**'
+      - 'docs/v031-research/*j24i34*'
+      - '.github/workflows/v031-j24i34-native-symlink-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: j24i34-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-native-symlink-repair:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Pin exact candidate and historical scientist
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "463c50633be74423e92a074b7d7577db6a4b0cf9"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "cd1a367761465cbba3e8054f743af551c1e560e1"
+          test "$(git hash-object research/j24i30/generate_symlink_wire.py)" = "802866103c607febc8da95135a27c4ca50aa3b3a"
+          test "$(git hash-object research/j24i30/audit_symlink_wire.py)" = "8b181476d090de2cd3c91335f824eb7ec4821329"
+          git rev-parse HEAD | tee j24i34-head.txt
+          git hash-object native/cmpct-core/tests/j24i34_native_symlink_verify.rs | tee j24i34-test-blob.txt
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(native/cmpct-core/src/vzip_dispatch[.]rs|native/cmpct-core/tests/j24i34_native_symlink_verify[.]rs|research/j24i34/|docs/v031-research/.*j24i34|[.]github/workflows/v031-j24i34-native-symlink-fix[.]yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
+      - name: Install CMPCT and independently authenticate five original r24 specimens
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . zstandard
+          python research/j24i30/generate_symlink_wire.py --output j24i34-observations 2>&1 | tee j24i34-python.log
+          python research/j24i34/generate_dual_sha_conflict.py --case-dir j24i34-observations 2>&1 | tee j24i34b-python.log
+          python research/j24i30/audit_symlink_wire.py --case-dir j24i34-observations 2>&1 | tee j24i34-referee.log
+          python research/j24i34/audit_dual_sha_conflict.py --case-dir j24i34-observations 2>&1 | tee j24i34b-referee.log
+          test -s j24i34-observations/dual-commit-detached-audit.json
+          test -s j24i34-observations/python-observations.json
+          test -s j24i34-observations/independent-physical-audit.json
+      - name: Run actual compiled native product integrity tests
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        env:
+          J24I34_CASE_DIR: ${{ github.workspace }}/j24i34-observations
+        run: |
+          set -euo pipefail
+          cargo test --manifest-path native/cmpct-core/Cargo.toml --test j24i34_native_symlink_verify -- --ignored --nocapture 2>&1 | tee j24i34-native.log
+          grep -q 'J24I34_GOOD_original:verified_payload_count=1' j24i34-native.log
+          grep -q 'J24I34_GOOD_present-correct:verified_payload_count=1' j24i34-native.log
+          grep -q 'J24I34_REJECTED_present-foreign:reason=MemberHash' j24i34-native.log
+          grep -q 'J24I34_REJECTED_physical-wrong:reason=MemberHash' j24i34-native.log
+          grep -q 'J24I34_SEPARATE_DEBT_empty_optional_sha=native_rejected' j24i34-native.log
+          grep -q 'J24I34B_REJECTED_dual-commit-corrupt:reason=MemberHash' j24i34-native.log
+      - name: Preserve source, full receipts, installed Rust logs, and original wire
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i34-native-symlink-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24i34-head.txt
+            j24i34-test-blob.txt
+            j24i34-python.log
+            j24i34-referee.log
+            j24i34b-python.log
+            j24i34b-referee.log
+            j24i34-native.log
+            j24i34-observations/

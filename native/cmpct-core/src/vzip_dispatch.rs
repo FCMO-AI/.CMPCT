@@ -23,7 +23,7 @@ use sha2::{Digest, Sha256};
 const VERIFY_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 
 impl Archive {
-    /// Resolve the complete identity that revision-24 actually carries for one regular member.
+    /// Resolve the complete identity revision-24 carries for one payload-bearing file or symlink.
     ///
     /// Newer r24 representations may carry a member-level logical SHA-256 in the authenticated index, and
     /// virtual ZIP carries one in its recipe. Historical direct members predate that field: for those exact
@@ -33,6 +33,23 @@ impl Archive {
     fn complete_member_identity(&self, entry_index: usize) -> Result<[u8; 32], CmpctError> {
         let entry = self.entries.get(entry_index).ok_or(CmpctError::Range)?;
         if let Some(hash) = entry.logical_hash {
+            // The index SHA is an additional commitment, not an override for CMA4.
+            // RAW direct range reads intentionally avoid hashing unrequested bytes;
+            // full verification must still reject a matching re-signed row SHA when
+            // the physical blob's separately committed header SHA disagrees.
+            if let Storage::Direct(index) = &entry.storage {
+                let blob = self.blobs.get(*index).ok_or_else(|| {
+                    CmpctError::Schema("direct member references missing blob".into())
+                })?;
+                if blob.usize != entry.size {
+                    return Err(CmpctError::BlobHeader);
+                }
+                let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
+                let (_, physical_hash) = self.checked_blob_layout(blob, &mut file)?;
+                if physical_hash != hash {
+                    return Err(CmpctError::MemberHash);
+                }
+            }
             return Ok(hash);
         }
         match &entry.storage {
@@ -58,7 +75,7 @@ impl Archive {
         }
     }
 
-    /// Stream every regular revision-24 member and authenticate its complete logical identity.
+    /// Stream every regular file and symlink payload and authenticate its complete logical identity.
     ///
     /// This is deliberately stronger than treating a successful range read as verification. Direct RAW range
     /// reads are intentionally local and therefore do not hash unseen payload bytes; complete verification must
@@ -68,7 +85,10 @@ impl Archive {
     pub fn verify_complete(&self) -> Result<usize, CmpctError> {
         let mut verified = 0usize;
         for (entry_index, entry) in self.entries.iter().enumerate() {
-            if entry.kind != 0 {
+            // A symlink target is an archived payload too: skipping kind=2 silently certified
+            // corrupt or contradictory targets as verified. Direct symlinks reuse this exact
+            // bounded hash/read path; directories and hardlink aliases have no own payload.
+            if entry.kind != 0 && entry.kind != 2 {
                 continue;
             }
             let expected = self.complete_member_identity(entry_index)?;
