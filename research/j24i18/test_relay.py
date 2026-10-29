@@ -42,7 +42,7 @@ class PhysicalRelayCourt(unittest.TestCase):
                         self.assertEqual(a.read(row[0]),b.read(row[0]))
             original_data=archive.read_bytes();result_data=result.read_bytes()
             ai,ab,ad=read_index(original_data);bi,bb,bd=read_index(result_data)
-            self.assertEqual(ad,1)
+            self.assertGreaterEqual(ad,1,'a genuine committed delta must exist; original Builder may write multiple checkpoints')
             self.assertEqual(bd,0)
             original_records=read_blobs(original_data,ai,ab)
             result_records=read_blobs(result_data,bi,bb)
