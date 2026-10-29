@@ -20,6 +20,7 @@ if sys.platform in ("darwin", "linux"):
     required.append("test_native_xattr_roundtrip_through_authentic_r24_archive")
 if sys.platform == "darwin":
     required.append("test_darwin_nofollow_does_not_inherit_target_xattr")
+    required.append("test_missing_darwin_native_set_api_rejects_before_destination_creation")
 observed = {name: {
     "present": name in by_name,
     "skipped": name in by_name and by_name[name].find("skipped") is not None,
