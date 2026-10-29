@@ -1,0 +1,108 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24G35 POSIX stage-directory custody falsifier
+
+on:
+  push:
+    branches:
+      - "agent/phased2-v031-j24g35-*"
+    paths:
+      - "tests/research/j24g35_posix_stage_custody.py"
+      - "docs/v031-research/2026-10-29-j24g35-*"
+      - ".github/workflows/v031-j24g35-posix-stage-custody.yml"
+  pull_request:
+    paths:
+      - "tests/research/j24g35_posix_stage_custody.py"
+      - "docs/v031-research/2026-10-29-j24g35-*"
+      - ".github/workflows/v031-j24g35-posix-stage-custody.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g35-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  primitive-falsifier:
+    name: Pinned directory stage primitive - ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Bind current experiment to exact product source and frozen forecast
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 78fda13e48db0a4ce8d9f3f824ef65c0e7f9bec7 HEAD
+          git merge-base --is-ancestor b47f830b1a9aebcc7d0524ed6bdf2d0082b46eae HEAD
+          git diff --exit-code 78fda13e48db0a4ce8d9f3f824ef65c0e7f9bec7 HEAD -- src/ native/ docs/FORMAT.md docs/PRE1_RELEASE_POLICY.md benchmarks/
+          test "$(git rev-parse 'HEAD:src/cmpct/transactions.py')" = 8d1e46e1fdf408c1d95ce9091e25fa159f0e6264
+          mkdir -p j24g35-evidence
+          git rev-parse HEAD > j24g35-evidence/head.txt
+          git rev-parse 'HEAD:tests/research/j24g35_posix_stage_custody.py' > j24g35-evidence/instrument-blob.txt
+          git rev-parse 'HEAD:src/cmpct/transactions.py' > j24g35-evidence/product-transactions-blob.txt
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run bounded real-filesystem primitive court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile tests/research/j24g35_posix_stage_custody.py
+          python tests/research/j24g35_posix_stage_custody.py > j24g35-evidence/ordinary-user.json
+          if [[ "$RUNNER_OS" = "Linux" ]]; then
+            sudo -n "$(command -v python)" tests/research/j24g35_posix_stage_custody.py > j24g35-evidence/separate-uid.json
+          fi
+
+      - name: Independently verify receipts against preregistered decision boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path("j24g35-evidence")
+          receipts=[("ordinary-user.json",1)]
+          if os.environ.get("RUNNER_OS") == "Linux":
+              receipts.append(("separate-uid.json",2))
+          for f,min_cases in receipts:
+              doc=json.loads((p/f).read_text())
+              assert doc["decision"] == "PRIVATE_DIR_ONLY_FALSIFIED__FD_ANCHOR_SURVIVES_THIS_REBIND",f
+              assert doc["evidence_class"] == "OS_PRIMITIVE_NOT_PRODUCT",f
+              assert len(doc["cases"]) >= min_cases,f
+              for row in doc["cases"]:
+                  assert row["weak_path_writer_reached_outside"]
+                  assert row["weak_path_publish_used_outside"]
+                  assert row["source_dir_fd_retains_original_inode"]
+                  assert row["anchored_output_sha256"] == row["expected_sha256"]
+                  assert not row["anchored_writer_reached_outside"]
+                  assert row["outside_sentinel_intact"]
+              if min_cases == 2:
+                  assert any(row["actor_uid"] == 65534 for row in doc["cases"])
+              print("RECEIPT_PASS", f, len(doc["cases"]))
+          PY
+
+      - name: Preserve raw scientific evidence, also on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g35-stage-primitive-${{ matrix.os }}-${{ github.run_id }}
+          path: j24g35-evidence/
+          retention-days: 30
+          if-no-files-found: warn
