@@ -17,7 +17,7 @@ class Zstd:
         self.z.ZSTD_isError.restype=ctypes.c_uint
     def size(self,b):
         if not b:return 0
-        src=ctypes.create_string_buffer(b)
+        src=ctypes.create_string_buffer(bytes(b))
         dst=ctypes.create_string_buffer(self.z.ZSTD_compressBound(len(b)))
         n=self.z.ZSTD_compress(dst,len(dst),src,len(b),19)
         assert not self.z.ZSTD_isError(n)
