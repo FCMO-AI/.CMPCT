@@ -88,7 +88,7 @@ def main() -> None:
         "scope": "real Builder symlink, r24 direct RAW only; not full product evidence",
     }
     (case_dir / "j24i36-symlink-independent-referee.json").write_text(
-        json.dumps(result, indent=2, sort_keys=True) + "\\n", encoding="utf-8"
+        json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     print(json.dumps(result, sort_keys=True))
 
