@@ -1,0 +1,93 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24I17 installed sparse owner alias compaction RSS scientific court
+on:
+  pull_request:
+    paths:
+      - 'tests/research/j24i17_sparse_alias_compaction.py'
+      - 'docs/v031-research/2026-10-29-j24i17-*'
+      - '.github/workflows/j24i17-sparse-alias-compaction.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i17-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authentic-alias-compaction-resource:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24I17_ARTIFACT_DIR: ${{ github.workspace }}/j24i17-artifacts
+    steps:
+      - name: Checkout exact PR branch head, never synthetic merge
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact donor, compaction owner, preregistered prediction
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 82e90eca58ed0580df191378947004e4061d53c3 HEAD
+          git merge-base --is-ancestor 44cad3ea10d6bc76a2be3f5a1d40b473f136e474 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = b2b7774c13a5c8235ff89786d171b7ea3ff20710
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 8d1e46e1fdf408c1d95ce9091e25fa159f0e6264
+          mkdir -p "$J24I17_ARTIFACT_DIR"
+          git rev-parse HEAD > "$J24I17_ARTIFACT_DIR/exact-head.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$J24I17_ARTIFACT_DIR/reader-git-blob.txt"
+          git rev-parse HEAD:src/cmpct/transactions.py > "$J24I17_ARTIFACT_DIR/transactions-git-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check syntax and install authentic product wheel
+        shell: bash
+        run: |
+          python -m py_compile tests/research/j24i17_sparse_alias_compaction.py
+          python -m pip install .
+      - name: Authenticate installed source and execution boundary
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import pathlib, os, cmpct.reader, cmpct.builder, cmpct.transactions
+          root = pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for module in (cmpct.reader, cmpct.builder, cmpct.transactions):
+              path = pathlib.Path(module.__file__).resolve()
+              assert not path.is_relative_to(root), path
+              checkout = root/"src"/"cmpct"/path.name
+              assert path.read_bytes().replace(b"\r\n",b"\n")==checkout.read_bytes().replace(b"\r\n",b"\n")
+              print("EXACT_INSTALLED",path)
+          PY
+      - name: Genuine sparse owner versus owner plus hardlink fresh-child ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          export CMPCT_ENCODE_WORKERS=1
+          python "$GITHUB_WORKSPACE/tests/research/j24i17_sparse_alias_compaction.py" | tee "$J24I17_ARTIFACT_DIR/court.stdout.txt"
+          python - <<'PY'
+          import json,os,pathlib
+          r=json.loads((pathlib.Path(os.environ["J24I17_ARTIFACT_DIR"])/"report.json").read_text())
+          assert r["schema"]=="cmpct-j24i17-owner-alias-compaction-v1"
+          assert r["decision"]=="ALIAS_COMPACTION_RSS_DEBT_CONFIRMED"
+          assert r["scientific_only"] and r["release_credit"]==0
+          assert all(len(x["owner_only_trials"])==2 and len(x["alias_trials"])==2 for x in r["observations"])
+          assert all(v["rows_metadata_and_sha_equal"] and v["source_unchanged"] for c in r["observations"] for x in ("owner_only_trials","alias_trials") for v in c[x])
+          print("J24I17_SOURCE_EXACT_SCIENTIFIC_RESULT", r["decision"])
+          PY
+      - name: Preserve sources, physical outputs, raw process receipts, including on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i17-sparse-alias-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ env.J24I17_ARTIFACT_DIR }}/
+          if-no-files-found: warn
+          retention-days: 90
