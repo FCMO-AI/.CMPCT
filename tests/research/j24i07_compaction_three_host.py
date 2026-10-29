@@ -120,7 +120,25 @@ def main() -> dict:
                     if reader.read("link") != os.fsencode(observed_target):
                         raise AssertionError("compaction changed target text")
             if name == "hardlink" and not any(r[1] == K_HARDLINK for r in after["rows"]):
-                raise AssertionError("hardlink was flattened")
+                # Preserve physical archives and an independent filesystem
+                # discriminator on failure. No hardlink control is relaxed.
+                shutil.copyfile(source, artifact_dir / (name + "-source.cmpct"))
+                shutil.copyfile(output, artifact_dir / (name + "-output.cmpct"))
+                st_a = os.stat(folder / "data.bin")
+                st_b = os.stat(folder / "hardlink.bin")
+                with os.scandir(folder) as entries:
+                    scan = {e.name: e.stat(follow_symlinks=False) for e in entries}
+                witness = {
+                    "same_inode": (st_a.st_dev, st_a.st_ino) == (st_b.st_dev, st_b.st_ino),
+                    "os_stat_nlink": [st_a.st_nlink, st_b.st_nlink],
+                    "scandir_nlink": [scan["data.bin"].st_nlink, scan["hardlink.bin"].st_nlink],
+                    "scandir_identical_inodes": (
+                        scan["data.bin"].st_dev, scan["data.bin"].st_ino
+                    ) == (scan["hardlink.bin"].st_dev, scan["hardlink.bin"].st_ino),
+                    "source_kinds": [(r[0], r[1]) for r in before["rows"]],
+                    "output_kinds": [(r[0], r[1]) for r in after["rows"]],
+                }
+                raise AssertionError("hardlink flattened, diagnostic=" + json.dumps(witness, sort_keys=True))
             shutil.copyfile(source, artifact_dir / (name + "-source.cmpct"))
             shutil.copyfile(output, artifact_dir / (name + "-output.cmpct"))
             report["cases"].append({
