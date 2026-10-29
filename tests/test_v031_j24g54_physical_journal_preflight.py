@@ -23,7 +23,7 @@ KEY = "com.fcmo.cmpct.j24g54" if sys.platform == "darwin" else "user.cmpct_j24g5
 A = "a-owner.bin"
 B = "b-delete.bin"
 Z = "z-survivor.bin"
-VALUE = {"a": b"j24g54-a\\x00\\xff", "z": b"j24g54-z\\x00\\xfe"}
+VALUE = {"a": b"j24g54-a\x00\xff", "z": b"j24g54-z\x00\xfe"}
 
 
 def _sha(data: bytes) -> str:
@@ -69,7 +69,7 @@ def test_firstparty_committed_delete_preflight_differs_from_reader(
 ) -> None:
     source = tmp_path / "tree"
     source.mkdir()
-    payloads = {A: b"original-A\\x00" * 32, B: b"remove-B" * 50, Z: b"survivor-Z\\xff" * 42}
+    payloads = {A: b"original-A\x00" * 32, B: b"remove-B" * 50, Z: b"survivor-Z\xff" * 42}
     for name, payload in payloads.items():
         (source / name).write_bytes(payload)
     for flag in marked:
@@ -141,5 +141,5 @@ def test_firstparty_committed_delete_preflight_differs_from_reader(
             "source": "installed real Builder and transaction Writer; unmodified branch product",
         }
         (directory / f"{case}-receipt.json").write_text(
-            json.dumps(receipt, indent=2, sort_keys=True) + "\\n")
+            json.dumps(receipt, indent=2, sort_keys=True) + "\n")
     print("J24G54_RESULT", case, "reader_valid=2", "preflight_exception=", error)
