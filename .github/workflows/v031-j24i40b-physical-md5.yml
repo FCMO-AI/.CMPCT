@@ -73,12 +73,7 @@ jobs:
             archive="$PWD/j24i40b-cases/md5-physical-${variant/md5_flip/flip}.cmpct"
             if [ "$variant" = valid ]; then archive="$PWD/j24i40b-cases/md5-physical-valid.cmpct"; fi
             set +e
-            python - "$archive" > "j24i40b-${variant}-python.log" 2>&1 <<'PY'
-import sys
-from cmpct.reader import CMPCT
-with CMPCT(sys.argv[1]) as archive:
-    assert archive.verify() == 1
-PY
+            python -c 'import sys; from cmpct.reader import CMPCT; ar = CMPCT(sys.argv[1]); assert ar.verify() == 1' "$archive" > "j24i40b-${variant}-python.log" 2>&1
             pyrc=$?
             "$exe" "$archive" "$meta" "$flac" "$manifest" 8 native >"j24i40b-${variant}-native.log" 2>&1
             nrc=$?
