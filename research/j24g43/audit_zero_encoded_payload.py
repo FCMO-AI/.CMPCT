@@ -12,7 +12,7 @@ import zstandard as zstd
 
 HDR=struct.Struct("<8sHHQQQ32s")
 BHDR=struct.Struct("<4sBBHQQII32s")
-FTR=struct.Struct("<4sBBHIQQQ32s")
+FTR=struct.Struct("<8sBBBBQQQ32s")
 EMPTY=hashlib.sha256(b"").digest()
 
 def h(data):
@@ -41,7 +41,7 @@ def parse(archive:bytes):
     payload=body[BHDR.size:]
     assert len(payload)==csize
     fmagic,kind,fc,ff,fr,tcs,tus,parent,tailsha=FTR.unpack_from(archive,len(archive)-FTR.size)
-    assert (fmagic,kind,fc,ff,fr,parent)==(b"CMFT",0,1,0,0,0)
+    assert (fmagic,kind,fc,ff,fr,parent)==(b"CMPTF24\\0",0,1,0,0,0)
     assert tcs==cs and tus==us and tailsha==claimed
     assert archive[HDR.size+cs+span:-FTR.size]==idx_compressed
     if codec==0:
