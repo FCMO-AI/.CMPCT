@@ -272,24 +272,49 @@ def compact_archive(src:Path,dst:Path):
             os.replace(stage,dst)
         return result
     finally:
-        if write_fd is not None:os.close(write_fd)
-        if stage_dir_fd is not None:
-            try:os.unlink('payload.cmpct',dir_fd=stage_dir_fd)
-            except FileNotFoundError:pass
-            if stage_dir_name is not None:
+        # A failed stage-open does not make an actor-planted payload ours. Never
+        # unlink through a pinned but untrusted replacement directory merely
+        # because a predictable leaf name exists there. Record the opened FD's
+        # physical identity before releasing it and match that identity when
+        # reclaiming an actual owned staging leaf.
+        owned_stage_inode=None
+        try:
+            if write_fd is not None:
                 try:
-                    # Never recursively clean a substituted symlink/directory.
-                    current=os.stat(stage_dir_name,dir_fd=parent_fd,
-                                    follow_symlinks=False)
-                    pinned=os.fstat(stage_dir_fd)
-                    if (current.st_dev,current.st_ino)==(pinned.st_dev,pinned.st_ino):
-                        os.rmdir(stage_dir_name,dir_fd=parent_fd)
-                except OSError:pass
-            os.close(stage_dir_fd)
-        elif stage is not None:
-            try:stage.unlink()
-            except FileNotFoundError:pass
-        if parent_fd is not None:os.close(parent_fd)
+                    st=os.fstat(write_fd)
+                    owned_stage_inode=(st.st_dev,st.st_ino)
+                finally:
+                    os.close(write_fd)
+            if stage_dir_fd is not None:
+                try:
+                    if owned_stage_inode is not None:
+                        try:
+                            staged=os.stat('payload.cmpct',dir_fd=stage_dir_fd,
+                                           follow_symlinks=False)
+                            if (staged.st_dev,staged.st_ino)==owned_stage_inode:
+                                os.unlink('payload.cmpct',dir_fd=stage_dir_fd)
+                        except OSError:
+                            # A hostile pathname may have disappeared or lost
+                            # permissions. Cleanup cannot override the original
+                            # failure or delete an inode we never owned.
+                            pass
+                    if stage_dir_name is not None and owned_stage_inode is not None:
+                        try:
+                            current=os.stat(stage_dir_name,dir_fd=parent_fd,
+                                            follow_symlinks=False)
+                            pinned=os.fstat(stage_dir_fd)
+                            if (current.st_dev,current.st_ino)==(pinned.st_dev,pinned.st_ino):
+                                os.rmdir(stage_dir_name,dir_fd=parent_fd)
+                        except OSError:pass
+                finally:
+                    os.close(stage_dir_fd)
+            elif stage is not None:
+                try:stage.unlink()
+                except FileNotFoundError:pass
+        finally:
+            # The parent descriptor must close even when an adversarial cleanup
+            # unexpectedly raises. Same-UID stat→unlink races remain unproved.
+            if parent_fd is not None:os.close(parent_fd)
 
 
 def tree_digest(root:Path):
