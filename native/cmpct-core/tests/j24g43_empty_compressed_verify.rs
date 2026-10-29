@@ -17,7 +17,9 @@ fn j24g43_zero_logical_size_does_not_verify_corrupt_encoded_payload() {
     assert_eq!(source.entries().len(), 1);
     assert_eq!(source.entries()[0].size, 0);
     assert_eq!(
-        source.verify_complete().expect("authentic empty source strong verify"),
+        source
+            .verify_complete()
+            .expect("authentic empty source strong verify"),
         1
     );
     println!("J24G43_ORIGINAL_RAW:verified_count=1");
@@ -26,7 +28,9 @@ fn j24g43_zero_logical_size_does_not_verify_corrupt_encoded_payload() {
     assert_eq!(valid.entries().len(), 1);
     assert_eq!(valid.entries()[0].size, 0);
     assert_eq!(
-        valid.verify_complete().expect("valid compressed empty member"),
+        valid
+            .verify_complete()
+            .expect("valid compressed empty member"),
         1
     );
     println!("J24G43_VALID_ZSTD_EMPTY:verified_count=1");
