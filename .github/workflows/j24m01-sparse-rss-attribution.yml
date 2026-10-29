@@ -85,10 +85,12 @@ jobs:
         shell: bash
         run: |
           set +e
-          cd "$RUNNER_TEMP"
-          python -m pytest -q --noconftest "$GITHUB_WORKSPACE/tests/test_j24v01_sparse_verify_streamed.py" -k real_256m 2>&1 | tee "$J24M01_ARTIFACT_DIR/inherited-test-noconftest.log"
+          cd "$GITHUB_WORKSPACE"
+          printf "cwd=%s python=%s\\n" "$PWD" "$(command -v python)" > "$J24M01_ARTIFACT_DIR/probe-context.txt"
+          env | sort | grep -E '^(PYTHON|PYTEST|CMPCT|VIRTUAL_ENV|LD_PRELOAD)=' >> "$J24M01_ARTIFACT_DIR/probe-context.txt" || true
+          python -m pytest -q --noconftest tests/test_j24v01_sparse_verify_streamed.py -k real_256m 2>&1 | tee "$J24M01_ARTIFACT_DIR/inherited-test-noconftest.log"
           echo "${PIPESTATUS[0]}" > "$J24M01_ARTIFACT_DIR/inherited-test-noconftest-exit.txt"
-          python -m pytest -q "$GITHUB_WORKSPACE/tests/test_j24v01_sparse_verify_streamed.py" -k real_256m 2>&1 | tee "$J24M01_ARTIFACT_DIR/inherited-test-default.log"
+          python -m pytest -q tests/test_j24v01_sparse_verify_streamed.py -k real_256m 2>&1 | tee "$J24M01_ARTIFACT_DIR/inherited-test-default.log"
           echo "${PIPESTATUS[0]}" > "$J24M01_ARTIFACT_DIR/inherited-test-default-exit.txt"
           exit 0
       - name: Preserve all raw receipt and negative evidence
