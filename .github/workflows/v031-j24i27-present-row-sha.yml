@@ -23,8 +23,12 @@ concurrency:
 
 jobs:
   installed-compatibility:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,7 +66,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: j24i27-present-sha-${{ github.run_id }}-${{ github.run_attempt }}
+          name: j24i27-present-sha-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           retention-days: 30
           path: |
