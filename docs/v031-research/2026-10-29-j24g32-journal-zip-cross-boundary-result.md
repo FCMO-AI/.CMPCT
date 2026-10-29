@@ -35,3 +35,22 @@ Per-host source physical lengths/hashes from raw provider logs (same input to bo
 - **Concurrency:** no collision found for this cross-layer narrow experiment, and the branch is stacked on #727 solely for source continuity; #492, #243/#245/#250 and #574 remain respective implementation/shared-state owners. Do not modify their lanes.
 
 Next cheapest independent adversarial check: flip CRC/ZIP name/receipt data in *copies* of hosted artifacts and prove the independent auditor catches all seeded faults without touching the authentic evidence; no product credit from that test. Otherwise close the scientific question and select a different general-purpose product debt.
+
+
+## Independent physical wire follow-up — J24G32b (local science, not new product credit)
+
+After the hosted result, the **actual original three GitHub artifact bundles** (not reconstructed from logs) were downloaded via the provider and SHA-256 verified byte-for-byte:
+- Ubuntu `8eee96ed0a2011211c5dcc35dd8e6de1f031fc0da4abca509565e3203cb33e44`;
+- macOS `c3836845bc90a8cf7b3a028f58ed8a879ea3a3e418a4ae1d98d65f2c4594252a`;
+- Windows `57cb27a16cfa1a92d32788f24ca36a41c3ac949d33102f1b8e2cc4083f755aba`.
+
+A separate **stdlib + msgpack + external zstd CLI** wire examiner (no CMPCT Reader, Builder, Writer or native library) validated each original r24 header, primary-index decompressed SHA-256, authentic committed generation footer/payload hashes and previous-offset chain (checkpoint plus exactly rename/delete/update), all three source and updated physical blob framing and decoded CRC32/SHA-256, and final ZIP member content/CRC/UTF8/EOCD/modes against the authenticated effective index. It verified the same 340 B primary physical blob span SHA `f865c076ee8ffa854535ab59a5ceb933f9483247265d214f066f1ed67dbb443b` on all three hosts. Source data bytes are not the cause of the archive/ZIP SHA variance.
+
+**Causal field localization (not cross-platform equality assertion):**
+- Initial r24 file-row modes are `0644` on Ubuntu/macOS versus `0666` on Windows, faithfully inherited from the respective host's source filesystem. Initial authenticated `fsmeta.owner` is `[1001,1001]` on Ubuntu, `[501,20]` on macOS, and `[0,0]` on Windows. These are *different input filesystem metadata semantics*, so the nominally same logical payloads do not constitute same-semantics byte-identical input.
+- Independently decoded classic ZIP central directory has exactly the same file contents, date 2020-02-02, compression methods, CRCs, sizes, and offsets on every host. Windows ZIP differs from Ubuntu's by precisely **two bytes** at zero-based offsets `635,689`, both high permission-mode bytes (`0xa4` vs `0xb6`, corresponding to `0644` vs `0666`). macOS ZIP matches Ubuntu byte-for-byte.
+- The physical CMPCT index's compressed lengths vary 398 B Ubuntu / 399 B macOS / 394 B Windows because authenticated owner/mode metadata differ; do not attribute that difference to a codec regression.
+
+**Adversarial auditor self-review and repair:** An initial weak stdlib-only ZIP checker failed to reject a mutation of the ZIP central directory's `external_attr` despite unchanged content SHA; this exposed a **test-oracle gap**, not a product bug. The independent examiner was strengthened to compare ZIP `external_attr` against the authenticated source's effective journal index, independently validate physical blob CRC/SHA, and require coherent EOCD counts/offsets. Its nine *local* hostile mutations of ZIP headers, modes, data and CMPCT header/primary/blob/footer fields were all rejected (**9/9**) with intact controls accepted. This is a local verifier self-test over the original hosted artifacts, not a second hosted product acceptance or complete general hostile-input proof. No original J24G32 preregistration, CI checks, fixed benchmark, thresholds, or product code were altered.
+
+**Transferable discriminator:** Before interpreting cross-host archive hashes as encoder nondeterminism, independently compare the authenticated file mode/owner metadata and physically stored blob bytes. Cross-platform same-content is not cross-platform same-filesystem semantics. In a future test of `reproducible=True` (separately owned issue #353), normalize or fully charge mode/owner differences and compare exact same-semantics inputs before proposing Builder changes.
