@@ -76,7 +76,7 @@ jobs:
           J24I30_CASE_DIR: ${{ github.workspace }}/j24i30-observations
         run: |
           set -euo pipefail
-          cargo test --manifest-path native/cmpct-core/Cargo.toml --test j24i30_symlink_verify -- --nocapture 2>&1 | tee j24i30-rust.log
+          cargo test --manifest-path native/cmpct-core/Cargo.toml --test j24i30_symlink_verify -- --ignored --nocapture 2>&1 | tee j24i30-rust.log
           grep -q 'J24I30_NEGATIVE_present-foreign:native_verify_ok=true' j24i30-rust.log
           grep -q 'J24I30_NEGATIVE_physical-wrong:native_verify_ok=true' j24i30-rust.log
           grep -q 'J24I30B_NEGATIVE_present-empty:native_admission_refused=true' j24i30-rust.log
