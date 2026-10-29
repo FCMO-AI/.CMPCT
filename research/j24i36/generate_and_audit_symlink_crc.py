@@ -34,7 +34,7 @@ def main() -> None:
     source = source_path.read_bytes()
     assert len(source) > HEADER.size + BLOB.size
     magic, version, flags, index_csize, _index_usize, span, _index_sha = HEADER.unpack_from(source)
-    assert (magic, version, flags) == (b"CMPCT24\\0", 24, 0)
+    assert (magic, version, flags) == (b"CMPCT24\0", 24, 0)
     record_start = HEADER.size + index_csize
     assert record_start + BLOB.size <= len(source)
     assert span >= BLOB.size
