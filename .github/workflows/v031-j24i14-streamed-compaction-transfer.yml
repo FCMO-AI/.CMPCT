@@ -93,6 +93,13 @@ jobs:
           print("J24I14_ACTUAL_RESULT", c["decision"])
           PY
 
+      - name: Independently reconstruct physical r24 blobs and sparse hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/research/j24i14_detached_wire_referee.py" "$CMPCT_J24I14_ARTIFACT_DIR"
+
       - name: Always preserve source, result and negative evidence
         if: always()
         uses: actions/upload-artifact@v4
