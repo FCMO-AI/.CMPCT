@@ -178,10 +178,11 @@ def test_j24g45_borrowed_zero_encoded_pointer_is_length_preserving(monkeypatch) 
     import gc
     import platform
 
-    specimen = b"source\\x00with\\x00NUL\\xff"  # explicitly bounded, not a C-string
-    expected = specimen
+    specimen = bytes(range(256)) + bytes((0, 42, 255))  # includes embedded NUL
+    expected_sha = hashlib.sha256(specimen).digest()
+    expected_size = len(specimen)
     borrowed = native_codec._borrowed_zero_encoded_src(specimen)
-    assert ctypes.string_at(borrowed, len(specimen)) == expected
+    assert ctypes.string_at(borrowed, expected_size) == bytes(range(256)) + bytes((0, 42, 255))
 
     if platform.python_implementation() == "CPython":
         assert borrowed._objects is specimen  # pins bytes until native call returns
@@ -193,7 +194,7 @@ def test_j24g45_borrowed_zero_encoded_pointer_is_length_preserving(monkeypatch) 
     # The borrowed wrapper, not a caller local variable, must own lifetime.
     del specimen
     gc.collect()
-    assert ctypes.string_at(borrowed, len(expected)) == expected
+    assert hashlib.sha256(ctypes.string_at(borrowed, expected_size)).digest() == expected_sha
 
     # If a future refactor silently reinstates the copying helper for this
     # specific zero-output case, the otherwise-valid native path must fail.
@@ -210,7 +211,7 @@ def test_j24g45_borrowed_zero_encoded_input_does_not_allocate_payload_copy() -> 
     """16 MiB immutable source allocation comparison; not full archive RSS."""
     import tracemalloc
 
-    payload = (b"A\\x00B\\xff" * (4 * 1024 * 1024))
+    payload = (bytes((65, 0, 66, 255)) * (4 * 1024 * 1024))
     assert len(payload) == 16 * 1024 * 1024
     tracemalloc.start()
     try:
