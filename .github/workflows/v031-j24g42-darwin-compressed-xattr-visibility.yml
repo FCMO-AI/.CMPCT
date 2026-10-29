@@ -1,0 +1,73 @@
+# ci-lane: fast
+# J24G42: research-only, read-only probe of Apple-managed compressed xattrs.
+name: CMPCT J24G42 Darwin compressed xattr visibility research
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g42-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compression-visibility:
+    runs-on: macos-14
+    timeout-minutes: 15
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact research parent package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Bind exact Git source and installed xattr provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --exit-code -- src/cmpct/_xattrs.py research/j24g42/darwin_compressed_xattr_probe.py
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct._xattrs as provider
+          actual = Path(provider.__file__).read_bytes()
+          expected = Path("src/cmpct/_xattrs.py").read_bytes()
+          assert actual == expected, "installed provider differs from exact checkout"
+          PY
+      - name: Run bounded native visibility discriminator (read-only system files)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python research/j24g42/darwin_compressed_xattr_probe.py --source-head "$EXPECTED_HEAD" --output evidence/result.json
+          python research/j24g42/audit_host_result.py evidence/result.json --expected-source "$EXPECTED_HEAD" | tee evidence/detached-audit.txt
+          python research/j24g42/test_audit_host_result.py | tee evidence/auditor-selftest.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("evidence/result.json").read_text())
+          assert r["source_head"], "no source identity"
+          assert r["platform"]=="darwin", "not actual macOS"
+          assert r["decision"] in (
+             "VISIBILITY_GAP_POSITIVE", "NO_GAP_OBSERVED_ON_SAMPLED_HOST",
+             "INCONCLUSIVE_INSUFFICIENT_COMPRESSED_SPECIMENS"), "instrument failure"
+          print("Scientific disposition:", r["decision"], "(INCONCLUSIVE is NOT proof)")
+          PY
+      - name: Preserve complete raw results, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g42-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: warn
