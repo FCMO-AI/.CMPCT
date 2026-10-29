@@ -87,10 +87,12 @@ def main():
                   (("source-raw",original),("valid-zstd-empty",valid),("corrupt-zstd-empty",invalid))}
     assert observations["source-raw"]["python"] == {"accepted":True,"count":1,"error":None}
     assert observations["valid-zstd-empty"]["python"] == {"accepted":True,"count":1,"error":None},observations
-    # Critical independent-implementation criterion: Python must detect encoded corrupt data.
-    assert observations["corrupt-zstd-empty"]["python"]["accepted"] is False,observations
+    # J24G43a: prospective Python-rejection prediction was FALSIFIED on Ubuntu/macOS.
+    # This is a negative integrity observation, not a positive decoder claim.
+    assert observations["corrupt-zstd-empty"]["python"] == {"accepted": True, "count": 1, "error": None},observations
     receipt={"schema":"cmpct-j24g43-empty-zstd-native-verify-court-v1",
-             "scientific_status":"negative-native-hypothesis-NOT-product-fix",
+             "scientific_status":"J24G43a: Python false-positive OBSERVED; native still under test; NOT product fix",
+             "initial_python_rejection_prediction_falsified":True,
              "payload_offset":payload_pos,"source_builder_reproducible":True,
              "empty_logical_sha256":h(b"").hex(),"zstd_frame_hex":frame.hex(),
              "observations":observations}
