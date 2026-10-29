@@ -1,6 +1,6 @@
 # ci-lane: fast
 # ci-cancel-policy: cancel-obsolete-fast-pr-check
-name: J24I07 compaction installed three-host portability falsifier
+name: J24I10 inherited four-case J24I08 installed compaction portability
 
 on:
   push:
@@ -54,7 +54,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
           git merge-base --is-ancestor 52d51b9446dc8876319f7bd1e6ca2b7f54681de8 HEAD
           git merge-base --is-ancestor 90ca7794b36fffbadf7b1a43be4a1272dddf9bc0 HEAD
-          git diff --exit-code 52d51b9446dc8876319f7bd1e6ca2b7f54681de8 HEAD -- src/ native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md benchmarks/
+          # This child evaluates the exact J24I08 Win32 donor composition,
+          # not the earlier J24I06 source; preserve the old court on #724.
+          git merge-base --is-ancestor 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD
+          git diff --exit-code 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD -- src/ native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md benchmarks/
           python -c "import os,pathlib; p=pathlib.Path(os.environ['CMPCT_J24I07_RECEIPT']).parent; p.mkdir(parents=True,exist_ok=True)"
           git rev-parse HEAD > j24i07-head.txt
           python -c "import os,shutil,pathlib; shutil.copy('j24i07-head.txt',pathlib.Path(os.environ['CMPCT_J24I07_RECEIPT']).parent/'head.txt')"

@@ -70,11 +70,16 @@ def main() -> dict:
                 target = str(sentinel.resolve())
             elif name == "parent-relative":
                 target = "../external/sentinel.bin"
+            observed_target = None
             if target is not None:
-                # If unsupported on a host, the run must be red, not silently skip.
+                # Windows may return a native extended-length spelling for an
+                # absolute symlink. The actual OS readback is Builder's source;
+                # the caller's requested spelling is NOT a cross-host oracle.
+                # Do not weaken either archive-byte fidelity assertion below.
                 (folder / "link").symlink_to(target)
-                if os.readlink(folder / "link") != target:
-                    raise AssertionError("host changed literal symlink target bytes")
+                observed_target = os.readlink(folder / "link")
+                if not observed_target:
+                    raise AssertionError("host returned an empty symlink target")
             if name == "hardlink":
                 os.link(folder / "data.bin", folder / "hardlink.bin")
                 if os.stat(folder / "data.bin").st_ino != os.stat(folder / "hardlink.bin").st_ino:
@@ -87,7 +92,7 @@ def main() -> dict:
             before_sha = sha(source)
             if target is not None:
                 with CMPCT(source) as reader:
-                    if reader.read("link") != os.fsencode(target):
+                    if reader.read("link") != os.fsencode(observed_target):
                         raise AssertionError("source lost literal link target")
                     blocked = work / (name + "-blocked-destination")
                     try:
@@ -112,10 +117,28 @@ def main() -> dict:
                 raise AssertionError("compaction traversed external symlink")
             if target is not None:
                 with CMPCT(output) as reader:
-                    if reader.read("link") != os.fsencode(target):
+                    if reader.read("link") != os.fsencode(observed_target):
                         raise AssertionError("compaction changed target text")
             if name == "hardlink" and not any(r[1] == K_HARDLINK for r in after["rows"]):
-                raise AssertionError("hardlink was flattened")
+                # Preserve physical archives and an independent filesystem
+                # discriminator on failure. No hardlink control is relaxed.
+                shutil.copyfile(source, artifact_dir / (name + "-source.cmpct"))
+                shutil.copyfile(output, artifact_dir / (name + "-output.cmpct"))
+                st_a = os.stat(folder / "data.bin")
+                st_b = os.stat(folder / "hardlink.bin")
+                with os.scandir(folder) as entries:
+                    scan = {e.name: e.stat(follow_symlinks=False) for e in entries}
+                witness = {
+                    "same_inode": (st_a.st_dev, st_a.st_ino) == (st_b.st_dev, st_b.st_ino),
+                    "os_stat_nlink": [st_a.st_nlink, st_b.st_nlink],
+                    "scandir_nlink": [scan["data.bin"].st_nlink, scan["hardlink.bin"].st_nlink],
+                    "scandir_identical_inodes": (
+                        scan["data.bin"].st_dev, scan["data.bin"].st_ino
+                    ) == (scan["hardlink.bin"].st_dev, scan["hardlink.bin"].st_ino),
+                    "source_kinds": [(r[0], r[1]) for r in before["rows"]],
+                    "output_kinds": [(r[0], r[1]) for r in after["rows"]],
+                }
+                raise AssertionError("hardlink flattened, diagnostic=" + json.dumps(witness, sort_keys=True))
             shutil.copyfile(source, artifact_dir / (name + "-source.cmpct"))
             shutil.copyfile(output, artifact_dir / (name + "-output.cmpct"))
             report["cases"].append({
@@ -124,6 +147,13 @@ def main() -> dict:
                 "entries": len(after["rows"]), "wall_ns": cost_wall, "cpu_ns": cost_cpu,
                 "semantics_equal": True, "outside_sentinel_unchanged": True,
             })
+            if target is not None:
+                # Preserve the exact two literals in provider receipts. A
+                # mismatch BEFORE the archive is evidence about filesystem
+                # representation, not an authorized change to CMPCT content.
+                report["cases"][-1]["requested_link_hex"] = os.fsencode(target).hex()
+                report["cases"][-1]["observed_link_hex"] = os.fsencode(observed_target).hex()
+                report["cases"][-1]["requested_equals_observed"] = (target == observed_target)
 
         # A corrupt physical blob must not overwrite an existing destination.
         source = work / "plain.cmpct"
