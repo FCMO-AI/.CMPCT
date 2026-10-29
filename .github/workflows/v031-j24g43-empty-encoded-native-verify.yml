@@ -1,0 +1,85 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24G43 Native r24 Zero-Size Encoded Payload Falsifier
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24g43/**'
+      - 'native/cmpct-core/tests/j24g43_empty_compressed_verify.rs'
+      - 'docs/v031-research/*j24g43*'
+      - '.github/workflows/v031-j24g43-empty-encoded-native-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: j24g43-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-empty-encoded-payload:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Pin exact parent core and current research instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "463c50633be74423e92a074b7d7577db6a4b0cf9"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "cd1a367761465cbba3e8054f743af551c1e560e1"
+          git rev-parse HEAD | tee j24g43-head.txt
+          git hash-object research/j24g43/zero_encoded_payload_falsifier.py | tee j24g43-generator-blob.txt
+          git hash-object research/j24g43/audit_zero_encoded_payload.py | tee j24g43-auditor-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build real installed Builder source and physically independent derived/refuted wire
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . zstandard
+          python research/j24g43/zero_encoded_payload_falsifier.py --output j24g43-observations 2>&1 | tee j24g43-generator.log
+          python research/j24g43/audit_zero_encoded_payload.py --case-dir j24g43-observations 2>&1 | tee j24g43-detached.log
+          test -s j24g43-observations/python-observations.json
+          test -s j24g43-observations/detached-wire-audit.json
+      - name: Test compiled candidate native verifier on original, valid Zstd, corrupted Zstd
+        shell: bash
+        env:
+          J24G43_CASE_DIR: ${{ github.workspace }}/j24g43-observations
+        run: |
+          set -euo pipefail
+          cargo test --manifest-path native/cmpct-core/Cargo.toml --test j24g43_empty_compressed_verify -- --ignored --nocapture 2>&1 | tee j24g43-native.log
+          grep -q 'J24G43_ORIGINAL_RAW:verified_count=1' j24g43-native.log
+          grep -q 'J24G43_VALID_ZSTD_EMPTY:verified_count=1' j24g43-native.log
+          grep -q 'J24G43_NATIVE_CORRUPT_ZSTD_ZERO_ACCEPTED:verified_count=1' j24g43-native.log
+      - name: Preserve raw archives, source identity and scientific result even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g43-zero-zstd-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24g43-head.txt
+            j24g43-generator-blob.txt
+            j24g43-auditor-blob.txt
+            j24g43-generator.log
+            j24g43-detached.log
+            j24g43-native.log
+            j24g43-observations/
