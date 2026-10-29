@@ -227,7 +227,7 @@ def compact_archive(src:Path,dst:Path):
                 result=Builder(root,_preserve_archive_meta=metadata).build(stage)
                 with CMPCT(stage) as rebuilt:
                     _compaction_assert_equivalent(ar,rebuilt,metadata)
-                with open(stage,'rb') as stream:os.fsync(stream.fileno())
+                with open(stage,'rb+') as stream:os.fsync(stream.fileno())
         # The source Reader is closed before replacement, including on Windows.
         # os.replace replaces a destination symlink rather than following it.
         os.replace(stage,dst)
