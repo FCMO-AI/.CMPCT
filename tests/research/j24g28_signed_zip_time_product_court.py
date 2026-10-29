@@ -6,6 +6,7 @@ A baseline acceptance discrepancy is recorded, not hidden or renamed a green pro
 """
 from __future__ import annotations
 import argparse
+import calendar
 import hashlib
 import inspect
 import json
@@ -21,7 +22,15 @@ from cmpct.reader import CMPCT
 
 NAME = "timestamped.bin"
 PAYLOAD = b"cmpct-j24g27:signed-mtime:lossless-byte-identity\n" * 17
-CASES = {"negative_epoch": -1_000_000_000, "zero_epoch": 0, "pre_1980_1979": 283_996_800_000_000_000, "ordinary_2020": 1_577_880_000_000_000_000}
+CASES = {
+    "negative_epoch": -1_000_000_000,
+    "zero_epoch": 0,
+    "pre_1980_1979": 283_996_800_000_000_000,
+    "ordinary_2020": 1_577_880_000_000_000_000,
+    "upper_2107_control": 4_354_689_600_000_000_000,  # 2107-12-30 UTC
+    "upper_2108_leap": 4_359_960_000_000_000_000,  # 2108-02-29 UTC
+    "upper_2108_ordinary": 4_360_046_400_000_000_000,  # 2108-03-01 UTC
+}
 
 
 def sha(b: bytes) -> str:
@@ -61,7 +70,7 @@ def generate(root: Path) -> None:
         blob = archive.read_bytes()
         info[label] = {"archive": archive.name, "size": len(blob), "sha256": sha(blob),
                        "mtime_ns": mt, "payload_sha256": sha(PAYLOAD)}
-    manifest = {"schema": "j24g28-fixed-first-party-r24-v1", "generator": identity(),
+    manifest = {"schema": "j24g29-fixed-first-party-r24-v2", "generator": identity(),
                 "cases": info, "reader_patch_base": "ca01d885fedc8ffc343b9c3c624eddd134158452"}
     (root / "manifest.json").write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
     print("J24G28_GENERATED=" + json.dumps(manifest, sort_keys=True), flush=True)
@@ -70,7 +79,7 @@ def generate(root: Path) -> None:
 def court(inputs: Path, output: Path, mode: str, repeat: int) -> None:
     output.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((inputs / "manifest.json").read_text())
-    assert manifest["schema"] == "j24g28-fixed-first-party-r24-v1"
+    assert manifest["schema"] == "j24g29-fixed-first-party-r24-v2"
     got = {}
     for label, mt in CASES.items():
         meta = manifest["cases"][label]
@@ -102,15 +111,22 @@ def court(inputs: Path, output: Path, mode: str, repeat: int) -> None:
                 dt = z.getinfo(NAME).date_time
                 assert 1980 <= dt[0] <= 2107
                 result["dos_datetime"] = list(dt)
+                # Read the exact ZIP DOS header through the independent stdlib parser.
+                # Old Reader may encode 2107-02-29 (impossible); preserve the negative.
+                result["gregorian_valid"] = 1 <= dt[2] <= calendar.monthrange(dt[0], dt[1])[1]
             result["zip_sha256"] = sha(out.read_bytes())
             result["zip_length"] = out.stat().st_size
         if label == "ordinary_2020":
             assert result["zip"] == "SUCCESS", result
-        if mode == "candidate" and label in ("negative_epoch", "zero_epoch", "pre_1980_1979"):
+        if mode == "candidate":
             assert result["zip"] == "SUCCESS", result
-            assert result["dos_datetime"] == [1980, 1, 1, 0, 0, 0], result
+            assert result["gregorian_valid"], result
+            if label in ("negative_epoch", "zero_epoch", "pre_1980_1979"):
+                assert result["dos_datetime"] == [1980, 1, 1, 0, 0, 0], result
+            if label.startswith("upper_2108"):
+                assert result["dos_datetime"] == [2107, 12, 31, 23, 59, 58], result
         got[label] = result
-    report = {"schema": "j24g28-signed-zip-time-court-v1", "mode": mode,
+    report = {"schema": "j24g29-upper-calendar-product-court-v2", "mode": mode,
               "source": identity(), "platform": platform.platform(),
               "python": sys.version, "repeat": repeat, "cases": got}
     (output / ("j24g28_" + mode + "_" + str(repeat) + ".json")).write_text(
