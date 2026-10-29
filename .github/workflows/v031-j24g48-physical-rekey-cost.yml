@@ -73,6 +73,11 @@ jobs:
             --candidate product-candidate \
             --defective product-defective \
             --output evidence/j24g48 2>&1 | tee j24g48-hosted.log
+      - name: Independently reconcile physical SHA, source controls and all raw repeated measurements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g48/audit_raw_cost.py             evidence/j24g48/raw-results.json             evidence/j24g48/independent-referee.json             2>&1 | tee evidence/j24g48/independent-referee.log
       - name: Preserve raw evidence even on source, correctness, or run errors
         if: always()
         uses: actions/upload-artifact@v4
