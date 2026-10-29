@@ -19,7 +19,6 @@ pub use projection::{execute_range, VirtualZipDispatchError};
 
 use crate::{Archive, CmpctError, Storage};
 use sha2::{Digest, Sha256};
-use std::io::{Read, Seek, SeekFrom};
 
 const VERIFY_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 
@@ -31,44 +30,40 @@ impl Archive {
     /// one-blob members the physical CMA4 header SHA-256 is the format's complete decoded-blob integrity value.
     /// We may use it only when the direct blob spans the whole logical member; composites without a logical
     /// identity still fail closed instead of inventing a checksum from partial storage metadata.
-    fn complete_member_identity(&self, entry_index: usize) -> Result<[u8; 32], CmpctError> {
+    fn complete_member_identity_and_crc(
+        &self,
+        entry_index: usize,
+    ) -> Result<([u8; 32], Option<u32>), CmpctError> {
         let entry = self.entries.get(entry_index).ok_or(CmpctError::Range)?;
-        if let Some(hash) = entry.logical_hash {
-            // The index SHA is an additional commitment, not an override for CMA4.
-            // RAW direct range reads intentionally avoid hashing unrequested bytes;
-            // full verification must still reject a matching re-signed row SHA when
-            // the physical blob's separately committed header SHA disagrees.
-            if let Storage::Direct(index) = &entry.storage {
-                let blob = self.blobs.get(*index).ok_or_else(|| {
-                    CmpctError::Schema("direct member references missing blob".into())
-                })?;
-                if blob.usize != entry.size {
-                    return Err(CmpctError::BlobHeader);
-                }
-                let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
-                let (_, physical_hash) = self.checked_blob_layout(blob, &mut file)?;
-                if physical_hash != hash {
+
+        if let Storage::Direct(index) = &entry.storage {
+            let blob = self.blobs.get(*index).ok_or_else(|| {
+                CmpctError::Schema("direct member references missing blob".into())
+            })?;
+            if blob.usize != entry.size {
+                return Err(CmpctError::BlobHeader);
+            }
+            // The physical hash and CRC belong to the same checked CMA4 header.
+            // Re-reading CRC after authenticating the hash duplicated header I/O
+            // and could observe a different header if the source changed between reads.
+            let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
+            let (_payload_pos, physical_hash, physical_crc) =
+                self.checked_blob_layout_with_crc(blob, &mut file)?;
+            if let Some(logical_hash) = entry.logical_hash {
+                if physical_hash != logical_hash {
                     return Err(CmpctError::MemberHash);
                 }
             }
-            return Ok(hash);
+            return Ok((entry.logical_hash.unwrap_or(physical_hash), Some(physical_crc)));
+        }
+
+        if let Some(hash) = entry.logical_hash {
+            return Ok((hash, None));
         }
         match &entry.storage {
-            Storage::VirtualZip(recipe) => Ok(recipe.logical_sha256),
-            Storage::Direct(index) => {
-                let blob = self.blobs.get(*index).ok_or_else(|| {
-                    CmpctError::Schema("direct member references missing blob".into())
-                })?;
-                if blob.usize != entry.size {
-                    return Err(CmpctError::BlobHeader);
-                }
-                let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
-                let (_payload_pos, hash) = self.checked_blob_layout(blob, &mut file)?;
-                Ok(hash)
-            }
-            // Chunked, sparse and packed members can compose or slice several blobs. Their physical
-            // blob hashes therefore cannot stand in for one logical member hash; accepting them here would turn
-            // a compatibility fix into a false strong-verification claim.
+            Storage::VirtualZip(recipe) => Ok((recipe.logical_sha256, None)),
+            // Chunked, sparse and packed members can compose or slice several blobs. Their
+            // physical blob hashes/CRCs cannot be the concatenated member's identity.
             _ => Err(CmpctError::Schema(format!(
                 "regular member {} is missing complete logical SHA-256",
                 entry.path
@@ -92,32 +87,10 @@ impl Archive {
             if entry.kind != 0 && entry.kind != 2 {
                 continue;
             }
-            let expected = self.complete_member_identity(entry_index)?;
+            let (expected, physical_crc) = self.complete_member_identity_and_crc(entry_index)?;
             // Physical CMA4 CRC32 is a separately stored field, not superseded by SHA.
             // Only a direct member spans its own physical blob exactly: composite member
             // CRCs cannot be inferred from the concatenated logical stream.
-            let physical_crc = if let Storage::Direct(blob_id) = &entry.storage {
-                let blob = self.blobs.get(*blob_id).ok_or_else(|| {
-                    CmpctError::Schema("direct member references missing blob".into())
-                })?;
-                if blob.usize != entry.size {
-                    return Err(CmpctError::BlobHeader);
-                }
-                let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
-                self.checked_blob_layout(blob, &mut file)?;
-                let crc_pos = self
-                    .data_base
-                    .checked_add(blob.offset)
-                    .and_then(|pos| pos.checked_add(28))
-                    .ok_or(CmpctError::BlobHeader)?;
-                file.seek(SeekFrom::Start(crc_pos))?;
-                let mut encoded_crc = [0u8; 4];
-                file.read_exact(&mut encoded_crc)?;
-                Some(u32::from_le_bytes(encoded_crc))
-            } else {
-                None
-            };
-
             let mut digest = Sha256::new();
             let mut crc = physical_crc.map(|_| crc32fast::Hasher::new());
             let mut offset = 0u64;
