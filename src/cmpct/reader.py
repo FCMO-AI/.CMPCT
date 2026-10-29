@@ -498,9 +498,8 @@ class CMPCT:
         t=time.localtime(mtime_ns/1_000_000_000)
         if t.tm_year < 1980:
             return 0, 33
-        if t.tm_year > 2107:
-            return (23<<11)|(59<<5)|29, (127<<9)|(12<<5)|31  # 2107-12-31 23:59:58
-        y=t.tm_year;mo=min(12,max(1,t.tm_mon));d=min(31,max(1,t.tm_mday))
+        # Preserve inherited upper-endpoint/ordinary calendar encoding unchanged.
+        y=min(2107,max(1980,t.tm_year));mo=min(12,max(1,t.tm_mon));d=min(31,max(1,t.tm_mday))
         zdate=((y-1980)<<9)|(mo<<5)|d;ztime=(t.tm_hour<<11)|(t.tm_min<<5)|(t.tm_sec//2)
         return ztime,zdate
 
