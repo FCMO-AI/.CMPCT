@@ -56,6 +56,14 @@ A third, externally rooted consumer path uses **Info-ZIP UnZip 6.00** (Debian bu
 python research/j24g31_external_zip_interop.py --artifacts ./downloaded
 ```
 
+### Independent signed-r24 → ZIP filesystem-metadata continuity (04:33 UTC)
+
+`research/j24g31_fs_metadata_parity.py` independently decompresses the *signed, authenticated original r24 primary index* with external `zstd` + MessagePack, extracts the true original file path/mode/size/timestamp and compares each actual ZIP central-directory field via raw `struct` parsing (without CMPCT or Python's inner ZIP reader). On the **41 original successful physical ZIP exports**, path, regular-file kind, Unix permission bits `0o644`, logical length and UNIX creator-system marker were **41/41 exact matches**. The separate calendar auditor already proves the candidate's bounded DOS-date transformation; this check does not equate DOS dates with signed nanoseconds. These seven samples contain one ordinary regular file, so it provides **no coverage** for symlink/hardlink tree semantics, ACL/xattrs, uid/gid restoration, filesystem writes, or unknown path encodings.
+
+```sh
+python research/j24g31_fs_metadata_parity.py --artifacts ./downloaded
+```
+
 ## Handoff
 
 Keep #727 DRAFT, the Reader source unchanged. Check actual inherited generic CI reds separately (they are not erased by this positive wire audit). For a decision-changing next experiment prefer real ZIP64 >=4GiB or a distinct adversarial filesystem path-custody experiment owned by its existing integration PR. Do not fork another calendar algorithm or infer release readiness.
