@@ -154,3 +154,31 @@ def test_missing_darwin_provider_symbol_is_fail_closed_not_no_xattr(monkeypatch)
             assert err.value.errno == errno.EIO
         finally:
             _xattrs._darwin_api.cache_clear()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="native Darwin strict ABI preflight")
+def test_missing_darwin_native_set_api_rejects_before_destination_creation(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    leaf = source / "member"
+    leaf.write_bytes(b"native provider preflight")
+    _native_mac_write(leaf, KEY_MAC, VALUE)
+    archive = tmp_path / "present-xattr.cmpct"
+    Builder(source, workers=1).build(archive)
+    with CMPCT(archive) as reader:
+        assert reader.fsmeta["xattrs"]
+        target = tmp_path / "must-not-exist"
+        class NativeSymbolsUnavailable:
+            pass
+        with monkeypatch.context() as patch:
+            # Linux/Windows use their own Python providers, but Darwin's
+            # missing native ABI cannot masquerade as a valid strict target.
+            patch.delattr(os, "setxattr", raising=False)
+            patch.setattr(_xattrs.ctypes, "CDLL", lambda *_args, **_kwargs: NativeSymbolsUnavailable())
+            _xattrs._darwin_api.cache_clear()
+            try:
+                with pytest.raises(IOError, match="unsupported by destination host"):
+                    reader.extractall(target, require_xattrs=True)
+                assert not target.exists()
+            finally:
+                _xattrs._darwin_api.cache_clear()
