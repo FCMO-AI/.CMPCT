@@ -1,0 +1,108 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I39 File-backed Claxon WAV Oracle
+on:
+  pull_request:
+    paths:
+      - 'research/j24i39/**'
+      - 'docs/v031-research/*j24i39*'
+      - '.github/workflows/v031-j24i39-file-backed-flac-oracle.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i39-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  independent-streaming-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm this latest commit changes the scoped research
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i39/|docs/v031-research/.*j24i39|[.]github/workflows/v031-j24i39-file-backed-flac-oracle[.]yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
+      - name: Pin current product, Builder, codec and inherited independent evidence
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee j24i39-head.txt
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "46fa87930a9229f42233594816330f35f0505e71"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "27e4d7962ccfed6a822010383158d98e20d823dd"
+          test "$(git hash-object native/cmpct-core/src/wavflac.rs)" = "8e5d22539d0afa89f5be3bc20f536376e44b7dd6"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          test "$(git hash-object research/j24i38/audit_builder_wav.py)" = "1d4c04ab1d534e10504d71794bd12492827fc49c"
+          test "$(git hash-object research/j24i38/generate_builder_wav.py)" = "967146feadaacf45321bbeaed11f6bff1ff6abfb"
+          git diff --name-only 793da74881e5180d982df29d2ef08bacbe6d7933 HEAD | tee j24i39-changed.txt
+          if grep -Eq '^(native/|src/cmpct/|tests/conformance/|benchmarks/)' j24i39-changed.txt; then
+            echo 'Scientific oracle may not mutate product/frozen source'; exit 1
+          fi
+      - name: Generate exact authentic Builder files; detached physical audit; split for Claxon
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . numpy soundfile msgpack zstandard
+          python research/j24i38/generate_builder_wav.py --output j24i39-cases
+          python research/j24i38/audit_builder_wav.py --case-dir j24i39-cases
+          python research/j24i39/extract_signed_wav_flac.py --case-dir j24i39-cases
+      - name: Compile unchanged native verifier + disposable sample-streaming probe
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native/cmpct-core/src/bin
+          cp research/j24i39/native_file_flac_digest.rs native/cmpct-core/src/bin/j24i39_perf.rs
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i39_perf
+      - name: ABBA-BAAB complete-archive vs detached file-backed PCM digest
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=native/cmpct-core/target/release/j24i39_perf
+          manifest="$PWD/j24i39-cases/stream-manifest.json"
+          : > j24i39-raw.txt
+          for lane in A B B A B A A B; do
+            if [ "$lane" = A ]; then mode=native; else mode=stream; fi
+            for mib in 8 32; do
+              "$exe" "$PWD/j24i39-cases/builder-wav-${mib}m.cmpct" \
+                "$PWD/j24i39-cases/oracle-${mib}m.meta" \
+                "$PWD/j24i39-cases/oracle-${mib}m.flac" \
+                "$manifest" "$mib" "$mode" | sed "s/^/$lane /" | tee -a j24i39-raw.txt
+            done
+          done
+          python research/j24i39/summarize_file_flac_oracle.py \
+            --raw j24i39-raw.txt --output j24i39-result.json
+      - name: Preserve original sources, detached audit and all raw measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i39-file-backed-flac-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24i39-head.txt
+            j24i39-changed.txt
+            j24i39-cases/
+            j24i39-raw.txt
+            j24i39-result.json
