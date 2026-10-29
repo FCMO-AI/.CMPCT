@@ -25,11 +25,25 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Classify exact latest HEAD only
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(native/cmpct-core/src/(lib|vzip_dispatch)[.]rs|research/j24i36/|docs/v031-research/.*j24i36d|[.]github/workflows/v031-j24i36d-one-header-cost[.]yml)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
       - name: Freeze single installed same-input archive
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -38,6 +52,7 @@ jobs:
           git rev-parse HEAD > j24i36d-head.txt
           git rev-parse 09ee165f3c74de7df65372a63a93b82115e3f695 > j24i36d-control.txt
       - name: Compile old CRC implementation and one-header candidate
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -47,6 +62,7 @@ jobs:
           cargo build --release --locked --manifest-path "$RUNNER_TEMP/j24i36d-previous/native/cmpct-core/Cargo.toml" --bin j24i36_perf
           cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i36_perf
       - name: ABBA BAAB in-process same-archive verification
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
