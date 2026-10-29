@@ -231,3 +231,49 @@ def test_seeded_path_identity_state_machine():
         assert actual_attrs == expected_attrs, (step, action, actual_attrs, expected_attrs)
         assert actual_owner == expected_owner, (step, action, actual_owner, expected_owner)
         assert idx["fsmeta"]["owner"] == [7, 8]
+
+
+@pytest.mark.parametrize("mutation", ["delete", "rename"])
+def test_depth_64_checkpoint_delete_and_rename_rekey(tmp_path, mutation):
+    """Writer must preserve the *other* member's xattr through a full checkpoint.
+
+    This closes the Reader-only-fix gap on 64th-operation delete/rename,
+    independently of the depth-64 put case above.
+    """
+    source = tmp_path / "source"
+    source.mkdir()
+    earlier = source / "a-unowned.bin"
+    earlier.write_bytes(b"unowned-member" * 17)
+    owner = source / "z-owner.bin"
+    owner.write_bytes(b"owner-member" * 31)
+    if NATIVE_XATTRS:
+        _set_native(owner)
+        assert _get_native(owner) == VALUE
+    archive = tmp_path / "checkpoint.cmpct"
+    Builder(source, workers=1, reproducible=False).build(archive)
+
+    # 63 same-name writes deliberately do not perturb row order.
+    for _ in range(63):
+        append_update(archive, "z-owner.bin", owner)
+
+    if mutation == "delete":
+        append_delete(archive, "a-unowned.bin")
+        expected = ["z-owner.bin"]
+    else:
+        append_rename(archive, "a-unowned.bin", "zz-after.bin")
+        expected = ["z-owner.bin", "zz-after.bin"]
+
+    with CMPCT(archive) as ar:
+        assert ar.delta_depth == 0, "64th operation must be a full checkpoint"
+        assert [r[0] for r in ar.files] == expected
+        assert ar.verify() == len(expected)
+        if NATIVE_XATTRS:
+            assert "z-owner.bin" in _names_metadata(ar)
+            assert not any(k != "z-owner.bin" for k in _names_metadata(ar))
+        output = tmp_path / "materialized"
+        ar.extractall(output, require_xattrs=NATIVE_XATTRS)
+    assert (output / "z-owner.bin").read_bytes() == owner.read_bytes()
+    if NATIVE_XATTRS:
+        assert _get_native(output / "z-owner.bin") == VALUE
+        if mutation == "rename":
+            assert _get_native(output / "zz-after.bin") is None
