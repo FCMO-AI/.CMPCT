@@ -50,10 +50,27 @@ The physical result does **not** settle runtime at 10k+ members; the abstract he
 
 ## Independent referee boundary
 
-The above figures originate in the complete successful hosted run, not a separately downloaded audited ZIP. The subsequent independent source-free auditor `research/j24g48/audit_raw_cost.py` and CI step verify physical original/shifted SHA, archive byte-extension, all 224 raw records, case coverage, source identities, positive/negative controls and recomputed medians. **Its later exact-head CI must succeed before claiming this stronger independent validation.** The frozen earlier measurement remains traceable at its original HEAD.
+The first table originates in successful run #40931290242, not a separately downloaded audited ZIP. A new source-free referee `research/j24g48/audit_raw_cost.py` was subsequently landed and executed against an **independent repeated hosted run on a different source HEAD**, as described below; it does not retroactively claim to have independently audited the first artifact. The frozen earlier measurement remains traceable at its original HEAD.
 
 ## Product/release handoff
 
 - Owner #773 remains OPEN/DRAFT and the canonical repair locus. J24G48 modifies only research documents, instrument, independent referee and workflow; no reader/writer code, format, benchmark gate, evaluator, version, discovery state, merge or release.
 - General tests, broad portability/Windows, privileged UID/GID, exact sparse verification, collision/race safety, cold page-cache, real 10k workloads and full archive economics remain inherited debt.
 - Next highest-leverage action: if final referee passes, hand raw evidence to #773 owner, prioritize correctness integration rather than further 2k micro-tuning, then require canonical full-product parity. If large-scale physical costs emerge, isolate rekey vs index sorting instead of gardening thresholds.
+
+## Second hosted court — independent raw referee, and evidence of run-to-run variation
+
+[Actions #40932031052](https://github.com/FCMO-AI/.CMPCT/actions/runs/40932031052) at source HEAD `fbf03c74e235c1e59b37d9b3fb27f8dae99e78aa` completed **SUCCESS** including the new independent source-free auditor. This HEAD changes only research/instrument/CI, not either tested Reader source. The original measured heads of defective and repaired Readers remain byte-identical to the first hosted court. [Original second-run artifact #12922129850](https://github.com/FCMO-AI/.CMPCT/actions/runs/40932031052/artifacts/12922129850) has provider ZIP SHA-256 `d8a35b5b95b0f86765d5a38a4e53f56bfc46c6c0f6bb62280a79fa097fb46ac6` (2,687,037 B).
+
+The referee checked all 224 raw observations, 16 groups × 14 measurements, all original/journal physical SHA-256 digests and prefix-byte custody, source identities, 7-cycle distribution, expected xattr counts, signed baseline negative, repaired identity preservation, process RSS records and recomputed medians **without importing CMPCT**.
+
+| Physical fixture | Shifted defective median | Shifted repaired median | Added wall | Diff-in-diff vs original | Defective semantic control |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 256 files, 1/32 xattrs | 0.453 ms | 0.528 ms | +0.075 ms | +0.076 ms | wrong |
+| 2,048, no xattrs | 2.254 ms | 2.752 ms | +0.497 ms | +0.504 ms | not applicable |
+| 2,048, 1/32 xattrs | 2.289 ms | 2.821 ms | +0.532 ms | +0.539 ms | wrong |
+| 2,048, 1/2 xattrs | 2.967 ms | 3.740 ms | +0.773 ms | +0.755 ms | wrong |
+
+**Contradiction/uncertainty preserved:** these second-run wall medians are materially *lower* than the first run's 0.99–1.41 ms added on 2,048 members, despite identical tested Reader source and nominal case families. The physically generated archive bytes are guaranteed identical *within* each run and between candidates; they are **not claimed identical across runs** because non-reproducible source timestamps and host environment may vary. Do not pool the two campaigns into a fictitiously precise microsecond conclusion. Both hosted observations nevertheless support the same bounded decision for the tested scale: roughly **0.5–1.4 ms additional Reader open+metadata-map**, below the prospective absolute 20-ms research triage threshold, with wrong-Reader metadata misbinding independently established and corrected-Reader path identity preserved.
+
+The second referee verifies its own measurements; no third-party download/re-run of either ZIP is claimed. Both results leave 10k-file physical scaling, cold cache, full extraction/CPU/RSS, portability and release parity unresolved.
