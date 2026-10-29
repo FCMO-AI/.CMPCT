@@ -1,0 +1,107 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24G50 signed fsmeta x empty-Zstd integrated product court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g50-zstd-fsmeta-integrity-compose-20261029
+  pull_request:
+    branches:
+      - agent/phased2-v031-j24g47-positional-fsmeta-rekey-20261029
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24g50-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  installed-two-owner-integrity:
+    name: signed journal fsmeta + Zstd empty physical / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 29
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G44_EVIDENCE_DIR: evidence/physical
+      J24G50_EVIDENCE_DIR: evidence/integration
+    steps:
+      - name: Checkout exact branch head, not synthetic merge ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Authenticate preregistration, donor, parent and tested checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 05fcd9c23ee6ef897168468941e61162ca46de04 HEAD
+          git merge-base --is-ancestor 893aac3f6b7b54e89d71af6970405ff5fc71aef7 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/native_codec.py)" = 1dd853c111410726e051adc48ee59392a4cbd5fb
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 84f1c0602c7a9679cd79a0a5de984b169a467903
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 3eef7fdc3f6deca5ddd6d9edf1292c7e2c864f11
+          test "$(git rev-parse HEAD:tests/test_j24g44_zero_encoded_python_codec.py)" = 0af8716d893967a46822ef32eafd6f9d0e5e2d3e
+          test "$(git rev-parse HEAD:research/j24g44/detached_zero_encoded_wire_audit.py)" = 215fec4d14430ced49b0cd56a1d5eaf4d1255352
+          mkdir -p evidence/physical evidence/integration
+          git rev-parse HEAD > evidence/exact-head.txt
+          git rev-parse HEAD:src/cmpct/native_codec.py > evidence/native-codec-blob.txt
+          git rev-parse HEAD:src/cmpct/reader.py > evidence/reader-blob.txt
+          git rev-parse HEAD:src/cmpct/transactions.py > evidence/writer-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual repository-owned native package and independent audit dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'pytest>=8' 'zstandard>=0.22'
+          python -m pip freeze | sort > evidence/pip-freeze.txt
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import cmpct.native_codec as nc, cmpct.reader as rd, cmpct.transactions as tx
+          for path, module in (('src/cmpct/native_codec.py',nc),
+                               ('src/cmpct/reader.py',rd),
+                               ('src/cmpct/transactions.py',tx)):
+              original=Path(path).read_bytes().replace(b'\r\n', b'\n')
+              installed=Path(module.__file__).read_bytes().replace(b'\r\n', b'\n')
+              assert original == installed, (path, module.__file__)
+              print('INSTALLED_SHA256',path,hashlib.sha256(original).hexdigest())
+          PY
+      - name: Run unchanged donor, unchanged parent, frozen direct-codec and cross-boundary integration
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest --noconftest -q -s --junitxml=evidence/installed-pytest.xml \
+            tests/test_j24g44_zero_encoded_python_codec.py \
+            tests/test_v031_j24g47_journal_fsmeta_identity.py \
+            tests/test_v031_j24g50_zstd_fsmeta_compose.py \
+            tests/test_conformance_direct_codecs.py \
+            tests/test_conformance_zstd_dictionary.py \
+            2>&1 | tee evidence/installed-pytest.log
+      - name: Independently audit both physical witness families without importing CMPCT
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s evidence/physical/receipt.json
+          test -s evidence/integration/receipt.json
+          python research/j24g44/detached_zero_encoded_wire_audit.py \
+            --artifacts evidence --output evidence/donor-independent-audit.json \
+            2>&1 | tee evidence/donor-audit.log
+          python research/j24g50/independent_audit.py evidence/integration \
+            2>&1 | tee evidence/integration-audit.log
+          test -s evidence/donor-independent-audit.json
+          test -s evidence/integration/independent-audit.json
+      - name: Preserve signed specimen bytes and failure state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g50-integrated-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: warn
