@@ -41,7 +41,10 @@ def _darwin_api():
         getter = library.getxattr
         setter = library.setxattr
     except AttributeError as exc:
-        raise OSError(errno.ENOSYS, "Darwin native xattr entrypoint missing") from exc
+        # We promised the Darwin provider; a missing libSystem symbol is not
+        # proof that the SOURCE filesystem lacks xattrs. O65 must fail closed
+        # rather than interpret ENOSYS as a legitimate empty metadata table.
+        raise OSError(errno.EIO, "Darwin native xattr entrypoint missing") from exc
 
     listing.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
     listing.restype = ctypes.c_ssize_t
