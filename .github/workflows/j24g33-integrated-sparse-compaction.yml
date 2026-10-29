@@ -1,0 +1,114 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24G33 integrated sparse compaction installed product court
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_j24v01_sparse_verify_streamed.py'
+      - 'tests/research/j24g33_integrated_sparse_compaction.py'
+      - 'docs/v031-research/2026-10-29-j24g33-*'
+      - '.github/workflows/j24g33-integrated-sparse-compaction.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g33-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-physical-r24-compaction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G33_ARTIFACT_DIR: ${{ runner.temp }}/j24g33-artifacts
+    steps:
+      - name: Checkout exact PR HEAD (no synthetic merge)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact Reader donor, compaction owner and immutable preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 52d51b9446dc8876319f7bd1e6ca2b7f54681de8 HEAD
+          git merge-base --is-ancestor bd583cedb34f26485b4d8bc2fe472c34bb512006 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = b2b7774c13a5c8235ff89786d171b7ea3ff20710
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 8d1e46e1fdf408c1d95ce9091e25fa159f0e6264
+          test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = dc31bd4a46c117e6621a76a91b7bdeef85579ebf
+          test "$(git rev-parse HEAD:tests/research/j24i06_compaction_product_court.py)" = e6b3fb41b254743e51ba3e0b3078933f1acb7f41
+          mkdir -p "$J24G33_ARTIFACT_DIR"
+          git rev-parse HEAD > "$J24G33_ARTIFACT_DIR/source-head.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$J24G33_ARTIFACT_DIR/reader-git-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual source wheel and unmodified donor test requirements
+        run: |
+          python -m pip install .
+          python -m pip install pytest
+      - name: Prove installed wheel is the exact checkout (not source import)
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import cmpct.builder, cmpct.reader, cmpct.transactions, pathlib, os, hashlib
+          root = pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for module, expected_blob in [
+              (cmpct.reader, "b2b7774c13a5c8235ff89786d171b7ea3ff20710"),
+              (cmpct.builder, "387192edd783e02bf7a44a38945214bf9d6c183e"),
+              (cmpct.transactions, "8d1e46e1fdf408c1d95ce9091e25fa159f0e6264")]:
+              installed = pathlib.Path(module.__file__).resolve()
+              assert not installed.is_relative_to(root), installed
+              checkout = root/"src"/"cmpct"/installed.name
+              assert installed.read_bytes().replace(b"\r\n",b"\n") == checkout.read_bytes().replace(b"\r\n",b"\n")
+              print("INSTALLED_SOURCE_EXACT",installed,expected_blob)
+          PY
+      - name: Unmodified donor frozen vector, hostile extent and fresh 256MiB RSS tests
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest -q --noconftest "$GITHUB_WORKSPACE/tests/test_j24v01_sparse_verify_streamed.py" 2>&1 | tee "$J24G33_ARTIFACT_DIR/donor-frozen-and-256m.log"
+      - name: Unmodified owner compaction custody regression (eight authentic cases)
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP"
+          export CMPCT_J24I06_RECEIPT="$J24G33_ARTIFACT_DIR/owner-regression.json"
+          python "$GITHUB_WORKSPACE/tests/research/j24i06_compaction_product_court.py" | tee "$J24G33_ARTIFACT_DIR/owner-regression.log"
+      - name: Source-verified installed 2MiB and 128MiB sparse compaction exactness, RSS, corruption
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP"
+          export CMPCT_ENCODE_WORKERS=1
+          python "$GITHUB_WORKSPACE/tests/research/j24g33_integrated_sparse_compaction.py" | tee "$J24G33_ARTIFACT_DIR/integrated-court.log"
+          python - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ["J24G33_ARTIFACT_DIR"])
+          record=json.loads((root/"report.json").read_text())
+          assert record["disposition"]=="NARROW_INTEGRATED_CANDIDATE_EVIDENCE_NOT_RELEASE"
+          assert len(record["cases"])==2
+          assert all(c["exact_repeat_output"] for c in record["cases"])
+          assert record["cases"][0]["physical_corruption_negative"]["rejected"]
+          large=next(c for c in record["cases"] if c["logical_sparse_bytes"]==128*1024*1024)
+          assert all(x["peak_rss_kib"]<128*1024 for x in large["repeat_results"])
+          assert all(x["source_metadata_equal"] and x["index_rows_equal"] for c in record["cases"] for x in c["repeat_results"])
+          print("INTEGRATED_PRODUCT_CANDIDATE_NARROW_PASS")
+          PY
+      - name: Preserve physical source, outputs, receipts and negatives, even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g33-installed-sparse-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ env.J24G33_ARTIFACT_DIR }}/
+          if-no-files-found: warn
+          retention-days: 90
