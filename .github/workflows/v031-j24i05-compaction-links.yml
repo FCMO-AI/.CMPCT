@@ -1,0 +1,95 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24I05 physical compaction symlink policy (research only)
+
+on:
+  pull_request:
+    paths:
+      - "research/j24i05_compaction_link_policy.py"
+      - ".github/workflows/v031-j24i05-compaction-links.yml"
+      - "docs/v031-research/2026-10-29-j24i05-*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i05-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-installed:
+    name: Genuine installed Builder/Reader/compaction (Ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      OUT_DIR: ${{ github.workspace }}/j24i05-evidence
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind preregistration, HEAD, and untouched product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 5c0a635e0ecf5ba08226e3bc4260a83d786dff6b HEAD
+          test -z "$(git diff --name-only 80c358f8824ec1b20d349c92ed94c898090969b0 HEAD -- src/ native/)"
+          mkdir -p "$OUT_DIR"
+          git rev-parse HEAD > "$OUT_DIR/head.txt"
+          git rev-parse HEAD:src/cmpct/builder.py > "$OUT_DIR/builder-git-blob.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$OUT_DIR/reader-git-blob.txt"
+          git rev-parse HEAD:src/cmpct/transactions.py > "$OUT_DIR/transactions-git-blob.txt"
+          git rev-parse HEAD:research/j24i05_compaction_link_policy.py > "$OUT_DIR/instrument-git-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install unchanged original CMPCT native distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+      - name: Verify installed package files match checkout rather than local import
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import cmpct.builder,cmpct.reader,cmpct.transactions,os,pathlib
+          source=pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          for mod in (cmpct.builder,cmpct.reader,cmpct.transactions):
+              installed=pathlib.Path(mod.__file__).resolve()
+              checkout=source/"src/cmpct"/installed.name
+              normalize=lambda x:x.replace(b"\r\n",b"\n")
+              assert normalize(installed.read_bytes())==normalize(checkout.read_bytes()), (installed,checkout)
+              assert not installed.is_relative_to(source), installed
+              print("INSTALLED_SOURCE_MATCH",installed)
+          PY
+      - name: Physical valid-archive / compaction counterexamples and controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          export CMPCT_J24I05_RECEIPT="$OUT_DIR/cases.json"
+          python "$GITHUB_WORKSPACE/research/j24i05_compaction_link_policy.py" | tee "$OUT_DIR/court.log"
+          python - <<'PY'
+          import json,os,pathlib
+          j=json.loads((pathlib.Path(os.environ["OUT_DIR"])/"cases.json").read_text())
+          assert j["decision"]=="COMPACTION_POLICY_INCOMPLETENESS_CONFIRMED"
+          assert [x["expected_rejection"] for x in j["cases"]]==[False,False,True,True]
+          assert [x["conclusion"] for x in j["cases"]]==[
+              "COMPACTED_EXACTLY","COMPACTED_EXACTLY",
+              "EXPECTED_POLICY_REJECTION","EXPECTED_POLICY_REJECTION"]
+          print("J24I05 RESEARCH RESULT VERIFIED; NO PRODUCT CREDIT")
+          PY
+      - name: Preserve evidence on both success and failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i05-compaction-links-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24i05-evidence/
+          if-no-files-found: warn
+          retention-days: 90
