@@ -18,8 +18,8 @@ mod projection;
 pub use projection::{execute_range, VirtualZipDispatchError};
 
 use crate::{Archive, CmpctError, Storage, CODEC_WAV_FLAC, MAX_DIRECT_DECODE_BYTES};
-use std::io::{Read, Seek, SeekFrom};
 use sha2::{Digest, Sha256};
+use std::io::{Read, Seek, SeekFrom};
 
 const VERIFY_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 
@@ -75,7 +75,11 @@ impl Archive {
         }
     }
 
-    fn verify_direct_wav_flac(&self, entry_index: usize, blob_index: usize) -> Result<(), CmpctError> {
+    fn verify_direct_wav_flac(
+        &self,
+        entry_index: usize,
+        blob_index: usize,
+    ) -> Result<(), CmpctError> {
         let entry = self.entries.get(entry_index).ok_or(CmpctError::Range)?;
         let blob = self.blobs.get(blob_index).ok_or(CmpctError::BlobHeader)?;
         if blob.codec != CODEC_WAV_FLAC || blob.usize != entry.size {
@@ -83,24 +87,35 @@ impl Archive {
         }
         if blob.usize > MAX_DIRECT_DECODE_BYTES
             || blob.csize > MAX_DIRECT_DECODE_BYTES
-            || u64::from(blob.meta_len) > MAX_DIRECT_DECODE_BYTES {
+            || u64::from(blob.meta_len) > MAX_DIRECT_DECODE_BYTES
+        {
             return Err(CmpctError::MemberLimit);
         }
         let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
-        let (pos, physical_sha, physical_crc) = self.checked_blob_layout_with_crc(blob, &mut file)?;
+        let (pos, physical_sha, physical_crc) =
+            self.checked_blob_layout_with_crc(blob, &mut file)?;
         if entry.logical_hash.is_some_and(|hash| hash != physical_sha) {
             return Err(CmpctError::MemberHash);
         }
-        let meta_pos = pos.checked_sub(u64::from(blob.meta_len)).ok_or(CmpctError::BlobHeader)?;
+        let meta_pos = pos
+            .checked_sub(u64::from(blob.meta_len))
+            .ok_or(CmpctError::BlobHeader)?;
         file.seek(SeekFrom::Start(meta_pos))?;
         let mut meta = vec![0u8; blob.meta_len as usize];
         file.read_exact(&mut meta)?;
         file.seek(SeekFrom::Start(pos))?;
         let (sha, crc) = crate::wavflac::digest_wav_flac_stream(
-            (&mut *file).take(blob.csize), &meta, blob.usize, MAX_DIRECT_DECODE_BYTES
+            (&mut *file).take(blob.csize),
+            &meta,
+            blob.usize,
+            MAX_DIRECT_DECODE_BYTES,
         )?;
-        if sha != physical_sha { return Err(CmpctError::MemberHash); }
-        if crc != physical_crc { return Err(CmpctError::BlobHeader); }
+        if sha != physical_sha {
+            return Err(CmpctError::MemberHash);
+        }
+        if crc != physical_crc {
+            return Err(CmpctError::BlobHeader);
+        }
         Ok(())
     }
 
@@ -121,7 +136,11 @@ impl Archive {
                 continue;
             }
             if let Storage::Direct(idx) = &entry.storage {
-                if self.blobs.get(*idx).is_some_and(|b| b.codec == CODEC_WAV_FLAC) {
+                if self
+                    .blobs
+                    .get(*idx)
+                    .is_some_and(|b| b.codec == CODEC_WAV_FLAC)
+                {
                     self.verify_direct_wav_flac(entry_index, *idx)?;
                     verified = verified.checked_add(1).ok_or(CmpctError::MemberLimit)?;
                     continue;
