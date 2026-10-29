@@ -21,7 +21,7 @@ from cmpct.reader import CMPCT
 
 NAME = "timestamped.bin"
 PAYLOAD = b"cmpct-j24g27:signed-mtime:lossless-byte-identity\n" * 17
-CASES = {"negative_epoch": -1_000_000_000, "ordinary_2020": 1_577_880_000_000_000_000}
+CASES = {"negative_epoch": -1_000_000_000, "zero_epoch": 0, "pre_1980_1979": 283_996_800_000_000_000, "ordinary_2020": 1_577_880_000_000_000_000}
 
 
 def sha(b: bytes) -> str:
@@ -106,7 +106,7 @@ def court(inputs: Path, output: Path, mode: str, repeat: int) -> None:
             result["zip_length"] = out.stat().st_size
         if label == "ordinary_2020":
             assert result["zip"] == "SUCCESS", result
-        if mode == "candidate" and label == "negative_epoch":
+        if mode == "candidate" and label in ("negative_epoch", "zero_epoch", "pre_1980_1979"):
             assert result["zip"] == "SUCCESS", result
             assert result["dos_datetime"] == [1980, 1, 1, 0, 0, 0], result
         got[label] = result
