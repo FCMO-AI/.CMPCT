@@ -18,22 +18,34 @@ fn specimen(name: &str) -> PathBuf {
 fn j24i33a_authentic_nested_and_flat_files_open_and_verify() {
     let real = Archive::open(&specimen("real-nested"))
         .expect("authentic Builder nested directory tree must open in native");
-    assert_eq!(real.entries().len(), 3, "expected two directories and a regular file");
+    assert_eq!(
+        real.entries().len(),
+        3,
+        "expected two directories and a regular file"
+    );
     assert_eq!(
         real.entries().iter().map(|e| e.kind).collect::<Vec<_>>(),
         vec![1, 1, 0],
         "actual persisted Builder entry topology differs from preregistered source"
     );
     assert_eq!(real.entries()[2].path, "nested/payload.bin");
-    assert_eq!(real.verify_complete().expect("native must verify regular payload"), 1);
+    assert_eq!(
+        real.verify_complete()
+            .expect("native must verify regular payload"),
+        1
+    );
     println!("J24I33_AUTHENTIC_NATIVE_nested=true;verified_regular=1");
 
-    let flat = Archive::open(&specimen("flat"))
-        .expect("flat same-payload Builder control must open");
+    let flat =
+        Archive::open(&specimen("flat")).expect("flat same-payload Builder control must open");
     assert_eq!(flat.entries().len(), 1);
     assert_eq!(flat.entries()[0].kind, 0);
     assert_eq!(flat.entries()[0].path, "payload.bin");
-    assert_eq!(flat.verify_complete().expect("native must verify flat payload"), 1);
+    assert_eq!(
+        flat.verify_complete()
+            .expect("native must verify flat payload"),
+        1
+    );
     println!("J24I33_AUTHENTIC_NATIVE_flat=true;verified_regular=1");
 }
 
@@ -41,8 +53,9 @@ fn j24i33a_authentic_nested_and_flat_files_open_and_verify() {
 #[ignore = "requires J24I33 derived signed-index specimens; execute by dedicated CI"]
 fn j24i33a_only_optional_empty_sentinel_has_native_python_gap() {
     for label in ["inserted-empty", "invalid-one-byte"] {
-        let err = Archive::open(&specimen(label))
-            .expect_err("unmodified strict native parser should refuse malformed-length binary digest");
+        let err = Archive::open(&specimen(label)).expect_err(
+            "unmodified strict native parser should refuse malformed-length binary digest",
+        );
         let why = err.to_string();
         assert!(
             why.contains("invalid logical SHA-256 length"),
