@@ -62,7 +62,7 @@ jobs:
           J24G44_EVIDENCE_DIR: j24g44-evidence/physical
         run: |
           set -euo pipefail
-          python -m pytest -q -rA tests/test_j24g44_zero_encoded_python_codec.py tests/test_conformance_direct_codecs.py tests/test_conformance_zstd_dictionary.py 2>&1 | tee j24g44-evidence/pytest.log
+          python -m pytest --noconftest -q -rA tests/test_j24g44_zero_encoded_python_codec.py tests/test_conformance_direct_codecs.py tests/test_conformance_zstd_dictionary.py 2>&1 | tee j24g44-evidence/pytest.log
           test -s j24g44-evidence/physical/receipt.json
           test -s j24g44-evidence/physical/valid.cmpct
           test -s j24g44-evidence/physical/invalid.cmpct
