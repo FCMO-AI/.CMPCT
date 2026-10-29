@@ -57,7 +57,12 @@ jobs:
           # This child evaluates the exact J24I08 Win32 donor composition,
           # not the earlier J24I06 source; preserve the old court on #724.
           git merge-base --is-ancestor 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD
-          git diff --exit-code 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD -- src/ native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md benchmarks/
+          # J24I11 is deliberately a Builder product fix; freeze all other
+          # J24I08 sources and the exact one-file donor rather than treating
+          # the previous research-only source identity as immutable.
+          git diff --exit-code 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD -- src/cmpct/reader.py src/cmpct/transactions.py src/cmpct/codec.py src/cmpct/_win32_times.py native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md benchmarks/
+          test "$(git diff --name-only 96989c923ed8a01f6cd6a6ca8bf69002a2409685 HEAD -- src/)" = "src/cmpct/builder.py"
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = "b3c8cbfbefb9d47ffa849bd939257215ee4b0a09"
           python -c "import os,pathlib; p=pathlib.Path(os.environ['CMPCT_J24I07_RECEIPT']).parent; p.mkdir(parents=True,exist_ok=True)"
           git rev-parse HEAD > j24i07-head.txt
           python -c "import os,shutil,pathlib; shutil.copy('j24i07-head.txt',pathlib.Path(os.environ['CMPCT_J24I07_RECEIPT']).parent/'head.txt')"

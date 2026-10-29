@@ -54,9 +54,12 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
           git merge-base --is-ancestor 52d51b9446dc8876319f7bd1e6ca2b7f54681de8 HEAD
           git merge-base --is-ancestor e625b83eb3be9b1eb298de2aa1962d1641185555 HEAD
-          git diff --exit-code 94acd76dafc7463cc98b3a566041a7334ea966e9 HEAD -- src/cmpct/builder.py native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md benchmarks/
+          # J24I11 changes exactly one additional Builder donor; every J24I08
+          # mtime/transaction invariant below remains source-exact and tested.
+          git diff --exit-code 94acd76dafc7463cc98b3a566041a7334ea966e9 HEAD -- native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md benchmarks/
           test "$(git rev-parse HEAD:src/cmpct/_win32_times.py)" = "70308f454c74fad7b247db6ee36aa8cc7d38c99c"
-          python -c "import subprocess; changed=set(subprocess.check_output(['git','diff','--name-only','94acd76dafc7463cc98b3a566041a7334ea966e9','HEAD','--','src/']).decode().splitlines()); assert changed=={'src/cmpct/_win32_times.py','src/cmpct/reader.py','src/cmpct/transactions.py'}, changed"
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = "b3c8cbfbefb9d47ffa849bd939257215ee4b0a09"
+          python -c "import subprocess; changed=set(subprocess.check_output(['git','diff','--name-only','94acd76dafc7463cc98b3a566041a7334ea966e9','HEAD','--','src/']).decode().splitlines()); assert changed=={'src/cmpct/_win32_times.py','src/cmpct/reader.py','src/cmpct/transactions.py','src/cmpct/builder.py'}, changed"
           python -c "from pathlib import Path; s=Path('src/cmpct/reader.py').read_text(); assert s.count('self._restore_regular_mtime(')==2 and 'except (OSError, NotImplementedError):pass' in s and 'restore_win32_leaf_mtime' in s"
           python -c "import pathlib,subprocess; original=subprocess.check_output(['git','show','94acd76dafc7463cc98b3a566041a7334ea966e9:src/cmpct/transactions.py']).decode(); current=pathlib.Path('src/cmpct/transactions.py').read_text(); assert current==original.replace(\"with open(stage,'rb') as stream:os.fsync(stream.fileno())\",\"with open(stage,'rb+') as stream:os.fsync(stream.fileno())\")"
           python -c "import os,pathlib; p=pathlib.Path(os.environ['CMPCT_J24I07_RECEIPT']).parent; p.mkdir(parents=True,exist_ok=True)"
