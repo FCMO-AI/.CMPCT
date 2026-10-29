@@ -29,20 +29,37 @@ jobs:
       - name: Record exact source HEAD
         shell: bash
         run: git rev-parse HEAD > j24i36-head.txt
+      - name: Classify exact HEAD narrow scientific mutation
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i36/|native/cmpct-core/|docs/v031-research/.*j24i36|[.]github/workflows/v031-j24i36-native-fused-crc-court[.]yml)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
         with:
           components: rustfmt
       - run: python -m pip install . zstandard
+        if: steps.scope.outputs.run == 'true'
       - run: python research/j24i36/generate_fixed_crc.py --vectors tests/conformance/v24-direct-codecs.json --output j24i36-cases
+        if: steps.scope.outputs.run == 'true'
       - run: python research/j24i36/audit_fixed_crc.py --vectors tests/conformance/v24-direct-codecs.json --case-dir j24i36-cases
+        if: steps.scope.outputs.run == 'true'
       - run: cargo test --locked --manifest-path native/cmpct-core/Cargo.toml --test j24i36_fused_crc_court j24i36_frozen_direct_codecs_reject_crc_only_mutation -- --ignored --nocapture
+        if: steps.scope.outputs.run == 'true'
         env:
           J24I36_CASE_DIR: ${{ github.workspace }}/j24i36-cases
       - name: Real symlink and payload SHA adversarial control
-        if: runner.os != 'Windows'
+        if: steps.scope.outputs.run == 'true' && runner.os != 'Windows'
         shell: bash
         env:
           J24I36_SYMLINK_CASE_DIR: ${{ github.workspace }}/j24i36-symlink
