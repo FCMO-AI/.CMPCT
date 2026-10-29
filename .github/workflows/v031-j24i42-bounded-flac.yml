@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 # ci-pr-scope: latest-head-commit-gate
 name: J24I42 Bounded In-Archive FLAC Oracle
 on:
@@ -12,7 +13,7 @@ permissions:
   contents: read
 concurrency:
   group: j24i42-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   physical-inarchive-court:
     runs-on: ubuntu-24.04
@@ -108,7 +109,7 @@ jobs:
         with:
           name: j24i42-physical-original-${{ github.run_id }}
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
           path: |
             j24i42-physical-evidence.tar.gz
             j24i42-head.txt
