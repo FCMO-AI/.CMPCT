@@ -155,10 +155,39 @@ def compact_archive(src:Path,dst:Path):
         return Builder(root).build(dst)
 
 def tree_digest(root:Path):
-    h=hashlib.sha256();root=Path(root)
+    """Fingerprint tree contents and link topology, not all filesystem metadata.
+
+    This is the v2 *tree evidence* digest, not a stable on-disk CMPCT identifier.
+    Mode, timestamps, sparse allocation, xattrs/ACLs and concurrent mutations
+    are outside its scope. Historical v1 values are intentionally not comparable.
+    """
+    h=hashlib.sha256(b'CMPCT-tree-digest-v2\x00');root=Path(root)
+    owners={}
     for p in sorted(root.rglob('*')):
-        rel=p.relative_to(root).as_posix().encode();h.update(struct.pack('<I',len(rel)));h.update(rel)
-        if p.is_file():b=p.read_bytes();h.update(b'F');h.update(struct.pack('<Q',len(b)));h.update(hashlib.sha256(b).digest())
-        elif p.is_dir():h.update(b'D')
-        elif p.is_symlink():h.update(b'L');h.update(os.readlink(p).encode())
+        rel=os.fsencode(p.relative_to(root).as_posix())
+        h.update(struct.pack('<I',len(rel)));h.update(rel)
+        # lstat is required: Path.is_file/is_dir follow symlinks and previously made
+        # a symlink-to-file and an independent file copy hash identically.
+        st=p.lstat()
+        if stat.S_ISLNK(st.st_mode):
+            target=os.fsencode(os.readlink(p))
+            h.update(b'L');h.update(struct.pack('<Q',len(target)));h.update(target)
+        elif stat.S_ISDIR(st.st_mode):
+            h.update(b'D')
+        elif stat.S_ISREG(st.st_mode):
+            # Store the *first logical path*, never a host inode number: equivalent
+            # hardlink trees at different roots must retain identical digests.
+            key=(st.st_dev,st.st_ino)
+            if st.st_nlink>1 and not st.st_ino:
+                raise ValueError(f'cannot establish hardlink identity: {p}')
+            if st.st_nlink>1 and key in owners:
+                owner=owners[key]
+                h.update(b'H');h.update(struct.pack('<I',len(owner)));h.update(owner)
+            else:
+                if st.st_nlink>1:owners[key]=rel
+                b=p.read_bytes()
+                h.update(b'F');h.update(struct.pack('<Q',len(b)));h.update(hashlib.sha256(b).digest())
+        else:
+            # Unknown node kinds must not quietly share a digest with each other.
+            raise ValueError(f'unsupported filesystem entry type: {p}')
     return h.hexdigest()
