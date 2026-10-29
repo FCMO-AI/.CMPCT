@@ -69,6 +69,11 @@ jobs:
           set -euo pipefail
           mkdir -p evidence
           python -m pytest -q --noconftest tests/test_v031_j24g47_journal_fsmeta_identity.py 2>&1 | tee evidence/pytest.log
+      - name: Record raw cost of path-lineage remapping at 1k/10k rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g47/measure_metadata_rekey_cost.py evidence/helper-cost.json 2>&1 | tee evidence/helper-cost.log
       - name: Execute original J24G46 physical negative-reproduction fixture as positive acceptance
         shell: bash
         run: |
