@@ -13,6 +13,8 @@ import json
 import os
 from pathlib import Path
 import platform
+import subprocess
+import sys
 import tempfile
 from unittest.mock import patch
 
@@ -95,11 +97,22 @@ def main() -> None:
                     assert snapshot(payload) == expected, "candidate did not verify authentic archive"
                     verified_sha = sha(payload)
                     saved_inode = stage / "already-verified.cmpct"
-                    original_replace(payload, saved_inode)
-                    if kind == "symlink":
-                        payload.symlink_to(outside)
-                    else:
-                        payload.write_bytes(marker)
+                    # A separate same-UID process does the namespace mutation.
+                    # The owner process only schedules it at the real rename boundary.
+                    actor_code = (
+                        "import os,sys\\n"
+                        "from pathlib import Path\\n"
+                        "src,dst,kind,sentinel=sys.argv[1:]\\n"
+                        "os.replace(src,dst)\\n"
+                        "if kind=='symlink':os.symlink(sentinel,src)\\n"
+                        "else:Path(src).write_bytes(b'J24G39-UNVERIFIED-REGULAR-REPLACEMENT')\\n"
+                    )
+                    actor = subprocess.run(
+                        [sys.executable, "-c", actor_code, str(payload),
+                         str(saved_inode), kind, str(outside)],
+                        check=True, capture_output=True, text=True,
+                    )
+                    assert actor.returncode == 0
                     observed.append({
                         "verified_sha": verified_sha,
                         "planted_kind": kind,
