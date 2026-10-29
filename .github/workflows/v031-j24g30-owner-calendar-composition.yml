@@ -1,0 +1,111 @@
+# ci-lane: fast
+name: CMPCT J24G30 O190/O191 calendar composition on O149 publication
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g30-o190-o191-o149-calendar-composition-20261029
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_v031_o190_zip_dos_time.py'
+      - 'tests/test_v031_j24g30_zip_calendar_composition.py'
+      - '.github/workflows/v031-j24g30-owner-calendar-composition.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g30-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-calendar:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source and independent owner ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor ca01d885fedc8ffc343b9c3c624eddd134158452 HEAD
+          test "$(git rev-parse ca01d885fedc8ffc343b9c3c624eddd134158452:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = cd6a2971396d6fe02a1d7f460d850107b3dcc397
+          test "$(git rev-parse HEAD:tests/test_v031_o190_zip_dos_time.py)" = c5a822330e8f38d25c414f81badd3a890a833b5b
+          test -f docs/v031-research/2026-10-29-j24g30-owner-zip-calendar-composition-prereg.md
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install real candidate separately from source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j30-installed" "$GITHUB_WORKSPACE"
+          python -m pip install --disable-pip-version-check pytest
+          mkdir -p "$RUNNER_TEMP/j30-tests"
+          cp tests/test_v031_o190_zip_dos_time.py tests/test_v031_j24g30_zip_calendar_composition.py "$RUNNER_TEMP/j30-tests/"
+          printf '[pytest]\n' > "$RUNNER_TEMP/j30-tests/pytest.ini"
+      - name: Confirm installed Reader source identity independent of checkout
+        shell: bash
+        env:
+          EXPECTED_BLOB: cd6a2971396d6fe02a1d7f460d850107b3dcc397
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$RUNNER_TEMP/j30-installed" python - <<'PY'
+          import hashlib, inspect, os
+          from cmpct.reader import CMPCT
+          src=open(inspect.getfile(CMPCT),'rb').read()
+          normalized=src.replace(b'\r\n',b'\n')
+          sha=hashlib.sha1(b'blob '+str(len(normalized)).encode()+b'\0'+normalized).hexdigest()
+          assert sha==os.environ['EXPECTED_BLOB'], (sha, os.environ['EXPECTED_BLOB'])
+          assert b'\r' not in normalized
+          print('J24G30_READER_BLOB='+sha)
+          PY
+      - name: Execute unchanged O190 tests and new bounded composition falsifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$RUNNER_TEMP/j30-installed" python -m pytest --noconftest -c "$RUNNER_TEMP/j30-tests/pytest.ini" -q \
+            "$RUNNER_TEMP/j30-tests/test_v031_o190_zip_dos_time.py" \
+            "$RUNNER_TEMP/j30-tests/test_v031_j24g30_zip_calendar_composition.py" \
+            2>&1 | tee "$RUNNER_TEMP/j30-calendar-tests.log"
+      - name: Run inherited exact ZIP publication/source/nonregular suites
+        if: matrix.os != 'windows-2022'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:tests/test_v031_o149_zip_export_atomic_publication.py)" = d394c1dd66eb229f5b24ccbd3713825f5e95cd89
+          test "$(git rev-parse HEAD:tests/test_v031_o140_zip_export_nonregular.py)" = 063493b35b22f48d3b95a18c0b4ae41e761de1cf
+          test "$(git rev-parse HEAD:tests/test_v031_zip_export_source_alias_o135.py)" = 9d913212d29600be83c990ff5a86d8309a86a6cb
+          export PYTHONPATH="$RUNNER_TEMP/j30-installed"
+          export CMPCT_FIXTURE_JSON="$GITHUB_WORKSPACE/tests/conformance/v24-direct-codecs.json"
+          export O140_ENGINE=candidate O140_PRODUCT_SRC="$RUNNER_TEMP/j30-installed"
+          export O135_EXPECT=candidate O135_PRODUCT_SRC="$RUNNER_TEMP/j30-installed"
+          python -m pytest --noconftest -c "$RUNNER_TEMP/j30-tests/pytest.ini" -q -s \
+            tests/test_v031_o149_zip_export_atomic_publication.py \
+            tests/test_v031_o140_zip_export_nonregular.py \
+            tests/test_v031_zip_export_source_alias_o135.py \
+            2>&1 | tee "$RUNNER_TEMP/j30-inherited-contracts.log"
+      - name: Preserve original per-host result logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g30-calendar-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/j30-calendar-tests.log
+            ${{ runner.temp }}/j30-inherited-contracts.log
+          if-no-files-found: warn
+          retention-days: 30

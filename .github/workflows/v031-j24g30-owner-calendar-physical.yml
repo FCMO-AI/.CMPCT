@@ -1,0 +1,126 @@
+# ci-lane: fast
+name: CMPCT J24G30 owner-composed authentic ZIP calendar across hosts
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g30-o190-o191-o149-calendar-composition-20261029
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/research/j24g30_owner_calendar_physical_court.py'
+      - '.github/workflows/v031-j24g30-owner-calendar-physical.yml'
+      - 'docs/v031-research/2026-10-29-j24g30-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g30-physical-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  physical-vector:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check exact source and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = cd6a2971396d6fe02a1d7f460d850107b3dcc397
+          test -e docs/v031-research/2026-10-29-j24g30-owner-zip-calendar-composition-prereg.md
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j30-installed" "$GITHUB_WORKSPACE"
+          echo "PYTHONPATH=$RUNNER_TEMP/j30-installed" >> "$GITHUB_ENV"
+          echo "EXPECTED_READER_BLOB=cd6a2971396d6fe02a1d7f460d850107b3dcc397" >> "$GITHUB_ENV"
+      - name: Create physical first-party revision-24 signed input
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/research/j24g30_owner_calendar_physical_court.py generate --output "$RUNNER_TEMP/j30-physical"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j30-fixed-physical-r24
+          path: |
+            ${{ runner.temp }}/j30-physical/*.cmpct
+            ${{ runner.temp }}/j30-physical/manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+  old-vs-candidate:
+    needs: physical-vector
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check exact branch lineage, Reader SHA, baseline SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor ca01d885fedc8ffc343b9c3c624eddd134158452 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = cd6a2971396d6fe02a1d7f460d850107b3dcc397
+          test "$(git rev-parse ca01d885fedc8ffc343b9c3c624eddd134158452:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install full independent source trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/j30-parent-tree" ca01d885fedc8ffc343b9c3c624eddd134158452
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j30-old" "$RUNNER_TEMP/j30-parent-tree"
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j30-new" "$GITHUB_WORKSPACE"
+      - uses: actions/download-artifact@v4
+        with:
+          name: j30-fixed-physical-r24
+          path: ${{ runner.temp }}/j30-input
+      - name: Compare old and new Readers on physically identical archives, twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/j30-old-out" "$RUNNER_TEMP/j30-new-out"
+          for rep in 1 2; do
+            PYTHONPATH="$RUNNER_TEMP/j30-old" EXPECTED_READER_BLOB=496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332 \
+              python tests/research/j24g30_owner_calendar_physical_court.py court --input "$RUNNER_TEMP/j30-input" --output "$RUNNER_TEMP/j30-old-out" --mode baseline --repeat "$rep"
+            PYTHONPATH="$RUNNER_TEMP/j30-new" EXPECTED_READER_BLOB=cd6a2971396d6fe02a1d7f460d850107b3dcc397 \
+              python tests/research/j24g30_owner_calendar_physical_court.py court --input "$RUNNER_TEMP/j30-input" --output "$RUNNER_TEMP/j30-new-out" --mode candidate --repeat "$rep"
+          done
+          cmp "$RUNNER_TEMP/j30-old-out/ordinary_2020.zip" "$RUNNER_TEMP/j30-new-out/ordinary_2020.zip"
+          cmp "$RUNNER_TEMP/j30-old-out/upper_2107_control.zip" "$RUNNER_TEMP/j30-new-out/upper_2107_control.zip"
+      - name: Original per-host raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j30-${{ matrix.os }}-evidence
+          path: |
+            ${{ runner.temp }}/j30-old-out/*
+            ${{ runner.temp }}/j30-new-out/*
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,104 @@
+# ci-lane: fast
+# Research-only provider-bound reproduction of original J24G30 artifacts.
+name: CMPCT J24G31 independent original r24 to ZIP wire audit
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g30-o190-o191-o149-calendar-composition-20261029
+    paths:
+      - 'research/j24g31_*.py'
+      - 'docs/v031-research/2026-10-29-j24g31-*'
+      - '.github/workflows/v031-j24g31-independent-source-wire.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: j24g31-independent-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+jobs:
+  independent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check exact tested Reader and original provider ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = cd6a2971396d6fe02a1d7f460d850107b3dcc397
+          test "$(git rev-parse HEAD:research/j24g31_cmpct_physical_oracle.py)" = 27341301d052ca1e66b729c9cb29612227039056
+          git merge-base --is-ancestor 8581f1dee427e9ca7359e3c05bd514499471c357 HEAD
+      - name: Install independent audit dependencies only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check msgpack
+          command -v zstd || (sudo apt-get -qq update && sudo apt-get -y -qq install zstd)
+          command -v unzip
+      - name: Download original GitHub Actions ZIP envelopes by immutable artifact ID
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/j31"
+          for pair in 12871265991:physical 12871102381:linux 12871166981:mac 12870519614:win; do
+            id="${pair%%:*}"; label="${pair##*:}"
+            curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" \
+              -o "$RUNNER_TEMP/j31/j30-$label-original.zip"
+          done
+          cd "$RUNNER_TEMP/j31"
+          printf '%s\n' \
+            '856777ebf5dcc1c2a7e85a4bb7b0fd5e7a15b3dbcbf6f94ab8eb4ddf68a7082a  j30-physical-original.zip' \
+            '9a25d1ed4cf94c01b575d9cb21d0e91bc7632d86ceee4ac779a7e7d5743c840e  j30-linux-original.zip' \
+            '989b9cba84c1555d208a9864e63778ce5c47e08d8358025fc355a2b509767f8c  j30-mac-original.zip' \
+            'c13352d9f9c7e4ac88073888c40b20ce4cbb09770e07f2a3bc8a45771dbc84d0  j30-win-original.zip' | sha256sum -c -
+      - name: Execute independent source/ZIP oracles and hostile controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          A="$RUNNER_TEMP/j31"
+          python research/j24g31_cmpct_physical_oracle.py --physical-artifact "$A/j30-physical-original.zip" > "$A/r24.json"
+          python research/j24g31_r24_adversarial_tests.py --physical-artifact "$A/j30-physical-original.zip" > "$A/r24-negative.json"
+          python research/j24g31_independent_zip_wire_audit.py --artifacts "$A" --json "$A/zip-wire.json"
+          python research/j24g31_adversarial_tests.py --artifacts "$A" > "$A/zip-negative.json"
+          python research/j24g31_transport_controls.py --artifacts "$A" > "$A/transport-negative.json"
+          python research/j24g31_external_zip_interop.py --artifacts "$A" > "$A/infozip.json"
+          python research/j24g31_fs_metadata_parity.py --artifacts "$A" > "$A/fs-metadata.json"
+          python - <<'PY'
+          import json,os,pathlib
+          d=pathlib.Path(os.environ['RUNNER_TEMP'])/'j31'
+          check=lambda f,key,want:json.loads((d/f).read_text())[key]==want
+          assert check('r24.json','checks',148)
+          assert check('zip-wire.json','checks',1240)
+          assert check('zip-wire.json','actual_inner_zips_verified',41)
+          assert check('zip-negative.json','total_corruptions_rejected',24)
+          assert check('r24-negative.json','corruptions_rejected',19)
+          assert check('transport-negative.json','rejected',4)
+          assert check('infozip.json','independent_unzip_6_00_zip_exports',41)
+          assert check('fs-metadata.json','original_exports',41)
+          print('J24G31 independent source/ZIP audit passed')
+          PY
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g31-independent-receipts
+          path: |
+            ${{ runner.temp }}/j31/r24.json
+            ${{ runner.temp }}/j31/*-negative.json
+            ${{ runner.temp }}/j31/zip-wire.json
+            ${{ runner.temp }}/j31/infozip.json
+            ${{ runner.temp }}/j31/fs-metadata.json
+          retention-days: 30
+          if-no-files-found: warn

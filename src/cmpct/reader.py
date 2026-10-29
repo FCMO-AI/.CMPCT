@@ -489,11 +489,27 @@ class CMPCT:
             n+=1
         return n
     def _zip_dos_time(self,mtime_ns:int):
-        # ZIP timestamps are DOS-local-time with two-second resolution. The native CMPCT metadata
-        # remains nanosecond precision; only this legacy endpoint accepts ZIP's timestamp ceiling.
-        t=time.localtime(mtime_ns/1_000_000_000 if mtime_ns else 315532800)
-        y=min(2107,max(1980,t.tm_year));mo=min(12,max(1,t.tm_mon));d=min(31,max(1,t.tm_mday))
-        zdate=((y-1980)<<9)|(mo<<5)|d;ztime=(t.tm_hour<<11)|(t.tm_min<<5)|(t.tm_sec//2)
+        # CMPCT stores signed nanoseconds; DOS ZIP stores a *whole* local calendar date
+        # only between 1980-01-01 00:00:00 and 2107-12-31 23:59:58.
+        # Footnote: converting ancient signed timestamps with the host CRT first is unsafe:
+        # Windows localtime rejects even a valid CMPCT timestamp from 1960 (O184).
+        earliest=(1980,1,1,0,0,0);latest=(2107,12,31,23,59,58)
+        seconds=mtime_ns//1_000_000_000
+        if not mtime_ns or seconds<315360000:
+            # Zero is the legacy unspecified-time sentinel. 1979-12-30 UTC is
+            # safely before the DOS epoch even under real-world local offsets.
+            date=earliest
+        elif seconds>=4354992000:
+            # 2108-01-03 UTC is safely past the DOS ceiling in local zones.
+            date=latest
+        else:
+            # Keep local-time compatibility within the representable neighborhood.
+            # Integer division avoids floating-point rollover at second boundaries.
+            t=time.localtime(seconds)
+            date=(t.tm_year,t.tm_mon,t.tm_mday,t.tm_hour,t.tm_min,min(t.tm_sec,59))
+            date=max(earliest,min(latest,date))
+        y,mo,d,h,mi,s=date
+        zdate=((y-1980)<<9)|(mo<<5)|d;ztime=(h<<11)|(mi<<5)|(s//2)
         return ztime,zdate
 
     def _direct_deflate_stream(self,row):
@@ -672,6 +688,12 @@ class CMPCT:
             with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=level,allowZip64=True) as z:
                 for rel,k,mode,mt,size,h,storage in self.files:
                     zi=zipfile.ZipInfo(rel.rstrip('/')+'/' if k==K_DIR else rel)
+                    # ZIP64 fallback must use the same authenticated DOS-local calendar
+                    # as the fast writer. ZipInfo's default 1980 date silently discards
+                    # ordinary and signed CMPCT mtimes (O191; O190 bounds the calendar).
+                    ztime,zdate=self._zip_dos_time(mt)
+                    zi.date_time=(1980+(zdate>>9),(zdate>>5)&15,zdate&31,
+                                  ztime>>11,(ztime>>5)&63,(ztime&31)*2)
                     zi.create_system=3
                     typ=stat.S_IFDIR if k==K_DIR else (stat.S_IFLNK if k==K_SYMLINK else stat.S_IFREG)
                     zi.external_attr=((typ|mode)&0xffff)<<16
