@@ -91,9 +91,13 @@ class Builder:
                     # os.stat proves a real multi-link inode. Do not flatten hardlink topology
                     # into independent regular files merely to preserve the scandir fast path.
                     checked=os.stat(e.path,follow_symlinks=False)
-                    if (not stat.S_ISREG(checked.st_mode)
-                            or (checked.st_dev,checked.st_ino)!=(st.st_dev,st.st_ino)):
-                        raise OSError('source file identity changed during hardlink census: '+e.path)
+                    # DirEntry.stat and os.stat can expose different Win32 file-ID
+                    # encodings for the same real file; cross-API inode equality
+                    # is not a valid custody oracle. Retain nonfollowing type and
+                    # exact size as cheap consistency checks, without claiming a
+                    # race-free source snapshot (tracked separately in #408).
+                    if not stat.S_ISREG(checked.st_mode) or checked.st_size!=st.st_size:
+                        raise OSError('source file type/size changed during hardlink census: '+e.path)
                     if checked.st_nlink<1:
                         raise OSError('unavailable Windows hardlink count for: '+e.path)
                     st=checked
