@@ -1,0 +1,68 @@
+{
+  "schema": "j24i40-hosted-result-v1",
+  "date_utc": "2026-10-29",
+  "type": "scientific_codec_metadata_oracle_not_product_evidence",
+  "source_commit": "03f8939418837b83e4e3d12be21a64d2fa43b275",
+  "pr": 779,
+  "branch": "agent/phased3-v031-j24i40-flac-streaminfo-md5-court-20261029",
+  "preregistration_commit": "26decb9dac7f2fe5952b3b8ef979d0119d15a9d9",
+  "workflow_run_id": 40943497098,
+  "workflow_job_id": 123692681787,
+  "workflow_url": "https://github.com/FCMO-AI/.CMPCT/actions/runs/40943497098",
+  "workflow_conclusion": "success",
+  "job_conclusion": "success",
+  "artifact_id": 12927298973,
+  "artifact_url": "https://github.com/FCMO-AI/.CMPCT/actions/runs/40943497098/artifacts/12927298973",
+  "artifact_zip_digest_sha256": "d8981a0bdcf421bfdb7967fcfdc2db8aabe730ae2b7e1daebc1df2b3b159f890",
+  "inner_tar_sha256": "61e83a0f6e0bceaae009314378b4b9abf682c669f13efd4c5e5d7914a3c65500",
+  "original_builder_archive_sha256": "9250964815f67891c3e106c9d87aadc67d4f2c3dce8b3e4e1873813a13a6fac7",
+  "original_flac_sha256": "d2126c870dcba10ad7f9d7b6caf83ca0c0df2815b9e47be343f3ed3b3b1355e8",
+  "original_streaminfo_md5": "0dedd25a319eefdf6fc912ff1b021645",
+  "streaminfo_md5_byte_offset": 26,
+  "encoded_flac_bytes_each": 3982561,
+  "logical_wav_sha256": "626fe0fd569bc6de01277e7dc71053ef2ef10506ab06a429dcc93ce9e78fe3a5",
+  "mutants": {
+    "valid": {
+      "changed_offsets": [],
+      "sha256": "d2126c870dcba10ad7f9d7b6caf83ca0c0df2815b9e47be343f3ed3b3b1355e8",
+      "flac_t_exit": 0,
+      "claxon_iter_exit": 0
+    },
+    "md5_flip": {
+      "changed_offsets": [
+        26
+      ],
+      "sha256": "90fbfa3f1bad9b4e91b364b03348e18242f08cda5ddabb2ada0ae938dc44bdc8",
+      "flac_t_exit": 1,
+      "claxon_iter_exit": 0
+    },
+    "md5_zero": {
+      "changed_offsets": [
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41
+      ],
+      "sha256": "647a897117d93421c4f9192f8faaf7efccb75aba9325a65533a48980f7ae86f6",
+      "flac_t_exit": 0,
+      "claxon_iter_exit": 0
+    }
+  },
+  "reference_error_for_flip": "MD5 signature mismatch",
+  "reference_warning_for_zero": "cannot check MD5 signature since it was unset in the STREAMINFO",
+  "classification": "DIVERGENCE_CONFIRMED_FOR_INTERNAL_FLAC_MD5_ONLY",
+  "negative_scope": "Original and altered bitstreams produce identical logical WAV SHA-256/CRC32 in the pinned Claxon oracle; no CMPCT logical identity bypass, native full-archive read, C ABI, resource bound or product performance established.",
+  "next_decision": "Do not add MD5 cost by default. Native owner should decide whether enforcing codec-private MD5 is required, given stronger CMPCT logical SHA-256 and zeroed-MD5 validity; prioritize original archive FD+bounded FLAC stream integration."
+}
