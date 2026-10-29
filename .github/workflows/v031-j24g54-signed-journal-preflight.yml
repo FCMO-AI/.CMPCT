@@ -76,7 +76,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m pytest --noconftest -q -s --junitxml=evidence/pytest.xml tests/test_v031_j24g54_physical_journal_preflight.py 2>&1 | tee evidence/pytest.log
+          python -m pytest --noconftest -q -s --junitxml=evidence/pytest.xml tests/test_v031_j24g54_physical_journal_preflight.py tests/test_v031_j24g54b_inrange_journal_metadata.py 2>&1 | tee evidence/pytest.log
       - name: Independent signed r24 footer, metadata and tamper referee
         if: always()
         shell: bash
@@ -86,6 +86,9 @@ jobs:
           test -s evidence/physical/both_survivors-after.cmpct
           python research/j24g54/independent_journal_referee.py evidence/physical 2>&1 | tee evidence/referee.log
           test -s evidence/physical/independent-referee.json
+          test -s evidence/physical/inrange_xattr-after.cmpct
+          python research/j24g54/independent_inrange_referee.py evidence/physical 2>&1 | tee evidence/inrange-referee.log
+          test -s evidence/physical/independent-inrange-referee.json
       - name: Preserve result-bearing physical data and failure logs
         if: always()
         uses: actions/upload-artifact@v4
