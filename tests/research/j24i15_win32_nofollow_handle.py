@@ -7,6 +7,7 @@ out of scope. Preregistration: docs/v031-research/2026-10-29-j24i15-*.md.
 from __future__ import annotations
 
 import ctypes
+import functools
 import hashlib
 import json
 import os
@@ -48,6 +49,7 @@ def corpus(root: Path) -> dict[str, list[Path]]:
     return {"unique256": sorted(unique.iterdir()), "topology3": [owner, alias, copy]}
 
 
+@functools.lru_cache(maxsize=1)
 def api():
     if os.name != "nt":
         raise OSError("Win32 kernel32 API unavailable; not a product failure")
@@ -238,6 +240,9 @@ def run() -> dict:
         result["installed_package_path"] = str(installed)
         if installed == checkout or checkout in installed.parents:
             raise AssertionError("instrument imported checkout instead of installed package")
+        # J24I15b: charge Win32 descriptor operations, not per-file ctypes declarations.
+        # Initialize once outside every timing interval; original uncached court remains immutable.
+        api()
         with tempfile.TemporaryDirectory(prefix="j24i15-") as d:
             root = Path(d)
             groups = corpus(root)
