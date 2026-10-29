@@ -79,3 +79,71 @@ jobs:
             j24i36-head.txt
             j24i36-cases/
             j24i36-symlink/
+
+  cost-diagnostic:
+    name: Same-source in-process ABBA cost (not release gate)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Create one installed corpus, then preserve archive identity
+        run: |
+          python -m pip install . zstandard
+          python research/j24i36/generate_cost_corpus.py --output j24i36-cost
+          git rev-parse HEAD > j24i36-cost-head.txt
+      - name: Compile immutable baseline and candidate separately
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/j24i36-baseline" e67ed337e78e021ba91f7bc6bdc271ae0ddd6b51
+          cp research/j24i36/native_verify_cost_probe.rs "$RUNNER_TEMP/j24i36-baseline/native/cmpct-core/src/bin/j24i36_perf.rs"
+          cp research/j24i36/native_verify_cost_probe.rs native/cmpct-core/src/bin/j24i36_perf.rs
+          cargo build --release --locked --manifest-path "$RUNNER_TEMP/j24i36-baseline/native/cmpct-core/Cargo.toml" --bin j24i36_perf
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i36_perf
+      - name: Source-exact ABBA/BAAB in-process measurement
+        shell: bash
+        run: |
+          set -euo pipefail
+          A="$RUNNER_TEMP/j24i36-baseline/native/cmpct-core/target/release/j24i36_perf"
+          B="native/cmpct-core/target/release/j24i36_perf"
+          archive="$PWD/j24i36-cost/same-input.cmpct"
+          : > j24i36-abba-raw.txt
+          for lane in A B B A B A A B; do
+            if [ "$lane" = A ]; then executable="$A"; else executable="$B"; fi
+            "$executable" "$archive" | sed "s/^/$lane /" | tee -a j24i36-abba-raw.txt
+          done
+          python - <<'PY'
+          import json, pathlib, re, statistics
+          pairs={"A":[],"B":[]}
+          for line in pathlib.Path("j24i36-abba-raw.txt").read_text().splitlines():
+              m=re.fullmatch(r"([AB]) J24I36_PERF iteration=(\d+) verified=(\d+) wall_ns=(\d+)",line)
+              assert m,line
+              lane,it,n,ns=m.groups()
+              assert int(n)==64
+              if int(it)>0: pairs[lane].append(int(ns))
+          assert len(pairs["A"])==len(pairs["B"])==24
+          a,b=statistics.median(pairs["A"]),statistics.median(pairs["B"])
+          out={"schema":"j24i36-source-exact-library-abba-v1","original_wall_median_ns":a,"candidate_wall_median_ns":b,"candidate_over_original":b/a,"repetitions_each":len(pairs["A"]),"warmup_excluded":True,"not_full_product_or_release_evidence":True,"raw_ns":pairs}
+          pathlib.Path("j24i36-cost-observation.json").write_text(json.dumps(out,indent=2,sort_keys=True)+"\n")
+          print(json.dumps({k:v for k,v in out.items() if k!="raw_ns"},sort_keys=True))
+          PY
+      - name: Preserve independent source and raw A/B observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i36-cost-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24i36-cost/source-custody.json
+            j24i36-cost-head.txt
+            j24i36-abba-raw.txt
+            j24i36-cost-observation.json
