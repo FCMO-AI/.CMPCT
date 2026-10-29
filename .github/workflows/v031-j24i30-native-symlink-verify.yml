@@ -53,9 +53,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install .
+          python -m pip install . zstandard
           python research/j24i30/generate_symlink_wire.py --output j24i30-observations 2>&1 | tee j24i30-python.log
           test -s j24i30-observations/python-observations.json
+          python research/j24i30/audit_symlink_wire.py --case-dir j24i30-observations 2>&1 | tee j24i30-referee.log
+          test -s j24i30-observations/independent-physical-audit.json
       - name: Run real native core full-verification court
         shell: bash
         env:
@@ -65,6 +67,7 @@ jobs:
           cargo test --manifest-path native/cmpct-core/Cargo.toml --test j24i30_symlink_verify -- --nocapture 2>&1 | tee j24i30-rust.log
           grep -q 'J24I30_NEGATIVE_present-foreign:native_verify_ok=true' j24i30-rust.log
           grep -q 'J24I30_NEGATIVE_physical-wrong:native_verify_ok=true' j24i30-rust.log
+          grep -q 'J24I30B_NEGATIVE_present-empty:native_admission_refused=true' j24i30-rust.log
       - name: Preserve original positive and negative evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -78,4 +81,5 @@ jobs:
             j24i30-rust-test-blob.txt
             j24i30-python.log
             j24i30-rust.log
+            j24i30-referee.log
             j24i30-observations/
