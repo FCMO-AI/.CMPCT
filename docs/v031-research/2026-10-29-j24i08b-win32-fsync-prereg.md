@@ -1,0 +1,11 @@
+# J24I08b — Windows staged-output durability handle mode preregistration
+
+Time 2026-10-29 UTC. **Immutable prediction before this second product edit.** Parent #725 exact implementation `cd95a55ad2ed999a91883eecd14ff7c06b4eef00`; inherited #724 Windows previous error at no-follow `utime` addressed by source-exact donor #504/#629. New hosted source-exact [run #40809118432](https://github.com/FCMO-AI/.CMPCT/actions/runs/40809118432): Ubuntu/macOS four-case PASS, Windows fails on the **next stage** with `OSError: [Errno 9] Bad file descriptor`, source-installed `src/cmpct/transactions.py:230` at `with open(stage,'rb') as stream:os.fsync(stream.fileno())`. Both earlier source and this failure are real and preserved.
+
+## Hypothesis and alternatives
+Windows CRT `os.fsync`/commit on a read-only descriptor is not supported by its host runtime. The same freshly Builder-created exclusive sibling stage can be reopened **read/write** (`rb+`) without changing bytes, then synchronized prior to `os.replace`. Prediction: this removes the second Windows failure while preserving source/output semantic identity, unchanged outside sentinel, no replacement on corruption, and original Ubuntu/macOS suite.
+
+Cheapest control: change only the stage-open mode `rb` -> `rb+` and re-run the **unchanged J24I07 court** on all three hosts. Alternative skip fsync: rejects durability requirement and is not allowed. Alternative rewrite staging architecture with Win32 HANDLE-based commit and inode custody: stronger but larger carrying cost than the narrow source-observable discrimination. Alternative create another independent compaction implementation: rejected.
+
+## Disproof and retained gates
+Failure of existing host court, changed archive hashes/content, source mutation, missing fsync attempt, early replace or outside sentinel change falsifies. A green run does not prove crash power-loss durability, parent fsync, TOCTOU safety, resource caps or full release performance. Preserve original historical #724 and initial #725 red logs. Whitelist only this single additional transaction source change; Reader and exact O167 donor remain fixed. No alteration of existing tests, validators, ordinary extraction policy, format, release law, Discovery STATE or other owner branches.
