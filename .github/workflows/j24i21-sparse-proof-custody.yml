@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - 'tests/research/j24i21_sparse_proof_custody.py'
+      - 'tests/research/j24i21_physical_audit.py'
       - 'docs/v031-research/2026-10-29-j24i21-*'
       - '.github/workflows/j24i21-sparse-proof-custody.yml'
   workflow_dispatch:
@@ -93,6 +94,12 @@ jobs:
                   assert trial['source_sha_before']==case['source_sha256']==trial['source_sha_after']
           print('RESEARCH_ONLY_DECISION',receipt['decision'])
           PY
+      - name: Third-party physical r24/index/blob tamper audit (no CMPCT import)
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i21_physical_audit.py" "$J24I21_EVIDENCE_DIR" 2>&1 | tee "$J24I21_EVIDENCE_DIR/independent-physical-audit.json"
       - name: Preserve raw source, modified copies, receipts, stdout even on failure
         if: always()
         uses: actions/upload-artifact@v4
