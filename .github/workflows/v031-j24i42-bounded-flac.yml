@@ -1,0 +1,120 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I42 Bounded In-Archive FLAC Oracle
+on:
+  pull_request:
+    paths:
+      - 'research/j24i42/**'
+      - 'docs/v031-research/*j24i42*'
+      - '.github/workflows/v031-j24i42-bounded-flac.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i42-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  physical-inarchive-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Determine latest HEAD scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff-tree --no-commit-id --name-only -r HEAD > j24i42-scope.txt
+          if grep -Eq '^(research/j24i42/|docs/v031-research/.*j24i42|[.]github/workflows/v031-j24i42-bounded-flac[.]yml)' j24i42-scope.txt; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
+      - name: Freeze source and verify no product mutation
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee j24i42-head.txt
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "46fa87930a9229f42233594816330f35f0505e71"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "27e4d7962ccfed6a822010383158d98e20d823dd"
+          test "$(git hash-object native/cmpct-core/src/wavflac.rs)" = "8e5d22539d0afa89f5be3bc20f536376e44b7dd6"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          test "$(git hash-object research/j24i38/audit_builder_wav.py)" = "1d4c04ab1d534e10504d71794bd12492827fc49c"
+          test "$(git hash-object research/j24i38/generate_builder_wav.py)" = "967146feadaacf45321bbeaed11f6bff1ff6abfb"
+          test "$(git hash-object research/j24i39/extract_signed_wav_flac.py)" = "89572779c1154706d8f3ba5db873d2d35bb26cdc"
+          git diff --name-only 0047e45e92793ca58a50251847e3cf1adb9c6d90 HEAD > j24i42-changed.txt
+          if grep -Eq '^(native/|src/cmpct/|tests/conformance/|benchmarks/)' j24i42-changed.txt; then
+            echo 'Research route cannot mutate product/frozen source'; exit 1
+          fi
+      - name: Generate, audit, compile, hostile tests and A/B
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . numpy soundfile msgpack zstandard
+          python research/j24i38/generate_builder_wav.py --output j24i42-cases
+          python research/j24i38/audit_builder_wav.py --case-dir j24i42-cases
+          python research/j24i39/extract_signed_wav_flac.py --case-dir j24i42-cases
+          python research/j24i42/derive_spans.py --case-dir j24i42-cases | tee j24i42-spans-stdout.json
+          mkdir -p native/cmpct-core/src/bin
+          cp research/j24i42/native_bounded_flac.rs native/cmpct-core/src/bin/j24i42_probe.rs
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i42_probe
+          exe=native/cmpct-core/target/release/j24i42_probe
+          manifest="$PWD/j24i42-cases/bounded-container-manifest.json"
+          : > j24i42-hostile.txt
+          for mib in 8 32; do
+            for mode in truncated badmagic; do
+              "$exe" "$PWD/j24i42-cases/builder-wav-"$mib"m.cmpct" \
+                "$PWD/j24i42-cases/oracle-"$mib"m.meta" "$manifest" "$mib" "$mode" \
+                | tee -a j24i42-hostile.txt
+            done
+          done
+          test "$(grep -c '^J24I42_REJECTED_INVALID' j24i42-hostile.txt)" = 4
+          ! grep -q 'J24I42_UNSAFE_ACCEPT' j24i42-hostile.txt
+          : > j24i42-raw.txt
+          for lane in A B B A B A A B; do
+            if [ "$lane" = A ]; then mode=native; else mode=bounded; fi
+            for mib in 8 32; do
+              "$exe" "$PWD/j24i42-cases/builder-wav-"$mib"m.cmpct" \
+                "$PWD/j24i42-cases/oracle-"$mib"m.meta" "$manifest" "$mib" "$mode" \
+                | sed "s/^/$lane /" | tee -a j24i42-raw.txt
+            done
+          done
+          python research/j24i42/summarize_bounded.py --raw j24i42-raw.txt \
+            --manifest "$manifest" --output j24i42-result.json
+          test -s j24i42-result.json
+          find j24i42-cases -type f -print0 | sort -z | xargs -0 sha256sum > j24i42-files.sha256
+          sha256sum j24i42-raw.txt j24i42-result.json j24i42-hostile.txt > j24i42-results.sha256
+          tar -czf j24i42-physical-evidence.tar.gz \
+            j24i42-cases j24i42-head.txt j24i42-changed.txt \
+            j24i42-files.sha256 j24i42-results.sha256 j24i42-raw.txt \
+            j24i42-result.json j24i42-hostile.txt
+          test -s j24i42-physical-evidence.tar.gz
+      - name: Preserve physical specimens, sources and raw measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i42-physical-original-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24i42-physical-evidence.tar.gz
+            j24i42-head.txt
+            j24i42-scope.txt
+            j24i42-changed.txt
+            j24i42-spans-stdout.json
+            j24i42-hostile.txt
+            j24i42-raw.txt
+            j24i42-result.json
