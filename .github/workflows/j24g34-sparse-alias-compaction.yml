@@ -7,6 +7,7 @@ on:
       - 'src/cmpct/reader.py'
       - 'tests/test_j24v03_sparse_hardlink_verify.py'
       - 'tests/research/j24g34_sparse_alias_product_court.py'
+      - 'tests/research/j24g34_samewire_abba.py'
       - 'docs/v031-research/2026-10-29-j24g34-*'
       - '.github/workflows/j24g34-sparse-alias-compaction.yml'
   workflow_dispatch:
@@ -106,6 +107,20 @@ jobs:
           assert large['conservative_delta_kib'] < 32*1024
           print('COMPOSITION_EVIDENCE',result['decision'],large['conservative_delta_kib'])
           PY
+      - name: Same-physical-archive source-exact #735 versus #620 A/B/B/A
+        shell: bash
+        run: |
+          set -eo pipefail
+          git worktree add --detach "$RUNNER_TEMP/j24g34-baseline-source" 82e90eca58ed0580df191378947004e4061d53c3
+          test "$(git -C "$RUNNER_TEMP/j24g34-baseline-source" rev-parse HEAD:src/cmpct/reader.py)" = b2b7774c13a5c8235ff89786d171b7ea3ff20710
+          python -m venv "$RUNNER_TEMP/j24g34-a"
+          python -m venv "$RUNNER_TEMP/j24g34-b"
+          "$RUNNER_TEMP/j24g34-a/bin/python" -m pip install -q "$RUNNER_TEMP/j24g34-baseline-source"
+          "$RUNNER_TEMP/j24g34-b/bin/python" -m pip install -q "$GITHUB_WORKSPACE"
+          export J24G34_BASE_PYTHON="$RUNNER_TEMP/j24g34-a/bin/python"
+          export J24G34_CAND_PYTHON="$RUNNER_TEMP/j24g34-b/bin/python"
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24g34_samewire_abba.py" 2>&1 | tee "$J24G34_ARTIFACT_DIR/samewire-abba.log"
       - name: Preserve all original source and physical evidence on success or failure
         if: always()
         uses: actions/upload-artifact@v4
