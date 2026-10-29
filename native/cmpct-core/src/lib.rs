@@ -236,6 +236,20 @@ impl Archive {
         blob: &Blob,
         file: &mut File,
     ) -> Result<(u64, [u8; 32]), CmpctError> {
+        let (payload_pos, hash, _crc32) = self.checked_blob_layout_with_crc(blob, file)?;
+        Ok((payload_pos, hash))
+    }
+
+    /// Read a single CMA4 header and return both physical identity commitments.
+    ///
+    /// Keep the existing two-value helper for normal range/codec callers; the complete
+    /// verifier consumes CRC from this very same validated header rather than seeking
+    /// back to the physical record and trusting an independently reread field.
+    fn checked_blob_layout_with_crc(
+        &self,
+        blob: &Blob,
+        file: &mut File,
+    ) -> Result<(u64, [u8; 32], u32), CmpctError> {
         let blob_pos = self
             .data_base
             .checked_add(blob.offset)
@@ -268,7 +282,8 @@ impl Archive {
         }
         let mut hash = [0u8; 32];
         hash.copy_from_slice(&header[32..64]);
-        Ok((payload_pos, hash))
+        let crc32 = le_u32(&header[28..32]);
+        Ok((payload_pos, hash, crc32))
     }
 
     fn decode_zstd_blob(
