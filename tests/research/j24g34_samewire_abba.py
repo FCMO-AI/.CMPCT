@@ -50,7 +50,10 @@ def main() -> None:
              str(source), str(output), str(receipt)],
             cwd=os.environ.get("RUNNER_TEMP", "/tmp"),
             capture_output=True, text=True, timeout=300,
-            env={**os.environ, "CMPCT_ENCODE_WORKERS": "1"},
+            env={**os.environ, "CMPCT_ENCODE_WORKERS": "1",
+                 "J24G34_EXPECTED_READER_BLOB": (
+                     "b2b7774c13a5c8235ff89786d171b7ea3ff20710" if label=="A_baseline"
+                     else "f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f")},
         )
         (root / f"samewire-{index}-{label}.stdout").write_text(proc.stdout)
         (root / f"samewire-{index}-{label}.stderr").write_text(proc.stderr)
@@ -60,6 +63,9 @@ def main() -> None:
         assert item["genuine_hardlink_alias"]
         assert item["rows_metadata_and_sha_equal"] and item["source_unchanged"]
         assert item["source_sha256"] == original_sha
+        assert item["installed_reader_git_blob"] == (
+            "b2b7774c13a5c8235ff89786d171b7ea3ff20710" if label=="A_baseline"
+            else "f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f"), item
         assert digest(output) == item["output_sha256"]
         assert item["output_bytes"] == output.stat().st_size
         item["runner"] = label
