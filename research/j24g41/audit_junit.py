@@ -14,6 +14,7 @@ required = [
     "test_provider_capability_matches_native_platform",
     "test_bounded_native_two_pass_never_silently_truncates",
     "test_native_name_is_lossless_or_rejected",
+    "test_missing_darwin_provider_symbol_is_fail_closed_not_no_xattr",
 ]
 if sys.platform in ("darwin", "linux"):
     required.append("test_native_xattr_roundtrip_through_authentic_r24_archive")
