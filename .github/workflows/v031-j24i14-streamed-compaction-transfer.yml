@@ -19,13 +19,13 @@ concurrency:
 
 jobs:
   ubuntu-physical-source-exact-court:
-    name: J24I14 original compaction A/B exact #613 transfer (Ubuntu)
+    name: 'J24I14 original compaction A/B exact #613 transfer (Ubuntu)'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       DONOR_SHA: "3b2bf3c2e033fa27d77b2355821dc0087aa46873"
-      CMPCT_J24I14_DONOR_PATH: ${{ runner.temp }}/j24i14-donor-reader.py
+      CMPCT_J24I14_DONOR_PATH: /tmp/j24i14-donor-reader.py
       CMPCT_J24I14_ARTIFACT_DIR: ${{ github.workspace }}/j24i14-evidence
     steps:
       - uses: actions/checkout@v4
