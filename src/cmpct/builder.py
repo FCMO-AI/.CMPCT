@@ -85,31 +85,23 @@ class Builder:
             with os.scandir(absdir) as it: entries=sorted(it,key=lambda e:e.name)
             for e in entries:
                 rel=f'{prefix}/{e.name}' if prefix else e.name
-                st=e.stat(follow_symlinks=False)
-                if os.name == 'nt' and stat.S_ISREG(st.st_mode) and st.st_nlink == 0:
-                    # On Win32, DirEntry.stat can report an unknown zero link count even when
-                    # os.stat proves a real multi-link inode. Do not flatten hardlink topology
-                    # into independent regular files merely to preserve the scandir fast path.
-                    checked=os.stat(e.path,follow_symlinks=False)
-                    # DirEntry.stat and os.stat can expose different Win32 file-ID
-                    # encodings for the same real file; cross-API inode equality
-                    # is not a valid custody oracle. Retain nonfollowing type and
-                    # exact size as cheap consistency checks, without claiming a
-                    # race-free source snapshot (tracked separately in #408).
-                    if not stat.S_ISREG(checked.st_mode) or checked.st_size!=st.st_size:
-                        raise OSError('source file type/size changed during hardlink census: '+e.path)
-                    if checked.st_nlink<1:
-                        raise OSError('unavailable Windows hardlink count for: '+e.path)
-                    st=checked
-                mode=stat.S_IMODE(st.st_mode);self._capture_fs_meta(e.path,rel,st)
+                st=e.stat(follow_symlinks=False);mode=stat.S_IMODE(st.st_mode);self._capture_fs_meta(e.path,rel,st)
                 if stat.S_ISLNK(st.st_mode):
                     b=os.readlink(e.path).encode();ref=self.add_content(b,'.symlink')
                     self.files.append([rel,K_SYMLINK,mode,st.st_mtime_ns,len(b),sha(b),[S_BLOB,ref]]);continue
                 if stat.S_ISDIR(st.st_mode):
                     self.files.append([rel,K_DIR,mode,st.st_mtime_ns,0,b'',None]);walk(e.path,rel);continue
                 if not stat.S_ISREG(st.st_mode):continue
-                if st.st_nlink>1:
-                    ik=(st.st_dev,st.st_ino)
+                # CPython's Windows DirEntry.stat() reports st_ino/st_dev/st_nlink
+                # as zero even for genuine Win32 hardlinks. The cheap directory
+                # entry metadata remains the owner of normal mode/size/mtime;
+                # refresh only the physical-identity fact needed for link capture.
+                ownership_st = (os.stat(e.path, follow_symlinks=False)
+                                if os.name == 'nt' else st)
+                if not stat.S_ISREG(ownership_st.st_mode):
+                    raise OSError(f'file type changed during archive scan: {rel}')
+                if ownership_st.st_nlink>1:
+                    ik=(ownership_st.st_dev,ownership_st.st_ino)
                     if ik in self.inode_first:
                         self.files.append([rel,K_HARDLINK,mode,st.st_mtime_ns,st.st_size,None,[self.inode_first[ik]]]);continue
                     self.inode_first[ik]=rel
