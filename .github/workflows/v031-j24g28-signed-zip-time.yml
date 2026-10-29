@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: j24g28-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   physical-vector:
