@@ -24,6 +24,7 @@ ROW = f'<testcase classname="{CLASSNAME}" name="{NAME}" time="0.01">{{child}}</t
         ("genuine_pass", ROW.format(child=""), True),
         ("missing", '<testcase classname="tests.other" name="different"/>', False),
         ("wrong_class", ROW.replace(CLASSNAME, "tests.unrelated"), False),
+        ("wrong_namespace", ROW.replace(CLASSNAME, "decoy.test_j24v01_sparse_verify_streamed"), False),
         ("skipped", ROW.format(child="<skipped/>"), False),
         ("failure", ROW.format(child="<failure message='x'/>"), False),
         ("error", ROW.format(child="<error message='x'/>"), False),
