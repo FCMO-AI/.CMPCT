@@ -65,6 +65,13 @@ def test_native_xattr_roundtrip_through_authentic_r24_archive(tmp_path):
 
     assert key in _xattrs.listxattr(leaf, follow_symlinks=False)
     assert _xattrs.getxattr(leaf, key, follow_symlinks=False) == VALUE
+    # A zero-byte value is *present*, not the absence of an attribute.
+    empty_key = key + ".empty"
+    _xattrs.setxattr(leaf, empty_key, b"", follow_symlinks=False)
+    assert empty_key in _xattrs.listxattr(leaf, follow_symlinks=False)
+    assert _xattrs.getxattr(leaf, empty_key, follow_symlinks=False) == b""
+    if sys.platform == "darwin":
+        assert _native_mac_read(leaf, empty_key) == b""
 
     archive = tmp_path / "native.cmpct"
     Builder(source, workers=1, reproducible=False).build(archive)
@@ -75,6 +82,7 @@ def test_native_xattr_roundtrip_through_authentic_r24_archive(tmp_path):
         assert len(rows) == 1
         assert rows[0][0] == 0
         assert rows[0][1][key] == VALUE
+        assert empty_key in rows[0][1] and rows[0][1][empty_key] == b""
         destination = tmp_path / "dest"
         reader.extractall(destination, require_xattrs=True)
 
@@ -82,8 +90,10 @@ def test_native_xattr_roundtrip_through_authentic_r24_archive(tmp_path):
     assert hashlib.sha256(restored.read_bytes()).hexdigest() == original_sha
     if sys.platform == "darwin":
         assert _native_mac_read(restored, key) == VALUE
+        assert _native_mac_read(restored, empty_key) == b""
     else:
         assert os.getxattr(restored, key, follow_symlinks=False) == VALUE
+        assert os.getxattr(restored, empty_key, follow_symlinks=False) == b""
     assert hashlib.sha256(leaf.read_bytes()).hexdigest() == original_sha
 
 
