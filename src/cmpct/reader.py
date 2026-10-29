@@ -127,7 +127,7 @@ class CMPCT:
                 self._zdict_decoder=DictDecoder(self._blob(self.dict_idx))
             return self._zdict_decoder.decompress(comp,usize)
 
-    def _blob(self,idx:int)->bytes:
+    def _blob(self,idx:int,*,retain:bool=True)->bytes:
         with self._cache_lock:
             cached=self.cache.get(idx)
         if cached is not None:return cached
@@ -147,7 +147,7 @@ class CMPCT:
         else:raise IOError(f'unknown codec {c}')
         if len(raw)!=rus or (binascii.crc32(raw)&0xffffffff)!=rcrc:raise IOError('blob integrity failure')
         # Cache only modest blobs; huge archives should not become accidental RAM copies.
-        if len(raw)<=2*1024*1024:
+        if retain and len(raw)<=2*1024*1024:
             with self._cache_lock:self.cache[idx]=raw
         return raw
     def _stream(self,mode:int,idx:int,level:int=-1)->bytes:
@@ -480,12 +480,48 @@ class CMPCT:
                     if stat.S_IMODE(os.stat(full,follow_symlinks=False).st_mode)!=mode:os.chmod(full,mode)
                     os.utime(full,ns=(mt,mt),follow_symlinks=False)
                 except OSError:pass
+    def _verify_sparse_streamed(self,row):
+        """Verify the complete sparse logical SHA without allocating logical zero holes.
+
+        read() intentionally materializes member bytes for its API, but verify() needs only an
+        incremental digest. Physical decoded chunks are not retained in the Reader cache on this
+        path; integrity and extent-length bounds remain mandatory.
+        """
+        rel,k,mode,mt,size,want,storage=row
+        if not isinstance(want,(bytes,bytearray)) or len(want)!=32:
+            raise IOError(f'missing sparse SHA-256: {rel}')
+        digest=hashlib.sha256();zeros=bytes(1024*1024);position=0
+        def hash_zeros(count):
+            while count:
+                n=min(count,len(zeros))
+                digest.update(zeros if n==len(zeros) else zeros[:n])
+                count-=n
+        for off,declared,ids in storage[1]:
+            if off<position or declared<=0 or off+declared>size:
+                raise IOError(f'sparse extent geometry failure: {rel}')
+            hash_zeros(off-position)
+            actual=0
+            for idx in ids:
+                chunk=self._blob(idx,retain=False)
+                actual+=len(chunk)
+                if actual>declared:raise IOError(f'sparse extent length failure: {rel}')
+                digest.update(chunk)
+            if actual!=declared:raise IOError(f'sparse extent length failure: {rel}')
+            position=off+declared
+        hash_zeros(size-position)
+        if digest.digest()!=bytes(want):
+            raise IOError(f'SHA-256 verification failure: {rel}')
+
     def verify(self):
         n=0
         for row in self.files:
             if row[1]==K_DIR:continue
-            raw=self.read(row[0]);want=self.file_sha256(row[0])
-            if sha(raw)!=want:raise IOError(f'SHA-256 verification failure: {row[0]}')
+            if row[1]==K_FILE and row[6][0]==S_SPARSE:
+                # Hardlink aliases retain their prior path; this change covers regular sparse owners.
+                self._verify_sparse_streamed(row)
+            else:
+                raw=self.read(row[0]);want=self.file_sha256(row[0])
+                if sha(raw)!=want:raise IOError(f'SHA-256 verification failure: {row[0]}')
             n+=1
         return n
     def _zip_dos_time(self,mtime_ns:int):
