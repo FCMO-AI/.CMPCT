@@ -191,7 +191,34 @@ def prove(out: Path) -> dict:
             physical_misapplication = None
             decision = "WINDOWS_CONTENT_ONLY_NO_XATTR_POSITIVE"
 
+        # Preserve actual input and archive bytes for an independent wire auditor.
+        evidence_dir = dest.parent / "artifacts"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        originals = {
+            "source_owner": owner,
+            "source_inserted": inserted_source,
+            "initial_archive": base,
+            "stable_archive": stable,
+            "stable_compact_archive": baseline_compact,
+            "shifted_archive": shifted,
+            "shifted_compact_archive": shifted_compact,
+            "restored_owner": restored / "z-owner.bin",
+            "restored_inserted": restored / "a-inserted.bin",
+        }
+        manifest = {}
+        for label, original_path in originals.items():
+            suffix = ".cmpct" if "archive" in label else ".bin"
+            artifact_path = evidence_dir / (label + suffix)
+            shutil.copyfile(original_path, artifact_path)
+            raw = artifact_path.read_bytes()
+            manifest[label] = {
+                "relative_path": "artifacts/" + artifact_path.name,
+                "sha256": sha(raw),
+                "bytes": len(raw),
+            }
+
         return {
+            "artifact_manifest": manifest,
             "experiment": "J24G46 positional fsmeta journal insertion",
             "platform": sys.platform,
             "python": sys.version,
