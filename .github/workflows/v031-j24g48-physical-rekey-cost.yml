@@ -42,6 +42,21 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install . zstandard
+          # The product deliberately requires its package-owned Rust cdylib beside
+          # native_codec.py. Both source-exact checkouts use the SAME wheel-built
+          # native .so, avoiding accidental ambient libzstd and binary drift.
+          python - <<'PY'
+          import hashlib, shutil
+          from pathlib import Path
+          from cmpct.native_codec import _library_path
+          native = _library_path()
+          for name in ('product-candidate', 'product-defective'):
+              dest = Path(name) / 'src/cmpct' / native.name
+              assert not dest.exists(), 'unexpected untracked native binary'
+              shutil.copy2(native, dest)
+              assert hashlib.sha256(dest.read_bytes()).digest() == hashlib.sha256(native.read_bytes()).digest()
+              print(name, 'shared package-owned native codec SHA256', hashlib.sha256(dest.read_bytes()).hexdigest())
+          PY
           test "$(git -C product-candidate rev-parse HEAD)" = "$CAND_SHA"
           test "$(git -C product-defective rev-parse HEAD)" = "$PRIOR_SHA"
           git diff --no-index --exit-code product-candidate/src/cmpct/reader.py src/cmpct/reader.py
