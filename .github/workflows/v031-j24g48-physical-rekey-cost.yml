@@ -7,6 +7,9 @@ on:
     branches:
       - agent/phased2-v031-j24g48-physical-journal-rekey-economics-20261029
   workflow_dispatch:
+concurrency:
+  group: cmpct-j24g48-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
