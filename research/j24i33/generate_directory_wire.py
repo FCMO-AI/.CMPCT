@@ -42,8 +42,8 @@ def split(archive: bytes):
 def resign(archive: bytes, new_sentinel) -> bytes:
     index, physical = split(archive)
     rows = [r for r in index["files"] if r[1] == K_DIR]
-    require(len(rows) == 2 and all(r[5] == b"" and r[6] is None for r in rows),
-            "not two authentic empty-digest directory rows")
+    require(len(rows) == 2 and all(r[5] is None and r[6] is None for r in rows),
+            "not two authentic absent-digest directory rows")
     for r in rows:
         r[5] = new_sentinel
     index_wire = msgpack.packb(index, use_bin_type=True)
@@ -83,14 +83,14 @@ def main() -> None:
     require([(r[0], r[1]) for r in source_rows] ==
             [("empty", K_DIR), ("nested", K_DIR), ("nested/payload.bin", K_FILE)],
             "unexpected original directory tree")
-    require(all(r[5] == b"" and r[6] is None for r in source_rows[:2]),
-            "Builder did not produce directory b''")
+    require(all(r[5] is None and r[6] is None for r in source_rows[:2]),
+            "Builder unexpectedly serialized intermediate directory b''")
     require(len(source_index["blobs"]) == 1, "not one physical member")
     require(source_rows[2][5] is None, "unexpected changed direct hash policy")
 
     cases = {
         "real-nested": original,
-        "normalized-nil": resign(original, None),
+        "inserted-empty": resign(original, b""),
         "invalid-one-byte": resign(original, b"X"),
         "flat": flat_wire,
     }
