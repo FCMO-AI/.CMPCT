@@ -1,0 +1,151 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: J24G34 exact-installed sparse hardlink compaction product court
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/reader.py'
+      - 'tests/test_j24v03_sparse_hardlink_verify.py'
+      - 'tests/research/j24g34_sparse_alias_product_court.py'
+      - 'docs/v031-research/2026-10-29-j24g34-*'
+      - '.github/workflows/j24g34-sparse-alias-compaction.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24g34-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-composition:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G34_ARTIFACT_DIR: ${{ github.workspace }}/j24g34-artifacts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm exact branch and unchanged donor/owner source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 82e90eca58ed0580df191378947004e4061d53c3 HEAD
+          git merge-base --is-ancestor 39f7ebd960a7d66c6bc45ea61af95d578b41cd8a HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 8d1e46e1fdf408c1d95ce9091e25fa159f0e6264
+          test "$(git rev-parse HEAD:tests/test_j24v03_sparse_hardlink_verify.py)" = 945aa54f6ecd4b6b7e3059072596cce4262cb71a
+          mkdir -p "$J24G34_ARTIFACT_DIR"
+          git rev-parse HEAD > "$J24G34_ARTIFACT_DIR/exact-head.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$J24G34_ARTIFACT_DIR/reader-donor-blob.txt"
+          git rev-parse HEAD:src/cmpct/builder.py > "$J24G34_ARTIFACT_DIR/builder-blob.txt"
+          git rev-parse HEAD:src/cmpct/transactions.py > "$J24G34_ARTIFACT_DIR/transactions-blob.txt"
+          git log -8 --format='%H %s' > "$J24G34_ARTIFACT_DIR/lineage.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual source package and unchanged test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m pip install pytest
+      - name: Prove installed wheel is not source-tree import
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import os, pathlib, subprocess, cmpct.reader, cmpct.builder, cmpct.transactions
+          root = pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          for module, expected in [
+              (cmpct.reader, 'f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f'),
+              (cmpct.builder, '387192edd783e02bf7a44a38945214bf9d6c183e'),
+              (cmpct.transactions, '8d1e46e1fdf408c1d95ce9091e25fa159f0e6264')]:
+              installed = pathlib.Path(module.__file__).resolve()
+              assert not installed.is_relative_to(root), installed
+              checkout = root/'src'/'cmpct'/installed.name
+              assert installed.read_bytes().replace(b'\r\n',b'\n') == checkout.read_bytes().replace(b'\r\n',b'\n')
+              actual=subprocess.check_output(['git','-C',str(root),'hash-object',str(checkout)],text=True).strip()
+              assert actual==expected,(installed,actual,expected)
+              print('INSTALLED_EQUIVALENT',installed,actual)
+          PY
+      - name: Unmodified #620 signed hardlink and #613 streamed sparse tests
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest -q --noconftest "$GITHUB_WORKSPACE/tests/test_j24v03_sparse_hardlink_verify.py" "$GITHUB_WORKSPACE/tests/test_j24v01_sparse_verify_streamed.py" 2>&1 | tee "$J24G34_ARTIFACT_DIR/inherited-donor.log"
+      - name: Unmodified #723 compaction metadata/path custody
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP"
+          export CMPCT_J24I06_RECEIPT="$J24G34_ARTIFACT_DIR/owner-regression.json"
+          python "$GITHUB_WORKSPACE/tests/research/j24i06_compaction_product_court.py" 2>&1 | tee "$J24G34_ARTIFACT_DIR/owner-regression.log"
+      - name: New authentic 2/128 MiB sparse hardlink composition A/B/B/A
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP"
+          export CMPCT_ENCODE_WORKERS=1
+          python "$GITHUB_WORKSPACE/tests/research/j24g34_sparse_alias_product_court.py" 2>&1 | tee "$J24G34_ARTIFACT_DIR/product-court.log"
+          python - <<'PY'
+          import json,os,pathlib
+          r=pathlib.Path(os.environ['J24G34_ARTIFACT_DIR'])
+          result=json.loads((r/'report.json').read_text())
+          assert result['decision']=='SPARSE_ALIAS_RSS_BOUND_CANDIDATE_CONFIRMED'
+          assert len(result['observations'])==2
+          large=next(x for x in result['observations'] if x['size']==128<<20)
+          assert all(x['peak_rss_kib_compaction'] < 64*1024 for x in large['alias_trials'])
+          assert large['conservative_delta_kib'] < 32*1024
+          print('COMPOSITION_EVIDENCE',result['decision'],large['conservative_delta_kib'])
+          PY
+      - name: Preserve all original source and physical evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g34-ubuntu-${{ env.EXACT_HEAD }}
+          path: j24g34-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
+
+  donor-hostile-portability:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 22
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          persist-credentials: false
+      - name: Exact Reader source and unchanged signed adversarial test
+        shell: bash
+        run: |
+          set -e
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          test "$(git hash-object src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
+          test "$(git hash-object tests/test_j24v03_sparse_hardlink_verify.py)" = 945aa54f6ecd4b6b7e3059072596cce4262cb71a
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual source and hostile test requirements
+        shell: bash
+        run: |
+          python -m pip install .
+          python -m pip install pytest
+      - name: Run original signed hardlink and streaming tests
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q --noconftest tests/test_j24v03_sparse_hardlink_verify.py tests/test_j24v01_sparse_verify_streamed.py
