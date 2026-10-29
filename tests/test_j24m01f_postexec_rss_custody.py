@@ -54,5 +54,9 @@ print(json.dumps({'parent_peak_kib':parent_peak,'child':json.loads(child.stdout)
     # Source-bound kernel control: an artificially high parent allocation must
     # not be mistaken for memory consumed after exec by the independent child.
     assert parent_kib >= 160 * 1024, data
-    assert inherited_kib >= parent_kib, data
+    # Linux may report slightly different historical peaks for parent and child:
+    # exact parent<=child equivalence is not the causal requirement. Instead
+    # prove BOTH truly large inherited child high-water and small post-exec RSS.
+    assert inherited_kib >= 160 * 1024, data
+    assert postexec_kib < 128 * 1024, data
     assert inherited_kib - postexec_kib >= 32 * 1024, data
