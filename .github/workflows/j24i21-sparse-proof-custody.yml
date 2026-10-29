@@ -1,0 +1,103 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24I21 sparse owner proof-reuse custody falsifier
+
+on:
+  pull_request:
+    paths:
+      - 'tests/research/j24i21_sparse_proof_custody.py'
+      - 'docs/v031-research/2026-10-29-j24i21-*'
+      - '.github/workflows/j24i21-sparse-proof-custody.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i21-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-source-physical-custody:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      J24I21_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24I21_EVIDENCE_DIR: ${{ github.workspace }}/j24i21-evidence
+    steps:
+      - name: Checkout exact PR branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.J24I21_SOURCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm preregistration and unchanged Reader / Builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$J24I21_SOURCE_HEAD"
+          git merge-base --is-ancestor ad6ebbbe5462c7be93d434fed494b8cb15cee2c9 HEAD
+          git merge-base --is-ancestor 7ca3951d48b4ebabf07f740b551b009ce78a3e34 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
+          mkdir -p "$J24I21_EVIDENCE_DIR"
+          git rev-parse HEAD > "$J24I21_EVIDENCE_DIR/exact-head.txt"
+          git rev-parse HEAD:src/cmpct/reader.py > "$J24I21_EVIDENCE_DIR/reader-git-blob.txt"
+          git rev-parse HEAD:src/cmpct/builder.py > "$J24I21_EVIDENCE_DIR/builder-git-blob.txt"
+          git log -4 --format='%H %s' > "$J24I21_EVIDENCE_DIR/lineage.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual package, independent from checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m pip install pytest
+      - name: Verify import provenance in temp working directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import cmpct.reader,hashlib,os,pathlib
+          src=pathlib.Path(cmpct.reader.__file__).resolve()
+          root=pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          assert not src.is_relative_to(root), (src,root)
+          raw=src.read_bytes()
+          git_blob=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+          assert git_blob=='f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f',git_blob
+          print('INSTALLED_READER_EQUIVALENCE',str(src),git_blob)
+          PY
+      - name: Preserve inherited signed hardlink adversarial tests
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP"
+          python -m pytest --noconftest -q "$GITHUB_WORKSPACE/tests/test_j24v03_sparse_hardlink_verify.py" 2>&1 | tee "$J24I21_EVIDENCE_DIR/inherited-test.log"
+      - name: Same-wire A/B/B/A and deterministic after-owner physical mutation
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP"
+          CMPCT_ENCODE_WORKERS=1 python "$GITHUB_WORKSPACE/tests/research/j24i21_sparse_proof_custody.py" 2>&1 | tee "$J24I21_EVIDENCE_DIR/court.log"
+          python - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ['J24I21_EVIDENCE_DIR'])
+          receipt=json.loads((root/'report.json').read_text())
+          assert receipt['decision']=='NAIVE_CACHE_MUTABLE_CUSTODY_FALSIFIED'
+          assert len(receipt['mutation'])==2
+          assert not receipt['mutation'][0]['accepted']
+          assert receipt['mutation'][1]['accepted']
+          for case in receipt['cases']:
+              for trial in case['trials']:
+                  assert trial['source_sha_before']==case['source_sha256']==trial['source_sha_after']
+          print('RESEARCH_ONLY_DECISION',receipt['decision'])
+          PY
+      - name: Preserve raw source, modified copies, receipts, stdout even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i21-ubuntu-${{ env.J24I21_SOURCE_HEAD }}
+          path: j24i21-evidence/
+          if-no-files-found: warn
+          retention-days: 30
