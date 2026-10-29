@@ -1,0 +1,117 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I39b Hostile FLAC Tail Custody Court
+on:
+  pull_request:
+    paths:
+      - 'research/j24i39/**'
+      - 'docs/v031-research/*j24i39*'
+      - '.github/workflows/v031-j24i39b-flac-tail-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i39b-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  falsify-encoded-tail:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify latest-head research scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i39/|docs/v031-research/.*j24i39|[.]github/workflows/v031-j24i39b-flac-tail-court[.]yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
+      - name: Confirm exact product source and research-only mutation
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee j24i39b-head.txt
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "46fa87930a9229f42233594816330f35f0505e71"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "27e4d7962ccfed6a822010383158d98e20d823dd"
+          test "$(git hash-object native/cmpct-core/src/wavflac.rs)" = "8e5d22539d0afa89f5be3bc20f536376e44b7dd6"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          git diff --name-only 793da74881e5180d982df29d2ef08bacbe6d7933 HEAD | tee j24i39b-changed.txt
+          if grep -Eq '^(native/|src/cmpct/|tests/conformance/|benchmarks/)' j24i39b-changed.txt; then
+            echo 'Product or fixed evidence changed'; exit 1
+          fi
+      - name: Prepare genuine Builder FLAC, independent auditor and hostile variants
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . numpy soundfile msgpack zstandard
+          python research/j24i38/generate_builder_wav.py --output j24i39b-cases
+          python research/j24i38/audit_builder_wav.py --case-dir j24i39b-cases
+          python research/j24i39/extract_signed_wav_flac.py --case-dir j24i39b-cases
+          python research/j24i39/mutate_flac_tail.py --case-dir j24i39b-cases
+          if ! command -v flac >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq flac
+          fi
+          flac --version
+      - name: Compile original Claxon sample iterator research probe
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native/cmpct-core/src/bin
+          cp research/j24i39/native_file_flac_digest.rs native/cmpct-core/src/bin/j24i39_perf.rs
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i39_perf
+      - name: Run pre-registered exact bytes through reference FLAC and actual Claxon iterator
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=native/cmpct-core/target/release/j24i39_perf
+          manifest="$PWD/j24i39b-cases/stream-manifest.json"
+          archive="$PWD/j24i39b-cases/builder-wav-8m.cmpct"
+          meta="$PWD/j24i39b-cases/oracle-8m.meta"
+          : > j24i39b-raw.txt
+          for variant in valid trailer truncated concatenated; do
+            mutant="$PWD/j24i39b-cases/tail-${variant}.flac"
+            set +e
+            flac -t -s "$mutant" >"j24i39b-${variant}-reference.log" 2>&1
+            reference_rc=$?
+            "$exe" "$archive" "$meta" "$mutant" "$manifest" 8 stream >"j24i39b-${variant}-claxon.log" 2>&1
+            claxon_rc=$?
+            set -e
+            echo "variant=$variant reference_exit=$reference_rc claxon_exit=$claxon_rc" | tee -a j24i39b-raw.txt
+          done
+          python research/j24i39/summarize_tail_falsifier.py \
+            --case-dir j24i39b-cases --raw j24i39b-raw.txt --output j24i39b-result.json
+      - name: Retain scientific positive AND negative responses, original archives, source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i39b-flac-tail-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24i39b-head.txt
+            j24i39b-changed.txt
+            j24i39b-cases/
+            j24i39b-raw.txt
+            j24i39b-result.json
+            j24i39b-*-claxon.log
+            j24i39b-*-reference.log
