@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e0521023411c01d1b1ef30ed5ee5085f6d19347c
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 27631d674435786fae0e77a55fe8d273b1cbb8c3
           test -e docs/v031-research/2026-10-29-j24g28-signed-zip-timestamp-product-prereg.md
       - uses: actions/setup-python@v5
         with:
@@ -48,7 +48,7 @@ jobs:
           set -euo pipefail
           python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j28-installed" "$GITHUB_WORKSPACE"
           echo "PYTHONPATH=$RUNNER_TEMP/j28-installed" >> "$GITHUB_ENV"
-          echo "EXPECTED_READER_BLOB=e0521023411c01d1b1ef30ed5ee5085f6d19347c" >> "$GITHUB_ENV"
+          echo "EXPECTED_READER_BLOB=27631d674435786fae0e77a55fe8d273b1cbb8c3" >> "$GITHUB_ENV"
       - name: Create physical first-party revision-24 signed input
         shell: bash
         run: |
@@ -85,7 +85,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git merge-base --is-ancestor ca01d885fedc8ffc343b9c3c624eddd134158452 HEAD
-          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e0521023411c01d1b1ef30ed5ee5085f6d19347c
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 27631d674435786fae0e77a55fe8d273b1cbb8c3
           test "$(git rev-parse ca01d885fedc8ffc343b9c3c624eddd134158452:src/cmpct/reader.py)" = 496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332
       - uses: actions/setup-python@v5
         with:
@@ -109,7 +109,7 @@ jobs:
           for rep in 1 2; do
             PYTHONPATH="$RUNNER_TEMP/j28-old" EXPECTED_READER_BLOB=496e70bdc06ddc17aa90e4fc0e9f10a6bc5c5332 \
               python tests/research/j24g28_signed_zip_time_product_court.py court --input "$RUNNER_TEMP/j28-input" --output "$RUNNER_TEMP/j28-old-out" --mode baseline --repeat "$rep"
-            PYTHONPATH="$RUNNER_TEMP/j28-new" EXPECTED_READER_BLOB=e0521023411c01d1b1ef30ed5ee5085f6d19347c \
+            PYTHONPATH="$RUNNER_TEMP/j28-new" EXPECTED_READER_BLOB=27631d674435786fae0e77a55fe8d273b1cbb8c3 \
               python tests/research/j24g28_signed_zip_time_product_court.py court --input "$RUNNER_TEMP/j28-input" --output "$RUNNER_TEMP/j28-new-out" --mode candidate --repeat "$rep"
           done
           cmp "$RUNNER_TEMP/j28-old-out/ordinary_2020.zip" "$RUNNER_TEMP/j28-new-out/ordinary_2020.zip"
