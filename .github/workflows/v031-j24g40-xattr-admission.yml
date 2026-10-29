@@ -1,6 +1,6 @@
 # ci-lane: fast
 # ci-cancel-policy: cancel-obsolete-fast-pr-check
-# ci-pr-scope: latest-head-commit-gate
+# Every PR head executes source-locked physical court; never skip docs-only or latest commit.
 name: J24G40 POSIX xattr fixture/admission versus compaction fidelity
 
 on:
