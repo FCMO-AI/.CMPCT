@@ -7,6 +7,7 @@ on:
     paths:
       - 'native/cmpct-core/src/vzip_dispatch.rs'
       - 'native/cmpct-core/tests/j24i34_native_symlink_verify.rs'
+      - 'research/j24i34/**'
       - 'docs/v031-research/*j24i34*'
       - '.github/workflows/v031-j24i34-native-symlink-fix.yml'
   workflow_dispatch:
@@ -42,13 +43,13 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           test "$(git hash-object native/cmpct-core/src/lib.rs)" = "463c50633be74423e92a074b7d7577db6a4b0cf9"
-          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "173b121ad9fb19409d93f9040003347bee49d1d9"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "cd1a367761465cbba3e8054f743af551c1e560e1"
           test "$(git hash-object research/j24i30/generate_symlink_wire.py)" = "802866103c607febc8da95135a27c4ca50aa3b3a"
           test "$(git hash-object research/j24i30/audit_symlink_wire.py)" = "8b181476d090de2cd3c91335f824eb7ec4821329"
           git rev-parse HEAD | tee j24i34-head.txt
           git hash-object native/cmpct-core/tests/j24i34_native_symlink_verify.rs | tee j24i34-test-blob.txt
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          if printf '%s\n' "$changed" | grep -Eq '^(native/cmpct-core/src/vzip_dispatch[.]rs|native/cmpct-core/tests/j24i34_native_symlink_verify[.]rs|docs/v031-research/.*j24i34|[.]github/workflows/v031-j24i34-native-symlink-fix[.]yml)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(native/cmpct-core/src/vzip_dispatch[.]rs|native/cmpct-core/tests/j24i34_native_symlink_verify[.]rs|research/j24i34/|docs/v031-research/.*j24i34|[.]github/workflows/v031-j24i34-native-symlink-fix[.]yml)'; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
@@ -66,7 +67,10 @@ jobs:
           set -euo pipefail
           python -m pip install . zstandard
           python research/j24i30/generate_symlink_wire.py --output j24i34-observations 2>&1 | tee j24i34-python.log
+          python research/j24i34/generate_dual_sha_conflict.py --case-dir j24i34-observations 2>&1 | tee j24i34b-python.log
           python research/j24i30/audit_symlink_wire.py --case-dir j24i34-observations 2>&1 | tee j24i34-referee.log
+          python research/j24i34/audit_dual_sha_conflict.py --case-dir j24i34-observations 2>&1 | tee j24i34b-referee.log
+          test -s j24i34-observations/dual-commit-detached-audit.json
           test -s j24i34-observations/python-observations.json
           test -s j24i34-observations/independent-physical-audit.json
       - name: Run actual compiled native product integrity tests
@@ -82,6 +86,7 @@ jobs:
           grep -q 'J24I34_REJECTED_present-foreign:reason=MemberHash' j24i34-native.log
           grep -q 'J24I34_REJECTED_physical-wrong:reason=MemberHash' j24i34-native.log
           grep -q 'J24I34_SEPARATE_DEBT_empty_optional_sha=native_rejected' j24i34-native.log
+          grep -q 'J24I34B_REJECTED_dual-commit-corrupt:reason=MemberHash' j24i34-native.log
       - name: Preserve source, full receipts, installed Rust logs, and original wire
         if: always()
         uses: actions/upload-artifact@v4
@@ -94,5 +99,7 @@ jobs:
             j24i34-test-blob.txt
             j24i34-python.log
             j24i34-referee.log
+            j24i34b-python.log
+            j24i34b-referee.log
             j24i34-native.log
             j24i34-observations/
