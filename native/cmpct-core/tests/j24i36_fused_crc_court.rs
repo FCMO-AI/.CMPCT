@@ -68,3 +68,15 @@ fn j24i36_real_symlink_reject_crc_only_mutation() {
     );
     println!("J24I36_REAL_SYMLINK_CRC_REJECTED");
 }
+
+#[test]
+#[ignore = "requires unchanged WAV/FLAC and dictionary r24 physical vectors from dedicated CI"]
+fn j24i36_heldout_direct_codecs_reject_crc_only_mutation() {
+    let root = PathBuf::from(
+        env::var("J24I36_EXTRA_CASE_DIR").expect("CI must set J24I36_EXTRA_CASE_DIR"),
+    );
+    for stem in ["wav", "dict"] {
+        run_case(&root, stem);
+    }
+    println!("J24I36_HELDOUT_DIRECT_SUCCESS:2");
+}
