@@ -35,6 +35,7 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
       - name: Source/frozen-vector identity witness
+        id: scope
         shell: bash
         run: |
           set -euo pipefail
@@ -44,10 +45,18 @@ jobs:
           git hash-object tests/conformance/v24-direct-codecs.json | tee j24i29-golden-blob.txt
           git hash-object research/j24i29/test_hardlink_alias_sha.py | tee j24i29-test-blob.txt
           test "$(git hash-object tests/conformance/v24-direct-codecs.json)" = 'd10b7dab9126d39e819a74279c186363a163f2ef'
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i29/|docs/v031-research/.*j24i29|\.github/workflows/v031-j24i29-hardlink-alias-sha\.yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           python-version: '3.11'
       - name: Run frozen physical-wire hardlink proof
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
