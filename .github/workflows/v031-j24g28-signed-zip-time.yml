@@ -113,10 +113,12 @@ jobs:
               python tests/research/j24g28_signed_zip_time_product_court.py court --input "$RUNNER_TEMP/j28-input" --output "$RUNNER_TEMP/j28-new-out" --mode candidate --repeat "$rep"
           done
           cmp "$RUNNER_TEMP/j28-old-out/ordinary_2020.zip" "$RUNNER_TEMP/j28-new-out/ordinary_2020.zip"
-      - name: Inherited direct-Deflate integrity regression (candidate)
+      - name: Inherited direct-Deflate integrity regression (candidate; Linux-only harness)
+        if: matrix.os == 'ubuntu-24.04'
         shell: bash
         run: |
           set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest
           PYTHONPATH="$RUNNER_TEMP/j28-new" python -m pytest -q tests/test_v031_deflate_export_verified.py
       - name: Original per-host raw evidence
         if: always()
