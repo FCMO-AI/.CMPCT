@@ -37,7 +37,7 @@ jobs:
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
           test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
           test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = c383c86982b8c7fe48ecc41c893b575b96eaeb06
-          test "$(git rev-parse HEAD:tests/test_j24m01f_postexec_rss_custody.py)" = 0b8295deb44fa08ca3ff98214842424818772d92
+          test "$(git rev-parse HEAD:tests/test_j24m01f_postexec_rss_custody.py)" = 8e5878020110af3d20bdbe4b2c0a179c374857a9
           mkdir -p "$EVIDENCE_DIR"
           git rev-parse HEAD > "$EVIDENCE_DIR/exact-head.txt"
       - uses: actions/setup-python@v5
