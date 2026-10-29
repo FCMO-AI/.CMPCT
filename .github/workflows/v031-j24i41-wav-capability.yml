@@ -61,6 +61,34 @@ jobs:
                             "libsndfile":soundfile.__libsndfile_version__,"msgpack":msgpack.version,
                             "zstandard":zstandard.__version__},default=str))
           PY
+      - name: Bind the same installed package-owned native codec to both exact source trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Packaging installs CMPCT's Rust cdylib beside site-packages/cmpct,
+          # whereas the source-pinned Python codecs live in two worktrees.
+          # Copy only that *identical installed binary* into both ephemeral
+          # source trees; keep each Python source file and release ABI unchanged.
+          python - <<'PY'
+          import hashlib, pathlib, shutil
+          import cmpct
+          package = pathlib.Path(cmpct.__file__).resolve().parent
+          libs = sorted(p for p in package.iterdir()
+                        if p.is_file() and p.name.startswith("cmpct_core")
+                        and p.suffix.lower() in (".so", ".dylib", ".pyd", ".dll"))
+          assert len(libs) == 1, ("expected exactly one installed native codec", libs)
+          source = libs[0]
+          assert source.stat().st_size > 0
+          checkout = pathlib.Path.cwd()
+          destinations = (checkout / "src" / "cmpct",
+                          checkout.parent / "j24i41-parent" / "src" / "cmpct")
+          for dest in destinations:
+              assert (dest / "codec.py").is_file(), dest
+              shutil.copy2(source, dest / source.name)
+              assert hashlib.sha256((dest / source.name).read_bytes()).digest() == hashlib.sha256(source.read_bytes()).digest()
+          print("Native library identical for source-exact A/B:", source.name,
+                hashlib.sha256(source.read_bytes()).hexdigest(), source.stat().st_size)
+          PY
       - name: Freeze same input tree and run candidate full Builder verification
         shell: bash
         run: |
