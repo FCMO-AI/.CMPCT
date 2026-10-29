@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - "tests/research/j24i12_sparse_compaction_cost.py"
+      - "tests/research/j24i12b_sparse_verify_phase.py"
       - ".github/workflows/v031-j24i12-sparse-compaction-cost.yml"
       - "docs/v031-research/2026-10-29-j24i12-*.md"
   workflow_dispatch:
@@ -86,6 +87,21 @@ jobs:
           assert all(c["input_archive_bytes"] < c["logical_sparse_bytes"]//8 for c in r["cases"])
           assert all(c["compaction"]["output_bytes"] < c["logical_sparse_bytes"]//8 for c in r["cases"])
           print("J24I12_COURT_DECISION",r["decision"],r["large_minus_small_peak_rss_mib"])
+          PY
+      - name: J24I12b original-Reader sparse-read RSS phase attribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i12b_sparse_verify_phase.py" | tee "$OUT_DIR/phase-summary.txt"
+          python - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ["OUT_DIR"])/"j24i12b-phase-court.json"
+          r=json.loads(p.read_text())
+          assert len(r["sparse_read_events"])==2
+          assert r["decision"] in {"FIRST_SPARSE_READ_MATERIALIZATION_CONFIRMED","FIRST_SPARSE_READ_MATERIALIZATION_FALSIFIED","FIRST_SPARSE_READ_MATERIALIZATION_AMBIGUOUS"}
+          assert r["sparse_read_events"][0]["logical_size"]==128<<20
+          print("J24I12B_PHASE_WITNESS",r["decision"],r["first_read_peak_delta_kib"])
           PY
       - name: Always preserve receipts and exact physical archives
         if: always()
