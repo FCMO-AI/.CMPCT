@@ -61,12 +61,14 @@ jobs:
               assert source == installed, f"installed package diverged: {path}"
               print(path, hashlib.sha256(source).hexdigest())
           PY
+      # The repository-wide conftest imports historical Linux-only experimental libs;
+      # isolate this bounded installed-product court without editing or relaxing it.
       - name: Run unchanged-control and additional journal/checkpoint acceptance tests
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p evidence
-          python -m pytest -q tests/test_v031_j24g47_journal_fsmeta_identity.py 2>&1 | tee evidence/pytest.log
+          python -m pytest -q --noconftest tests/test_v031_j24g47_journal_fsmeta_identity.py 2>&1 | tee evidence/pytest.log
       - name: Execute original J24G46 physical negative-reproduction fixture as positive acceptance
         shell: bash
         run: |
