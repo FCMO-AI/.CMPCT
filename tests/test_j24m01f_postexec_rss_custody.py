@@ -60,3 +60,53 @@ print(json.dumps({'parent_peak_kib':parent_peak,'child':json.loads(child.stdout)
     assert inherited_kib >= 160 * 1024, data
     assert postexec_kib < 128 * 1024, data
     assert inherited_kib - postexec_kib >= 32 * 1024, data
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux /proc resident measurement only")
+def test_true_postexec_spike_exceeds_unmodified_128m_limit() -> None:
+    """Negative control: a real child spike must trip the SAME strict 128-MiB gate.
+
+    Prospectively registered in J24M01h before implementation. Keep the
+    allocation in a separate process, not in pytest or the CMPCT verifier.
+    """
+    script = """
+import json,os
+from pathlib import Path
+def read_metric(metric):
+    matches=[line.split() for line in Path('/proc/self/status').read_text().splitlines()
+             if line.startswith(metric+':')]
+    if len(matches)!=1 or len(matches[0])!=3 or matches[0][2]!='kB':
+        raise RuntimeError('invalid /proc '+metric+': '+repr(matches))
+    value=int(matches[0][1])
+    if value<=0:
+        raise RuntimeError('nonpositive /proc '+metric)
+    return value
+before=read_metric('VmHWM')
+# Materialize resident pages, not merely a virtual address reservation.
+resident=bytearray(160*1024*1024)
+for offset in range(0,len(resident),4096):
+    resident[offset]=0xA5
+peak=read_metric('VmHWM')
+rss=read_metric('VmRSS')
+statm_pages=int(Path('/proc/self/statm').read_text().split()[1])
+statm_kib=statm_pages*os.sysconf('SC_PAGE_SIZE')//1024
+print(json.dumps({'before_kib':before,'peak_kib':peak,'rss_kib':rss,
+                  'statm_kib':statm_kib,'touched_bytes':len(resident)}))
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=40,
+        check=True,
+    )
+    data = json.loads(proc.stdout)
+    ceiling = 128 * 1024
+    assert data["touched_bytes"] == 160 * 1024 * 1024, data
+    assert data["peak_kib"] - data["before_kib"] >= ceiling, data
+    assert data["rss_kib"] >= ceiling and data["statm_kib"] >= ceiling, data
+    # Contemporaneous RSS and resident statm pages are different kernel views.
+    assert abs(data["rss_kib"] - data["statm_kib"]) <= 8 * 1024, data
+    assert data["peak_kib"] >= data["rss_kib"], data
+    # Exact same strict predicate used by original sparse verifier: this MUST fail.
+    assert not (data["peak_kib"] < ceiling), data
