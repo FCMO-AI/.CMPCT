@@ -89,7 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP"
-          python "$GITHUB_WORKSPACE/tests/research/j24g39_publish_leaf_rebind_court.py" > "$GITHUB_WORKSPACE/j24g39-evidence/physical-negative.json"
+          CMPCT_J24G39_ARTIFACTS="$GITHUB_WORKSPACE/j24g39-evidence/physical" python "$GITHUB_WORKSPACE/tests/research/j24g39_publish_leaf_rebind_court.py" > "$GITHUB_WORKSPACE/j24g39-evidence/physical-negative.json"
       - name: Independent receipt-level classification
         shell: bash
         run: |
