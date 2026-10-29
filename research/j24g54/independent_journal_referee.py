@@ -134,9 +134,15 @@ def main(root: Path) -> None:
     for label, position in positions.items():
         damaged = bytearray(base)
         damaged[position] ^= 1
+        # Keep the append-only relationship valid when mutating base-region
+        # bytes. Otherwise the prefix check would trivially reject without
+        # ever exercising independent checksum/footer/record validation.
+        source_before = bytearray(before)
+        if position < len(before):
+            source_before[position] ^= 1
+        assert bytes(damaged).startswith(bytes(source_before))
         try:
-            inspect(before if label != "checkpoint_footer_digest" else bytes(damaged[:len(before)]),
-                    bytes(damaged), "both_survivors")
+            inspect(bytes(source_before), bytes(damaged), "both_survivors")
         except (AssertionError, ValueError, KeyError, TypeError,
                 zstd.ZstdError, msgpack.UnpackException, struct.error):
             rejected[label] = True
