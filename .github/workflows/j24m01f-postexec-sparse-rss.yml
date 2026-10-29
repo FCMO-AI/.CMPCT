@@ -36,12 +36,13 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
           git merge-base --is-ancestor a014326c858b313c1e769a73c0b22b955cb0285b HEAD
+          git merge-base --is-ancestor fe235fc42558751e7a6467512c0900d00e2134fb HEAD
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
           test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
           test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = c383c86982b8c7fe48ecc41c893b575b96eaeb06
           test "$(git rev-parse HEAD:tests/test_j24m01f_postexec_rss_custody.py)" = 8e5878020110af3d20bdbe4b2c0a179c374857a9
-          test "$(git rev-parse HEAD:tools/j24m01g_junit_custody.py)" = e7abc6cd21f2d39a78a8dd88bb0e18391c07062f
-          test "$(git rev-parse HEAD:tests/test_j24m01g_junit_custody.py)" = ceba51d96275d5d250cefc7c4a219664de4c8b3f
+          test "$(git rev-parse HEAD:tools/j24m01g_junit_custody.py)" = 7caf4d0ff6ff2fba5d4d9c9e84f2434ec9540f7f
+          test "$(git rev-parse HEAD:tests/test_j24m01g_junit_custody.py)" = 2444f143f0a5a44254f118385bd9ee3ff8179589
           mkdir -p "$EVIDENCE_DIR"
           git rev-parse HEAD > "$EVIDENCE_DIR/exact-head.txt"
       - uses: actions/setup-python@v5
@@ -88,6 +89,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
           git merge-base --is-ancestor a014326c858b313c1e769a73c0b22b955cb0285b HEAD
+          git merge-base --is-ancestor fe235fc42558751e7a6467512c0900d00e2134fb HEAD
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
           test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
           test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = c383c86982b8c7fe48ecc41c893b575b96eaeb06
