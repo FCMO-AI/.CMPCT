@@ -54,7 +54,10 @@ impl Archive {
                     return Err(CmpctError::MemberHash);
                 }
             }
-            return Ok((entry.logical_hash.unwrap_or(physical_hash), Some(physical_crc)));
+            return Ok((
+                entry.logical_hash.unwrap_or(physical_hash),
+                Some(physical_crc),
+            ));
         }
 
         if let Some(hash) = entry.logical_hash {
