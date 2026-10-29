@@ -39,6 +39,9 @@ def _corrupt_magic(frame: bytes) -> bytes:
 def test_zero_output_codec_api_validates_real_encoded_frame() -> None:
     frame = _empty_frame()
     broken = _corrupt_magic(frame)
+    # The second hostile specimen is a *valid* frame with contradictory decoded
+    # length, not just invalid Zstd magic; no SHA(empty) should rescue it.
+    wrong_logical_size = zstd.ZstdCompressor(level=3).compress(b"x")
     dictionary = b"codec-zero-output-dictionary" * 16
 
     # This historical sentinel has no physical encoded payload to authenticate.
@@ -53,6 +56,8 @@ def test_zero_output_codec_api_validates_real_encoded_frame() -> None:
         assert decoder.decompress(frame, 0) == b""
         with pytest.raises((RuntimeError, IOError, ValueError)):
             decoder.decompress(broken, 0)
+        with pytest.raises((RuntimeError, IOError, ValueError)):
+            decoder.decompress(wrong_logical_size, 0)
     finally:
         decoder.close()
 
@@ -60,7 +65,12 @@ def test_zero_output_codec_api_validates_real_encoded_frame() -> None:
         native_codec.decompress(broken, 0)
     with pytest.raises((RuntimeError, IOError, ValueError)):
         native_codec.decompress_using_dict(broken, 0, dictionary)
+    with pytest.raises((RuntimeError, IOError, ValueError)):
+        native_codec.decompress(wrong_logical_size, 0)
+    with pytest.raises((RuntimeError, IOError, ValueError)):
+        native_codec.decompress_using_dict(wrong_logical_size, 0, dictionary)
 
+    assert zstd.ZstdDecompressor().decompress(wrong_logical_size, max_output_size=2) == b"x"
     assert zstd.ZstdDecompressor().decompress(frame, max_output_size=1) == b""
     with pytest.raises(zstd.ZstdError):
         zstd.ZstdDecompressor().decompress(broken, max_output_size=1)
