@@ -15,7 +15,6 @@ fn j24i30_source_exact_native_symlink_verify_falsifier() {
     let cases = [
         "original",
         "present-correct",
-        "present-empty",
         "present-foreign",
         "physical-wrong",
     ];
@@ -36,4 +35,26 @@ fn j24i30_source_exact_native_symlink_verify_falsifier() {
     for observation in observed {
         println!("J24I30_NEGATIVE_{observation}");
     }
+}
+
+
+// J24I30b: preserve the independently observed native/Python admission red.
+// Unlike Python #750, current Rust parse_hash rejects b'' in a signed file row.
+// This separate negative must not be hidden when testing the admissible cohort.
+#[test]
+fn j24i30b_native_empty_optional_sha_admission_difference() {
+    let root = PathBuf::from(
+        env::var("J24I30_CASE_DIR").expect("J24I30_CASE_DIR is required"),
+    );
+    let path = root.join("present-empty.cmpct");
+    let error = match Archive::open(&path) {
+        Err(error) => error,
+        Ok(_) => panic!("historical observed native empty-SHA refusal disappeared; re-adjudicate contract"),
+    };
+    let detail = error.to_string();
+    assert!(
+        detail.contains("invalid logical SHA-256 length"),
+        "different native parse rejection: {detail}"
+    );
+    println!("J24I30B_NEGATIVE_present-empty:native_admission_refused=true;reason={detail}");
 }
