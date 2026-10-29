@@ -78,7 +78,7 @@ def profile(label,inputs,z):
               "sha256":hashlib.sha256(b).hexdigest(),"size":len(b)}
         if i in base_ids:
             charged+=base_sizes[i]+16
-            meta.update({"root":True,"reference_count":0,"copy_bytes":0})
+            meta.update({"root":True,"reference_count":0,"copy_bytes":0,"references":[]})
             per.append(meta);continue
         literal=bytearray();rebuild=bytearray();position=0
         for a,end,src,s in matches:
@@ -91,7 +91,7 @@ def profile(label,inputs,z):
         literal+=b[position:];rebuild+=b[position:]
         assert rebuild==b, "reconstruction mismatch"
         charged+=z.size(literal)+16+16*len(matches)
-        meta.update({"root":False,"reference_count":len(matches),"copy_bytes":sum(end-a for a,end,_,_ in matches)})
+        meta.update({"root":False,"reference_count":len(matches),"copy_bytes":sum(end-a for a,end,_,_ in matches),\n                     "references":[{"start":a,"end":end,"source":src,"source_start":s} for a,end,src,s in matches]})
         per.append(meta)
     full_seen=set();whole_dup=0;blocks={};fixed4=0
     for i,b in enumerate(blobs):
