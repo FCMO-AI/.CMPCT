@@ -52,6 +52,7 @@ name = "cmpct-core"
 version = "0.1.0"
 dependencies = [
  "claxon",
+ "crc32fast",
  "flate2",
  "rmpv",
  "serde",
