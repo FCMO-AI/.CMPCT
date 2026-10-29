@@ -46,8 +46,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          # Windows checkout may materialize CRLF while Git blobs store LF.
+          # Git diff enforces HEAD content; compare wheel to actual checkout bytes.
+          git diff --exit-code -- src/cmpct/builder.py src/cmpct/reader.py src/cmpct/_xattrs.py
           python - <<'PY'
-          import hashlib, pathlib, subprocess
+          import hashlib, pathlib
           import cmpct.builder as builder
           import cmpct.reader as reader
           import cmpct._xattrs as native
@@ -57,8 +60,8 @@ jobs:
               ("src/cmpct/_xattrs.py", native),
           ):
               observed = pathlib.Path(mod.__file__).read_bytes()
-              expected = subprocess.check_output(["git", "show", "HEAD:" + path])
-              assert observed == expected, f"installed source != HEAD for {path}"
+              expected = pathlib.Path(path).read_bytes()
+              assert observed == expected, f"installed wheel != verified checkout for {path}"
               print(path, hashlib.sha256(observed).hexdigest())
           PY
       - name: Run original O65/O72 tests plus required physical native court
