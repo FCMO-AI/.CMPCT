@@ -35,7 +35,8 @@ jobs:
           ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 2
           persist-credentials: false
-      - name: Exact source custody
+      - name: Exact source custody and latest-head-commit gate
+        id: scope
         shell: bash
         run: |
           set -euo pipefail
@@ -46,11 +47,20 @@ jobs:
           git rev-parse HEAD | tee j24i33-head.txt
           git hash-object research/j24i33/generate_directory_wire.py | tee j24i33-generator-sha.txt
           git hash-object research/j24i33/audit_directory_wire.py | tee j24i33-auditor-sha.txt
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\\n' "$changed" | grep -Eq '^(research/j24i33/|native/cmpct-core/tests/j24i33_directory_sentinel[.]rs|docs/v031-research/.*j24i33|[.]github/workflows/v031-j24i33-native-directory[.]yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
       - name: Install current CMPCT and create genuine source-bound directory tree
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -60,6 +70,7 @@ jobs:
           python research/j24i33/audit_directory_wire.py --case-dir j24i33-observations 2>&1 | tee j24i33-referee.log
           test -s j24i33-observations/independent-physical-audit.json
       - name: Execute actual native Rust current-Builder versus derived-sentinel falsifier
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         env:
           J24I33_CASE_DIR: ${{ github.workspace }}/j24i33-observations
