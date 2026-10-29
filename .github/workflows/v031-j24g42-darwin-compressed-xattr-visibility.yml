@@ -51,6 +51,7 @@ jobs:
           set -euo pipefail
           mkdir -p evidence
           python research/j24g42/darwin_compressed_xattr_probe.py --source-head "$EXPECTED_HEAD" --output evidence/result.json
+          python research/j24g42/audit_host_result.py evidence/result.json --expected-source "$EXPECTED_HEAD" | tee evidence/detached-audit.txt
           python - <<'PY'
           import json
           from pathlib import Path
