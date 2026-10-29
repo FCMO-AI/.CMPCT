@@ -109,6 +109,14 @@ def main() -> dict:
                 "scandir_link_inode_equal": (
                     scan["a_owner.bin"].st_dev, scan["a_owner.bin"].st_ino) == (
                     scan["b_alias.bin"].st_dev, scan["b_alias.bin"].st_ino),
+                # The same physical pathname may expose unequal IDs across the
+                # two different Python stat APIs on Win32. Record, don't assume.
+                "cross_api_owner_inode_equal": (
+                    scan["a_owner.bin"].st_dev, scan["a_owner.bin"].st_ino) == (
+                    st_a.st_dev, st_a.st_ino),
+                "os_stat_owner_identity": [st_a.st_dev, st_a.st_ino],
+                "scandir_owner_identity": [scan["a_owner.bin"].st_dev,
+                                            scan["a_owner.bin"].st_ino],
                 "symlink_observed": os.readlink(root/"d_source_symlink"),
             }
             if (not rec["source_witness"]["os_link_inode_equal"] or
