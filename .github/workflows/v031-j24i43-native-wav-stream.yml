@@ -91,9 +91,12 @@ jobs:
           test "$(grep -c 'J24I43_REJECTED' j24i43-hostile.txt)" = 12
           test "$(grep -c '^B J24I43 iter=' j24i43-raw.txt)" = 32
           test "$(grep -c '^A J24I43 iter=' j24i43-raw.txt)" = 32
+          python research/j24i43/summarize_product_ab.py \
+            --raw j24i43-raw.txt --out j24i43-product-ab.json | tee j24i43-product-summary.txt
+          test -s j24i43-product-ab.json
           find j24i43-cases -type f -print0 | sort -z | xargs -0 sha256sum > j24i43-files.sha256
-          sha256sum j24i43-head.txt j24i43-raw.txt j24i43-hostile.txt > j24i43-receipt.sha256
-          tar -czf j24i43-evidence.tar.gz j24i43-cases j24i43-head.txt j24i43-diff.txt j24i43-raw.txt j24i43-hostile.txt j24i43-files.sha256 j24i43-receipt.sha256
+          sha256sum j24i43-head.txt j24i43-raw.txt j24i43-hostile.txt j24i43-product-ab.json > j24i43-receipt.sha256
+          tar -czf j24i43-evidence.tar.gz j24i43-cases j24i43-head.txt j24i43-diff.txt j24i43-raw.txt j24i43-hostile.txt j24i43-product-ab.json j24i43-product-summary.txt j24i43-rebind.txt j24i43-files.sha256 j24i43-receipt.sha256
       - name: Preserve scientific evidence including failures
         if: always()
         uses: actions/upload-artifact@v4
