@@ -71,7 +71,7 @@ jobs:
               installed = Path(module.__file__).read_bytes().replace(b"\r\n", b"\n")
               checkout = (workspace/path).read_bytes().replace(b"\r\n", b"\n")
               assert installed == checkout, (path, module.__file__)
-              assert str(Path(module.__file__).resolve()).startswith(str(Path(os.environ["RUNNER_TEMP"]).resolve())) is False or True
+              assert not Path(module.__file__).resolve().is_relative_to(workspace), "loaded checkout instead of installed package"
               print("SOURCE_IDENTICAL", path, module.__file__)
           PY
       - name: Reproduce solely inside a synthetic temporary namespace
