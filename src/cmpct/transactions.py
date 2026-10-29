@@ -155,9 +155,18 @@ def compact_archive(src:Path,dst:Path):
         return Builder(root).build(dst)
 
 def tree_digest(root:Path):
+    h=hashlib.sha256();root=Path(root)
+    for p in sorted(root.rglob('*')):
+        rel=p.relative_to(root).as_posix().encode();h.update(struct.pack('<I',len(rel)));h.update(rel)
+        if p.is_file():b=p.read_bytes();h.update(b'F');h.update(struct.pack('<Q',len(b)));h.update(hashlib.sha256(b).digest())
+        elif p.is_dir():h.update(b'D')
+        elif p.is_symlink():h.update(b'L');h.update(os.readlink(p).encode())
+    return h.hexdigest()
+
+def tree_topology_digest(root:Path):
     """Fingerprint tree contents and link topology, not all filesystem metadata.
 
-    This is the v2 *tree evidence* digest, not a stable on-disk CMPCT identifier.
+    This opt-in v2 *tree evidence* digest is not a stable on-disk CMPCT identifier.
     Mode, timestamps, sparse allocation, xattrs/ACLs and concurrent mutations
     are outside its scope. Historical v1 values are intentionally not comparable.
     """
