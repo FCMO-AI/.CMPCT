@@ -12,6 +12,7 @@ import msgpack
 from .codec import *
 from .codec import _audio_modules, _compressed_payload, _hash_sparse, _sparse_data_extents, _wav_parts
 from ._ordered_pull import ordered_worker_pull
+from . import _xattrs  # native Darwin fallback; existing os providers remain the test seam
 
 @dataclass
 class Candidate:
@@ -61,9 +62,9 @@ class Builder:
             self.meta_by_rel[rel]=(0,0,{})
             return
         xa={}
-        if hasattr(os,'listxattr'):
+        if _xattrs.can_list():
             try:
-                names=os.listxattr(path,follow_symlinks=False)
+                names=_xattrs.listxattr(path,follow_symlinks=False)
             except OSError as exc:
                 # Only a genuinely unsupported enumerator permits empty-xattr fallback.
                 # Permission/I-O failures cannot certify absence of source metadata.
@@ -71,7 +72,7 @@ class Builder:
                     raise OSError(exc.errno,f'cannot enumerate xattrs for {rel!r}; refusing lossy archive') from exc
                 names=()
             for name in names:
-                try:xa[name]=os.getxattr(path,name,follow_symlinks=False)
+                try:xa[name]=_xattrs.getxattr(path,name,follow_symlinks=False)
                 except OSError as exc:
                     # Once a key is observed, losing its value is not exact archival.
                     raise OSError(exc.errno,f'cannot read xattr {name!r} for {rel!r}; refusing lossy archive') from exc
