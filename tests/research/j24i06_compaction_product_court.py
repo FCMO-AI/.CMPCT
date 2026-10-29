@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from cmpct.builder import Builder
@@ -47,7 +48,7 @@ def run() -> dict:
         sentinel = external / "sentinel"
         sentinel.write_bytes(b"J24I06 NEVER MUTATE OUTSIDE SCRATCH\n")
         sentinel_hash = digest(sentinel)
-        for name in ("plain", "safe-relative", "absolute", "parent-relative", "hardlink", "sparse"):
+        for name in ("plain", "safe-relative", "absolute", "parent-relative", "hardlink", "sparse", "xattrs"):
             root = work / (name + "-root")
             root.mkdir()
             payload = b"J24I06 exact owner bytes\n" * 5
@@ -72,8 +73,10 @@ def run() -> dict:
 
             source = work / (name + ".cmpct")
             output = work / (name + ".compacted.cmpct")
-            Builder(root, reproducible=True, workers=1).build(source)
+            Builder(root, reproducible=(name != "xattrs"), workers=1).build(source)
             original = snapshot(source)
+            if name == "xattrs":
+                assert any(v[5] for v in original["metadata"].values()), "xattr source control not captured"
             source_sha = digest(source)
             if target is not None:
                 with CMPCT(source) as reader:
@@ -87,12 +90,17 @@ def run() -> dict:
                         else:
                             raise AssertionError("ordinary safe_symlinks=True failed to reject")
             output.write_bytes(b"J24I06 EXISTING DESTINATION MUST ONLY CHANGE ON SUCCESS")
+            before_wall = time.perf_counter_ns()
+            before_cpu = time.process_time_ns()
             compact_archive(source, output)
+            measured_wall_ns = time.perf_counter_ns() - before_wall
+            measured_cpu_ns = time.process_time_ns() - before_cpu
             result = snapshot(output)
             assert original == result, (name, original, result)
             assert digest(source) == source_sha, "compaction altered source"
             assert digest(sentinel) == sentinel_hash, "archive target escaped staging"
-            assert all(tuple(v[3:5]) == (0, 0) for v in result["metadata"].values()), (name, result["metadata"])
+            if name != "xattrs":
+                assert all(tuple(v[3:5]) == (0, 0) for v in result["metadata"].values()), (name, result["metadata"])
             if target is not None:
                 with CMPCT(output) as reader:
                     assert reader.read("link") == os.fsencode(target)
@@ -109,6 +117,8 @@ def run() -> dict:
                 "output_sha256": digest(output),
                 "entries": len(result["rows"]),
                 "verified": result["verified"],
+                "compact_wall_ns": measured_wall_ns,
+                "compact_cpu_ns": measured_cpu_ns,
                 "metadata_exact": True,
                 "sentinel_unchanged": True,
             })
