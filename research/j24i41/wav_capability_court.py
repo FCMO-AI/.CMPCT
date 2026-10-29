@@ -67,7 +67,7 @@ def prepare(root: Path) -> None:
             raw = wav(steps(65536, 2, 32, SEED), channels=2, rate=44100, bits=32)
         elif case == "pcm24_mono":
             rng = np.random.default_rng(SEED)
-            pcm = rng.integers(0, 256, size=512*1024, dtype=np.uint8).tobytes()
+            pcm = rng.integers(0, 256, size=((512*1024)//3)*3, dtype=np.uint8).tobytes()
             raw = wav(pcm, channels=1, rate=44100, bits=24)
         elif case == "pcm8_mono":
             rng = np.random.default_rng(SEED)
