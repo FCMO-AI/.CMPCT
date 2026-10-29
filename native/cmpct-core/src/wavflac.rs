@@ -161,3 +161,82 @@ pub fn decode_wav_flac(
     }
     Ok(out)
 }
+
+
+/// Complete logical identity for one direct codec-2 member without materializing
+/// the WAV or copying its encoded FLAC payload. The caller owns the already-open
+/// CMPCT source File, authenticates its index/CMA4 bounds, and supplies an
+/// encoded-length-limited Read view. Ordinary selective read APIs still use
+/// `decode_wav_flac` and retain their existing semantics.
+pub fn digest_wav_flac_stream<R: std::io::Read>(
+    encoded: R,
+    meta: &[u8],
+    logical_size: u64,
+    max_output: u64,
+) -> Result<([u8; 32], u32), WavFlacError> {
+    use sha2::{Digest, Sha256};
+    use std::io::BufReader;
+
+    if logical_size > max_output {
+        return Err(WavFlacError::Limit);
+    }
+    let metadata = parse_metadata(meta)?;
+    if metadata.channels == 0 || metadata.sample_rate == 0 {
+        return Err(WavFlacError::Metadata(
+            "channels and sample_rate must be non-zero".into(),
+        ));
+    }
+    let prefix_size = u64::try_from(metadata.prefix.len()).map_err(|_| WavFlacError::Limit)?;
+    let suffix_size = u64::try_from(metadata.suffix.len()).map_err(|_| WavFlacError::Limit)?;
+    let fixed = prefix_size
+        .checked_add(suffix_size)
+        .ok_or(WavFlacError::Limit)?;
+    let expected_pcm = logical_size.checked_sub(fixed).ok_or(WavFlacError::Length)?;
+    let width = u64::from(metadata.bits_per_sample / 8);
+    if expected_pcm % width != 0 {
+        return Err(WavFlacError::Length);
+    }
+    let mut flac = FlacReader::new(BufReader::new(encoded))
+        .map_err(|e| WavFlacError::Flac(e.to_string()))?;
+    let info = flac.streaminfo();
+    if info.channels != metadata.channels
+        || info.sample_rate != metadata.sample_rate
+        || info.bits_per_sample != metadata.bits_per_sample
+    {
+        return Err(WavFlacError::StreamInfo);
+    }
+
+    let mut sha = Sha256::new();
+    let mut crc = crc32fast::Hasher::new();
+    sha.update(&metadata.prefix);
+    crc.update(&metadata.prefix);
+    let mut pcm_bytes = 0u64;
+    let mut chunk = Vec::with_capacity(64 * 1024);
+    for sample in flac.samples() {
+        let sample = sample.map_err(|e| WavFlacError::Flac(e.to_string()))?;
+        if metadata.bits_per_sample == 16 {
+            let narrow = i16::try_from(sample).map_err(|_| WavFlacError::StreamInfo)?;
+            chunk.extend_from_slice(&narrow.to_le_bytes());
+        } else {
+            chunk.extend_from_slice(&sample.to_le_bytes());
+        }
+        pcm_bytes = pcm_bytes.checked_add(width).ok_or(WavFlacError::Limit)?;
+        if pcm_bytes > expected_pcm {
+            return Err(WavFlacError::Length);
+        }
+        if chunk.len() >= 64 * 1024 {
+            sha.update(&chunk);
+            crc.update(&chunk);
+            chunk.clear();
+        }
+    }
+    if pcm_bytes != expected_pcm {
+        return Err(WavFlacError::Length);
+    }
+    sha.update(&chunk);
+    crc.update(&chunk);
+    sha.update(&metadata.suffix);
+    crc.update(&metadata.suffix);
+    let hash: [u8; 32] = sha.finalize().into();
+    Ok((hash, crc.finalize()))
+}
