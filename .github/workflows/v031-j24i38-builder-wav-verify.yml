@@ -1,0 +1,103 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I38 Real Builder WAV Native Verification Work Court
+on:
+  pull_request:
+    paths:
+      - 'research/j24i38/**'
+      - 'docs/v031-research/*j24i38*'
+      - '.github/workflows/v031-j24i38-builder-wav-verify.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i38-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  builder-wav-amplification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify exact latest-head research mutation
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i38/|docs/v031-research/.*j24i38|[.]github/workflows/v031-j24i38-builder-wav-verify[.]yml)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
+      - name: Authenticate exact native, Builder and frozen source
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee j24i38-head.txt
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "46fa87930a9229f42233594816330f35f0505e71"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "27e4d7962ccfed6a822010383158d98e20d823dd"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          test "$(git hash-object tests/conformance/v24-direct-codecs.json)" = "d10b7dab9126d39e819a74279c186363a163f2ef"
+          git diff --name-only 2d0dd4031b8c0fb2c42b715b6a4569199a2309a3 HEAD | tee j24i38-changed.txt
+          if grep -Eq '^(native/|src/cmpct/|tests/conformance/|benchmarks/)' j24i38-changed.txt; then
+            echo "Product/frozen source changed; research comparison invalid"; exit 1
+          fi
+      - name: Build actual WAV sources, use unmodified Builder and independently audit FLAC
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . numpy soundfile msgpack zstandard
+          python research/j24i38/generate_builder_wav.py --output j24i38-cases
+          python research/j24i38/audit_builder_wav.py --case-dir j24i38-cases
+      - name: Compile exact native core with disposable research probe
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native/cmpct-core/src/bin
+          cp research/j24i38/native_wav_verify_work.rs native/cmpct-core/src/bin/j24i38_perf.rs
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i38_perf
+      - name: Run source-exact same-archive ABBA/BAAB work and memory comparison
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=native/cmpct-core/target/release/j24i38_perf
+          manifest="$PWD/j24i38-cases/manifest.json"
+          : > j24i38-raw.txt
+          for lane in A B B A B A A B; do
+            if [ "$lane" = A ]; then mode=verify; else mode=oneshot; fi
+            for mib in 8 32; do
+              "$exe" "$PWD/j24i38-cases/builder-wav-${mib}m.cmpct" "$mode" "$mib" "$manifest" \
+                | sed "s/^/$lane /" | tee -a j24i38-raw.txt
+            done
+          done
+          python research/j24i38/summarize_wav_work.py --manifest "$manifest" \
+            --raw j24i38-raw.txt --output j24i38-result.json
+      - name: Preserve original physical archives, detached audit, source and raw observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i38-authentic-builder-wav-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24i38-head.txt
+            j24i38-changed.txt
+            j24i38-cases/
+            j24i38-raw.txt
+            j24i38-result.json
