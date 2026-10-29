@@ -1,0 +1,127 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: J24M01f post-exec Linux sparse verifier memory custody
+on:
+  pull_request:
+    paths:
+      - 'docs/v031-research/2026-10-29-j24m01f-*'
+      - 'tests/test_j24v01_sparse_verify_streamed.py'
+      - 'tests/test_j24m01f_postexec_rss_custody.py'
+      - '.github/workflows/j24m01f-postexec-sparse-rss.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24m01f-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-postexec-sparse-resource-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      EVIDENCE_DIR: ${{ github.workspace }}/j24m01f-focused
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Authenticate exact preregistered source and unchanged product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor a014326c858b313c1e769a73c0b22b955cb0285b HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
+          test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = c383c86982b8c7fe48ecc41c893b575b96eaeb06
+          test "$(git rev-parse HEAD:tests/test_j24m01f_postexec_rss_custody.py)" = 0b8295deb44fa08ca3ff98214842424818772d92
+          mkdir -p "$EVIDENCE_DIR"
+          git rev-parse HEAD > "$EVIDENCE_DIR/exact-head.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact candidate and test dependencies
+        run: |
+          python -m pip install -e '.[test,audio]'
+          python -m pip freeze | sort > "$EVIDENCE_DIR/pip-freeze.txt"
+      - name: Execute CMPCT-independent hostile high-water control and genuine sparse verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q \
+            tests/test_j24m01f_postexec_rss_custody.py \
+            tests/test_j24v01_sparse_verify_streamed.py \
+            2>&1 | tee "$EVIDENCE_DIR/focused-pytest.log"
+      - name: Persist exact-head positive and original source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24m01f-focused-${{ env.EXACT_HEAD }}
+          path: j24m01f-focused/
+          retention-days: 30
+          if-no-files-found: warn
+
+  linux-original-complete-suite-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      EVIDENCE_DIR: ${{ github.workspace }}/j24m01f-full-suite
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Authenticate exact code/source and original unchanged resource ceiling
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor a014326c858b313c1e769a73c0b22b955cb0285b HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = f2bf7e5ca79f35706bc7d09a496eba9ef151fc1f
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 387192edd783e02bf7a44a38945214bf9d6c183e
+          test "$(git rev-parse HEAD:tests/test_j24v01_sparse_verify_streamed.py)" = c383c86982b8c7fe48ecc41c893b575b96eaeb06
+          mkdir -p "$EVIDENCE_DIR"
+          git rev-parse HEAD > "$EVIDENCE_DIR/exact-head.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install unchanged full test dependency profile
+        run: |
+          python -m pip install -e '.[test,audio]'
+          python -m pip freeze | sort > "$EVIDENCE_DIR/pip-freeze.txt"
+      - name: Run all original CMPCT tests and preserve actual result (even inherited failures)
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          python -m pytest -q 2>&1 | tee "$EVIDENCE_DIR/full-suite.log"
+          code="${PIPESTATUS[0]}"
+          printf '%s\n' "$code" > "$EVIDENCE_DIR/pytest-exit-code.txt"
+          echo "REAL_FULL_SUITE_EXIT=$code; workflow scientific SUCCESS must not be confused with product PASS"
+          exit 0
+      - name: Verify sparse test is not red; retain any historical suite reds
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$EVIDENCE_DIR/full-suite.log"
+          if grep -E '^FAILED tests/test_j24v01_sparse_verify_streamed.py::test_real_256m' "$EVIDENCE_DIR/full-suite.log"; then
+            echo 'REAL_SPARSE_RESOURCE_TEST_STILL_FAILS; do not change the ceiling' >&2
+            exit 1
+          fi
+          grep -E '([0-9]+ passed|[0-9]+ failed)' "$EVIDENCE_DIR/full-suite.log" | tail -n 4
+          echo 'Scientific resource attribution only; independent release failures remain'
+      - name: Persist complete original-suite failure context
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24m01f-full-suite-${{ env.EXACT_HEAD }}
+          path: j24m01f-full-suite/
+          retention-days: 30
+          if-no-files-found: warn
