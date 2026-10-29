@@ -27,7 +27,17 @@ def can_list() -> bool:
 
 
 def can_set() -> bool:
-    return hasattr(os, "setxattr") or _DARWIN
+    if hasattr(os, "setxattr"):
+        return True
+    if not _DARWIN:
+        return False
+    try:
+        # Strict Reader must reject unavailable destination capability *before*
+        # creating output, not discover a missing native ABI during late restore.
+        _darwin_api()
+    except OSError:
+        return False
+    return True
 
 
 @functools.lru_cache(maxsize=1)
