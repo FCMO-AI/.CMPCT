@@ -63,7 +63,7 @@ jobs:
           for lane in A B B A B A A B; do
             if [ "$lane" = A ]; then mode=verify; else mode=oneshot; fi
             for mib in 8 32 64; do
-              "$exe" "$PWD/j24i37-cases/direct-zstd-$mib.cmpct" "$mode" "$mib" "$manifest" \
+              "$exe" "$PWD/j24i37-cases/direct-zstd-${mib}m.cmpct" "$mode" "$mib" "$manifest" \
                 | sed "s/^/$lane /" | tee -a j24i37-raw.txt
             done
           done
