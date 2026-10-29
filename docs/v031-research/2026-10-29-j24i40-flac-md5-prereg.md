@@ -1,0 +1,25 @@
+# J24I40 — FLAC STREAMINFO MD5 custody vs decoded-CMPCT logical integrity (prospective)
+
+Date: 2026-10-29 UTC. **Research-only O0/O1 falsifier. No native/Builder/format/ABI/release/frozen benchmark changes.** Repository `FCMO-AI/.CMPCT` main `80c358f8824ec1b20d349c92ed94c898090969b0` v0.30.0/r24. Research parent PR #776 exact `0047e45e92793ca58a50251847e3cf1adb9c6d90`, which already demonstrates a genuine Builder codec-2 WAV streaming logical-hash path; native product ownership remains #765/#759.
+
+## Primary question and baseline
+Does the **actual compiled Claxon sample iterator** used in J24I39 accept an encoded FLAC stream whose STREAMINFO **declared MD5 of unencoded audio** has been deliberately contradicted while keeping every encoded audio frame and CMPCT logical output byte unchanged? Does upstream `flac -t` reject that same byte-identical-input mutation? The published native decoder and candidate streaming oracle separately check the CMPCT logical WAV SHA-256, so **accepting an altered redundant FLAC MD5 alone is not evidence of lost reconstructed bytes, a security vulnerability, or a release-contract failure**.
+
+Existing J24I39b tested invalid tails and truncated/concatenated frames; all were rejected. This is a materially different *codec-metadata internal-signature* axis, not another suffix threshold variant.
+
+## Exact intervention and controls
+1. Generate the **unchanged real Builder** 8-MiB PCM16 WAV + codec-2 FLAC archive with existing `research/j24i38/generate_builder_wav.py`. Audit using the **unchanged independent no-CMPCT-import** auditor `audit_builder_wav.py`. Split existing authenticated physical FLAC using `research/j24i39/extract_signed_wav_flac.py`.
+2. Assert the split FLAC begins `fLaC`, the first metadata block has type 0 (STREAMINFO) and exactly 34 bytes; STREAMINFO MD5 begins at byte offset 26 (= 4 magic + 4 metadata header + 18 body). Require original 16-byte MD5 nonzero and record exact binary SHA-256.
+3. Write three separate FLAC *copies*: `valid`; `md5_flip` (flip exactly bit 0 of first MD5 byte at offset 26, changing **one byte/one bit**); `md5_zero` (all 16 MD5 bytes zero, encoding the allowed 'unknown' checksum state). No frame bytes, PCM, codec-2 prefix/suffix, metadata index, or original archive are modified.
+4. Pass these exact three streams through `flac -t -s` as independent reference and the **same compiled J24I39 Rust oracle** in `stream` mode, which must still compare reconstructed SHA-256, CRC32, logical size and channels/rate/bits against authentic original archive evidence. Save exit codes and stderr without suppressing an unexpected failure. Compile from the exact parent Rust source, no weakening.
+5. Add a deterministic evaluator that asserts original reference + Claxon accept, altered byte custody matches prereg, and explicitly records both divergent and nondiffering outcomes. A scientific court succeeds by collecting decisive evidence, not by forcing the predicted result. Preserve all physical variants, command outputs, SHA-256, exact checkout HEAD, source pins and independent audit in a fail-closed GitHub artifact.
+
+## Predictions / alternative explanations / kill conditions
+**Primary prediction:** `flac -t` detects the nonzero wrong STREAMINFO MD5; J24I39 Claxon sample iteration does not independently authenticate it and therefore reconstructs matching logical WAV SHA/CRC. **Control prediction:** zeroed MD5 is treated by the reference as an unavailable signature (may be accepted); do not force the zero case to pass if actual reference semantics differ.
+
+Alternative: Claxon does validate MD5 at iterator exhaustion; the prediction is false and the codec's native verification already has stronger internal checks. A second alternative: producer's FLAC has zero MD5, in which case this exact question is not experimentally admissible; report blocked, do not fabricate a synthetic signed-source specimen without separately preregistering it. If reference does not reject `md5_flip`, record the negative instead of changing its settings. If Claxon accepts `md5_flip`, label it a **FLAC-internal MD5 discrepancy**, never a logical CMPCT-SHA bypass. Neither answer earns product credit without a full archive-based native test.
+
+## Decision fork and product boundary
+If diverging, native owner decides whether codec-specific MD5 enforcement is warranted when an independently stronger **logical** SHA-256 already secures exact reconstructed WAV identity. Added PCM MD5 cost, external dependency cost, and natural FLAC zero-MD5 encoding must be accounted. If no divergence, the streaming primitive has one more internal codec check, but remains blocked on authenticated source-descriptor custody, resource ceilings, recoverability, range behavior, Windows/macOS and full product benchmarks.
+
+This is the cheapest decisive independent falsifier before spending on a native source-FD integration. No changes to `docs/discovery/STATE.json` absent a decision-changing broader state transition. No CI green status alone represents physical product authority. 
