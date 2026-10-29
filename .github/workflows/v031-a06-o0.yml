@@ -1,0 +1,58 @@
+name: A06-O0 off-boundary research oracle (science only)
+on:
+  push:
+    branches:
+      - agent/phased1-v031-a06-offboundary-oracle-20261029
+  workflow_dispatch:
+jobs:
+  bounded-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Display exact source and system toolchain
+        run: |
+          git rev-parse HEAD
+          python3 --version
+          zstd --version
+          uname -a
+      - name: Ensure deterministic public header cohorts available
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libboost-dev libstdc++-13-dev libzstd1 zstd
+      - name: Execute fixture controls before real cohorts
+        run: |
+          python3 -m py_compile research/a06_o0/offboundary_oracle.py
+          python3 research/a06_o0/offboundary_oracle.py --controls-only
+      - name: Execute natural full-file cohorts (no CMPCT product claims)
+        run: |
+          python3 research/a06_o0/offboundary_oracle.py
+      - name: Independently check signed source manifest and arithmetic
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,pathlib
+          j=json.load(open("a06_o0_results.json"))
+          assert len(j["cohorts"])==3
+          assert j["controls"]["shifted"]["gifted_coverage_bytes"]>=8192
+          assert j["controls"]["random_negative"]["gifted_coverage_bytes"]==0
+          for x in j["cohorts"]:
+              files=x["files"]
+              assert len(files)==32 and x["correct_exact_reconstruction"]
+              assert sum(f["size"] for f in files)==x["logical_bytes"]
+              for f in files:
+                  actual=hashlib.sha256(pathlib.Path(f["path"]).read_bytes()).hexdigest()
+                  assert f["sha256"]==actual,(f["path"],actual)
+              assert x["complete_candidate_bytes_lower_bound"]-x["solid_zstd19_bytes"]==x["candidate_delta_vs_solid"]
+              assert x["complete_candidate_bytes_lower_bound"]-x["independent_zstd19_plus_16B_per_file"]==x["candidate_delta_vs_independent"]
+          print("manifest/arithmetic PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a06-o0-natural-host-evidence
+          path: a06_o0_results.json
+          if-no-files-found: warn
