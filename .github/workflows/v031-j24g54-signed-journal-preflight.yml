@@ -1,0 +1,96 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Scientific negative court only: green means mismatch reproduced, not repaired.
+name: CMPCT J24G54 physical signed journal preflight parity court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g54-physical-journal-preflight-parity-20261029
+  pull_request:
+    branches:
+      - agent/phased2-v031-j24g52-hardlink-xattr-inode-preflight-20261029
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24g54-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  signed-journal-parity:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G54_EVIDENCE_DIR: evidence/physical
+    steps:
+      - name: Checkout exact head; verify immutable preregistration and product ownership
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Source and lineage lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/physical
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 47ddedbeb844a8d59e9d142910c6705301214ce0 HEAD
+          git merge-base --is-ancestor 86942804086bf70508d0594add2dd667237e88d9 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = c82ab200bf849f844587683992f0c702cc39059a
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 10d67553d1c8ff5399dbadc0fcfd5f3c54ea846a
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 3eef7fdc3f6deca5ddd6d9edf1292c7e2c864f11
+          git rev-parse HEAD > evidence/head.txt
+          git rev-parse HEAD:src/cmpct/reader.py > evidence/reader-blob.txt
+          git rev-parse HEAD:src/cmpct/validation.py > evidence/validation-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact CMPCT and independent physical decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'pytest>=8' 'zstandard>=0.22'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import cmpct.reader as reader, cmpct.validation as validation
+          import cmpct.transactions as transactions, cmpct.builder as builder
+          for path, module in (
+              ('src/cmpct/reader.py', reader),
+              ('src/cmpct/validation.py', validation),
+              ('src/cmpct/transactions.py', transactions),
+              ('src/cmpct/builder.py', builder),
+          ):
+              source = Path(path).read_bytes().replace(b'\\r\\n', b'\\n')
+              installed = Path(module.__file__).read_bytes().replace(b'\\r\\n', b'\\n')
+              assert source == installed, path
+              print('SOURCE_EXACT', path, hashlib.sha256(source).hexdigest())
+          PY
+      - name: Actual first-party Builder journal deletion and native xattr restoration
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest --noconftest -q -s --junitxml=evidence/pytest.xml tests/test_v031_j24g54_physical_journal_preflight.py 2>&1 | tee evidence/pytest.log
+      - name: Independent signed r24 footer, metadata and tamper referee
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s evidence/physical/both_survivors-before.cmpct
+          test -s evidence/physical/both_survivors-after.cmpct
+          python research/j24g54/independent_journal_referee.py evidence/physical 2>&1 | tee evidence/referee.log
+          test -s evidence/physical/independent-referee.json
+      - name: Preserve result-bearing physical data and failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g54-signed-journal-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
