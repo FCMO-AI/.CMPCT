@@ -114,3 +114,43 @@ def test_tree_digest_non_utf8_filename(tmp_path: Path) -> None:
     with open(byte_path, "wb") as f:
         f.write(b"exact")
     assert len(tree_digest(tmp_path)) == 64
+
+
+def _four_path_partitions(prefix=(0,)):
+    """All 15 set partitions of four named entries (restricted-growth strings)."""
+    if len(prefix) == 4:
+        yield prefix
+        return
+    for nxt in range(max(prefix) + 2):
+        yield from _four_path_partitions(prefix + (nxt,))
+
+
+def test_tree_digest_exhaustive_four_path_hardlink_partition_court(tmp_path: Path) -> None:
+    """Independent oracle: os.path.samefile equivalence, not the digest's inode map."""
+    seen = {}
+    count = 0
+    for model in _four_path_partitions():
+        for replica in range(2):
+            root = tmp_path / f"{count:02d}-{replica}"
+            root.mkdir()
+            owners = {}
+            paths = []
+            for name, group in zip("abcd", model):
+                p = root / name
+                if group in owners:
+                    _hardlink_or_skip(owners[group], p)
+                else:
+                    p.write_bytes(b"same bytes in each independent file class")
+                    owners[group] = p
+                paths.append(p)
+            independent_equivalence = tuple(
+                tuple(os.path.samefile(a, b) for b in paths) for a in paths
+            )
+            observed = tree_digest(root)
+            if independent_equivalence in seen:
+                assert seen[independent_equivalence] == observed
+            else:
+                seen[independent_equivalence] = observed
+        count += 1
+    assert count == 15
+    assert len(seen) == len(set(seen.values())) == 15
