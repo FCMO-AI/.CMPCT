@@ -83,10 +83,12 @@ jobs:
           root=pathlib.Path(os.environ["OUT_DIR"])
           x=json.loads((root/"court.json").read_text())
           assert x["decision"]=="CANDIDATE_NARROW_EXACTNESS_PASS_NOT_RELEASE"
-          assert len(x["cases"])==7 and len(x["guards"])==2
+          assert len(x["cases"])==8 and len(x["guards"])==2
           assert all(c["metadata_exact"] and c["sentinel_unchanged"] for c in x["cases"])
-          assert len(list((root/"archives").glob("*.cmpct")))==14
-          print("J24I06 SEVEN PHYSICAL CASES, TWO HOSTILE GUARDS, ONE FAILURE-ATOMICITY PASS")
+          assert x["destination_symlink_not_followed"] is True
+          assert x["in_place_compaction_exact"] is True
+          assert len(list((root/"archives").glob("*.cmpct")))==16
+          print("J24I06 EIGHT PHYSICAL CASES, TWO HOSTILE GUARDS, ONE FAILURE-ATOMICITY PASS")
           PY
       - name: Preserve exact-head physical inputs and outputs
         if: always()
