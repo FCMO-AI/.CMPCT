@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m pytest --noconftest -q -s --junitxml=evidence/test.xml tests/test_v031_j24g52_inode_xattr_preflight.py 2>&1 | tee evidence/test.log
+          python -m pytest --noconftest -q -s --junitxml=evidence/test.xml tests/test_v031_j24g52_inode_xattr_preflight.py tests/test_v031_j24g52_journal_replay_discriminator.py 2>&1 | tee evidence/test.log
       - name: Independent r24 wire referee and auditor mutation controls
         if: always()
         shell: bash
