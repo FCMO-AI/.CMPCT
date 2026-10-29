@@ -30,7 +30,20 @@ jobs:
           ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 2
           persist-credentials: false
+      - name: Classify exact latest HEAD change
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i24/|docs/v031-research/.*j24i24|\.github/workflows/v031-j24i24-mmap-aba-source\.yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
       - name: Verify source and exact head
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -42,9 +55,11 @@ jobs:
           python --version
           uname -a
       - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
         with:
           python-version: '3.11'
       - name: Install authentic source and execute independent A/B/ABA tribunal
+        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
