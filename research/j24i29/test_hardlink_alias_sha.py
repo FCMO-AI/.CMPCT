@@ -161,7 +161,8 @@ class FixedWireHardlinkAliasSHA(unittest.TestCase):
 
 if __name__ == "__main__":
     try:
-        unittest.main(verbosity=2, exit=False)
+        suite = unittest.defaultTestLoader.loadTestsFromTestCase(FixedWireHardlinkAliasSHA)
+        result = unittest.TextTestRunner(verbosity=2).run(suite)
     finally:
         dest = os.environ.get("J24I29_RESULTS")
         if dest:
@@ -170,3 +171,5 @@ if __name__ == "__main__":
                 "classification": "research-only / does not authorize release",
                 "cases": CASES,
             }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if not result.wasSuccessful():
+        raise SystemExit(1)
