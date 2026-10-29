@@ -1,4 +1,4 @@
-"""Source-bound regression for public tree_digest topology fidelity (J24G27).
+"""Source-bound regression for opt-in tree topology digest fidelity (J24G27b).
 
 These filesystem tests use independent host operations, not CMPCT Builder/Reader;
 their scope is the public helper's evidence semantics only.
@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from cmpct.transactions import tree_digest
+from cmpct.transactions import tree_digest, tree_topology_digest
+from cmpct import core as public_facade
 
 
 def _new_tree(root: Path, variant: str) -> Path:
@@ -51,7 +52,7 @@ def test_tree_digest_symlink_is_not_content_copy(tmp_path: Path) -> None:
     linked.mkdir()
     (linked / "owner").write_bytes((copied / "owner").read_bytes())
     _symlink_or_skip(linked / "peer", "owner")
-    assert tree_digest(linked) != tree_digest(copied)
+    assert tree_topology_digest(linked) != tree_topology_digest(copied)
 
 
 def test_tree_digest_hardlink_is_not_content_copy(tmp_path: Path) -> None:
@@ -60,7 +61,7 @@ def test_tree_digest_hardlink_is_not_content_copy(tmp_path: Path) -> None:
     linked.mkdir()
     (linked / "owner").write_bytes((copied / "owner").read_bytes())
     _hardlink_or_skip(linked / "owner", linked / "peer")
-    assert tree_digest(linked) != tree_digest(copied)
+    assert tree_topology_digest(linked) != tree_topology_digest(copied)
 
 
 def test_tree_digest_hardlinks_use_logical_owner_not_inode(tmp_path: Path) -> None:
@@ -71,7 +72,7 @@ def test_tree_digest_hardlinks_use_logical_owner_not_inode(tmp_path: Path) -> No
         (d / "owner").write_bytes(b"shared content")
         _hardlink_or_skip(d / "owner", d / "peer")
         trees.append(d)
-    assert tree_digest(trees[0]) == tree_digest(trees[1])
+    assert tree_topology_digest(trees[0]) == tree_topology_digest(trees[1])
 
 
 def test_tree_digest_symlink_target_is_not_dereferenced(tmp_path: Path) -> None:
@@ -79,33 +80,33 @@ def test_tree_digest_symlink_target_is_not_dereferenced(tmp_path: Path) -> None:
     tree.mkdir()
     (tree / "owner").write_bytes(b"safe")
     _symlink_or_skip(tree / "peer", "owner")
-    existing = tree_digest(tree)
+    existing = tree_topology_digest(tree)
     (tree / "peer").unlink()
     (tree / "peer").symlink_to("absent")
-    assert tree_digest(tree) != existing
+    assert tree_topology_digest(tree) != existing
     # The target is absent: digesting only the lexical link is still defined.
-    assert tree_digest(tree) == tree_digest(tree)
+    assert tree_topology_digest(tree) == tree_topology_digest(tree)
 
 
 def test_tree_digest_regular_content_is_committed(tmp_path: Path) -> None:
     p = tmp_path / "content"
     p.write_bytes(b"A")
-    old = tree_digest(tmp_path)
+    old = tree_topology_digest(tmp_path)
     p.write_bytes(b"B")
-    assert tree_digest(tmp_path) != old
+    assert tree_topology_digest(tmp_path) != old
 
 
 def test_tree_digest_empty_directory_is_a_distinct_entry(tmp_path: Path) -> None:
-    old = tree_digest(tmp_path)
+    old = tree_topology_digest(tmp_path)
     (tmp_path / "empty").mkdir()
-    assert tree_digest(tmp_path) != old
+    assert tree_topology_digest(tmp_path) != old
 
 
 @pytest.mark.skipif(os.name != "posix" or not hasattr(os, "mkfifo"), reason="POSIX FIFO only")
 def test_tree_digest_unsupported_special_kind_fails_closed(tmp_path: Path) -> None:
     os.mkfifo(tmp_path / "pipe")
     with pytest.raises(ValueError, match="unsupported filesystem entry"):
-        tree_digest(tmp_path)
+        tree_topology_digest(tmp_path)
 
 
 @pytest.mark.skipif(os.name != "posix", reason="byte pathname semantics are POSIX-only")
@@ -113,7 +114,7 @@ def test_tree_digest_non_utf8_filename(tmp_path: Path) -> None:
     byte_path = os.fsencode(tmp_path) + b"/bad-\xff"
     with open(byte_path, "wb") as f:
         f.write(b"exact")
-    assert len(tree_digest(tmp_path)) == 64
+    assert len(tree_topology_digest(tmp_path)) == 64
 
 
 def _four_path_partitions(prefix=(0,)):
@@ -146,7 +147,7 @@ def test_tree_digest_exhaustive_four_path_hardlink_partition_court(tmp_path: Pat
             independent_equivalence = tuple(
                 tuple(os.path.samefile(a, b) for b in paths) for a in paths
             )
-            observed = tree_digest(root)
+            observed = tree_topology_digest(root)
             if independent_equivalence in seen:
                 assert seen[independent_equivalence] == observed
             else:
@@ -154,3 +155,27 @@ def test_tree_digest_exhaustive_four_path_hardlink_partition_court(tmp_path: Pat
         count += 1
     assert count == 15
     assert len(seen) == len(set(seen.values())) == 15
+
+
+def test_legacy_digest_golden_and_facade_contract(tmp_path: Path) -> None:
+    """Published v1 hash stays byte-identical, despite its known topology collision."""
+    (tmp_path / "owner").write_bytes(b"same bytes independent of topology")
+    (tmp_path / "peer").write_bytes(b"same bytes independent of topology")
+    expected = "4a0ec1aaba71d5c2abd6cb9c8d6b54e7601c582b35a1c4f98c0d3bd67ba85b24"
+    assert tree_digest(tmp_path) == expected
+    assert public_facade.tree_digest(tmp_path) == expected
+    assert public_facade.tree_topology_digest is tree_topology_digest
+    assert tree_topology_digest(tmp_path) != expected
+
+
+def test_legacy_collision_is_explicitly_not_topology_proof(tmp_path: Path) -> None:
+    original = tmp_path / "copy"
+    original.mkdir()
+    (original / "owner").write_bytes(b"same bytes independent of topology")
+    (original / "peer").write_bytes(b"same bytes independent of topology")
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    (linked / "owner").write_bytes(b"same bytes independent of topology")
+    _symlink_or_skip(linked / "peer", "owner")
+    assert tree_digest(linked) == tree_digest(original)
+    assert tree_topology_digest(linked) != tree_topology_digest(original)
