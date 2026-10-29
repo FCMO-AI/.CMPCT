@@ -100,18 +100,39 @@ jobs:
           done
           python research/j24i39/summarize_tail_falsifier.py \
             --case-dir j24i39b-cases --raw j24i39b-raw.txt --output j24i39b-result.json
-      - name: Retain scientific positive AND negative responses, original archives, source
-        if: always()
+      - name: Package and assert exact hostile evidence before upload
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s j24i39b-head.txt
+          test -s j24i39b-result.json
+          test -s j24i39b-raw.txt
+          test -s j24i39b-cases/tail-manifest.json
+          for variant in valid trailer truncated concatenated; do
+            test -s "j24i39b-cases/tail-${variant}.flac"
+            test -f "j24i39b-${variant}-claxon.log"
+            test -f "j24i39b-${variant}-reference.log"
+          done
+          tar -czf j24i39b-hostile-evidence.tar.gz \
+            j24i39b-head.txt j24i39b-changed.txt j24i39b-cases \
+            j24i39b-raw.txt j24i39b-result.json \
+            j24i39b-valid-claxon.log j24i39b-trailer-claxon.log \
+            j24i39b-truncated-claxon.log j24i39b-concatenated-claxon.log \
+            j24i39b-valid-reference.log j24i39b-trailer-reference.log \
+            j24i39b-truncated-reference.log j24i39b-concatenated-reference.log
+          test -s j24i39b-hostile-evidence.tar.gz
+          sha256sum j24i39b-hostile-evidence.tar.gz | tee j24i39b-artifact-sha256.txt
+          for variant in trailer truncated concatenated; do
+            echo "J24I39B_ERROR_DETAIL_BEGIN ${variant}"
+            sed -n '1,12p' "j24i39b-${variant}-claxon.log"
+            echo "J24I39B_ERROR_DETAIL_END ${variant}"
+          done
+      - name: Require full hostile evidence artifact, never a warning-only court
+        if: steps.scope.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: j24i39b-flac-tail-${{ github.run_id }}
           retention-days: 30
-          if-no-files-found: warn
-          path: |
-            j24i39b-head.txt
-            j24i39b-changed.txt
-            j24i39b-cases/
-            j24i39b-raw.txt
-            j24i39b-result.json
-            j24i39b-*-claxon.log
-            j24i39b-*-reference.log
+          if-no-files-found: error
+          path: ./j24i39b-hostile-evidence.tar.gz
