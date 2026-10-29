@@ -30,7 +30,7 @@ def main() -> None:
     original_path = case_dir / "original.cmpct"
     original = original_path.read_bytes()
     magic, revision, flags, index_csize, index_usize, span, index_hash = HDR.unpack_from(original)
-    assert (magic, revision, flags) == (b"CMPCT24\\0", 24, 0)
+    assert (magic, revision, flags) == (b"CMPCT24\0", 24, 0)
     assert index_csize < 2**26 and span < 2**30
     record_start = HDR.size + index_csize
     blob_magic, codec, blob_flags, reserved, usize, csize, meta_len, prior_crc, physical_sha = BHDR.unpack_from(original, record_start)
