@@ -23,8 +23,13 @@ def _safe_output_path(dest:Path,rel:str)->Path:
 
 # --- Reader ----------------------------------------------------------------
 class CMPCT:
-    def __init__(self,path:Path):
-        self.path=Path(path);self.f=open(path,'rb');self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};
+    def __init__(self,path:Path,*,_fd:int|None=None):
+        self.path=Path(path)
+        # Compaction verifies the exact same pinned staging inode that Builder
+        # wrote, independent of later changes to its directory-entry name.
+        self.f=open(path,'rb') if _fd is None else os.fdopen(os.dup(_fd),'rb')
+        if _fd is not None:self.f.seek(0)
+        self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};
         if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
         # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This
         # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map
