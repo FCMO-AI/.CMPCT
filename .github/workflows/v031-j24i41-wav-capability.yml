@@ -1,0 +1,110 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I41 WAV Capability Admission Court
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24i41/**'
+      - 'docs/v031-research/*j24i41*'
+      - '.github/workflows/v031-j24i41-wav-capability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i41-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-wav-court:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Assert exact product and original control identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "candidate_HEAD=$(git rev-parse HEAD)"
+          git merge-base --is-ancestor 4361424ddbe356463a6eab94361f3b950c120967 HEAD
+          test "$(git hash-object src/cmpct/codec.py)" = "6e116ee1fc348b78d81a541fcaf5cf3d6912d3c4"
+          test "$(git hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          test "$(git hash-object src/cmpct/reader.py)" = "$(git rev-parse 4361424ddbe356463a6eab94361f3b950c120967:src/cmpct/reader.py)"
+          git worktree add --detach ../j24i41-parent 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b
+          test "$(git -C ../j24i41-parent hash-object src/cmpct/codec.py)" = "29526db4203723d83523fc95d074c346b63d7587"
+          test "$(git -C ../j24i41-parent hash-object src/cmpct/builder.py)" = "663ef0922992b1fbb8f19e6eea88d55c10a56044"
+          mkdir -p j24i41-work
+          git rev-parse HEAD > j24i41-work/candidate-head.txt
+          git -C ../j24i41-parent rev-parse HEAD > j24i41-work/control-head.txt
+          git status --short > j24i41-work/checkout-status.txt
+      - name: Install identical environment for candidate and control
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . numpy soundfile msgpack zstandard
+          python - <<'PY'
+          import numpy, soundfile, msgpack, zstandard, sys, json
+          print(json.dumps({"python":sys.version,"numpy":numpy.__version__,"soundfile":soundfile.__version__,
+                            "libsndfile":soundfile.__libsndfile_version__,"msgpack":msgpack.version,
+                            "zstandard":zstandard.__version__},default=str))
+          PY
+      - name: Freeze same input tree and run candidate full Builder verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          COURT="$PWD/research/j24i41/wav_capability_court.py"
+          ROOT="$PWD/j24i41-work"
+          python "$COURT" prepare --root "$ROOT/input"
+          J24I41_SOURCE_ROOT="$PWD/src" PYTHONPATH="$PWD/src" python "$COURT" evaluate \
+            --root "$ROOT/input" --out "$ROOT/candidate" --side candidate
+      - name: Execute unchanged v0.31 predecessor and compare physical archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          COURT="$PWD/research/j24i41/wav_capability_court.py"
+          ROOT="$PWD/j24i41-work"
+          PARENT="$(cd ../j24i41-parent && pwd)"
+          J24I41_SOURCE_ROOT="$PARENT/src" PYTHONPATH="$PARENT/src" python "$COURT" evaluate \
+            --root "$ROOT/input" --out "$ROOT/control" --side control
+          python "$COURT" compare --parent "$ROOT/control" --candidate "$ROOT/candidate" \
+            --out "$ROOT/decision.json"
+      - name: Independent physical artifact custody and manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,pathlib
+          base=pathlib.Path("j24i41-work")
+          files={str(p.relative_to(base)):hashlib.sha256(p.read_bytes()).hexdigest()
+                 for p in sorted(base.rglob("*")) if p.is_file()}
+          (base/"checksums.json").write_text(json.dumps({"schema":"j24i41-artifact-hashes-v1","files":files},
+                     indent=2,sort_keys=True)+"\n")
+          print("J24I41 physical artifact files:",len(files))
+          PY
+          tar -czf j24i41-evidence.tgz -C j24i41-work .
+          python - <<'PY'
+          import hashlib,pathlib
+          b=pathlib.Path("j24i41-evidence.tgz").read_bytes()
+          print("J24I41 artifact SHA256",hashlib.sha256(b).hexdigest(),"bytes",len(b))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24i41-${{ matrix.os }}-${{ github.sha }}
+          path: j24i41-evidence.tgz
+          if-no-files-found: error
+          retention-days: 30
