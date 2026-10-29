@@ -1,0 +1,21 @@
+# J24I29 — present hardlink-alias SHA versus strong verification (prospective)
+Date: 2026-10-29 UTC. Status: PREREGISTRATION BEFORE IMPLEMENTATION / SCIENCE ONLY / NO PRODUCT PROMOTION.
+
+## Exact authority and neighboring ownership
+Published `main@80c358f8824ec1b20d349c92ed94c898090969b0` is v0.30.0 / on-disk revision 24. Independent direct-codec vectors have fixed Git blob `d10b7dab9126d39e819a74279c186363a163f2ef`. This isolated test-only branch is pinned to #750 source `aba3f2d72212b484d58bef4ca56ceaaf8dda9d09`, which claims optional present-row SHA handling **for direct file/symlink** and has already obtained installed fixed-vector evidence. #750 owns the code patch; #620 owns sparse/hardlink streaming; #615 owns alias size. This experiment does not mutate their source, validations, benchmarks, release law, or shared Discovery state.
+
+## Primary fork and independent control
+**Question:** if an r24 hardlink alias row carries a syntactically valid, present, 32-byte SHA that contradicts the physical target while the target and all physical records remain unchanged, does `preflight_archive` accept the archive and does `CMPCT.verify()` detect the contradiction? If it accepts, is that an actual integrity contract gap or a permitted non-authoritative alias field? This is about optional *alias* row semantics, not the already-claimed direct file/symlink patch.
+
+We predict an independently built, *unmodified* RAW/Zstd/Deflate frozen vector with one appended `K_HARDLINK` alias referencing its direct owner, re-signed head/tail index (unkeyed digests, **not** a provenance signature), will pass preflight and strong verify even when the alias row[5] contains an incorrect 32-byte SHA. Reason: current `file_sha256(alias)` resolves its target, `read(alias)` resolves its target, and the #750 optional row comparison is gated on `K_FILE,K_SYMLINK`. The **stronger alternative interpretation** is that aliases inherit physical owner identity by definition, so their independently present row digest is non-authoritative; then the observation is a contract ambiguity rather than an exploitable corruption.
+
+## Cheapest decisive rung
+All test inputs derive from the three published Builder-independent original archives; do not replace/edit the frozen vectors or alter physical blob records. For each: controls are unchanged original, added alias with row SHA `None`, `b''`, correct target SHA, and deliberately foreign 32-byte SHA. Independently recompute and check both index digests, identical physical record span, blob CRC and SHA, exact `read(alias)`, and `read_range(alias)`; execute real installed Reader and structural preflight. Do not alter any payload/record/framing when testing the alias digest.
+
+Hypothesis succeeds iff the original & three controls pass, preflight admits the contradictory alias, `CMPCT.verify()` returns normal count despite that contradiction, and direct-owner strong integrity remains intact. It fails if malformed-fixture admission, source mismatch, or if strong verification rejects the contradictory alias. Classify failure as instrument invalid if index, blob or CRC validation fails.
+
+## Decision/kill and product economics
+If admitted/ignored, propose explicit alias digest semantics to #750/#748 maintainers: either reject contradictory present alias digest or explicitly classify the alias digest field as ignored/reserved (including compatibility implications); **do not** silently require a row SHA for legacy aliases. A positive negative does not justify modifying Reader without historical alias-vector compatibility and portability evidence. Original archive bytes are unchanged, extra index bytes are only in test variants. CPU, RSS, create/extract wall, complete product, Windows/macOS, native ABI and release parity remain unmeasured until hosted runs provide their own evidence. This scientific test creates no compression/throughput credit.
+
+## BONK and anti-collision
+The simple source derivation predicts acceptance but cannot establish authentic archive/preflight behavior; the cheapest next action is a three-codec independent fixed-wire test in installed CI. Avoid broad existing-owner hardlink/sparse/compaction implementation. No policy self-modification or shared Discovery STATE write; #574 retains that surface. Preserve contradictory results without threshold gardening.
