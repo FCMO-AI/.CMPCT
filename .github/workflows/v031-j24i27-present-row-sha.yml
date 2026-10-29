@@ -1,0 +1,79 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I27 Present Direct-Row SHA Scientific and Compatibility Court
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24i27/**'
+      - 'tests/test_conformance_direct_codecs.py'
+      - 'docs/v031-research/*j24i27*'
+      - 'src/cmpct/reader.py'
+      - '.github/workflows/v031-j24i27-present-row-sha.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: j24i27-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Bind source commit and classify current head
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git rev-parse HEAD | tee j24i27-source-head.txt
+          git hash-object src/cmpct/reader.py | tee j24i27-reader-blob.txt
+          git hash-object tests/conformance/v24-direct-codecs.json | tee j24i27-golden-blob.txt
+          git hash-object research/j24i27/test_present_row_sha.py | tee j24i27-court-blob.txt
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i27/|tests/test_conformance_direct_codecs.py|src/cmpct/reader.py|docs/v031-research/.*j24i27|\.github/workflows/v031-j24i27-present-row-sha.yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - name: Install authentic source and run fixed-vector court
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e . pytest
+          python -m unittest discover -s research/j24i27 -p 'test_present_row_sha.py' -v 2>&1 | tee j24i27-court.log
+          # This single-file court requires only pytest's built-in fixtures; the repository's\n          # broad tests/conftest.py imports historical experiment libraries (including\n          # ambient libzstd.so on Windows) unrelated to the frozen direct-codec test.\n          # --noconftest retains every assertion and parametrized test in this module.\n          python -m pytest --noconftest -q tests/test_conformance_direct_codecs.py 2>&1 | tee -a j24i27-court.log
+      - name: Keep raw observations even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i27-present-sha-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            j24i27-source-head.txt
+            j24i27-reader-blob.txt
+            j24i27-golden-blob.txt
+            j24i27-court-blob.txt
+            j24i27-court.log

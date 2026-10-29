@@ -5,8 +5,11 @@ import hashlib
 import json
 from pathlib import Path
 
+import msgpack
+
 import pytest
 
+from cmpct.codec import FMAGIC, FTR, HDR, MAGIC, VERSION, sha, zc, zd
 from cmpct.reader import CMPCT
 from cmpct.validation import preflight_archive
 
@@ -60,3 +63,52 @@ def test_golden_set_covers_current_direct_native_frontier() -> None:
     # RAW and Zstd are implemented in the native core; Deflate is deliberately included one step
     # ahead so its implementation can target fixed bytes instead of a Python-built archive.
     assert {record["codec"] for record in _records()} == {0, 1, 4}
+
+
+@pytest.mark.parametrize("record", _records(), ids=lambda r: r["name"])
+def test_present_optional_direct_row_sha_is_an_additional_strong_commitment(
+    tmp_path: Path, record: dict
+) -> None:
+    """Historical r24 absent hashes remain valid; a *present* index SHA must bind bytes.
+
+    Footnote: changing only the index declaration while re-signing both unkeyed
+    index copies is not a forged security signature. It isolates a real
+    consistency boundary: strong verify must check physical AND optional
+    logical commitments, without requiring all old archives to have both.
+    """
+    original = base64.b64decode(record["archive_base64"], validate=True)
+    magic, version, flags, index_len, raw_len, physical_len, _ = HDR.unpack_from(original)
+    assert (magic, version, flags) == (MAGIC, VERSION, 0)
+    index = msgpack.unpackb(zd(original[HDR.size:HDR.size + index_len], raw_len), raw=False)
+    assert len(index["files"]) == 1 and index["files"][0][5] is None
+    physical = original[HDR.size + index_len:HDR.size + index_len + physical_len]
+    assert len(physical) == physical_len
+
+    original_digest = bytes.fromhex(record["logical_sha256"])
+    foreign_digest = sha(b"J24I27 fixed independent contradictory index digest")
+    assert foreign_digest != original_digest
+    for case, digest, is_invalid in (
+        ("absent", None, False),
+        ("empty", b"", False),
+        ("present-matching", original_digest, False),
+        ("present-contradictory", foreign_digest, True),
+    ):
+        index["files"][0][5] = digest
+        raw_index = msgpack.packb(index, use_bin_type=True)
+        comp_index = zc(raw_index, 12)
+        h = sha(raw_index)
+        header = HDR.pack(MAGIC, VERSION, 0, len(comp_index),
+                          len(raw_index), len(physical), h)
+        footer = FTR.pack(FMAGIC, 0, 1, 0, 0, len(comp_index),
+                          len(raw_index), 0, h)
+        path = tmp_path / f"present-sha-{record['codec']}-{case}.cmpct"
+        path.write_bytes(header + comp_index + physical + comp_index + footer)
+        assert preflight_archive(path)["files"] == 1
+        with CMPCT(path) as ar:
+            member = ar.read(record["name"])
+            assert hashlib.sha256(member).digest() == original_digest
+            if is_invalid:
+                with pytest.raises(IOError, match="SHA-256.*verification failure"):
+                    ar.verify()
+            else:
+                assert ar.verify() == 1
