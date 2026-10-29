@@ -8,6 +8,7 @@ on:
       - "agent/phased3-v031-j24i16-*"
     paths:
       - "tests/research/j24i16_win32_ancestor_junction.py"
+      - "tests/research/j24i16_independent_receipt.py"
       - ".github/workflows/v031-j24i16-win32-ancestor-junction.yml"
       - "docs/v031-research/2026-10-29-j24i16-*.md"
   workflow_dispatch:
@@ -54,13 +55,22 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install .
-          python -m py_compile tests/research/j24i16_win32_ancestor_junction.py tests/research/j24i15_win32_nofollow_handle.py
+          python -m py_compile tests/research/j24i16_win32_ancestor_junction.py tests/research/j24i15_win32_nofollow_handle.py tests/research/j24i16_independent_receipt.py
       - name: Falsify intermediate NTFS junction source confinement
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP"
           python "$GITHUB_WORKSPACE/tests/research/j24i16_win32_ancestor_junction.py"
+      - name: Independent receipt oracle and nine hostile tamper controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python "$GITHUB_WORKSPACE/tests/research/j24i16_independent_receipt.py" --self-test
+          python "$GITHUB_WORKSPACE/tests/research/j24i16_independent_receipt.py" \
+            --receipt "$CMPCT_J24I16_RECEIPT" \
+            --head "$CMPCT_J24I16_HEAD" \
+            --out "$GITHUB_WORKSPACE/j24i16-evidence/independent-verification.json"
       - name: Preserve original evidence on success or failure
         if: always()
         uses: actions/upload-artifact@v4
