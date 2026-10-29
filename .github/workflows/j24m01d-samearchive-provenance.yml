@@ -6,6 +6,7 @@ on:
     paths:
       - 'docs/v031-research/2026-10-29-j24m01d-*'
       - 'tests/research/j24m01d_*'
+      - 'tests/research/j24m01e_*'
       - 'tests/research/fixtures/j24m01c_fullsuite_failure_r24.b64'
       - 'j24m01d_pytest_probe.py'
       - '.github/workflows/j24m01d-samearchive-provenance.yml'
@@ -17,6 +18,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  linux-rusage-exec-causal-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          persist-credentials: false
+      - name: Source and preregistration
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          test -f docs/v031-research/2026-10-29-j24m01e-rusage-inheritance-prereg.md
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: No-CMPCT kernel fork-exec rusage vs VmHWM discriminator
+        run: python tests/research/j24m01e_rusage_fork_exec.py | tee j24m01e-kernel-receipt.jsonl
+      - name: Persist raw kernel receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24m01e-kernel-rusage-${{ env.EXACT_HEAD }}
+          path: j24m01e-kernel-receipt.jsonl
+          retention-days: 30
+          if-no-files-found: warn
+
   exact-failing-archive-control:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
