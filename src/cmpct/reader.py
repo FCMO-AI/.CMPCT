@@ -498,7 +498,11 @@ class CMPCT:
         t=time.localtime(mtime_ns/1_000_000_000)
         if t.tm_year < 1980:
             return 0, 33
-        # Preserve inherited upper-endpoint/ordinary calendar encoding unchanged.
+        # DOS cannot represent any local calendar year after 2107. Saturate the
+        # *whole* date/time: year-only clamping turns leap day 2108-02-29 into
+        # impossible 2107-02-29. Native CMPCT mtime_ns remains untouched.
+        if t.tm_year > 2107:
+            return 0xBF7D, 0xFF9F  # 2107-12-31 23:59:58
         y=min(2107,max(1980,t.tm_year));mo=min(12,max(1,t.tm_mon));d=min(31,max(1,t.tm_mday))
         zdate=((y-1980)<<9)|(mo<<5)|d;ztime=(t.tm_hour<<11)|(t.tm_min<<5)|(t.tm_sec//2)
         return ztime,zdate
