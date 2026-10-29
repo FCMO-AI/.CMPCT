@@ -77,8 +77,8 @@ def decompress(data: bytes, usize: int) -> bytes:
         return b""  # Historical empty encoded sentinel: no physical frame exists.
     # A nonempty encoded frame must be authenticated even when decoded size is zero.
     # The package-owned Zstd ABI can write 0 bytes into a non-null, 1-byte capacity.
-    src = _src(data); dst = ctypes.create_string_buffer(max(1, usize)); out = _sz()
-    _check(_core.cmpct_codec_zstd_decompress(src, len(data), dst, max(1, usize), ctypes.byref(out)), "Zstd decompress")
+    src = _src(data); cap = 1 if usize == 0 else usize; dst = ctypes.create_string_buffer(cap); out = _sz()
+    _check(_core.cmpct_codec_zstd_decompress(src, len(data), dst, cap, ctypes.byref(out)), "Zstd decompress")
     if out.value != usize:
         raise IOError(f"Zstd size mismatch: {out.value} != {usize}")
     return dst.raw[: out.value]
@@ -89,8 +89,8 @@ def decompress_using_dict(data: bytes, usize: int, dictionary: bytes) -> bytes:
     if usize == 0 and not data:
         return b""  # Preserve legacy zero-byte encoded dictionary payload.
     # Do not skip codec validation when zero logical bytes have a physical frame.
-    src = _src(data); db = _src(dictionary); dst = ctypes.create_string_buffer(max(1, usize)); out = _sz()
-    _check(_core.cmpct_codec_zstd_decompress_using_dict(src, len(data), db, len(dictionary), dst, max(1, usize), ctypes.byref(out)), "Zstd dictionary decompress")
+    src = _src(data); db = _src(dictionary); cap = 1 if usize == 0 else usize; dst = ctypes.create_string_buffer(cap); out = _sz()
+    _check(_core.cmpct_codec_zstd_decompress_using_dict(src, len(data), db, len(dictionary), dst, cap, ctypes.byref(out)), "Zstd dictionary decompress")
     if out.value != usize:
         raise IOError(f"Zstd dictionary size mismatch: {out.value} != {usize}")
     return dst.raw[: out.value]
@@ -112,8 +112,8 @@ class DictDecoder:
         if not self._handle:
             raise RuntimeError("Zstd dictionary decoder is closed")
         # A compressed frame claiming zero logical bytes is still codec input.
-        src = _src(data); dst = ctypes.create_string_buffer(max(1, usize)); out = _sz()
-        _check(_core.cmpct_codec_zstd_dict_decoder_decompress(self._handle, src, len(data), dst, max(1, usize), ctypes.byref(out)), "Zstd dictionary decompress")
+        src = _src(data); cap = 1 if usize == 0 else usize; dst = ctypes.create_string_buffer(cap); out = _sz()
+        _check(_core.cmpct_codec_zstd_dict_decoder_decompress(self._handle, src, len(data), dst, cap, ctypes.byref(out)), "Zstd dictionary decompress")
         if out.value != usize:
             raise IOError(f"Zstd dictionary size mismatch: {out.value} != {usize}")
         return dst.raw[: out.value]
