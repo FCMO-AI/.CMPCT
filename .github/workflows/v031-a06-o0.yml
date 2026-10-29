@@ -43,9 +43,26 @@ jobs:
               files=x["files"]
               assert len(files)==32 and x["correct_exact_reconstruction"]
               assert sum(f["size"] for f in files)==x["logical_bytes"]
-              for f in files:
-                  actual=hashlib.sha256(pathlib.Path(f["path"]).read_bytes()).hexdigest()
+              raw=[pathlib.Path(f["path"]).read_bytes() for f in files]
+              for i,f in enumerate(files):
+                  actual=hashlib.sha256(raw[i]).hexdigest()
                   assert f["sha256"]==actual,(f["path"],actual)
+                  refs=f["references"]
+                  assert f["reference_count"]==len(refs)
+                  assert f["copy_bytes"]==sum(r["end"]-r["start"] for r in refs)
+                  if f["root"]:
+                      assert refs==[]
+                      continue
+                  recovered=bytearray();pos=0
+                  for r in refs:
+                      a,b,src,off=r["start"],r["end"],r["source"],r["source_start"]
+                      assert 0<=pos<=a<b<=len(raw[i]) and src<i
+                      assert files[src]["root"]
+                      assert 0<=off<=off+b-a<=len(raw[src])
+                      recovered+=raw[i][pos:a]+raw[src][off:off+b-a]
+                      pos=b
+                  recovered+=raw[i][pos:]
+                  assert bytes(recovered)==raw[i],f["path"]
               assert x["complete_candidate_bytes_lower_bound"]-x["solid_zstd19_bytes"]==x["candidate_delta_vs_solid"]
               assert x["complete_candidate_bytes_lower_bound"]-x["independent_zstd19_plus_16B_per_file"]==x["candidate_delta_vs_independent"]
           print("manifest/arithmetic PASS")
