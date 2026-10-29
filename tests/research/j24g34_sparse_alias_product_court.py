@@ -96,6 +96,17 @@ def metadata_snapshot(reader) -> dict:
 def child(source: Path, output: Path, receipt: Path, size: int, alias: bool) -> None:
     from cmpct.reader import CMPCT
     from cmpct.transactions import compact_archive
+    import cmpct.reader as reader_module
+    installed_path = Path(reader_module.__file__).resolve()
+    installed_bytes = installed_path.read_bytes()
+    installed_blob = hashlib.sha1(
+        b"blob " + str(len(installed_bytes)).encode("ascii") + b"\0" + installed_bytes
+    ).hexdigest()
+    expected_blob = os.environ.get("J24G34_EXPECTED_READER_BLOB", READER_BLOB)
+    assert installed_blob == expected_blob, (
+        "samewire historical/candidate Reader provenance mismatch",
+        str(installed_path), installed_blob, expected_blob
+    )
     source_sha = digest(source)
     t0 = time.perf_counter_ns()
     c0 = time.process_time_ns()
@@ -137,6 +148,8 @@ def child(source: Path, output: Path, receipt: Path, size: int, alias: bool) -> 
         "exact_sparse_owner": True,
         "genuine_hardlink_alias": alias,
         "release_credit": 0,
+        "installed_reader_git_blob": installed_blob,
+        "installed_reader_path": str(installed_path),
     }
     receipt.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n")
     print(json.dumps(record, sort_keys=True))
