@@ -59,6 +59,11 @@ def fingerprint(manifest: dict, *, root: Path = ROOT) -> tuple[str, list[str]]:
             if not path.is_file() and not path.is_symlink():
                 continue
             relative = path.relative_to(root).as_posix()
+            # Cargo generates Rust/C/header sources beneath target/ during package
+            # installation. They are not canonical Git source and their build hashes
+            # vary by runner; never let them contaminate candidate source identity.
+            if relative.startswith("native/") and "target" in PurePosixPath(relative).parts:
+                continue
             if relative.startswith("integrations/android/") and (
                 "/build/" in relative or "/jniLibs/" in relative
             ):
