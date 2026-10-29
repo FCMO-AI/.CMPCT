@@ -33,6 +33,23 @@ impl Archive {
     fn complete_member_identity(&self, entry_index: usize) -> Result<[u8; 32], CmpctError> {
         let entry = self.entries.get(entry_index).ok_or(CmpctError::Range)?;
         if let Some(hash) = entry.logical_hash {
+            // The index SHA is an additional commitment, not an override for CMA4.
+            // RAW direct range reads intentionally avoid hashing unrequested bytes;
+            // full verification must still reject a matching re-signed row SHA when
+            // the physical blob's separately committed header SHA disagrees.
+            if let Storage::Direct(index) = &entry.storage {
+                let blob = self.blobs.get(*index).ok_or_else(|| {
+                    CmpctError::Schema("direct member references missing blob".into())
+                })?;
+                if blob.usize != entry.size {
+                    return Err(CmpctError::BlobHeader);
+                }
+                let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
+                let (_, physical_hash) = self.checked_blob_layout(blob, &mut file)?;
+                if physical_hash != hash {
+                    return Err(CmpctError::MemberHash);
+                }
+            }
             return Ok(hash);
         }
         match &entry.storage {
