@@ -1,0 +1,81 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24I16 Win32 ancestor junction custody court
+
+on:
+  push:
+    branches:
+      - "agent/phased3-v031-j24i16-*"
+    paths:
+      - "tests/research/j24i16_win32_ancestor_junction.py"
+      - "tests/research/j24i16_independent_receipt.py"
+      - ".github/workflows/v031-j24i16-win32-ancestor-junction.yml"
+      - "docs/v031-research/2026-10-29-j24i16-*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i16-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  win32-ancestor:
+    name: Installed Windows primitive ancestor-junction proof
+    runs-on: windows-2022
+    timeout-minutes: 15
+    env:
+      CMPCT_J24I16_HEAD: ${{ github.sha }}
+      CMPCT_J24I16_CHECKOUT: ${{ github.workspace }}
+      CMPCT_J24I16_RECEIPT: ${{ github.workspace }}/j24i16-evidence/receipt.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CMPCT_J24I16_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert exact lineage and no product change
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CMPCT_J24I16_HEAD"
+          git merge-base --is-ancestor 8d4343defe2918257e153654f1e59cdb7253f265 HEAD
+          git diff --exit-code 8d4343defe2918257e153654f1e59cdb7253f265 HEAD -- src/ native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md docs/PRE1_RELEASE_POLICY.md benchmarks/
+          mkdir -p "$GITHUB_WORKSPACE/j24i16-evidence"
+          git rev-parse HEAD > "$GITHUB_WORKSPACE/j24i16-evidence/head.txt"
+          git rev-parse HEAD:src/cmpct/builder.py > "$GITHUB_WORKSPACE/j24i16-evidence/unchanged-builder-blob.txt"
+          git hash-object tests/research/j24i16_win32_ancestor_junction.py > "$GITHUB_WORKSPACE/j24i16-evidence/instrument-blob.txt"
+          git hash-object tests/research/j24i15_win32_nofollow_handle.py > "$GITHUB_WORKSPACE/j24i16-evidence/inherited-handle-helper-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install actual source package without checkout import
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile tests/research/j24i16_win32_ancestor_junction.py tests/research/j24i15_win32_nofollow_handle.py tests/research/j24i16_independent_receipt.py
+      - name: Falsify intermediate NTFS junction source confinement
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i16_win32_ancestor_junction.py"
+      - name: Independent receipt oracle and nine hostile tamper controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python "$GITHUB_WORKSPACE/tests/research/j24i16_independent_receipt.py" --self-test
+          python "$GITHUB_WORKSPACE/tests/research/j24i16_independent_receipt.py" \
+            --receipt "$CMPCT_J24I16_RECEIPT" \
+            --head "$CMPCT_J24I16_HEAD" \
+            --out "$GITHUB_WORKSPACE/j24i16-evidence/independent-verification.json"
+      - name: Preserve original evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i16-win32-ancestor-${{ github.sha }}
+          path: j24i16-evidence/
+          if-no-files-found: warn
+          retention-days: 90
