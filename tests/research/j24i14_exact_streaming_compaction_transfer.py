@@ -102,13 +102,15 @@ def negative_child(mode: str, src: Path, dst: Path, receipt: Path) -> None:
         apply_exact_donor()
     from cmpct.transactions import compact_archive
     before = digest(dst)
+    source_before = digest(src)
     try:
         compact_archive(src, dst)
     except Exception as exc:
         record = {"mode": mode, "rejected": True, "exception": type(exc).__name__,
+                  "exception_message": str(exc)[:240],
                   "destination_preserved": digest(dst) == before,
-                  "source_preserved": True}
-        assert record["destination_preserved"]
+                  "source_preserved": digest(src) == source_before}
+        assert record["destination_preserved"] and record["source_preserved"]
         receipt.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n")
         return
     raise AssertionError("corrupt source reached publication")
