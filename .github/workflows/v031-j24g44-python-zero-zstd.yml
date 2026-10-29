@@ -8,6 +8,7 @@ on:
       - "src/cmpct/native_codec.py"
       - "tests/test_j24g44_zero_encoded_python_codec.py"
       - "research/j24g44/**"
+      - "research/j24g45/**"
       - "docs/v031-research/*j24g44*"
       - ".github/workflows/v031-j24g44-python-zero-zstd.yml"
   workflow_dispatch:
@@ -73,6 +74,12 @@ jobs:
           set -euo pipefail
           python research/j24g44/detached_zero_encoded_wire_audit.py --artifacts j24g44-evidence --output j24g44-evidence/detached-wire-result.json 2>&1 | tee j24g44-evidence/detached-wire.log
           test -s j24g44-evidence/detached-wire-result.json
+      - name: Independent borrowed-input source allocation probe (research-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g45/borrowed_input_oracle.py j24g44-evidence/borrowed-input-oracle.json 2>&1 | tee j24g44-evidence/borrowed-input-oracle.log
+          test -s j24g44-evidence/borrowed-input-oracle.json
       - name: Preserve exact-host binary archive specimens and diagnosis, even on failure
         if: always()
         uses: actions/upload-artifact@v4
