@@ -26,4 +26,4 @@ jobs:
       - run: python research/j24i36/audit_fixed_crc.py --vectors tests/conformance/v24-direct-codecs.json --case-dir j24i36-cases
       - run: cargo test --locked --manifest-path native/cmpct-core/Cargo.toml --test j24i36_fused_crc_court j24i36_frozen_direct_codecs_reject_crc_only_mutation -- --ignored --nocapture
         env:
-          J24I36_CASE_DIR: j24i36-cases
+          J24I36_CASE_DIR: ${{ github.workspace }}/j24i36-cases
