@@ -138,7 +138,11 @@ def evaluate(root: Path, out: Path, side: str) -> None:
             try: codec.wavflac_compress(pcm)
             except MemoryError: pass
             else: raise AssertionError("MemoryError must not be swallowed")
+        for failure in (ImportError("missing optional audio"), OSError("unloadable optional audio")):
+            with mock.patch.object(codec, "_audio_modules", side_effect=failure):
+                assert codec.wavflac_compress(pcm) is None, type(failure).__name__
         diag["injected_backend_refusal"]="fallback"
+        diag["injected_optional_import_error"]="fallback"
         diag["injected_MemoryError"]="propagated"
     else:
         pcm = (root/"pcm32_stereo"/"capture.wav").read_bytes()
