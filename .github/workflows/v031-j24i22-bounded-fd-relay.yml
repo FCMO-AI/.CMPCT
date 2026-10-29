@@ -1,0 +1,55 @@
+name: J24I22 r24 Bounded FD Physical Relay Science
+on:
+  pull_request:
+    paths:
+      - 'research/j24i22/**'
+      - 'docs/v031-research/*j24i22*'
+      - '.github/workflows/v031-j24i22-bounded-fd-relay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i22-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-fd-relay-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact source identity
+        run: |
+          git rev-parse HEAD | tee head.txt
+          git hash-object research/j24i22/bounded_fd_relay.py | tee relay-source-blob.txt
+          git hash-object research/j24i22/test_bounded_fd_relay.py | tee court-source-blob.txt
+          python --version
+      - name: Install current CMPCT and run original J24I18 invariant court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          PYTHONPATH=research/j24i18 python research/j24i18/test_relay.py 2>&1 | tee inherited.log
+      - name: Run installed J24I22 resource, hostile and physical courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=research/j24i18:research/j24i22 python research/j24i22/test_bounded_fd_relay.py -v 2>&1 | tee court.log
+      - name: Preserve exact-head source and raw observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i22-bounded-fd-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            head.txt
+            relay-source-blob.txt
+            court-source-blob.txt
+            inherited.log
+            court.log
