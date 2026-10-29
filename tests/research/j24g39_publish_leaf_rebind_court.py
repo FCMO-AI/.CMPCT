@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import platform
 import subprocess
+import shutil
 import sys
 import tempfile
 from unittest.mock import patch
@@ -63,6 +64,12 @@ def main() -> None:
         assert snapshot(control) == expected
         assert sha(source) == source_sha
         control_sha = sha(control)
+        artifacts = os.environ.get("CMPCT_J24G39_ARTIFACTS")
+        artifact_dir = Path(artifacts) if artifacts else None
+        if artifact_dir is not None:
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, artifact_dir / "source.cmpct")
+            shutil.copyfile(control, artifact_dir / "control.cmpct")
 
         outside = root / "outside-sentinel.bin"
         outside.write_bytes(b"FOREIGN-SENTINEL-DO-NOT-TOUCH")
@@ -138,6 +145,14 @@ else:Path(src).write_bytes(b'J24G39-UNVERIFIED-REGULAR-REPLACEMENT')
                 bad = target.is_symlink() and os.readlink(target) == str(outside)
             else:
                 bad = target.is_file() and not target.is_symlink() and target.read_bytes() == marker
+            if artifact_dir is not None:
+                shutil.copyfile(saved_inode, artifact_dir / f"verified-{kind}.cmpct")
+                if kind == "regular":
+                    shutil.copyfile(target, artifact_dir / "published-regular.bin")
+                else:
+                    (artifact_dir / "published-symlink.target").write_text(
+                        os.readlink(target), encoding="utf-8"
+                    )
             results.append({
                 "case": kind,
                 "publication_intercepted": True,
@@ -152,6 +167,8 @@ else:Path(src).write_bytes(b'J24G39-UNVERIFIED-REGULAR-REPLACEMENT')
                 "stage_name": observed[0]["stage"],
             })
 
+        if artifact_dir is not None:
+            shutil.copyfile(outside, artifact_dir / "outside-sentinel.bin")
         negative = all(r["published_unverified_entry"] and r["operation_error"] is None for r in results)
     output = {
         "schema": "J24G39-real-r24-stage-leaf-publication-v1",
