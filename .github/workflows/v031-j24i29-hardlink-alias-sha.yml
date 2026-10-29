@@ -60,7 +60,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install -e .
+          python -m pip install -e . 'zstandard>=0.22'
           J24I29_RESULTS=j24i29-results.json python research/j24i29/test_hardlink_alias_sha.py 2>&1 | tee j24i29-court.log
       - name: Retain original result/negative evidence
         if: always()
