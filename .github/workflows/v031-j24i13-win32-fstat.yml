@@ -1,0 +1,79 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete-fast-pr-check
+name: J24I13 installed Win32 fstat economics and nofollow boundary
+
+on:
+  push:
+    branches:
+      - "agent/phased3-v031-j24i13-*"
+    paths:
+      - "tests/research/j24i13_win32_fstat_economics.py"
+      - ".github/workflows/v031-j24i13-win32-fstat.yml"
+      - "docs/v031-research/2026-10-29-j24i13-*.md"
+  pull_request:
+    paths:
+      - "tests/research/j24i13_win32_fstat_economics.py"
+      - ".github/workflows/v031-j24i13-win32-fstat.yml"
+      - "docs/v031-research/2026-10-29-j24i13-*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i13-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  descriptor-economics:
+    name: Installed descriptor identity ABBA (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    env:
+      CMPCT_J24I13_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      CMPCT_J24I13_CHECKOUT: ${{ github.workspace }}
+      CMPCT_J24I13_RECEIPT: ${{ github.workspace }}/j24i13-evidence/receipt.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CMPCT_J24I13_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Source and law custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CMPCT_J24I13_HEAD"
+          git merge-base --is-ancestor f190a566950970895cec54e215538691aa7595ca HEAD
+          git diff --exit-code f190a566950970895cec54e215538691aa7595ca HEAD -- src/ native/ docs/FORMAT.md docs/PERFORMANCE_RELEASE_GATE.md docs/PRE1_RELEASE_POLICY.md benchmarks/
+          mkdir -p "$GITHUB_WORKSPACE/j24i13-evidence"
+          git rev-parse HEAD > "$GITHUB_WORKSPACE/j24i13-evidence/head.txt"
+          git rev-parse HEAD:src/cmpct/builder.py > "$GITHUB_WORKSPACE/j24i13-evidence/unchanged-builder-blob.txt"
+          git hash-object tests/research/j24i13_win32_fstat_economics.py > "$GITHUB_WORKSPACE/j24i13-evidence/instrument-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install actual package and compile research instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python -m py_compile tests/research/j24i13_win32_fstat_economics.py
+      - name: Run source-equivalent 4-round ABBA and AA controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          python "$GITHUB_WORKSPACE/tests/research/j24i13_win32_fstat_economics.py"
+      - name: Preserve raw decisions on success and failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i13-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: j24i13-evidence/
+          if-no-files-found: warn
+          retention-days: 90
