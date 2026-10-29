@@ -1,0 +1,96 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: J24I35 Native r24 CMA4 CRC Custody Scientific Court
+
+on:
+  pull_request:
+    paths:
+      - 'research/j24i35/**'
+      - 'native/cmpct-core/tests/j24i35_crc_court.rs'
+      - 'docs/v031-research/*j24i35*'
+      - '.github/workflows/v031-j24i35-native-cma4-crc-court.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: j24i35-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-cma4-crc-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Pin immutable parent and instrument sources
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git hash-object native/cmpct-core/src/lib.rs)" = "463c50633be74423e92a074b7d7577db6a4b0cf9"
+          test "$(git hash-object native/cmpct-core/src/vzip_dispatch.rs)" = "cd1a367761465cbba3e8054f743af551c1e560e1"
+          test "$(git hash-object research/j24i30/generate_symlink_wire.py)" = "802866103c607febc8da95135a27c4ca50aa3b3a"
+          test "$(git hash-object research/j24i30/audit_symlink_wire.py)" = "8b181476d090de2cd3c91335f824eb7ec4821329"
+          git rev-parse HEAD | tee j24i35-head.txt
+          git hash-object research/j24i35/generate_crc_variant.py | tee j24i35-generator-blob.txt
+          git hash-object research/j24i35/audit_crc_wire.py | tee j24i35-referee-blob.txt
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i35/|native/cmpct-core/tests/j24i35_crc_court[.]rs|docs/v031-research/.*j24i35|[.]github/workflows/v031-j24i35-native-cma4-crc-court[.]yml)'; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
+      - name: Build real r24 wire and independent CRC-only refutation
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . zstandard
+          python research/j24i30/generate_symlink_wire.py --output j24i35-observations 2>&1 | tee j24i35-original.log
+          python research/j24i35/generate_crc_variant.py --case-dir j24i35-observations 2>&1 | tee j24i35-python.log
+          python research/j24i35/audit_crc_wire.py --case-dir j24i35-observations 2>&1 | tee j24i35-referee.log
+          test -s j24i35-observations/j24i35-python-observations.json
+          test -s j24i35-observations/j24i35-detached-referee.json
+      - name: Execute compiled native library on exact original and CRC-only attack
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        env:
+          J24I35_CASE_DIR: ${{ github.workspace }}/j24i35-observations
+        run: |
+          set -euo pipefail
+          cargo test --manifest-path native/cmpct-core/Cargo.toml --test j24i35_crc_court -- --ignored --nocapture 2>&1 | tee j24i35-native.log
+          grep -q 'J24I35_GENUINE:verified_payload_count=1' j24i35-native.log
+          grep -q 'J24I35_NATIVE_CRC_MISMATCH_ACCEPTED:verified_payload_count=1' j24i35-native.log
+          grep -q 'J24I35_PHYSICAL_PAYLOAD_REJECTED:MemberHash' j24i35-native.log
+      - name: Preserve exact source, hostile wire and full negative receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i35-cma4-crc-ubuntu-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            j24i35-head.txt
+            j24i35-generator-blob.txt
+            j24i35-referee-blob.txt
+            j24i35-original.log
+            j24i35-python.log
+            j24i35-referee.log
+            j24i35-native.log
+            j24i35-observations/
