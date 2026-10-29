@@ -88,11 +88,12 @@ class BoundedRelayTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             d=pathlib.Path(td);root=d/"tree";root.mkdir()
             (root/"original.bin").write_bytes(b"ORIGINAL-"*1024)
+            (root/"obsolete.bin").write_bytes(b"UNREFERENCED-INITIAL-"*1024)
             os.link(root/"original.bin",root/"alias.bin")
             src=d/"input.cmpct";dst=d/"relay.cmpct"
             Builder(root,reproducible=True).build(src)
             nextfile=d/"next.bin";nextfile.write_bytes(b"REPLACED-"*1024)
-            append_update(src,"original.bin",nextfile)
+            append_update(src,"obsolete.bin",nextfile)
             receipt=br.relay(src,dst)
             self.assertGreater(receipt["dead"],0)
             self.assertLess(dst.stat().st_size,src.stat().st_size)
