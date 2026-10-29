@@ -27,9 +27,11 @@ def sha(raw: bytes) -> str:
 
 def mkjunction(link: Path, target: Path) -> str:
     """NTFS directory junction, not an ordinary file symlink; no admin needed."""
-    command = f'mklink /J "{link}" "{target}"'
+    # Pass arguments directly. A command string with nested quoted paths is
+    # incorrectly re-quoted by Windows cmd /c, causing ERROR_INVALID_NAME.
+    # All paths are generated under the runner's temporary directory.
     proc = subprocess.run(
-        ["cmd.exe", "/d", "/c", command],
+        ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(target)],
         capture_output=True, text=True, check=False, timeout=15
     )
     if proc.returncode:
