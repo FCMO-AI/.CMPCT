@@ -485,7 +485,16 @@ class CMPCT:
         for row in self.files:
             if row[1]==K_DIR:continue
             raw=self.read(row[0]);want=self.file_sha256(row[0])
-            if sha(raw)!=want:raise IOError(f'SHA-256 verification failure: {row[0]}')
+            actual=sha(raw)
+            if actual!=want:raise IOError(f'SHA-256 verification failure: {row[0]}')
+            # r24 permits absent logical SHA on direct S_BLOB owners, as in the fixed
+            # independent direct-codec vectors. When present, the indexed SHA is an
+            # *additional* content commitment, not a replacement for the physical
+            # blob-header SHA. Reuse the already computed digest; do not re-hash bytes.
+            if row[1] in (K_FILE,K_SYMLINK) and row[6][0]==S_BLOB:
+                declared=row[5]
+                if declared not in (None,b'') and actual!=declared:
+                    raise IOError(f'indexed SHA-256 verification failure: {row[0]}')
             n+=1
         return n
     def _zip_dos_time(self,mtime_ns:int):
