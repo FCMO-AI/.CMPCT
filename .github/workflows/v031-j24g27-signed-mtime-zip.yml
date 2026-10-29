@@ -1,0 +1,122 @@
+# ci-lane: fast
+name: CMPCT J24G27 signed r24 mtime legacy ZIP export portability court
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g27-signed-mtime-zip-crosshost-20261029
+  pull_request:
+    paths:
+      - 'tests/research/j24g27_signed_mtime_zip_court.py'
+      - '.github/workflows/v031-j24g27-signed-mtime-zip.yml'
+      - 'docs/v031-research/2026-10-29-j24g27-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24g27-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  first-party-physical-vector:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact scientific source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify immutable released source and full tested HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 80c358f8824ec1b20d349c92ed94c898090969b0 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 663ef0922992b1fbb8f19e6eea88d55c10a56044
+          test -e docs/v031-research/2026-10-29-j24g27-signed-mtime-zip-prereg.md
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install original product outside repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j24g27-installed" "$GITHUB_WORKSPACE"
+          echo "PYTHONPATH=$RUNNER_TEMP/j24g27-installed" >> "$GITHUB_ENV"
+      - name: Generate physical r24 inputs from real Builder on Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/research/j24g27_signed_mtime_zip_court.py generate --output "$RUNNER_TEMP/j24g27-physical"
+          cat "$RUNNER_TEMP/j24g27-physical/manifest.json"
+      - name: Upload immutable physical inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g27-physical-r24
+          path: |
+            ${{ runner.temp }}/j24g27-physical/*.cmpct
+            ${{ runner.temp }}/j24g27-physical/manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+  fixed-wire-court:
+    needs: first-party-physical-vector
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact scientific source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify original shipping Reader, Builder and tested HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 663ef0922992b1fbb8f19e6eea88d55c10a56044
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install identical released package outside repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/j24g27-installed" "$GITHUB_WORKSPACE"
+          echo "PYTHONPATH=$RUNNER_TEMP/j24g27-installed" >> "$GITHUB_ENV"
+      - name: Download exact same first-party physical inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: j24g27-physical-r24
+          path: ${{ runner.temp }}/j24g27-inputs
+      - name: Run fixed-source Reader court twice in fresh processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/research/j24g27_signed_mtime_zip_court.py court --input "$RUNNER_TEMP/j24g27-inputs" --output "$RUNNER_TEMP/j24g27-court" --repeat 1
+          python tests/research/j24g27_signed_mtime_zip_court.py court --input "$RUNNER_TEMP/j24g27-inputs" --output "$RUNNER_TEMP/j24g27-court" --repeat 2
+      - name: Upload raw court outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g27-${{ matrix.os }}-receipts
+          path: ${{ runner.temp }}/j24g27-court/*.json
+          if-no-files-found: warn
+          retention-days: 30
