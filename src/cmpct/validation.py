@@ -14,6 +14,7 @@ from pathlib import Path
 import msgpack
 
 from .path_policy import canonical_logical_path
+from .journal_replay import JournalReplayLimitError, _apply_journal_ops
 
 from .codec import (
     BHDR, BMAGIC, CODEC_DEFLATE, CODEC_RAW, CODEC_WAVFLAC, CODEC_ZSTD, CODEC_ZSTDDICT,
@@ -172,6 +173,13 @@ def _decode_footer(f, archive_size: int, pos: int, limits: ParserLimits):
 
 
 def _apply_delta(index: dict, delta: dict, limits: ParserLimits) -> None:
+    """Apply a bounded signed delta using exactly the Reader's path-identity replay.
+
+    The old structural path updated filenames without moving positional xattrs or
+    owner overrides, so it could reject a valid archive or attest metadata on
+    the wrong surviving file. Validate untrusted op syntax and file budgets here;
+    the shared replay owns *semantic* identity across every consumer.
+    """
     if not isinstance(delta, dict):
         raise ValidationError("transaction delta is not a map")
     new_blobs = delta.get("blobs", [])
@@ -184,8 +192,8 @@ def _apply_delta(index: dict, delta: dict, limits: ParserLimits) -> None:
         raise ValidationError("checkpoint lacks files/blobs arrays")
     if len(blobs) + len(new_blobs) > limits.max_blobs:
         raise ResourceLimitError("blob count exceeds parser limit")
-    blobs.extend(new_blobs)
-
+    # Do not let the more trusting Reader helper convert a malformed signed
+    # operation into an unintended different operation or silently skip it.
     for op in ops:
         if not isinstance(op, list) or not op:
             raise ValidationError("malformed transaction operation")
@@ -194,23 +202,19 @@ def _apply_delta(index: dict, delta: dict, limits: ParserLimits) -> None:
             row = op[1]
             if not isinstance(row, list) or not row or not isinstance(row[0], str):
                 raise ValidationError("malformed put operation")
-            for i, current in enumerate(files):
-                if isinstance(current, list) and current and current[0] == row[0]:
-                    files[i] = row
-                    break
-            else:
-                files.append(row)
-                if len(files) > limits.max_files:
-                    raise ResourceLimitError("file count exceeds parser limit")
         elif tag == "del" and len(op) == 2 and isinstance(op[1], str):
-            files[:] = [row for row in files if not (isinstance(row, list) and row and row[0] == op[1])]
+            pass
         elif tag == "ren" and len(op) == 3 and all(isinstance(x, str) for x in op[1:]):
-            for row in files:
-                if isinstance(row, list) and row and row[0] == op[1]:
-                    row[0] = op[2]
-                    break
+            pass
         else:
             raise ValidationError(f"unsupported transaction operation {tag!r}")
+    blobs.extend(new_blobs)
+    try:
+        _apply_journal_ops(index, ops, max_files=limits.max_files)
+    except JournalReplayLimitError as exc:
+        raise ResourceLimitError(str(exc)) from exc
+    except (TypeError, ValueError, IndexError, KeyError) as exc:
+        raise ValidationError(f"malformed signed journal replay: {exc}") from exc
 
 
 def _index_from_footer(f, archive_size: int, start: int, limits: ParserLimits):
