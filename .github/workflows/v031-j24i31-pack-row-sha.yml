@@ -17,6 +17,9 @@ concurrency:
   group: j24i31-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   installed-three-host:
     name: scientific-fixed-pack (${{ matrix.os }})
@@ -27,6 +30,8 @@ jobs:
         os: [ubuntu-24.04, macos-14, windows-2022]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Restore byte-identical repository blobs on Windows
         shell: bash
         run: |
@@ -68,6 +73,8 @@ jobs:
               assert installed == expect[path], (path, installed)
               receipts[path + ':installed'] = installed
           sha = subprocess.check_output(['git', 'rev-parse','HEAD'], text=True).strip()
+          import os
+          assert sha == os.environ['EVIDENCE_HEAD'], (sha, os.environ['EVIDENCE_HEAD'])
           print(json.dumps({'head':sha, 'blobs': receipts, 'scientific_scope':'frozen S_PACK row-SHA contradiction, not product success'},sort_keys=True))
           PY
       - name: Run authentic scientific negative and record full stdout
