@@ -48,7 +48,7 @@ jobs:
           git hash-object native/cmpct-core/tests/j24i30_symlink_verify.rs | tee j24i30-rust-test-blob.txt
           git hash-object research/j24i30/generate_symlink_wire.py | tee j24i30-python-test-blob.txt
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i30/|native/cmpct-core/tests/j24i30_symlink_verify\\.rs|docs/v031-research/.*j24i30|\\.github/workflows/v031-j24i30-native-symlink-verify\\.yml)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(research/j24i30/|native/cmpct-core/tests/j24i30_symlink_verify[.]rs|docs/v031-research/.*j24i30|[.]github/workflows/v031-j24i30-native-symlink-verify[.]yml)'; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
