@@ -1,0 +1,108 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: J24G49 exact-source independent fsmeta replay state-machine court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24g49-fsmeta-metamorphic-20261029
+  pull_request:
+    branches:
+      - agent/phased2-v031-j24g47-positional-fsmeta-rekey-20261029
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24g49-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detached-name-keyed-model:
+    name: 100k replay/batch independent model / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 28
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate, not merge ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prove source pin and preregistration chronology
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git merge-base --is-ancestor 893aac3f6b7b54e89d71af6970405ff5fc71aef7 HEAD
+          git merge-base --is-ancestor 304962b0361256566d6dba3eb83bfca9c1d4fe5f HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 84f1c0602c7a9679cd79a0a5de984b169a467903
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 3eef7fdc3f6deca5ddd6d9edf1292c7e2c864f11
+          test "$(git rev-parse HEAD:tests/test_v031_j24g47_journal_fsmeta_identity.py)" = 9729a744de77ed480615b8d42c1b4092492e4408
+          test "$(git rev-parse HEAD:tests/test_v031_j24g49_fsmeta_metamorphic.py)" = 87b785527899c88c8d31690e10e1cefaac7fd064
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/exact-head.txt
+          git rev-parse HEAD:src/cmpct/reader.py > evidence/reader-git-blob.txt
+          git rev-parse HEAD:src/cmpct/transactions.py > evidence/writer-git-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact repository-owned codec and independent pytest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . pytest
+          python -m pip freeze | sort > evidence/pip-freeze.txt
+      - name: Check installed Reader and Writer bytes (not merely branch labels)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import cmpct.reader as reader, cmpct.transactions as tx
+          for path, module in (('src/cmpct/reader.py',reader),
+                               ('src/cmpct/transactions.py',tx)):
+              source=Path(path).read_bytes().replace(b'\r\n',b'\n')
+              installed=Path(module.__file__).read_bytes().replace(b'\r\n',b'\n')
+              assert source==installed, (path,module.__file__)
+              print('INSTALLED_SHA256',path,hashlib.sha256(source).hexdigest())
+          PY
+      - name: Run 100k independent path-keyed trials, 400k+ operations and hostile controls
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q --noconftest tests/test_v031_j24g49_fsmeta_metamorphic.py --junitxml=evidence/pytest.xml > evidence/pytest.log 2>&1
+          rc=$?
+          cat evidence/pytest.log
+          printf '%s\n' "$rc" > evidence/pytest-exit-code.txt
+          exit "$rc"
+      - name: Prove exactly one real executed PASS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=ET.parse('evidence/pytest.xml').getroot()
+          matches=[x for x in root.iter('testcase')
+                   if x.get('name')=='test_name_keyed_journal_rekey_100k_batch_split_metamorphic'
+                   and x.get('classname')=='tests.test_v031_j24g49_fsmeta_metamorphic']
+          assert len(matches)==1,[(x.get('classname'),x.get('name')) for x in root.iter('testcase')]
+          assert not [child for child in matches[0] if child.tag in ('failure','error','skipped')]
+          assert 'J24G49_COURT_PASS' in Path('evidence/pytest.log').read_text()
+          assert Path('evidence/pytest-exit-code.txt').read_text().strip()=='0'
+          print('PASS: exact J24G49 test executed in installed package')
+          PY
+      - name: Preserve original sources, pytest XML, raw failure and version receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g49-${{ matrix.os }}-${{ env.EXACT_HEAD }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
