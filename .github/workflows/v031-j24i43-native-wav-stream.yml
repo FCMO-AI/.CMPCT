@@ -48,8 +48,10 @@ jobs:
           mkdir -p "$old/native/cmpct-core/src/bin" native/cmpct-core/src/bin
           cp research/j24i43/native_verify_probe.rs "$old/native/cmpct-core/src/bin/j24i43_probe.rs"
           cp research/j24i43/native_verify_probe.rs native/cmpct-core/src/bin/j24i43_probe.rs
+          cp research/j24i43/native_rebind_probe.rs native/cmpct-core/src/bin/j24i43_rebind.rs
           CARGO_TARGET_DIR="$RUNNER_TEMP/j24i43-old-target" cargo build --release --locked --manifest-path "$old/native/cmpct-core/Cargo.toml" --bin j24i43_probe
           CARGO_TARGET_DIR="$RUNNER_TEMP/j24i43-new-target" cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i43_probe
+          CARGO_TARGET_DIR="$RUNNER_TEMP/j24i43-new-target" cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i43_rebind
       - name: Authentic WAV corpus and detached physical audit
         shell: bash
         run: |
@@ -66,6 +68,11 @@ jobs:
           set -euo pipefail
           : > j24i43-raw.txt
           : > j24i43-hostile.txt
+          "$RUNNER_TEMP/j24i43-new-target/release/j24i43_rebind" \
+            "$PWD/j24i43-cases/builder-wav-8m.cmpct" \
+            "$PWD/j24i43-cases/badmagic-original-container-8m.cmpct" \
+            "$RUNNER_TEMP/j24i43-rebind" | tee j24i43-rebind.txt
+          grep -q '^J24I43_REBIND_PASS' j24i43-rebind.txt
           for lane in A B B A B A A B; do
             if [ "$lane" = A ]; then exe="$RUNNER_TEMP/j24i43-old-target/release/j24i43_probe"; else exe="$RUNNER_TEMP/j24i43-new-target/release/j24i43_probe"; fi
             for mib in 8 32; do
