@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: j24i18-\${{ github.event.pull_request.number || github.ref }}
+  group: j24i18-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: j24i18-r24-physical-relay-\${{ github.run_id }}-\${{ github.run_attempt }}
+          name: j24i18-r24-physical-relay-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           retention-days: 30
           path: |
