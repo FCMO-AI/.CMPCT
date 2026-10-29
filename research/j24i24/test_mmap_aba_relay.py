@@ -86,6 +86,38 @@ class SharedMmapABACourt(unittest.TestCase):
             print('J24I24_PERSISTENT', json.dumps({"rejected":True,
                   "source_sha_changed":True,"destination_absent":True}), flush=True)
 
+    def test_direct_row_vs_physical_blob_digest(self):
+        """Builder-independent contradiction on unchanged v0.30 Reader: B is
+        physically valid, while both signed index copies still identify A."""
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td)/'direct-contradictory.cmpct'
+            make_wire(src, PAYLOAD_A)
+            original = physical_snapshot(src)
+            wire = bytearray(original['wire'])
+            wire[original['start']:original['end']] = swap_record(PAYLOAD_B)
+            src.write_bytes(wire)
+            changed = physical_snapshot(src)
+            self.assertEqual(original['wire'][:original['start']],
+                             changed['wire'][:changed['start']])
+            self.assertEqual(original['wire'][original['end']:],
+                             changed['wire'][changed['end']:])
+            self.assertEqual(changed['payload'], PAYLOAD_B)
+            self.assertEqual(changed['blob_digest'],
+                             hashlib.sha256(PAYLOAD_B).hexdigest())
+            with CMPCT(src) as reader:
+                signed_row_hash = bytes(reader.by['blob.bin'][5])
+                self.assertEqual(signed_row_hash, hashlib.sha256(PAYLOAD_A).digest())
+                self.assertNotEqual(signed_row_hash,hashlib.sha256(PAYLOAD_B).digest())
+                self.assertEqual(reader.read('blob.bin'), PAYLOAD_B)
+                self.assertEqual(reader.verify(), 1)
+            print('J24I24_DIRECT_ROW_CONTRADICTION',json.dumps({
+                "accepted_by_unchanged_reader":True,
+                "indexed_row_sha":signed_row_hash.hex(),
+                "physical_blob_sha":changed['blob_digest'],
+                "primary_and_tail_indexes_unchanged":True,
+                "physical_raw_sha_crc_valid":True,
+                "wire_bytes":len(changed['wire'])},sort_keys=True),flush=True)
+
     def test_mmap_aba_crosses_source_hash_and_inode_witness(self):
         with tempfile.TemporaryDirectory() as td:
             src, dst = Path(td)/'aba.cmpct', Path(td)/'aba.out'
@@ -131,11 +163,15 @@ class SharedMmapABACourt(unittest.TestCase):
             self.assertEqual(final_source['payload'], PAYLOAD_A)
             self.assertEqual(final_dest['payload'], PAYLOAD_B)
             self.assertNotEqual(final_dest['file_sha256'],final_source['file_sha256'])
-            # CRC and physical SHA of B genuinely pass, so this is not malformed
-            # compressed-input rejection. The *logical* SHA row still binds A.
+            # The first hosted test expected Reader.verify() to reject, but
+            # it ACCEPTED: direct-file file_sha256 trusts the BLOB header
+            # instead of the signed index row[5]. This independent follow-up
+            # was preregistered before changing that failed assertion.
             with CMPCT(dst) as reader:
-                with self.assertRaises((IOError, ValueError, RuntimeError)):
-                    reader.verify()
+                self.assertEqual(bytes(reader.by['blob.bin'][5]),
+                                 hashlib.sha256(PAYLOAD_A).digest())
+                self.assertEqual(reader.read('blob.bin'), PAYLOAD_B)
+                self.assertEqual(reader.verify(), 1)
             print('J24I24_ABA_COUNTEREXAMPLE',json.dumps({
                 "accepted": True, "source_sha_before":initial['file_sha256'],
                 "source_sha_after":final_source['file_sha256'],
@@ -144,7 +180,7 @@ class SharedMmapABACourt(unittest.TestCase):
                 "output_blob_sha":final_dest['blob_digest'],
                 "unchanged_fstat":original_stat==final_stat,
                 "physical_output_self_authenticated":True,
-                "reader_logical_verify_rejected":True,
+                "reader_logical_verify_accepted_mismatched_row":True,
                 "bytes":len(final_dest['wire']), "mutations":observations},sort_keys=True),flush=True)
 
 
