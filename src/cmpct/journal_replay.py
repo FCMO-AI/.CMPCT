@@ -43,6 +43,79 @@ def _validate_journal_ops(ops: list) -> None:
 
 
 
+def _try_indexed_row_mutations(rows: list, ops: list, lineage: dict,
+                               max_files: int | None) -> bool:
+    """Use a name index only when a dry-run proves simple unambiguous semantics.
+
+    The general fallback below deliberately retains historical first-match rename,
+    all-match deletion and transient duplicate handling. This bounded fast path is
+    for large unique-name histories; a collision or limit violation falls back
+    *before* changing a row. Tombstones avoid repeated O(N) delete compaction.
+    """
+    if len(rows) < 64 or len(ops) < 16:
+        return False
+    try:
+        present = {row[0] for row in rows}
+    except (TypeError, IndexError):
+        return False
+    if len(present) != len(rows):
+        return False
+    active = len(rows)
+    for op in ops:
+        kind = op[0]
+        if kind == 'put':
+            name = op[1][0]
+            if name not in present:
+                present.add(name)
+                active += 1
+                if max_files is not None and active > max_files:
+                    return False
+        elif kind == 'del':
+            name = op[1]
+            if name in present:
+                present.remove(name)
+                active -= 1
+        else:  # 'ren' — grammar already admitted the complete operation list.
+            old, new = op[1], op[2]
+            if old not in present:
+                continue
+            if new != old and new in present:
+                return False
+            present.remove(old)
+            present.add(new)
+
+    positions = {row[0]: i for i, row in enumerate(rows)}
+    deleted = False
+    for op in ops:
+        kind = op[0]
+        if kind == 'put':
+            row = op[1]
+            position = positions.get(row[0])
+            if position is None:
+                positions[row[0]] = len(rows)
+                rows.append(row)
+            else:
+                rows[position] = row
+        elif kind == 'del':
+            path = op[1]
+            position = positions.pop(path, None)
+            if position is not None:
+                rows[position] = None
+                deleted = True
+            lineage.pop(path, None)
+        else:
+            old, new = op[1], op[2]
+            position = positions.pop(old, None)
+            if position is not None:
+                rows[position][0] = new
+                positions[new] = position
+                if old in lineage:
+                    lineage[new] = lineage.pop(old)
+    if deleted:
+        rows[:] = [row for row in rows if row is not None]
+    return True
+
+
 def _apply_journal_ops(index: dict, ops: list, *, max_files: int | None = None) -> dict:
     """Apply r24 journal ops while binding positional fsmeta to logical path identity.
 
@@ -70,33 +143,34 @@ def _apply_journal_ops(index: dict, ops: list, *, max_files: int | None = None) 
     # Lineage maps a current path to its original file-row identity. An inserted name
     # has no preexisting metadata, even if an earlier op deleted a homonymous path.
     lineage = {name: name for name in old_names}
-    for op in ops:
-        kind = op[0]
-        if kind == 'put':
-            row = op[1]
-            for i, prior in enumerate(rows):
-                if prior[0] == row[0]:
-                    rows[i] = row
-                    break
+    if not _try_indexed_row_mutations(rows, ops, lineage, max_files):
+        for op in ops:
+            kind = op[0]
+            if kind == 'put':
+                row = op[1]
+                for i, prior in enumerate(rows):
+                    if prior[0] == row[0]:
+                        rows[i] = row
+                        break
+                else:
+                    rows.append(row)
+                    if max_files is not None and len(rows) > max_files:
+                        raise JournalReplayLimitError("journal file count exceeds parser limit")
+            elif kind == 'del':
+                path = op[1]
+                rows[:] = [row for row in rows if row[0] != path]
+                lineage.pop(path, None)
+            elif kind == 'ren':
+                old, new = op[1], op[2]
+                for row in rows:
+                    if row[0] == old:
+                        row[0] = new
+                        if old in lineage:
+                            lineage[new] = lineage.pop(old)
+                        break
             else:
-                rows.append(row)
-                if max_files is not None and len(rows) > max_files:
-                    raise JournalReplayLimitError("journal file count exceeds parser limit")
-        elif kind == 'del':
-            path = op[1]
-            rows[:] = [row for row in rows if row[0] != path]
-            lineage.pop(path, None)
-        elif kind == 'ren':
-            old, new = op[1], op[2]
-            for row in rows:
-                if row[0] == old:
-                    row[0] = new
-                    if old in lineage:
-                        lineage[new] = lineage.pop(old)
-                    break
-        else:
-            # Defensive if the list ever changes after grammar admission.
-            raise JournalReplayAdmissionError(f"unsupported transaction operation {kind!r}")
+                # Defensive if the list ever changes after grammar admission.
+                raise JournalReplayAdmissionError(f"unsupported transaction operation {kind!r}")
     rows.sort(key=lambda row: row[0])
     new_names = [row[0] for row in rows]
     fsmeta = index.get('fsmeta')
