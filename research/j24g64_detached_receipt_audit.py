@@ -45,6 +45,24 @@ def review(document: dict, expected_head: str) -> dict:
         assert edges.get(key, "").startswith("fallback:")
     assert edges.get("future-op-exact-failure") == "matched-exception"
     assert edges.get("file-limit-exact-failure") == "matched-exception"
+    physical = document.get("physical_mixed_public_writer")
+    assert isinstance(physical, dict)
+    assert physical.get("prereg_commit") == "bce038172d6d1c0c68945512bb354b6f25ddef6e"
+    assert physical.get("initial_members") == 128
+    assert physical.get("final_members") == 117
+    assert physical.get("delta_depth") == 63
+    assert physical.get("operation_counts") == {"ren": 21, "del": 21, "put": 21}
+    assert physical.get("physical_footer_count") == 64
+    assert physical.get("admission_route") == "factored"
+    assert physical.get("reader_and_preflight_verified") is True
+    assert re.fullmatch(r"[a-f0-9]{64}", physical.get("source_index_msgpack_sha256", ""))
+    assert physical.get("retained_archive") == "evidence/j24g64b-physical.cmpct"
+    original_file = Path(physical["retained_archive"])
+    assert original_file.is_file()
+    assert original_file.stat().st_size == physical.get("physical_archive_bytes")
+    assert hashlib.sha256(original_file.read_bytes()).hexdigest() == physical.get("physical_archive_sha256")
+    assert physical.get("source", {}).get("head") == expected_head
+    assert physical.get("source", {}).get("sources", {}).get("src/cmpct/journal_replay.py", {}).get("git_blob") == SOURCE
     counts = document.get("differential")
     assert isinstance(counts, dict)
     assert all(type(v) is int and v >= 0 for v in counts.values())
@@ -114,6 +132,7 @@ def _hostile_controls(original: dict, expected_head: str) -> dict:
     attack("phase-order-perturbation", lambda p: p["raw_samples"][0].update(phase=3))
     attack("timing-branch-tampering", lambda p: [v.update(wall_ns=v["wall_ns"] * 3) for v in p["raw_samples"] if v["variant"] == "reference"])
     attack("metadata-records-erased", lambda p: p.update(sparse_xattr_records=0))
+    attack("physical-content-fingerprint-forgery", lambda p: p["physical_mixed_public_writer"].update(physical_archive_sha256="0" * 64))
     attack("identity-lineage-control-falsified", lambda p: p["targeted_semantic_edges"].update({"delete-and-recreate-same-name": "fallback:inconclusive"}))
     attack("differential-count-manipulation", lambda p: p["differential"].update(factored=p["differential"]["factored"] + 1))
     attack("false-product-decision", lambda p: p.update(decision="MIXED_FSMETA_REPLAY_SEED" if p["decision"] != "MIXED_FSMETA_REPLAY_SEED" else "NO_BOUNDED_MIXED_FSMETA_WIN"))
@@ -130,7 +149,7 @@ def main():
     result = review(data, head)
     result["original_receipt_sha256"] = hashlib.sha256(raw).hexdigest()
     result["adversarial"] = _hostile_controls(data, head)
-    assert len(result["adversarial"]) == 9
+    assert len(result["adversarial"]) == 10
     output = Path(sys.argv[3])
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
