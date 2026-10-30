@@ -68,7 +68,7 @@ jobs:
               for filename in sorted(p.glob("cmpct_*.zip")):
                   z.write(filename, arcname=filename.name)
           PY
-      - name: Run 14 hostile admission tests and original provider audit
+      - name: Run 15 hostile admission tests and original provider audit
         shell: bash
         run: |
           set -euo pipefail
@@ -82,7 +82,7 @@ jobs:
           assert len(data["trials"]) == 3
           assert sum(len(x["effects"]) for x in data["trials"]) == 384
           assert sum(len(x["official_cmpct"]) for x in data["trials"]) == 96
-          assert [(v["within_arm_magnitude_crossings"]["cmpct"], v["official_cmpct_positive_reds"]) for v in data["summaries"].values()] == [(5, 2), (14, 5), (0, 0)]
+          assert [(v["within_arm_magnitude_crossings"]["cmpct"], v["official_cmpct_positive_reds"], v["official_reds_persisting_in_both_blocks"]) for v in data["summaries"].values()] == [(5, 2, 1), (14, 5, 3), (0, 0, 0)]
           print("J24I69 original three provider identities and historical post-hoc results reproduced")
           PY
       - name: Preserve complete source-exact evidence even if the court fails
