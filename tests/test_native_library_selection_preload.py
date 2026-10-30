@@ -31,9 +31,9 @@ def execute(tmp_path, monkeypatch, entries):
             path.write_bytes(b"synthetic dummy; not loaded")
         elif kind == "directory":
             path.mkdir()
-        elif kind in ("symlink", "dangling"):
-            destination = tmp_path / "outside.dat"
-            if kind == "symlink":
+        elif kind in ("symlink", "dangling", "inside"):
+            destination = (package if kind == "inside" else tmp_path) / "outside.dat"
+            if kind != "dangling":
                 destination.write_bytes(b"synthetic dummy")
             try:
                 path.symlink_to(destination)
@@ -74,7 +74,7 @@ def test_two_matching_regular_files_fail_before_load(tmp_path, monkeypatch, addi
     assert calls == []
 
 
-@pytest.mark.parametrize("kind", ["symlink", "dangling", "directory"])
+@pytest.mark.parametrize("kind", ["symlink", "inside", "dangling", "directory"])
 def test_single_nonregular_matching_file_fails_before_load(tmp_path, monkeypatch, kind):
     _, calls, load = execute(tmp_path, monkeypatch, {"cmpct_core.so": kind})
     with pytest.raises(RuntimeError, match="not a regular file"):
@@ -86,5 +86,19 @@ def test_single_nonregular_matching_file_fails_before_load(tmp_path, monkeypatch
 def test_nonregular_second_match_is_not_ignored(tmp_path, monkeypatch, kind):
     _, calls, load = execute(tmp_path, monkeypatch, {"cmpct_core.so": "file", "cmpct_core-legacy.so": kind})
     with pytest.raises(RuntimeError, match="ambiguous"):
+        load()
+    assert calls == []
+
+def test_disappearance_during_native_lstat_fails_before_cdll(tmp_path, monkeypatch):
+    _, calls, load = execute(tmp_path, monkeypatch, {"cmpct_core.so": "file"})
+    original_lstat = Path.lstat
+
+    def disappearing(self, *args, **kwargs):
+        if self.name == "cmpct_core.so":
+            raise FileNotFoundError(self)
+        return original_lstat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", disappearing)
+    with pytest.raises(RuntimeError, match="not a regular file"):
         load()
     assert calls == []
