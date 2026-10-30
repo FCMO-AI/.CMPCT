@@ -63,9 +63,9 @@ The **independent second hosted execution** of the *same preregistered science i
 |---|---:|---:|---:|
 | Full Builder wall | 130.058 ms | 137.301 ms | +7.243 ms / **+5.569%** |
 | Full Builder process CPU | 158.855 ms | 166.097 ms | +7.242 ms / **+4.559%** |
-| Scan process CPU | 55.302 ms | 60.085 ms | +4.783 ms |
+| Scan process CPU | 80.831 ms | 85.614 ms | +4.783 ms |
 | Ordered encode CPU | 43.539 ms | 45.009 ms | +1.470 ms |
-| Minor process faults | 16,879.5 | 20,686 | +3,806.5 |
+| Minor process faults | 32,444.5 | 36,251 | +3,806.5 |
 | Major process faults | 0 | 0 | unchanged |
 
 The FRESH/FRESH label sham was +0.639 ms (+0.497%) wall and +0.804 ms (+0.512%) CPU, within both preregistered bounds. Both reversed-order experiment groups retained positive >3 ms CPU and wall differences. As a result, this *individual execution* returned **`NON_ENCODE_STAGE_BURDEN_SUPPORTED`**. Encoded work accounted for **20.30%** of the aggregate median process-CPU delta rather than >=60%.
