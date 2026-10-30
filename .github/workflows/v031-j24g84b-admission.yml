@@ -1,0 +1,118 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24G84b charged Zstd1 metadata scout
+on:
+  push:
+    branches:
+      - agent/phased2-v031-a08-frontcoded-names-o0-20261030
+    paths:
+      - 'research/j24g84b_*'
+      - 'docs/v031-research/*j24g84b*'
+      - '.github/workflows/v031-j24g84b-admission.yml'
+  pull_request:
+    branches:
+      - agent/v031-development
+    paths:
+      - 'research/j24g84b_*'
+      - 'docs/v031-research/*j24g84b*'
+      - '.github/workflows/v031-j24g84b-admission.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24g84b-probe-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  prospective-six-family-science:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G84B_EVIDENCE_DIR: evidence
+      J24G84_EVIDENCE_DIR: evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate exact source, archived negative and prereg
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 3721819520889b1994f8be5aaaa03747799568c6 HEAD
+          git merge-base --is-ancestor 311a6cabbe0e06afd0cab0179f561e750c3ce6dc HEAD
+          test "$(git rev-parse HEAD:research/j24g84_frontcode_whole_index.py)" = 71cf5ef26992833f56b2528a891860e25530547e
+          test "$(git rev-parse HEAD:research/j24g84b_probe_admission.py)" = 463b5b54b08e7d5d4bdba2beb41d485bde5ea8a8
+          git rev-parse HEAD > evidence/j24g84b-head.txt
+          git rev-parse HEAD:src/cmpct/reader.py > evidence/j24g84b-reader-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual CMPCT and two Zstd strength controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m py_compile research/j24g84b_probe_admission.py
+          python -m pip freeze > evidence/j24g84b-pip-freeze.txt
+      - name: Execute source-bound charged selector and preserve negatives
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g84b_probe_admission.py 2>&1 | tee evidence/j24g84b-run.log
+          test -s evidence/j24g84b-result.json
+      - name: Detached policy arithmetic referee (no CMPCT imported)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee evidence/j24g84b-independent.json
+          import json,pathlib,statistics
+          x=json.loads(pathlib.Path('evidence/j24g84b-result.json').read_text())
+          assert x['status']=='COMPLETE' and x['product_credit']==0
+          assert set(x['cases'])==set(('flat','deep','random','unicode','random_salt','deep_hash'))
+          positive=wrong=cpu=0
+          for label,row in x['cases'].items():
+              assert row['original_index_sha256']==row['recovered_index_sha256']
+              choose='candidate' if row['zstd1_candidate_bytes']<row['zstd1_control_bytes'] else 'control'
+              assert choose==row['selected']
+              a,b=row['zstd19_control_bytes'],row['zstd19_candidate_bytes']+1
+              selected=b if choose=='candidate' else a
+              assert selected==row['selected_stored_bytes']
+              assert row['gifted_oracle_bytes']==min(a,b)
+              assert row['selector_regret_bytes']==selected-min(a,b)
+              assert row['saved_bytes']==a-selected
+              assert abs(row['saved_pct']-100*(a-selected)/a)<1e-9
+              assert len(row['trials'])==20
+              refs=[r for r in row['trials'] if r['variant']=='control']
+              probes=[r for r in row['trials'] if r['variant']=='probe']
+              assert len(refs)==len(probes)==10
+              assert all(r['selected']=='control' and r['bytes']==a for r in refs)
+              assert all(r['selected']==choose and r['bytes']==selected for r in probes)
+              ctrl=statistics.median(r['wall_ns'] for r in refs)
+              pol=statistics.median(r['wall_ns'] for r in probes)
+              assert row['median_control_wall_ns']==ctrl and row['median_policy_wall_ns']==pol
+              assert abs(row['policy_over_control_wall']-pol/ctrl)<1e-9
+              p=(a-selected>=256 and a-selected>=0.05*a)
+              bad=selected>a
+              assert row['h1_positive']==p and row['h1_false_admission']==bad
+              positive+=p;wrong+=bad;cpu+=pol/ctrl>1.15
+          assert x['positive_families']==positive and x['false_admissions']==wrong
+          assert x['cpu_debt_families']==cpu
+          expected='CHARGED_L1_SCOUT_PROMISING_O0' if positive>=2 and wrong==0 and cpu==0 else 'CHARGED_L1_SCOUT_NOT_PRODUCT_ELIGIBLE'
+          assert x['decision']==expected
+          print(json.dumps(dict(schema='j24g84b-detached-policy-audit-v1',
+              decision=expected,positives=positive,false_admissions=wrong,
+              expensive_cpu=cpu,all_six_rows=True)))
+          PY
+      - name: Retain original provider evidence, including errors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g84b-charged-scout
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
