@@ -18,6 +18,12 @@ These are per-host medians of eight Reader-open wall readings per variant, in fo
 
 PUT d63 at n512 was only +1.33 / +0.84 / +0.96 ms; n2048 +3.35 / +2.80 / +2.06 ms. Ubuntu's +3.35ms clears the absolute threshold by only ~0.35ms; two hosts do not clear it. The predeclared two-host hypothesis **fails**, regardless of put's ~43–46% relative chain fraction.
 
+## Exploratory variance and scaling diagnostics (not preregistered decision gates)
+
+A separate review of the **original per-block raw readings**, using one median per two chain samples and one per two checkpoint samples in each of the four preexisting blocks, found the following paired block differences (ms, N=2,048/d63): PUT Ubuntu `[3.361,3.204,3.366,3.336]`, macOS `[0.619,2.241,3.737,3.010]`, Windows `[1.854,2.263,2.402,1.966]`; DELETE Ubuntu `[52.554,52.712,52.318,53.340]`, macOS `[41.127,61.590,52.181,46.188]`, Windows `[30.502,31.132,30.788,31.900]`. macOS has substantial run-to-run variation despite passing the **separate** final median/absolute gates for DELETE; this is explicitly retained, and PUT's individual macOS blocks sometimes cross 3ms despite failing the unchanged **overall-median** rule. No retroactive threshold or alternative evaluation replaces the preregistration.
+
+At d63 the observed DELETE penalty at N=2,048 vs N=512 increases roughly `3.79x Ubuntu / 3.81x macOS / 3.72x Windows`, near the 4x member-count change. At N=2,048, DELETE excess rises monotonically with d1/d16/d32/d63 on all hosts. These are consistent with the original helper's per-generation full-row scans, filtering and sorting, but **do not alone isolate the replay function from footer decode/physical journal traversal**, nor prove asymptotic complexity outside the observed N/depth range. The next experiment must localize this owner with timing attribution; no product improvement is inferred from scaling alone.
+
 ## Whole-system charge and source custody
 
 The public Writer built distinct physical files: PUT replaces 63 deterministic **spread-position** file names via 63 independent real `append_update` calls (64-byte changed payloads), while DELETE starts with 2,111 separate files and removes 63 through the public `append_delete` API to finish with 2,048. This is **not** a same-input put-vs-delete speed comparison. For each kind, checkpoint is only appended on a separate copy of the *same physical chain* after the last operation. Full effective index and all 2,048 logical file hashes agree; both preflight and strong verify accept.
