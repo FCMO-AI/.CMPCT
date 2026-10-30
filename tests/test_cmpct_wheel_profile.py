@@ -27,7 +27,16 @@ def fixture(path, extra=(), before=False):
     rows=[]
     with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED) as z:
         for name,data in files:
-            z.writestr(name,data)
+            # ZipInfo normalizes backslashes on Windows; explicitly preserve the raw
+            # filename in the ZIP central directory so the hostile case is real.
+            if '\\' in name:
+                entry=zipfile.ZipInfo(name)
+                entry.filename=name
+                entry.orig_filename=name
+                entry.compress_type=zipfile.ZIP_DEFLATED
+                z.writestr(entry,data)
+            else:
+                z.writestr(name,data)
             sha=base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b'=').decode()
             rows.append((name,'sha256='+sha,str(len(data))))
         r=STEM+'.dist-info/RECORD'
