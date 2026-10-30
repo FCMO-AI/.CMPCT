@@ -188,9 +188,15 @@ def main():
             shutil.copyfile(archive,retained)
             receipt["physical_sha256"] = sha256_file(retained)
             receipt["result"] = check(archive,expected,tags,sys.platform in ("linux","darwin"))
-        receipt["decision"] = (
-            "H1_PHYSICAL_PASS" if receipt["result"]["owned_route_reached"]
-            else "FALLBACK_NOT_ELIGIBLE")
+        # The Windows reference currently encodes the source alias as a
+        # regular member. Never convert logical-reader parity into an inode
+        # topology/xattr PASS solely because the underlying test completed.
+        if not receipt["result"]["owned_route_reached"]:
+            receipt["decision"] = "FALLBACK_NOT_ELIGIBLE"
+        elif sys.platform in ("linux", "darwin"):
+            receipt["decision"] = "H1_PHYSICAL_POSIX_PASS"
+        else:
+            receipt["decision"] = "LOGICAL_PASS_NO_NATIVE_HARDLINK"
         receipt["status"] = "PASS"
     except BaseException as err:
         receipt["status"]="FAIL"
