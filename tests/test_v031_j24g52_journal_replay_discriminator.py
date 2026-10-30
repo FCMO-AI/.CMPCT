@@ -1,9 +1,9 @@
-"""J24G52 narrow same-source replay discrepancy probe: never edit frozen validators.
+"""J24G52 historical discriminator, promoted to a current signed-replay parity regression.
 
-This is a source-level negative discriminator, not evidence that a whole on-disk
-multi-generation archive reconstructs incorrectly under preflight. It tests
-an adjacent ownership boundary so the next activation can choose a physical
-falsifier instead of silently assuming Reader and preflight agree.
+The earlier source deliberately asserted Reader/preflight disagreement after a
+DELETE shifted a sparse xattr ordinal. #795 repaired the shared replay and
+made that old negative expectation obsolete. Preserve historical defect evidence
+in Git history, then guard the *correct* identity property prospectively here.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from cmpct.reader import _apply_journal_ops
 from cmpct.validation import _apply_delta, ParserLimits
 
 
-def test_signed_sparse_xattrs_have_different_ordinals_after_delete():
+def test_signed_sparse_xattrs_remap_with_same_identity_after_delete():
     original = {
         "files": [
             ["a-owner", 0, 0, 0, 0, None, None],
@@ -29,9 +29,11 @@ def test_signed_sparse_xattrs_have_different_ordinals_after_delete():
             ],
         },
     }
+    immutable_input = copy.deepcopy(original)
     delta = {"blobs": [], "ops": [["del", "b-delete"]]}
     preflight_index = copy.deepcopy(original)
     reader_index = copy.deepcopy(original)
+
     _apply_delta(preflight_index, delta, ParserLimits())
     _apply_journal_ops(reader_index, delta["ops"])
 
@@ -39,16 +41,32 @@ def test_signed_sparse_xattrs_have_different_ordinals_after_delete():
         rows = index["files"]
         result = {}
         for ordinal, attrs in index["fsmeta"]["xattrs"]:
-            result[ordinal] = (rows[ordinal][0] if ordinal < len(rows) else None, attrs)
+            assert 0 <= ordinal < len(rows), "no orphaned positional xattr"
+            result[ordinal] = (rows[ordinal][0], attrs)
         return result
 
-    preflight = names_and_xattrs(preflight_index)
-    reader = names_and_xattrs(reader_index)
-    print("J24G52_JOURNAL_PREFLIGHT", preflight)
-    print("J24G52_JOURNAL_READER", reader)
-    # Preserve the actual independently checked source result rather than
-    # assuming correctness. This test will fail if the mechanism changes;
-    # the physical archive still needs an independent hosted test.
-    assert preflight[2][0] is None
-    assert reader[1][0] == "z-alias"
-    assert preflight != reader
+    expected = {
+        0: ("a-owner", [["user.same", b"same"]]),
+        1: ("z-alias", [["user.same", b"same"]]),
+    }
+    assert original == immutable_input, "replay must not mutate caller's source index"
+    assert [row[0] for row in reader_index["files"]] == ["a-owner", "z-alias"]
+    assert reader_index["files"][1][1] == 3
+    assert reader_index["files"][1][-1] == ["a-owner"]
+    assert names_and_xattrs(reader_index) == expected
+    assert names_and_xattrs(preflight_index) == expected
+    assert preflight_index == reader_index, "same signed input must yield the same full logical state"
+
+    # A subsequent signed rename must follow the *remapped identity*, not the
+    # deleted ordinal. This protects continuity across separately committed deltas.
+    second = {"blobs": [], "ops": [["ren", "z-alias", "zz-alias"]]}
+    _apply_delta(preflight_index, second, ParserLimits())
+    _apply_journal_ops(reader_index, second["ops"])
+    assert [row[0] for row in reader_index["files"]] == ["a-owner", "zz-alias"]
+    assert reader_index["files"][1][-1] == ["a-owner"]
+    assert names_and_xattrs(reader_index) == {
+        0: ("a-owner", [["user.same", b"same"]]),
+        1: ("zz-alias", [["user.same", b"same"]]),
+    }
+    assert preflight_index == reader_index, "later rename must preserve prior signed-xattr remap"
+    assert original == immutable_input

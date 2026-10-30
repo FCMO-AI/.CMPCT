@@ -6,9 +6,11 @@ on:
   push:
     branches:
       - agent/phased1-v031-j24g71-hardlink-owner-guard-x-signed-replay-20261030
+      - agent/phased1-v031-j24g72-hardlink-custody-unblock-20261030
   pull_request:
     branches:
       - agent/phased2-v031-j24g57-failclosed-journal-footer-20261030
+      - agent/phased1-v031-j24g71-hardlink-owner-guard-x-signed-replay-20261030
   workflow_dispatch:
 permissions:
   contents: read
@@ -27,6 +29,7 @@ jobs:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       J24G71_PHYSICAL: evidence/signed-checkpoint64.cmpct
       J24G71_RECEIPT: evidence/signed-checkpoint64.json
+      J24G72_XATTR_SAMPLE: evidence/signed-xattr-checkpoint64.cmpct
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,6 +82,7 @@ jobs:
             tests/test_v031_hardlink_owner_mutation_guard.py \
             tests/test_v031_win32_builder_hardlink_o47.py \
             tests/test_v031_j24g71_hardlink_guard_checkpoint64.py \
+            tests/test_v031_j24g72_hardlink_signed_xattr_checkpoint64.py \
             2>&1 | tee evidence/j24g71-pytest.log
       - name: Inherited signed-journal fail-closed and recovery controls
         shell: bash
