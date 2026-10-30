@@ -1,0 +1,91 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Physical research: private delete-only owned Reader versus r24 terminal checkpoint.
+name: J24G91 Physical DELETE Reader versus Checkpoint
+
+on:
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g90-terminal-checkpoint-recovery-20261030
+    paths:
+      - 'research/j24g91_*'
+      - 'docs/v031-research/*j24g91*'
+      - '.github/workflows/j24g91-delete-reader-checkpoint.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g91-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  independent-physical:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G91_EVIDENCE: evidence/j24g91
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert exact source, immutable prospective prereg and branch HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 78d8ae137cb83ec1846c4a07b8cc7cda0c2bb6d2 HEAD
+          git merge-base --is-ancestor 6ef210998f6f7002fd57a661133a895fb7e67307 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          mkdir -p "$J24G91_EVIDENCE"
+          git rev-parse HEAD > "$J24G91_EVIDENCE/checkout-head.txt"
+          git rev-parse HEAD:research/j24g91_delete_reader_checkpoint.py > "$J24G91_EVIDENCE/instrument-git-blob.txt"
+          git rev-parse HEAD:research/j24g91_detached_referee.py > "$J24G91_EVIDENCE/referee-git-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install unchanged CMPCT engine and detached codec dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m pip freeze > "$J24G91_EVIDENCE/pip-freeze.txt"
+          python -m py_compile research/j24g91_delete_reader_checkpoint.py research/j24g91_detached_referee.py
+      - name: Build same-index source artifacts, test six Reader variants, measure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g91_delete_reader_checkpoint.py 2>&1 | tee "$J24G91_EVIDENCE/run.log"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('evidence/j24g91/receipt.json').read_text())
+          assert data['status'] == 'PASS' and data['H_integrity']
+          assert set(data['cases']) == {'4096','8192'}
+          print('REPLAY_GATE:', data['H_replay'])
+          print('CHECKPOINT_MARGIN:', data['H_checkpoint_marginality'])
+          print('CHECKPOINT_HEADROOM:', data['H_checkpoint_survives'])
+          PY
+      - name: Independent binary footer/referee and raw median check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g91_detached_referee.py "$J24G91_EVIDENCE" 2>&1 | tee "$J24G91_EVIDENCE/detached.log"
+          test -s "$J24G91_EVIDENCE/detached-audit.json"
+      - name: Preserve original physical A/B/C and all raw observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-j24g91-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/j24g91/
+          if-no-files-found: warn
+          retention-days: 30
