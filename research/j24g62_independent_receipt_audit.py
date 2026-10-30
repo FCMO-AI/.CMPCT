@@ -107,10 +107,11 @@ def audit(report: dict, expected_head: str):
 
 def hostile(report: dict, head: str):
     # These are receipt-level transformations, not corrupt archive mutations.
+    # Mutate the entire comparator arm: one tail sample may not affect a median.
     transforms = [
         lambda x: x["samples"].pop(),
         lambda x: x["source"]["sources"]["src/cmpct/reader.py"].update(git_blob="0"*40),
-        lambda x: x["samples"][0].update(wall_ns=x["samples"][0]["wall_ns"]*2),
+        lambda x: [row.update(wall_ns=row["wall_ns"] * 2) for row in x["samples"] if row["variant"] == "baseline"],
         lambda x: x["samples"][0].update(variant="factored"),
         lambda x: x.update(checkpoint_premium_bytes=x["checkpoint_premium_bytes"]+1),
         lambda x: x["differential"].update(factored=x["differential"].get("factored", 0)+1),
