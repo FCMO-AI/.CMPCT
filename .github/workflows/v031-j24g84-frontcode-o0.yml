@@ -1,0 +1,115 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24G84 whole-index frontcode O0 court
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-a08-frontcoded-names-o0-20261030
+    paths:
+      - 'research/j24g84_*'
+      - 'docs/v031-research/*j24g84*'
+      - '.github/workflows/v031-j24g84-frontcode-o0.yml'
+  pull_request:
+    branches:
+      - agent/v031-development
+    paths:
+      - 'research/j24g84_*'
+      - 'docs/v031-research/*j24g84*'
+      - '.github/workflows/v031-j24g84-frontcode-o0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g84-index-frontcode-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  whole-index-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G84_EVIDENCE_DIR: evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert exact HEAD, frozen question, candidate source and inherited base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b HEAD
+          git merge-base --is-ancestor 3721819520889b1994f8be5aaaa03747799568c6 HEAD
+          test "$(git rev-parse HEAD:research/j24g84_frontcode_whole_index.py)" = 71cf5ef26992833f56b2528a891860e25530547e
+          git rev-parse HEAD > evidence/head.txt
+          git rev-parse HEAD:src/cmpct/reader.py > evidence/reader-blob.txt
+          git rev-parse HEAD:src/cmpct/builder.py > evidence/builder-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual candidate library and independent Zstd-19 comparator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m py_compile research/j24g84_frontcode_whole_index.py
+          python -m pip freeze > evidence/pip-freeze.txt
+      - name: Run four real-Builder index families and hostile exact-name controls
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g84_frontcode_whole_index.py 2>&1 | tee evidence/j24g84-run.log
+          test -s evidence/j24g84-result.json
+      - name: Independently recalculate declared result from raw receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee evidence/j24g84-detached-audit.json
+          import json, pathlib, statistics
+          x=json.loads(pathlib.Path('evidence/j24g84-result.json').read_text())
+          assert x['status']=='COMPLETE'
+          assert list(x['cases'])==sorted(['flat','deep','random','unicode'])
+          assert x['product_credit']==0
+          positive=regression=0
+          for name,c in x['cases'].items():
+              assert c['status']=='COMPLETE'
+              assert c['original_index_sha256']==c['recovered_index_sha256']
+              a,b=c['compressed_control_bytes'],c['compressed_candidate_bytes']
+              assert a>0 and b>0
+              assert a-b==c['signed_bytes_saved']
+              assert abs(c['saving_pct']-100*(a-b)/a)<1e-9
+              assert len(c['timing']['control'])==len(c['timing']['candidate'])==10
+              assert all(t['bytes']==a for t in c['timing']['control'])
+              assert all(t['bytes']==b for t in c['timing']['candidate'])
+              p=(a-b>=256 and (a-b)>=.05*a)
+              r=(a-b)<-.01*a
+              assert c['h1_positive']==p and c['h1_regression']==r
+              for variant in ('control','candidate'):
+                  assert c[variant+'_median_wall_ns']==statistics.median(
+                      t['wall_ns'] for t in c['timing'][variant])
+                  assert c[variant+'_median_cpu_ns']==statistics.median(
+                      t['cpu_ns'] for t in c['timing'][variant])
+              positive+=p;regression+=r
+          expected='H1_SCOPED_METADATA_HEADROOM' if positive>=2 and regression==0 else 'NO_GENERAL_METADATA_HEADROOM'
+          assert x['decision']==expected
+          assert x['positive_families']==positive and x['regressing_families']==regression
+          print(json.dumps(dict(schema='j24g84-independent-arithmetic-v1',
+              decision=expected,positive_families=positive,
+              regressing_families=regression,case_names=sorted(x['cases']))))
+          PY
+      - name: Preserve raw successful and failed evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g84-whole-index-frontcode-o0
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
