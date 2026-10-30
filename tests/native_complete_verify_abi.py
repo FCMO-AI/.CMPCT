@@ -296,6 +296,64 @@ def main() -> None:
         rejected_checkpoint = run_cli(checkpoint)
         assert rejected_checkpoint.returncode != 0 and rejected_checkpoint.stdout == b""
 
+        # J24I63: both independent single-generation archives are valid and
+        # equally sized. An already-open handle must not switch authentication
+        # from its cached A member table to B's newly written primary digest
+        # just because B replaced the bytes of the SAME inode.
+        from cmpct.codec import HDR, zc, zd
+        fields = HDR.unpack(raw_bytes[:HDR.size])
+        primary_csize, primary_usize, data_span = fields[3:6]
+        primary_index = zd(raw_bytes[HDR.size:HDR.size + primary_csize], primary_usize)
+        assert b"raw.bin" in primary_index
+        changed_index = primary_index.replace(b"raw.bin", b"new.bin")
+        assert len(changed_index) == primary_usize and changed_index != primary_index
+        changed_encoded = zc(changed_index, 3)
+        assert len(changed_encoded) == primary_csize, "control requires identical index geometry"
+        tail_pos = HDR.size + primary_csize + data_span
+        old_footer = FTR.unpack(raw_bytes[-FTR.size:])
+        assert old_footer[0] == FMAGIC and old_footer[1] == 0 and old_footer[7] == 0
+        assert old_footer[5:7] == (primary_csize, primary_usize)
+        assert zd(raw_bytes[tail_pos:tail_pos + primary_csize], primary_usize) == primary_index
+        alt_bytes = bytearray(raw_bytes)
+        alt_digest = hashlib.sha256(changed_index).digest()
+        alt_bytes[36:68] = alt_digest
+        alt_bytes[HDR.size:HDR.size + primary_csize] = changed_encoded
+        alt_bytes[tail_pos:tail_pos + primary_csize] = changed_encoded
+        alt_bytes[-32:] = alt_digest
+        assert len(alt_bytes) == len(raw_bytes)
+        assert hashlib.sha256(alt_bytes).digest() != hashlib.sha256(raw_bytes).digest()
+        assert zd(alt_bytes[HDR.size:HDR.size + primary_csize], primary_usize) == changed_index
+        assert zd(alt_bytes[tail_pos:tail_pos + primary_csize], primary_usize) == changed_index
+
+        inplace = root / "same-inode-reindexed-valid.cmpct"
+        inplace.write_bytes(raw_bytes)
+        inode_before = inplace.stat().st_ino
+        opened = ctypes.c_void_p()
+        assert lib.cmpct_open(str(inplace).encode(), ctypes.byref(opened)) == 0
+        try:
+            # No concurrency/race: overwrite B in place after open(A), then
+            # verify(A), preserving both inode and physical archive length.
+            with inplace.open("r+b") as sink:
+                sink.write(alt_bytes)
+                sink.flush()
+                os.fsync(sink.fileno())
+            assert inplace.stat().st_ino == inode_before
+            assert inplace.stat().st_size == len(raw_bytes)
+            with CMPCT(inplace) as fresh_python:
+                assert fresh_python.verify() == 1
+                assert "new.bin" in fresh_python.by and "raw.bin" not in fresh_python.by
+            assert verify_abi(inplace) == (0, 1), "valid alternate must independently pass"
+            fresh_cli = run_cli(inplace)
+            assert fresh_cli.returncode == 0, fresh_cli.stderr
+            count = ctypes.c_size_t(777)
+            stale_status = lib.cmpct_verify_complete(opened, ctypes.byref(count))
+            assert stale_status == -7 and count.value == 0, (
+                "held decoded primary must not inherit new index's success",
+                stale_status, count.value,
+            )
+        finally:
+            lib.cmpct_close(opened)
+
         print(json.dumps({
             "schema": "cmpct-j24i50-native-public-verify-v1",
             "fixed_vector_sha256": vector["archive_sha256"],
