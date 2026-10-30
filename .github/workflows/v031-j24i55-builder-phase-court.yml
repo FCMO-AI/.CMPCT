@@ -9,6 +9,7 @@ on:
     paths:
       - research/j24i55_phase_child.py
       - research/j24i55_builder_phase_court.py
+      - research/j24i55_physical_referee.py
       - .github/workflows/v031-j24i55-builder-phase-court.yml
   workflow_dispatch:
 
@@ -92,6 +93,13 @@ jobs:
                                    "NON_ENCODE_STAGE_BURDEN_SUPPORTED","DISTRIBUTED_OR_AMBIGUOUS")
           print("INDEPENDENT_REFEREE_PASS",x["decision"],x["evidence_head"])
           PY
+      - name: Independently decode and authenticate all CMA4 blobs, index, and footer
+        run: |
+          set -euo pipefail
+          python research/j24i55_physical_referee.py \
+            evidence/j24i55-binary.cmpct \
+            evidence/j24i55-result.json \
+            evidence/j24i55-physical-referee.json
       - name: Upload original raw observations and physical evidence
         if: always()
         uses: actions/upload-artifact@v4
