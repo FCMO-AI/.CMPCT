@@ -26,6 +26,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 from test_macos_wheel_physical_contract import good_fat, wheel as make_fixture_wheel
+from j24p05_wheel_installed_path_oracle import inspect_wheel as path_oracle
 
 SPEC = importlib.util.spec_from_file_location("j24p05_gate", ROOT / "tools" / "validate_macos_wheel_abi.py")
 GATE = importlib.util.module_from_spec(SPEC)
@@ -135,12 +136,18 @@ def run(root: Path) -> dict:
         result["cases"][label] = {
             "wheel": path.name, "wheel_sha256": sha(path.read_bytes()),
             "size": path.stat().st_size, "gate": verdict,
+            "installed_path_oracle": path_oracle(path),
             "pip": install(path, root, label) if platform.system() in ("Darwin", "Linux") else
                    {"not_executed": "unsupported host for the bounded court"}
         }
     # Positive-control failures mean that this court did not establish its baseline.
     assert result["cases"]["original"]["gate"]["pass"], "positive gate control failed"
     assert result["cases"]["unrelated"]["gate"]["pass"], "distinct-name control failed"
+    assert not result["cases"]["original"]["installed_path_oracle"], "original wheel identity ambiguous"
+    assert not result["cases"]["unrelated"]["installed_path_oracle"], "distinct control falsely rejected"
+    for alias in ("collision_before", "collision_after", "alias_parent", "alias_dot",
+                  "alias_repeated_separator", "alias_internal_dot"):
+        assert result["cases"][alias]["installed_path_oracle"], alias + " escaped independent oracle"
     if platform.system() in ("Darwin", "Linux"):
         assert result["cases"]["original"]["pip"]["returncode"] == 0, "positive pip control failed"
         assert result["cases"]["original"]["pip"]["primary_native_retained"], "positive pip native changed"
