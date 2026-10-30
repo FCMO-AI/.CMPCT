@@ -34,7 +34,7 @@ def _components(name: str) -> tuple[str, ...]:
     for segment in segments:
         if segment.endswith((' ', '.')) or any(ord(c) < 32 or ord(c) == 127 for c in segment):
             raise ValueError(f'nonportable wheel path component: {segment!r}')
-        device = unicodedata.normalize('NFKC', segment.split('.')[0]).upper()
+        device = unicodedata.normalize('NFKC', segment.split('.')[0]).rstrip(' ').upper()  # Win32 treats CON .txt as CON, not a harmless filename
         if device in WIN_DEVICES:
             raise ValueError(f'Windows device-name component: {segment!r}')
     return tuple(segments)
