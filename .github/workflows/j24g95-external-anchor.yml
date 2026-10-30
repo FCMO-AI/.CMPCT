@@ -1,0 +1,86 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Research only: external trusted SHA snapshot identity, no product semantics.
+name: J24G95 Trusted Snapshot Anchor O0
+on:
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g92-footer-parent-link-court-20261030
+    paths:
+      - 'research/j24g95_*'
+      - 'docs/v031-research/*j24g95*'
+      - '.github/workflows/j24g95-external-anchor.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24g95-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+jobs:
+  external-anchor-physical:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    env:
+      J24G95_EVIDENCE: evidence/j24g95
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact checkout and prospective prereg source witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 5691dc1fcf448ab43b203624fc52e64447c4b7ce HEAD
+          git merge-base --is-ancestor f29561c5e2d36a8f47aa35f61191911c0611be6b HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          mkdir -p "$J24G95_EVIDENCE"
+          git rev-parse HEAD > "$J24G95_EVIDENCE/checkout-head.txt"
+          git rev-parse HEAD:research/j24g95_anchor_court.py > "$J24G95_EVIDENCE/instrument-git-blob.txt"
+          git rev-parse HEAD:research/j24g95_detached_referee.py > "$J24G95_EVIDENCE/referee-git-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install source-exact public CMPCT
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m pip freeze > "$J24G95_EVIDENCE/pip-freeze.txt"
+          python -m py_compile research/j24g95_anchor_court.py research/j24g95_detached_referee.py
+      - name: Real Writer, trusted snapshot identity and same-host costs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g95_anchor_court.py 2>&1 | tee "$J24G95_EVIDENCE/run.log"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('evidence/j24g95/receipt.json').read_text())
+          assert x['status']=='PASS' and x['product_credit']==0
+          assert set(x['cases'])=={'16','128','4096'}
+          assert all(v['records']['normal']['pinned_sha_accept'] for v in x['cases'].values())
+          assert all(not v['records']['authorized_append']['pinned_sha_accept'] for v in x['cases'].values())
+          PY
+      - name: Independent no-CMPCT-import physical referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g95_detached_referee.py "$J24G95_EVIDENCE" 2>&1 | tee "$J24G95_EVIDENCE/detached.log"
+          test -s "$J24G95_EVIDENCE/detached-audit.json"
+      - name: Retain original archives, signed-anchor controls, all raw samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-j24g95-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/j24g95/
+          if-no-files-found: warn
+          retention-days: 30
