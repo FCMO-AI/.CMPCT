@@ -1,0 +1,115 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Research only: no core-code, format, release, or competitor mutation.
+name: CMPCT J24G69 same-input DELETE replay design court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g69-sameinput-delete-oracle-court-20261030
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24g69-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  same-input:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.sha }}
+      COMPETITOR_HEAD: 41cd7f88d9fede55a495f36e78126b26eff85880
+      J24G69_RESULT: evidence/j24g69-result.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact baseline and bring immutable competitor source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor afdce3f3e598db402deba4c2dfde50a8de3f3e10 HEAD
+          git merge-base --is-ancestor 4305d9a1f98ff6cf921bbe8ea24dd1dec2fa9de8 HEAD
+          git diff --exit-code afdce3f3e598db402deba4c2dfde50a8de3f3e10 HEAD -- src/cmpct/ tests/ benchmarks/history/ docs/FORMAT.md
+          test "$(git rev-parse HEAD:src/cmpct/journal_replay.py)" = 03743ca2a06c022c2ec64243a90fe373cf91e899
+          test "$(git rev-parse HEAD:research/j24g67_delete_bisect_onepass.py)" = dde3bbf0f4816adcfb552b83e579d8de09c86c19
+          git fetch --no-tags --depth=1 origin agent/phased1-v031-j24g64-mixed-fsmeta-crossgen-oracle-20261030
+          test "$(git rev-parse FETCH_HEAD)" = "$COMPETITOR_HEAD"
+          git show "$COMPETITOR_HEAD:research/j24g64_mixed_fsmeta_oracle.py" > evidence/j24g69-pinned-j24g64.py
+          test "$(git hash-object evidence/j24g69-pinned-j24g64.py)" = 7657a41d11f2b3c8136c0b69cfe62401f9b19ccb
+          git rev-parse HEAD > evidence/head.txt
+          git rev-parse HEAD:research/j24g69_delete_sameinput_court.py > evidence/instrument-blob.txt
+          git rev-parse HEAD:docs/v031-research/2026-10-30-j24g69-sameinput-delete-prereg.md > evidence/prereg-blob.txt
+          git status --porcelain > evidence/status-before.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact checked-out package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python -m py_compile research/j24g69_delete_sameinput_court.py evidence/j24g69-pinned-j24g64.py
+      - name: Run preregistered same-input comparison and preserve raw measurements
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g69_delete_sameinput_court.py 2>&1 | tee evidence/j24g69.log
+          test -s evidence/j24g69-result.json
+      - name: Detached receipt arithmetic and tamper controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,pathlib,statistics
+          p=pathlib.Path('evidence/j24g69-result.json')
+          r=json.loads(p.read_text())
+          raw=r['raw']
+          assert len(raw)==216
+          digest=lambda arr: hashlib.sha256(json.dumps(arr,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          assert digest(raw)==r['raw_sha256']
+          assert len(r['cases'])==9
+          for case in r['cases']:
+              n=case['n']; pattern=case['pattern']; blocks=case['blocks']
+              obs=[x for x in raw if x['n']==n and x['pattern']==pattern]
+              assert len(obs)==4*blocks
+              assert all(x['result_sha256']==case['index_sha256'] for x in obs)
+              for block in range(blocks):
+                  blockrows=sorted((x for x in obs if x['block']==block),key=lambda x:x['position'])
+                  assert [v['variant'] for v in blockrows]==(
+                      ['simple','factored','factored','simple'] if block%2==0 else
+                      ['factored','simple','simple','factored'])
+                  assert [v['position'] for v in blockrows]==[0,1,2,3]
+              for variant in ('simple','factored'):
+                  values=[x['wall_ns'] for x in obs if x['variant']==variant]
+                  assert len(values)==2*blocks
+                  assert statistics.median(values)==case['median_wall_ns'][variant]
+              ratio=case['median_wall_ns']['factored']/case['median_wall_ns']['simple']
+              assert abs(ratio-case['factored_over_simple_wall_ratio'])<1e-12
+              assert case['admission']['simple']['optimized']==63
+              assert case['admission']['simple']['fallback']==0
+              assert case['admission']['factored']['route']=='factored'
+          changed=json.loads(p.read_text());changed['raw'][0]['wall_ns']+=1
+          assert digest(changed['raw'])!=r['raw_sha256']
+          changed=json.loads(p.read_text());changed['source']['competitor_blob']='0'*40
+          assert changed['source']['competitor_blob']!=r['source']['competitor_blob']
+          assert r['source']['head']==pathlib.Path('evidence/head.txt').read_text().strip()
+          print("DETACHED_RECEIPT_PASS",len(raw),len(r['cases']))
+          PY
+      - name: Preserve original raw artifact even on test failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g69-sameinput-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
