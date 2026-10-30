@@ -1,0 +1,82 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G58 is a scoped research court: a successful helper benchmark is not a release gate.
+name: CMPCT J24G58 indexed shared journal replay court
+on:
+  pull_request:
+    branches:
+      - agent/phased2-v031-j24g57-failclosed-journal-footer-20261030
+    paths:
+      - 'src/cmpct/journal_replay.py'
+      - 'tests/test_v031_j24g58_indexed_shared_replay.py'
+      - 'research/j24g58_*.py'
+      - 'docs/v031-research/*j24g58*'
+      - '.github/workflows/v031-j24g58-shared-replay-index.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24g58-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  exact-parent-index-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G58_RESULT: evidence/j24g58-abba.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin exact source and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 1935c14c76f1bb39fd218d73cdbee93d3c2b76a1 HEAD
+          git merge-base --is-ancestor e344fb7a5de25d8fb98bb9f47f5edc945db70945 HEAD
+          test "$(git hash-object research/j24g58_frozen_parent_replay.py)" = 03743ca2a06c022c2ec64243a90fe373cf91e899
+          git rev-parse HEAD > evidence/head.txt
+          git rev-parse HEAD:src/cmpct/journal_replay.py > evidence/source-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact candidate and dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'pytest>=8'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.journal_replay as replay
+          p=Path('src/cmpct/journal_replay.py')
+          assert p.read_bytes() == Path(replay.__file__).read_bytes()
+          print('SOURCE_EXACT',replay.__file__)
+          PY
+      - name: Differential reference and hostile-identity controls
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest --noconftest -q -s \
+            --junitxml=evidence/pytest.xml \
+            tests/test_v031_j24g58_indexed_shared_replay.py \
+            2>&1 | tee evidence/pytest.log
+      - name: Same-source alternating ABBA with raw CPU and allocation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g58_replay_abba.py 2>&1 | tee evidence/abba.log
+          test -s evidence/j24g58-abba.json
+      - name: Preserve source-bound receipts including negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g58-indexed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
