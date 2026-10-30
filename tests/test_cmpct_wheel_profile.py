@@ -150,6 +150,32 @@ class StrictProfile(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'RECORD missing valid SHA-256'):
             validate(self.wheel)
 
+    def test_38_reject_duplicate_record_row(self):
+        fixture(self.wheel)
+        with zipfile.ZipFile(self.wheel) as src:
+            files = [(i.filename, src.read(i.filename)) for i in src.infolist()]
+        with zipfile.ZipFile(self.wheel, 'w') as dst:
+            for name, payload in files:
+                if name.endswith('.dist-info/RECORD'):
+                    first = next(line for line in payload.splitlines() if line.startswith(LOADER.encode()+b','))
+                    payload += first + b'\n'
+                dst.writestr(name, payload)
+        with self.assertRaisesRegex(ValueError, 'duplicate or invalid wheel RECORD row'):
+            validate(self.wheel)
+
+    def test_39_reject_record_self_hash(self):
+        fixture(self.wheel)
+        with zipfile.ZipFile(self.wheel) as src:
+            files = [(i.filename, src.read(i.filename)) for i in src.infolist()]
+        with zipfile.ZipFile(self.wheel, 'w') as dst:
+            for name, payload in files:
+                if name.endswith('.dist-info/RECORD'):
+                    payload = payload.replace((STEM+'.dist-info/RECORD,,').encode(),
+                                              (STEM+'.dist-info/RECORD,sha256=INVALID,0').encode())
+                dst.writestr(name, payload)
+        with self.assertRaisesRegex(ValueError, 'RECORD self-row must have empty'):
+            validate(self.wheel)
+
     def test_24_cli_rejects(self):
         fixture(self.wheel,[(STEM+'.data/data/other/unused',b'no')]);r=subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/'tools/validate_cmpct_wheel_profile.py'),str(self.wheel)],capture_output=True,text=True)
         self.assertEqual(r.returncode,1)
