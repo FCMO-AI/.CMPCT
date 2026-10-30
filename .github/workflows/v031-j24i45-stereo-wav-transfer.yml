@@ -117,7 +117,7 @@ jobs:
           x['source_probe']='unaltered research/j24i44/native_small_wav_probe.rs'
           x['source_summarizer']='unaltered research/j24i44/summarize_small_ab.py'
           x['sources']['B']='2a6dbd5407731c5660faf71d04a4ef5de2d431bd, inherited product code unchanged'
-          pathlib.Path('j24i45-summary.json').write_text(json.dumps(x,sort_keys=True,indent=2)+'\\n')
+          pathlib.Path('j24i45-summary.json').write_text(json.dumps(x,sort_keys=True,indent=2)+'\n')
           PY
           test -s j24i45-summary.json
           find j24i45-cases -type f -print0 | sort -z | xargs -0 sha256sum > j24i45-files.sha256
