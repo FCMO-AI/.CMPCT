@@ -83,7 +83,8 @@ def verify(root: Path):
     names = [
         "known_delete", "unknown_only", "unknown_then_delete",
         "delete_then_unknown", "malformed_del", "malformed_ren",
-        "invalid_flags", "invalid_reserved", "bad_sha",
+        "invalid_flags", "invalid_reserved", "invalid_kind",
+        "invalid_prev_self", "bad_sha",
     ]
     results = []
     tamper_rejections = 0
@@ -103,7 +104,12 @@ def verify(root: Path):
         new = generation(data, latest)
         require(old["payload_sha_consistent"] and old["kind"] == 0, f"{name}: old checkpoint")
         require(sorted(x[0] for x in old["payload"]["files"]) == ["a.bin", "z.bin"], f"{name}: old state")
-        require(new["kind"] == 1 and new["prev"] == prior, f"{name}: next generation linkage")
+        if name == "invalid_kind":
+            require(new["kind"] == 2 and new["prev"] == prior, "unsupported footer kind")
+        elif name == "invalid_prev_self":
+            require(new["kind"] == 1 and new["prev"] == latest, "invalid previous self-cycle")
+        else:
+            require(new["kind"] == 1 and new["prev"] == prior, f"{name}: next generation linkage")
         if name == "known_delete":
             require(new["payload_sha_consistent"], "valid delete hash")
             require(new["flags"] == 0 and new["reserved"] == 0, "valid delete fields")
@@ -112,7 +118,10 @@ def verify(root: Path):
             require(report["decision"] == "accept_latest", "valid behavior")
         elif name.startswith("invalid_"):
             require(new["payload_sha_consistent"], "invalid-header payload must still be authentic")
-            require((new["flags"], new["reserved"]) in ((1, 0), (0, 1)), "exact invalid header")
+            if name in ("invalid_flags", "invalid_reserved"):
+                require((new["flags"], new["reserved"]) in ((1, 0), (0, 1)), "exact invalid flag/reserved")
+            else:
+                require((new["flags"], new["reserved"]) == (0, 0), "unrelated header fields unchanged")
             require(report["decision"] == "recover_previous", "header behavior")
         elif name == "bad_sha":
             require(not new["payload_sha_consistent"], "bad SHA must be detected")
