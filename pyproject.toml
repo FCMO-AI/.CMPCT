@@ -8,7 +8,7 @@ version = "0.30.0"
 description = "Compact archive format prototype with adaptive codecs, deduplication, streaming access, and recovery metadata"
 authors = [{ name = "FCMO AI" }]
 requires-python = ">=3.10"
-dependencies = ["msgpack>=1.0"]
+dependencies = ["msgpack>=1.0", "numpy>=1.26", "soundfile>=0.12"]
 
 # Footnote: stewardship is expressed through standard package metadata and durable project URLs rather
 # than promotional text inside runtime code. This keeps provenance discoverable without turning imports,
@@ -19,7 +19,7 @@ Repository = "https://github.com/FCMO-AI/.CMPCT"
 "FCMO AI" = "https://github.com/FCMO-AI"
 
 [project.optional-dependencies]
-audio = ["numpy>=1.26", "soundfile>=0.12"]
+audio = []  # numpy y soundfile ya son dependencias base (issue 538)
 # The regression suite imports research engines that still use python-zstandard as an independent
 # comparator. Keep it test-only: the installed shipping product must not depend on it.
 test = [
