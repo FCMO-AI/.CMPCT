@@ -45,6 +45,18 @@ def main():
     assert [len(r["verdict"]["official_cmpct_reds"]) for r in report["results"].values()]==[2,5,0]
     assert [r["verdict"]["preregistered_h1_survives"] for r in report["results"].values()]==[False,True,False]
     assert report["all_three_h1_survive"] is False
+    # Freeze compact derived evidence for future readers when GitHub Actions
+    # artifact retention expires. It is intentionally lower-rung evidence and
+    # must match the original provider receipt before earning this label.
+    derived=json.loads((ROOT/"research"/"j24i68_derived_original_effect_pairs.json").read_text())
+    assert derived["schema"]=="cmpct-j24i68-derived-paired-timing-deltas-v1"
+    assert set(derived["derived_pairs"])==set(report["results"])
+    for name,values in derived["derived_pairs"].items():
+        assert len(values)==32
+        assert derived["original_provider_zip_sha256"][name]==m.EXPECTED[name][0]
+        actual=report["results"][name]["all_rows"]
+        for pair,row in zip(values,actual):
+            assert pair==[round(row["cmpct_delta_ms"],5),round(row["zip_delta_ms"],5)]
     with zipfile.ZipFile(bundle) as z:
         n=next(iter(m.EXPECTED))
         original=z.read(n)
