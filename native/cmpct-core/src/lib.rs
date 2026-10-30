@@ -1462,9 +1462,8 @@ pub unsafe extern "C" fn cmpct_verify_complete(
     };
     // A foreign caller must never receive a Rust panic across its ABI boundary.
     // Reuse the exact Reader verifier; partial range success is not integrity proof.
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        archive.verify_complete()
-    }));
+    let result =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| archive.verify_complete()));
     match result {
         Ok(Ok(verified)) => {
             *out_verified = verified;
