@@ -38,6 +38,28 @@ def main() -> None:
     if native_codec.decompress(encoded, len(test_data)) != test_data:
         raise RuntimeError("installed native codec roundtrip disagrees")
 
+    # Prove the fail-closed path on the *real editable-installed* package, not
+    # only on a synthetic copied module. The injected match is inert data, never
+    # a second native library; it is removed even when the subprocess fails.
+    injected = root / "cmpct_core-EXTRA-owner-control.so"
+    if injected.exists() or injected.is_symlink():
+        raise RuntimeError("refuse to overwrite an existing native candidate")
+    injected.write_bytes(b"not a shared library; selection must refuse before CDLL")
+    try:
+        hostile = subprocess.run(
+            [sys.executable, "-c", "from cmpct import native_codec"],
+            capture_output=True, text=True, check=False,
+        )
+        if hostile.returncode == 0 or "ambiguous package-owned cmpct_core codec libraries" not in hostile.stderr:
+            raise RuntimeError(
+                "installed package did not fail closed on extra native match: "
+                + hostile.stderr[-500:]
+            )
+    finally:
+        injected.unlink()
+    if sum(1 for pattern in PATTERNS for _ in root.glob(pattern)) != 1:
+        raise RuntimeError("native candidate inventory not restored after hostile test")
+
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     expected = os.environ.get("EVIDENCE_HEAD")
     if expected and expected != head:
@@ -51,6 +73,8 @@ def main() -> None:
         "native_size_bytes": selected.stat().st_size,
         "native_sha256": hashlib.sha256(selected.read_bytes()).hexdigest(),
         "native_roundtrip": "pass",
+        "injected_match_preload_refused": True,
+        "post_test_candidate_count": 1,
         "compressed_test_bytes": len(encoded),
         "claim_scope": "fresh installed package on this host only",
     }
