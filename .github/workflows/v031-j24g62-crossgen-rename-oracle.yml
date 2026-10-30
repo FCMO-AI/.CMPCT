@@ -1,0 +1,84 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G62 research-only one-op cross-generation factoring oracle.
+name: CMPCT J24G62 physical one-op rename factoring
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24g62-crossgen-rename-replay-oracle-20261030
+    paths:
+      - 'research/j24g62_crossgen_rename_oracle.py'
+      - 'docs/v031-research/*j24g62*'
+      - '.github/workflows/v031-j24g62-crossgen-rename-oracle.yml'
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g60-public-chain-coldopen-20261030
+    paths:
+      - 'research/j24g62_crossgen_rename_oracle.py'
+      - 'docs/v031-research/*j24g62*'
+      - '.github/workflows/v031-j24g62-crossgen-rename-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g62-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signed-rename-oracle:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G62_RESULT: evidence/j24g62-result.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin parent/prereg and inherited product sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor fb5d96cdb8855fe3e01868792e65b79d3d61661d HEAD
+          git merge-base --is-ancestor 13bfa4574fd56af39475f3cb9e3bd5f64e06e148 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = a2160a2f6b1ca3ef8cd94897cb68bb2fcb74ebc2
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 3eef7fdc3f6deca5ddd6d9edf1292c7e2c864f11
+          test "$(git rev-parse HEAD:src/cmpct/journal_replay.py)" = 03743ca2a06c022c2ec64243a90fe373cf91e899
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 5ea3b8f26058b0983c9686295c73f15472bc3ffe
+          git rev-parse HEAD > evidence/head.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and compile research instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'zstandard>=0.22' 'msgpack>=1.0'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python -m py_compile research/j24g60_single_delta_chain_court.py research/j24g62_crossgen_rename_oracle.py
+      - name: Physical public Writer rename factoring vs exact inherited replay
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g62_crossgen_rename_oracle.py 2>&1 | tee evidence/j24g62-court.log
+          test -s evidence/j24g62-result.json
+      - name: Archive original evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g62-rename-oracle-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
