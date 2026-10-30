@@ -72,6 +72,12 @@ jobs:
           set -o pipefail
           python research/j24g82_writer_prefix_crashcut.py 2>&1 | tee evidence/j24g82-run.log
           test -s evidence/j24g82-result.json
+      - name: Detached no-CMPCT signed-wire referee and adversarial receipt audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24g82_wire_referee.py
+          python research/j24g82_wire_referee.py evidence | tee evidence/j24g82-wire-referee.json
       - name: Preserve full original raw evidence also when failing
         if: always()
         uses: actions/upload-artifact@v4
