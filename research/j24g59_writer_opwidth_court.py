@@ -31,7 +31,7 @@ EXPECTED_WRITER_BLOB = "3eef7fdc3f6deca5ddd6d9edf1292c7e2c864f11"
 
 
 def git_blob(path: Path) -> str:
-    data = path.read_bytes()
+    data = path.read_bytes().replace(b"\r\n", b"\n")
     return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
 
 
@@ -106,8 +106,8 @@ def main() -> None:
     repo = Path(__file__).resolve().parents[1]
     assert git_blob(repo / "src/cmpct/journal_replay.py") == EXPECTED_INDEXED_BLOB
     assert git_blob(repo / "src/cmpct/transactions.py") == EXPECTED_WRITER_BLOB
-    assert (repo / "src/cmpct/journal_replay.py").read_bytes() == Path(jr.__file__).read_bytes()
-    assert (repo / "src/cmpct/transactions.py").read_bytes() == Path(tx.__file__).read_bytes()
+    assert (repo / "src/cmpct/journal_replay.py").read_bytes().replace(b"\r\n", b"\n") == Path(jr.__file__).read_bytes().replace(b"\r\n", b"\n")
+    assert (repo / "src/cmpct/transactions.py").read_bytes().replace(b"\r\n", b"\n") == Path(tx.__file__).read_bytes().replace(b"\r\n", b"\n")
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
 
     records = []
