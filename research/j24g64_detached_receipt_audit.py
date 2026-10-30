@@ -113,7 +113,8 @@ def _hostile_controls(original: dict, expected_head: str) -> dict:
     attack("sample-omission", lambda p: p["raw_samples"].pop())
     attack("phase-order-perturbation", lambda p: p["raw_samples"][0].update(phase=3))
     attack("timing-branch-tampering", lambda p: [v.update(wall_ns=v["wall_ns"] * 3) for v in p["raw_samples"] if v["variant"] == "reference"])
-    attack("metadata-records-erased", lambda p: p.update(sparse_xattr_records=0))\n    attack("identity-lineage-control-falsified", lambda p: p["targeted_semantic_edges"].update({"delete-and-recreate-same-name": "fallback:inconclusive"}))
+    attack("metadata-records-erased", lambda p: p.update(sparse_xattr_records=0))
+    attack("identity-lineage-control-falsified", lambda p: p["targeted_semantic_edges"].update({"delete-and-recreate-same-name": "fallback:inconclusive"}))
     attack("differential-count-manipulation", lambda p: p["differential"].update(factored=p["differential"]["factored"] + 1))
     attack("false-product-decision", lambda p: p.update(decision="MIXED_FSMETA_REPLAY_SEED" if p["decision"] != "MIXED_FSMETA_REPLAY_SEED" else "NO_BOUNDED_MIXED_FSMETA_WIN"))
     return attacks
