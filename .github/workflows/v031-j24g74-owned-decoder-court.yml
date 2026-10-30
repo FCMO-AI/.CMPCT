@@ -1,0 +1,89 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G74: scientifically distinguish deepcopy cost from Reader-owned decoded replay.
+name: CMPCT J24G74 owned decoder Reader court
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g74-owned-decoder-replay-court-20261030
+    paths:
+      - 'research/j24g74_*'
+      - 'docs/v031-research/*j24g74*'
+      - '.github/workflows/v031-j24g74-owned-decoder-court.yml'
+  pull_request:
+    branches:
+      - agent/phased2-v031-j24g73-installed-reader-mixed-physical-ab-20261030
+    paths:
+      - 'research/j24g74_*'
+      - 'docs/v031-research/*j24g74*'
+      - '.github/workflows/v031-j24g74-owned-decoder-court.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g74-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  owned-replay:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G74_EVIDENCE_DIR: evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact-source and prereg ancestry check
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 2bd44b03a37360b4c59af3bb6445553b2435ffff HEAD
+          git merge-base --is-ancestor 59c74a86cb87b715da91bd8207c7ce2282256766 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
+          test "$(git rev-parse HEAD:research/j24g64_mixed_fsmeta_oracle.py)" = 7657a41d11f2b3c8136c0b69cfe62401f9b19ccb
+          test "$(git rev-parse HEAD:research/j24g73_reader_open.py)" = 9b2fa7c2d625cce84597212673c35fba29dcafd5
+          git rev-parse HEAD > evidence/head.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install identical experiment source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22' 'psutil>=5.9'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python -m py_compile research/j24g74_owned_decoder_court.py
+      - name: Owned-versus-copied replay physical A-B-C
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g74_owned_decoder_court.py 2>&1 | tee evidence/j24g74-raw.log
+          test -s evidence/j24g74-result.json
+      - name: No-CMPCT independent signed-wire/footer interpreter
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g73_independent_wire.py evidence/j24g74-result.json evidence 2>&1 | tee evidence/j24g74-wire.log
+          test -s evidence/j24g73-independent-wire.json
+      - name: Preserve original physical and raw evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g74-owned-decoder-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
