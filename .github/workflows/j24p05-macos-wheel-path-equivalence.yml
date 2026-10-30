@@ -87,6 +87,7 @@ jobs:
             j24p05-results/court.json
             j24p05-detached-referee.json
             j24p05-results/installed-native/*.bin
+            j24p05-results/installed-native/*.RECORD.csv
             j24p05-results/original/*.whl
             j24p05-results/unrelated/*.whl
             j24p05-results/collision_before/*.whl
