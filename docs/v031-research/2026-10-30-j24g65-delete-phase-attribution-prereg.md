@@ -1,0 +1,31 @@
+# J24G65 — phase attribution for authentic one-op DELETE journal chains (preregistration)
+
+**Frozen before research code, CI execution, or measurements** — 2026-10-30 UTC. Research/evidence only: no Reader, Writer, parser, release, benchmark or format mutation.
+
+## Source authority, ownership and alternative actions
+
+Parent is J24G63 [#805](https://github.com/FCMO-AI/.CMPCT/pull/805) at `7f509d244325d4b6ea6d0e752ea365f79c33a742`; it is itself research stacked on J24G60 [#800](https://github.com/FCMO-AI/.CMPCT/pull/800) and fail-closed J24G57 [#795](https://github.com/FCMO-AI/.CMPCT/pull/795). The canonical released main remains v0.30.0 / r24. J24G63 found 31–53ms extra public one-op DELETE chain Reader open at 2,048 final members/63 generations versus an extra same-state checkpoint, but did not distinguish operation replay from footer decode/verification or other Reader overhead. This missing causal attribution is explicitly requested in [issue #806](https://github.com/FCMO-AI/.CMPCT/issues/806). #801 measured *RENAME* replay attribution, not DELETE. #804 owns rename-only factoring and active #808 owns mixed signed-fsmeta cross-generation factoring; do not replicate either implementation. #574 owns shared Discovery STATE. Concurrency protocol is absent on this exact parent branch; coordinate by PR lineage and narrow scoped source paths.
+
+Compare alternatives before material work: (A) immediately implement deletion/factoring (premature; #808 already researching a broader mechanism), (B) charge a checkpoint (known +12,990 B, changes physical organization), (C) port #801 attribution instrument onto the *same authentic J24G63 DELETE files*, (D) do nothing and let mixed factoring own the result. Choose (C), the smallest source-exact falsifier that can decide whether future optimization should target replay versus footer/read overhead, without creating a conflicting implementation.
+
+## Claim and falsifier
+
+**Primary question:** on a physically authentic 2,111-member Builder archive with 63 actual public `append_delete` generations, yielding 2,048 surviving members, does the unchanged source spend most of the extra Reader-open time in repeated `journal_replay._apply_journal_ops` rather than digest-valid footer parsing/decoding?
+
+Predict at least 60% of the measured positive excess open wall time is replay at 2,048/63 on at least two of three hosts. For a host to count: (1) raw uninstrumented chain-minus-checkpoint median penalty >=3ms; (2) wrapped attribution chain-minus-checkpoint penalty differs from uninstrumented penalty by <=15% relative; (3) exactly 63 replay and 64 footer decoder calls for the chain, and zero replay/one decoder call for checkpoint; (4) Reader index, strong verify and preflight parity against same-state checkpoint; (5) source identity, physical bytes/checkpoint premium, archived wire, raw-sample arithmetic and independent hostile receipt checks pass. Otherwise report NONMATERIAL, NONREPLAY or INCONCLUSIVE under recorded predicates; do not revise thresholds post-result.
+
+**Alternative explanations:** zstd/MessagePack/footer SHA dominates, other Reader allocations/validation dominate, warm filesystem cache skews wall, tracing perturbs Python cost, and mixed fsmeta changes ownership. The same-state checkpoint costs bytes and is **not** an available free Writer optimization.
+
+## Frozen setup and evidence hierarchy
+
+Use J24G63 `build_kind("delete", n,...)` unchanged at n=512 and n=2048; it emits physically authentic signed r24 one-op DELETE chains and separately appended private checkpoints, with independent existing `verify_pair` (full strong member check, index equality, preflight) and `signed_ledger` footer proof. Primary n=2048 depth=63. Secondary cases n=512/depth63, n=2048/depth1 and depth32. At each case, use four alternated ABBA/BAAB blocks of fresh Python child processes with thin timer wrappers around the *actual* public Reader imported `_apply_journal_ops` and `CMPCT._decode_generation_payload`. Timer boundaries exclude Python import/startup. For the primary case also collect two alternating uninstrumented blocks. Record 72 total raw observations per host (4 cases x 16 instrumented + 8 uninstrumented), separate CPU/wall, replay/footer/residual spans, invocation counts and archive bytes/SHA; profile only as non-credit diagnostic if useful. The probe installs/restores wrappers inside one process without altering product source.
+
+Recompute medians and ratios from raw observations with a separate stdlib (plus MessagePack/Zstd physical parsing) referee that never imports CMPCT. Audit original physical primary chain/checkpoint bytes, SHA-valid 63 one-op delete footers and appended full checkpoint; require four deliberate receipt falsifications be rejected. Use Ubuntu 24.04, macOS 14, Windows 2022 / Python 3.11, exact source blobs and installed source identity; archive evidence on failure. Host failures are route/evidence failures, not product regressions. Avoid bringing in #801's RENAME outcome as a same-input control.
+
+## Decision rule and limits
+
+A positive scientific decision is **DELETE_REPLAY_MAJOR_COST_OWNER** only if replay >=60% of excess on the host and all guards above pass. If source or measurement guards fail, **INCONCLUSIVE**. If valid positive penalty but replay <60%, **DELETE_REPLAY_NOT_PROVEN_MAJOR**. If the real penalty <3ms, **DELETE_NONMATERIAL**. No 0.x performance credit. This is low-rung attribution: no new archive representation, no changed Reader, no memory/RSS improvement, true cold disk, selective-read gain, create/extract speed, hostile mutation recovery, fsmeta/xattr/hardlink/general source transfer, or competitor ZIP/Zstd parity. A cross-generation replay architecture still owes its own whole-product cost and exactness gates. Keep baseline allowed to win.
+
+## Completion/handoff
+
+After hosted receipts, preserve negatives with exact head, run and artifacts; tell #806, #808 and #795 only the decisional finding. Maintain Discovery STATE under #574 ownership unchanged. If attribution is favorable, #808's mixed factoring must still be tested on real DELETE open/full recovery; if unfavorable, investigate footer or residual work instead of reflexively optimizing the replay helper. No duplicate source/product modifications.
