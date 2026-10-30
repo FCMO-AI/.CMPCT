@@ -65,7 +65,18 @@ def main():
         # be refused at the original provider ZIP digest boundary.
         forged=rewrite_member(original,"base-a.json",lambda x:x["corpora"]["binary"]["library"]["cmpct"].__setitem__("create_s_median",1.0))
         refuse(forged,n)
-    print("J24I68 PASS: 3 source-identical provider ZIPs, 96 CMPCT/ZIP paired cells, 2/5/0 inherited reds; 8 hostile refusal paths")
+        # These two controls MUST fail even after adjusting the outer ZIP digest,
+        # because the source-identical surrogate cannot compare changed archive shape.
+        for engine in ("zip","cmpct"):
+            def alter_size(x):
+                cell=x["corpora"]["binary"]["library"][engine]
+                cell["bytes"]=int(cell["bytes"])+1
+            forged=rewrite_member(original,"base-a.json",alter_size)
+            previous=m.EXPECTED[n]
+            m.EXPECTED[n]=(hashlib.sha256(forged).hexdigest(),previous[1],previous[2])
+            try:refuse(forged,n)
+            finally:m.EXPECTED[n]=previous
+    print("J24I68 PASS: 3 source-identical provider ZIPs, 96 CMPCT/ZIP paired cells, 2/5/0 inherited reds; 10 hostile refusal paths")
 
 if __name__=="__main__":
     main()
