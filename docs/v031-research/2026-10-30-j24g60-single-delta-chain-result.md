@@ -83,3 +83,8 @@ The detached independent receipt auditor additionally checked **all 384 process 
 | Windows | 57.075–60.451 | 3.886–4.896 | +53.923, +53.364, +55.041, +55.537 ms |
 
 Unadjusted four-depth linear fits of observed **chain** time vs depth yield per-generation slopes, for 512 and 2,048 entries respectively, of **0.0979/0.3924 ms (Ubuntu)**, **0.1595/0.5199 ms (macOS)**, and **0.2160/0.8539 ms (Windows)**. This is consistent with repeated N-dependent replay as depth increases; a four-point slope cannot prove the precise complexity class or allocate cost among sorting, metadata lineage, footer decode and validation. The check reinforces the **real measured opportunity** while not relaxing any product-economics, storage or security requirements.
+
+
+### Negative/noise observation preserved (smallest depth)
+
+Of 24 host × N × depth case medians, **24/24** favor the checkpoint, but only **23/24 cases have every individual paired block favorable**. The exception is the deliberately cheap/noisy **macOS N=512, depth=1** control: two of four ABBA block medians are contrary (**chain 0.806 ms vs checkpoint 1.166 ms**, and **chain 0.845 ms vs checkpoint 6.572 ms**). The other two blocks and pooled median favor the checkpoint. These individual contrary observations are not discarded or reclassified. The decisive N=2048,depth=63 result is far outside this submillisecond/noise region; its eight samples per variant have non-overlapping timing ranges on each host. This makes explicit why **the materiality gate required both 10% and 3 ms**, not a small-ratio optimization claim.
