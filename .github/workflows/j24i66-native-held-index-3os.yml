@@ -1,4 +1,6 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 # J24I66: candidate native C ABI same-inode custody on actual Linux/macOS/Windows.
 # Scientific portability court only: NOT release/format or installed wheel evidence.
 name: CMPCT J24I66 Native Held-Index 3OS Court
@@ -22,7 +24,31 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      measure: ${{ steps.changed.outputs.measure }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Select only a relevant latest commit (not accumulated PR paths)
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git diff-tree --no-commit-id --name-only -r HEAD | tee latest-files.txt
+          if grep -Eq '^(native/cmpct-core/|tests/native_verify_held_index_3os\.py$|\.github/workflows/j24i66-native-held-index-3os\.yml$)' latest-files.txt; then
+            echo 'measure=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'measure=false' >> "$GITHUB_OUTPUT"
+          fi
+
   held-index:
+    needs: [latest-scope]
+    if: needs.latest-scope.outputs.measure == 'true'
     name: Actual C ABI — ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
@@ -68,8 +94,8 @@ jobs:
           retention-days: 14
 
   independent-aggregate:
-    if: always()
-    needs: [held-index]
+    if: ${{ always() && needs.latest-scope.outputs.measure == 'true' }}
+    needs: [latest-scope, held-index]
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     env:
