@@ -112,24 +112,35 @@ def verify(artifact: Path) -> dict:
             # the reporter's extracted fields or treating self-consistency as signature.
             physical_record = "installed-native/" + label + ".RECORD.csv"
             hard_check(physical_record in names, label + ": missing installed RECORD artifact")
-            native_rows = [row for row in csv.reader(io.StringIO(z.read(physical_record).decode("utf-8")))
-                           if len(row) == 3 and row[0] == NATIVE]
-            hard_check(len(native_rows) == 1, label + ": installed RECORD must contain one primary native row")
-            native_row = native_rows[0]
+            parsed_rows = list(csv.reader(io.StringIO(z.read(physical_record).decode("utf-8"))))
+            native_rows = [row for row in parsed_rows if len(row) == 3 and row[0] == NATIVE]
+            portable_rows = [row for row in parsed_rows if len(row) == 3 and row[0].casefold() == NATIVE.casefold()]
+            expected_exact_count = 2 if label in ALIASES else 1
+            expected_portable_count = 2 if label in ALIASES | {"collision_before","collision_after"} else 1
+            hard_check(len(native_rows) == expected_exact_count and
+                       len(portable_rows) == expected_portable_count,
+                       label + ": unexpected post-pip installed RECORD equivalence cardinality")
             baseline_hash = "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(baseline).digest()).decode("ascii").rstrip("=")
+            inert_hash = "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(INERT).digest()).decode("ascii").rstrip("=")
             installed_hash = "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(installed_bytes).digest()).decode("ascii").rstrip("=")
-            hard_check(native_row[1] == baseline_hash and native_row[2] == str(len(baseline)),
-                       label + ": installed RECORD does not retain original native identity")
-            record_matches = native_row[1] == installed_hash and native_row[2] == str(len(installed_bytes))
-            hard_check(record_matches == eq_original, label + ": unexpected RECORD/native mismatch")
+            expected_record_values = {(baseline_hash, str(len(baseline)))}
+            if expected_portable_count == 2:
+                expected_record_values.add((inert_hash, str(len(INERT))))
+            hard_check({(row[1],row[2]) for row in portable_rows} == expected_record_values,
+                       label + ": installed RECORD hashes/sizes do not match wheel entries")
+            record_matches = any(row[1] == installed_hash and row[2] == str(len(installed_bytes))
+                                 for row in native_rows)
             claimed = info.get("installed_record_native")
             hard_check(isinstance(claimed, dict), label + ": missing RECORD scientific observation")
-            hard_check(claimed["advertised_hash"] == native_row[1] and
-                       claimed["advertised_size"] == native_row[2] and
-                       claimed["actual_hash"] == installed_hash and
-                       claimed["actual_size"] == str(len(installed_bytes)) and
-                       claimed["matches_physical_file"] == record_matches,
-                       label + ": RECORD self-report contradicted physical installed receipt")
+            encode = lambda row: {"path":row[0], "sha256_record":row[1],"size_record":row[2]}
+            hard_check(claimed["exact_rows"] == [encode(row) for row in native_rows] and
+                       claimed["portable_casefold_rows"] == [encode(row) for row in portable_rows] and
+                       claimed["physical_sha256_record_form"] == installed_hash and
+                       claimed["physical_size"] == str(len(installed_bytes)) and
+                       claimed["exact_record_path_ambiguous"] == (len(native_rows) != 1) and
+                       claimed["portable_record_path_ambiguous"] == (len(portable_rows) != 1) and
+                       claimed["any_exact_row_matches_physical"] == record_matches,
+                       label + ": RECORD self-report contradicted original installed CSV")
             hard_check(info["primary_native_retained"] is eq_original and
                        info["inert_collision_won"] is eq_inert, label + ": self-report contradicted actual installed data")
             expected_overwrite = label in ALIASES or (system == "Darwin" and label == "collision_after")
