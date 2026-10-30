@@ -8,6 +8,7 @@ buffers plus the lifetime of opaque decoder handles.
 """
 
 import ctypes
+import stat
 from pathlib import Path
 
 _sz = ctypes.c_size_t
@@ -27,7 +28,11 @@ def _library_path() -> Path:
     if len(candidates) != 1:
         raise RuntimeError("ambiguous package-owned cmpct_core codec libraries")
     candidate = candidates[0]
-    if candidate.is_symlink() or not candidate.is_file():
+    try:
+        mode = candidate.lstat().st_mode
+    except OSError as exc:
+        raise RuntimeError("package-owned cmpct_core codec library is not a regular file") from exc
+    if not stat.S_ISREG(mode):
         raise RuntimeError("package-owned cmpct_core codec library is not a regular file")
     return candidate
 
