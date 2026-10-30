@@ -13,6 +13,10 @@ validate_macos_wheel_abi.py and real installed/native smoke before publishing.
 from __future__ import annotations
 
 import argparse
+import base64
+import csv
+import hashlib
+import io
 import json
 import unicodedata
 import zipfile
@@ -20,6 +24,8 @@ from pathlib import Path
 
 MAX_WHEEL_BYTES = 256 * 1024 * 1024
 MAX_ENTRIES = 8192
+MAX_DECODED_BYTES = 512 * 1024 * 1024
+MAX_RECORD_BYTES = 8 * 1024 * 1024
 MAX_MEMBER_NAME_BYTES = 4096
 MAX_COMPONENTS = 256
 WIN_DEVICES = frozenset({'CON', 'PRN', 'AUX', 'NUL', 'CONIN$', 'CONOUT$'}) | {f'COM{i}' for i in range(1, 10)} | {f'LPT{i}' for i in range(1, 10)}
@@ -41,6 +47,47 @@ def _components(name: str) -> tuple[str, ...]:
         if device in WIN_DEVICES:
             raise ValueError(f'Windows device-name component: {segment!r}')
     return tuple(segments)
+
+
+def _verify_record(wheel: zipfile.ZipFile, infos: list[zipfile.ZipInfo], record_name: str) -> None:
+    """Require current payloads and metadata to match the wheel's entire RECORD.
+
+    Pip install success is not evidence of RECORD integrity (J24P09c).
+    Every member is hashed via bounded streaming before any installed code runs.
+    """
+    files = {info.filename: info for info in infos if not info.is_dir()}
+    info = files.get(record_name)
+    if info is None or info.file_size > MAX_RECORD_BYTES:
+        raise ValueError('missing or oversized wheel RECORD')
+    if sum(item.file_size for item in files.values()) > MAX_DECODED_BYTES:
+        raise ValueError('total decoded wheel bytes exceed preflight budget')
+    try:
+        record = wheel.read(info).decode('utf-8')
+        rows = list(csv.reader(io.StringIO(record, newline='')))
+    except (UnicodeError, csv.Error, RuntimeError) as exc:
+        raise ValueError('invalid wheel RECORD encoding') from exc
+    names: dict[str, tuple[str, str]] = {}
+    for row in rows:
+        if len(row) != 3 or not row[0] or row[0] in names:
+            raise ValueError('duplicate or invalid wheel RECORD row')
+        names[row[0]] = row[1], row[2]
+    if set(names) != set(files):
+        raise ValueError('RECORD path set does not match wheel payload members')
+    if names[record_name] != ('', ''):
+        raise ValueError('RECORD self-row must have empty digest and size')
+    for name, member in files.items():
+        if name == record_name:
+            continue
+        row_digest, row_size = names[name]
+        if row_size != str(member.file_size) or not row_digest.startswith('sha256='):
+            raise ValueError(f'RECORD missing valid SHA-256 or size: {name!r}')
+        digest = hashlib.sha256()
+        with wheel.open(member) as source:
+            for chunk in iter(lambda: source.read(1 << 20), b''):
+                digest.update(chunk)
+        actual = base64.urlsafe_b64encode(digest.digest()).rstrip(b'=').decode('ascii')
+        if row_digest != 'sha256=' + actual:
+            raise ValueError(f'RECORD SHA-256 mismatches wheel bytes: {name!r}')
 
 
 def validate(path: str | Path) -> dict[str, object]:
@@ -83,13 +130,16 @@ def validate(path: str | Path) -> dict[str, object]:
                 file_keys.add(key)
         if exact_wheels != 1 or len(metadata_roots) != 1:
             raise ValueError(f'expected exactly one matching CMPCT .dist-info/WHEEL root: {exact_wheels}')
+        # J24P09c: pip may install a wheel with altered bytes and stale RECORD.
+        # Validate the *final retagged* artifact, before installation on any OS.
+        _verify_record(wheel, infos, next(iter(metadata_roots)) + '/RECORD')
         for key, path_name in seen.items():
             for n in range(1, len(key)):
                 ancestor = key[:n]
                 if ancestor in file_keys:
                     raise ValueError(f'regular member shadows destination directory: {seen[ancestor]!r} vs {path_name!r}')
         return {'result': 'PASS', 'wheel': path.name, 'members': len(infos),
-                'policy': 'CMPCT-specific two-root no-.data publication profile; no installed-state attestation'}
+                'policy': 'CMPCT-specific two-root no-.data plus complete RECORD publication profile; no installed-state attestation'}
 
 
 def main() -> int:

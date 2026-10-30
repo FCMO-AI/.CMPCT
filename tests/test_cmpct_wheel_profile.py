@@ -101,6 +101,43 @@ class StrictProfile(unittest.TestCase):
     def test_33_accept_package_nonalias_assets(self):
         self.check([('cmpct/assets/plain.bin',b'asset'),('cmpct/assets/caf\u00e9.txt',b'caf')])
 
+    def test_34_reject_stale_python_sha_even_if_zip_is_self_consistent(self):
+        fixture(self.wheel)
+        with zipfile.ZipFile(self.wheel) as src:
+            files = [(i.filename, src.read(i.filename)) for i in src.infolist()]
+        with zipfile.ZipFile(self.wheel, 'w') as dst:
+            for name, payload in files:
+                if name == LOADER:
+                    payload += b'\n# inert RECORD mismatch\n'
+                dst.writestr(name, payload)
+        with self.assertRaisesRegex(ValueError, 'RECORD SHA-256 mismatches'):
+            validate(self.wheel)
+
+    def test_35_reject_record_row_omission(self):
+        fixture(self.wheel)
+        with zipfile.ZipFile(self.wheel) as src:
+            files = [(i.filename, src.read(i.filename)) for i in src.infolist()]
+        with zipfile.ZipFile(self.wheel, 'w') as dst:
+            for name, payload in files:
+                if name.endswith('.dist-info/RECORD'):
+                    text = payload.decode('utf-8')
+                    payload = '\n'.join(row for row in text.splitlines() if not row.startswith(LOADER + ',')) + '\n'
+                dst.writestr(name, payload)
+        with self.assertRaisesRegex(ValueError, 'RECORD path set'):
+            validate(self.wheel)
+
+    def test_36_reject_record_sha_with_wrong_algorithm(self):
+        fixture(self.wheel)
+        with zipfile.ZipFile(self.wheel) as src:
+            files = [(i.filename, src.read(i.filename)) for i in src.infolist()]
+        with zipfile.ZipFile(self.wheel, 'w') as dst:
+            for name, payload in files:
+                if name.endswith('.dist-info/RECORD'):
+                    payload = payload.replace(b'sha256=', b'sha1=')
+                dst.writestr(name, payload)
+        with self.assertRaisesRegex(ValueError, 'RECORD missing valid SHA-256'):
+            validate(self.wheel)
+
     def test_24_cli_rejects(self):
         fixture(self.wheel,[(STEM+'.data/data/other/unused',b'no')]);r=subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/'tools/validate_cmpct_wheel_profile.py'),str(self.wheel)],capture_output=True,text=True)
         self.assertEqual(r.returncode,1)
