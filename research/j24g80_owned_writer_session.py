@@ -96,6 +96,14 @@ def trial(root,base,n,where,names,variant,trial_no):
     with CMPCT(corrupt) as ar:
         assert ar.delta_depth==63 and len(ar.by)==n-63
         assert names[-1] in ar.by and ar.verify()==n-63
+    # Retain authentic wire bytes for a separate no-CMPCT referee. All export
+    # work occurs AFTER every timed mutation and every product verification.
+    if trial_no in (0,1):
+        export=Path(os.environ.get('J24G80_EVIDENCE_DIR','evidence'))
+        export.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(path,export/f'j24g80-{n}-{where}-{variant}-valid.cmpct')
+        if variant=='owned':
+            shutil.copyfile(corrupt,export/f'j24g80-{n}-{where}-{variant}-corrupt-tail.cmpct')
     return dict(variant=variant,trial=trial_no,per_generation=per,physical=physical,
                 init_wall_ns=initial_wall,init_cpu_ns=initial_cpu,
                 final_index_sha256=hashlib.sha256(final).hexdigest(),
