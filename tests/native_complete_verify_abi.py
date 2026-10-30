@@ -80,6 +80,40 @@ def main() -> None:
         assert clean_cli.returncode == 0, clean_cli.stderr
         assert json.loads(clean_cli.stdout) == {"revision": 24, "verified": 1}
 
+        # J24I50d: an external C caller holds the original Archive handle while
+        # the *pathname* is rebound to different (index-admissible) archive bytes.
+        # Only the old handle may certify the original inode. New pathname opens
+        # and the CLI must reject the mutated physical SHA; no Python delegation.
+        owned = ctypes.c_void_p()
+        assert lib.cmpct_open(str(original).encode(), ctypes.byref(owned)) == 0
+        assert owned.value is not None
+        retained = root / "retained-original-wavflac.cmpct"
+        assert not retained.exists()
+        original.rename(retained)
+        replacement = bytearray(raw)
+        replacement[blob_pos + 32] ^= 1
+        original.write_bytes(replacement)
+        assert hashlib.sha256(retained.read_bytes()).hexdigest() == vector["archive_sha256"]
+        assert hashlib.sha256(original.read_bytes()).hexdigest() != vector["archive_sha256"]
+        assert retained.stat().st_ino != original.stat().st_ino
+        try:
+            old_count = ctypes.c_size_t(999)
+            assert lib.cmpct_verify_complete(owned, ctypes.byref(old_count)) == 0
+            assert old_count.value == 1
+            replaced_status, replaced_count = verify_abi(original)
+            assert replaced_status != 0 and replaced_count == 0
+            bad_rebound_cli = run_cli(original)
+            assert bad_rebound_cli.returncode != 0 and bad_rebound_cli.stdout == b""
+            assert verify_abi(retained) == (0, 1)
+            good_retained_cli = run_cli(retained)
+            assert good_retained_cli.returncode == 0, good_retained_cli.stderr
+            assert json.loads(good_retained_cli.stdout) == {"revision": 24, "verified": 1}
+        finally:
+            lib.cmpct_close(owned)
+            original.unlink()
+            retained.rename(original)
+        assert hashlib.sha256(original.read_bytes()).hexdigest() == vector["archive_sha256"]
+
         # Valid handle, null count pointer: report error rather than crossing ABI
         # with an invalid writable pointer. Null archive must also clear a valid count.
         count = ctypes.c_size_t(999)
