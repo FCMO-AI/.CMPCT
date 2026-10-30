@@ -1,0 +1,85 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Scientific physical signed-xattr checkpoint64 transfer; not a product gate.
+name: CMPCT J24G68 physical signed-xattr checkpoint64 court
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24g68-physical-xattr-checkpoint64-20261030
+    paths:
+      - 'research/j24g68_*'
+      - 'docs/v031-research/*j24g68*'
+      - '.github/workflows/v031-j24g68-xattr-checkpoint64.yml'
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g66-physical-signed-fsmeta-20261030
+    paths:
+      - 'research/j24g68_*'
+      - 'docs/v031-research/*j24g68*'
+      - '.github/workflows/v031-j24g68-xattr-checkpoint64.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  physical-checkpoint:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G68_EVIDENCE_DIR: evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Authenticate immutable parent and prior prediction
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor f9246d33748fb97532d711f0a81760c3505a7a4a HEAD
+          git merge-base --is-ancestor 911fe68451dabb5ad8b238e8dc5ea8a798ce37fd HEAD
+          test "$(git rev-parse HEAD:src/cmpct/journal_replay.py)" = 03743ca2a06c022c2ec64243a90fe373cf91e899
+          git rev-parse HEAD > evidence/head.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact package, compile research witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python -m py_compile research/j24g68_physical_checkpoint64_court.py research/j24g68_detached_checkpoint_audit.py
+      - name: Execute authentic 63-delta parent and public 64th checkpoint
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g68_physical_checkpoint64_court.py 2>&1 | tee evidence/j24g68.log
+          test -s evidence/j24g68-result.json
+          test -s evidence/j24g68-before.cmpct
+          test -s evidence/j24g68-after.cmpct
+      - name: Independently decode and falsify actual signed checkpoint
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g68_detached_checkpoint_audit.py evidence/j24g68-before.cmpct evidence/j24g68-after.cmpct evidence/j24g68-result.json evidence/j24g68-detached.json 2>&1 | tee evidence/j24g68-detached.log
+          test -s evidence/j24g68-detached.json
+      - name: Preserve evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g68-checkpoint64-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
