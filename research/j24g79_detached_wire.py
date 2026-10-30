@@ -20,6 +20,10 @@ def digest(raw: bytes) -> str:
 def verify_physical(receipt: dict, raw: bytes) -> dict:
     assert receipt["schema"] == "cmpct-j24g79-owned-hardlink-v1"
     assert receipt["status"] == "PASS" and receipt["product_credit"] == 0
+    expected_decision = ("H1_PHYSICAL_POSIX_PASS" if receipt["os"] in ("linux", "darwin")
+                         else "LOGICAL_PASS_NO_NATIVE_HARDLINK")
+    assert receipt["decision"] == expected_decision, (
+        "unsupported physical-fidelity claim", receipt["os"], receipt["decision"])
     assert receipt["source"]["blobs"]["src/cmpct/reader.py"] == EXPECT_HEAD_BLOB
     assert digest(raw) == receipt["physical_sha256"]
     assert digest(raw) == receipt["result"]["archive_sha256"]
