@@ -81,6 +81,7 @@ jobs:
             tests/test_v031_hardlink_owner_mutation_guard.py \
             tests/test_v031_win32_builder_hardlink_o47.py \
             tests/test_v031_j24g71_hardlink_guard_checkpoint64.py \
+            tests/test_v031_j24g72_hardlink_signed_xattr_checkpoint64.py \
             2>&1 | tee evidence/j24g71-pytest.log
       - name: Inherited signed-journal fail-closed and recovery controls
         shell: bash
