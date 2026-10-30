@@ -186,11 +186,15 @@ def inspect(path: Path) -> dict:
         tags = [line[5:].strip() for line in lines if line.startswith("Tag: ")]
         if not tags or any(tag.split("-")[-1] != platform for tag in tags):
             reject("internal WHEEL platform tags disagree with filename")
-        expected_python_tags = set(python_tag.split("."))
-        if not expected_python_tags or any(t.split("-")[0] not in expected_python_tags or len(t.split("-")) != 3 for t in tags):
-            reject("internal WHEEL Python tags disagree with filename")
-        if any(t.split("-")[1] not in abi.split(".") for t in tags):
-            reject("internal WHEEL ABI tags disagree with filename")
+        # PEP 427 compressed wheel filename tags represent the full Cartesian expansion.
+        # A proper subset in WHEEL can silently discard a claimed interpreter/ABI while
+        # preserving valid RECORD hashes and physical Mach-O slices.
+        python_tags, abi_tags = python_tag.split("."), abi.split(".")
+        if not all(python_tags) or not all(abi_tags):
+            reject("empty wheel compatibility tag component")
+        expected_tags = {f"{py}-{ab}-{platform}" for py in python_tags for ab in abi_tags}
+        if len(tags) != len(expected_tags) or set(tags) != expected_tags:
+            reject("internal WHEEL tag coverage disagrees with filename")
         binary = z.read(native[0])
         physical = physical_slices(binary)
     if not required.issubset(physical):

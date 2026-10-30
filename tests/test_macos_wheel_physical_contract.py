@@ -47,13 +47,14 @@ def good_fat():
     return fat([(X86, thin(X86, (10, 12))), (ARM, thin(ARM, (11, 0), use_build=True))])
 
 
-def wheel(path, native, platform="macosx_10_12_universal2", metadata_platform=None, broken_record=False):
+def wheel(path, native, platform="macosx_10_12_universal2", metadata_platform=None, broken_record=False, metadata_python_tags=None):
     base = "cmpct-0.30.0.dist-info"
     lib = "cmpct/cmpct_core.cpython-311-darwin.so"
     tag = metadata_platform or platform
+    tag_lines = "".join(f"Tag: {py}-cp311-{tag}\n" for py in (metadata_python_tags or ["cp311"]))
     entries = {
         lib: native,
-        f"{base}/WHEEL": f"Wheel-Version: 1.0\nRoot-Is-Purelib: false\nTag: cp311-cp311-{tag}\n".encode(),
+        f"{base}/WHEEL": (f"Wheel-Version: 1.0\nRoot-Is-Purelib: false\n" + tag_lines).encode(),
         f"{base}/METADATA": b"Metadata-Version: 2.1\nName: cmpct\nVersion: 0.30.0\n",
     }
     records = []
@@ -118,6 +119,14 @@ class TestPhysicalWheelGuard(unittest.TestCase):
         ]:
             with self.subTest(platform=platform):
                 self.assertTrue(gate.inspect(wheel(self.path(platform), binary, platform=platform))["pass"])
+
+    def test_subset_wheel_tags_rejected_even_with_forged_valid_record(self):
+        # A wheel filename claims cp310 and cp311. RECORD may be valid while WHEEL
+        # intentionally omits cp310; minimum-OS and lipo-like checks still pass.
+        p = self.root / "cmpct-0.30.0-cp310.cp311-cp311-macosx_10_12_universal2.whl"
+        self.assertTrue(gate.inspect(wheel(p, good_fat(), metadata_python_tags=["cp310", "cp311"]))["pass"])
+        with self.assertRaisesRegex(ValueError, "WHEEL tag coverage"):
+            gate.inspect(wheel(p, good_fat(), metadata_python_tags=["cp311"]))
 
     def test_non_macos_build_version_rejected(self):
         with self.assertRaisesRegex(ValueError, "not for macOS"):
