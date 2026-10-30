@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 from cmpct.reader import CMPCT
-from cmpct.codec import BHDR, K_FILE, K_HARDLINK
+from cmpct.codec import BHDR, FTR, FMAGIC, K_FILE, K_HARDLINK
 from cmpct.builder import Builder
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -251,6 +251,8 @@ def main() -> None:
         source = root / "new-physical-member.bin"
         source.write_bytes(b"new signed generation content\\0" * 111)
         append_update(journal, "new-member.bin", source)
+        _, latest_kind, _, _, _, _, _, latest_prev, _ = FTR.unpack(journal.read_bytes()[-FTR.size:])
+        assert latest_kind == 1 and latest_prev != 0
         with CMPCT(journal) as current:
             assert current.verify() == 2
             assert "new-member.bin" in current.by and vector["name"] in current.by
@@ -259,6 +261,8 @@ def main() -> None:
         rejected_put = run_cli(journal)
         assert rejected_put.returncode != 0 and rejected_put.stdout == b""
         append_delete(journal, vector["name"])
+        latest_footer = FTR.unpack(journal.read_bytes()[-FTR.size:])
+        assert latest_footer[0] == FMAGIC and latest_footer[1] == 1 and latest_footer[7] != 0
         assert journal.stat().st_ino == original_inode
         assert journal.read_bytes().startswith(raw)
         with CMPCT(journal) as current:
@@ -279,6 +283,11 @@ def main() -> None:
             next_name = alternative_name if current_name == vector["name"] else vector["name"]
             append_rename(checkpoint, current_name, next_name)
             current_name = next_name
+        # Require the *actual* terminal kind=0 signed checkpoint, not a delta
+        # unexpectedly left by a failed test generator.
+        checkpoint_footer = FTR.unpack(checkpoint.read_bytes()[-FTR.size:])
+        assert checkpoint_footer[0] == FMAGIC
+        assert checkpoint_footer[1] == 0 and checkpoint_footer[7] != 0
         with CMPCT(checkpoint) as current:
             assert current.verify() == 1
             assert current_name in current.by
