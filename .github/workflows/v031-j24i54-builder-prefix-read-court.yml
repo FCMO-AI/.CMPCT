@@ -1,0 +1,133 @@
+# ci-lane: deep
+# J24I54: preregistered read-only versus Builder history, research only.
+name: J24I54 Builder Prefix READ vs BUILD
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24i54-builder-prefix-read-control-20261030
+    paths:
+      - research/j24i54_builder_prefix_read_court.py
+      - .github/workflows/v031-j24i54-builder-prefix-read-court.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i54-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  builder-prefix-discriminator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Verify preregistration, ancestry and syntax
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor a9ab3d0255434d3da95a1303cfdf9acf1762eb6e HEAD
+          git merge-base --is-ancestor 418c60708a06583e970612340eef0f79b50c40f4 HEAD
+          git merge-base --is-ancestor 0b80ecb9b1742a6c20756f4c9e8e097103881cb4 HEAD
+          python -m py_compile research/j24i54_builder_prefix_read_court.py
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install authentic native Builder
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd libsndfile1
+          python -m pip install -e '.[audio,test]'
+      - name: Run real FRESH READ BUILD balanced court
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python research/j24i54_builder_prefix_read_court.py \
+            --out evidence/j24i54-prefix-read-result.json --reps 3 \
+            | tee evidence/j24i54-stdout.txt
+      - name: Independently recompute observations and retained physical evidence
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,os,statistics
+          from pathlib import Path
+          x=json.loads(Path("evidence/j24i54-prefix-read-result.json").read_text())
+          assert x["schema"]=="cmpct-j24i54-prefix-read-court-v1"
+          assert x["evidence_head"]==os.environ["EVIDENCE_HEAD"]
+          assert x["preregistered_at_commit"]=="a9ab3d0255434d3da95a1303cfdf9acf1762eb6e"
+          rows=x["observations"]
+          assert len(rows)==18, len(rows)
+          experiment=[r for r in rows if r["court"]=="EXPERIMENT"]
+          sham=[r for r in rows if r["court"]=="SHAM"]
+          assert len(experiment)==12 and len(sham)==6
+          assert {r["group"] for r in experiment}=={0,1}
+          for group in (0,1):
+              slots=[r for r in experiment if r["group"]==group]
+              assert len(slots)==6 and {c:sum(r["context"]==c for r in slots) for c in ("FRESH","READ","BUILD")}=={"FRESH":2,"READ":2,"BUILD":2}
+          assert {r["context"] for r in sham}=={"FRESH"}
+          for r in rows:
+              assert len(r["samples"])==3
+              assert len(r["prefix"])==(0 if r["context"]=="FRESH" else 3)
+              assert statistics.median(s["wall_ms"] for s in r["samples"])==r["median_wall_ms"]
+              assert statistics.median(s["cpu_ms"] for s in r["samples"])==r["median_cpu_ms"]
+              if r["context"]=="READ":
+                  assert all(z["read_bytes"]>=0 and z["wall_ms"]>=0 and z["cpu_ms"]>=0 for z in r["prefix"])
+              if r["context"]=="BUILD":
+                  assert all(z["archive_bytes"]>0 and z["wall_ms"]>=0 and z["cpu_ms"]>=0 for z in r["prefix"])
+          hs={s["archive_sha256"] for r in rows for s in r["samples"]}
+          sz={s["archive_bytes"] for r in rows for s in r["samples"]}
+          ns={r["native_sha256"] for r in rows}
+          assert len(hs)==len(sz)==len(ns)==1
+          for key in ("physical_native","physical_archive"):
+              f=Path("evidence")/x[key]["file"]
+              assert hashlib.sha256(f.read_bytes()).hexdigest()==x[key]["sha256"]
+          assert x["physical_archive"]["sha256"]==next(iter(hs))
+          assert x["physical_archive"]["size"]==next(iter(sz))
+          assert x["physical_native"]["sha256"]==next(iter(ns))
+          def effect(a,b,key):
+              aa=statistics.median(s[key] for r in experiment if r["context"]==a for s in r["samples"])
+              bb=statistics.median(s[key] for r in experiment if r["context"]==b for s in r["samples"])
+              return {"base_median":aa,"test_median":bb,"delta_ms":bb-aa,"ratio":bb/aa,"samples_each":12}
+          for pair,k in [(("FRESH","BUILD"),"build"),(("FRESH","READ"),"read")]:
+              for suffix,field in (("wall","wall_ms"),("cpu","cpu_ms")):
+                  assert x[k+"_"+suffix]==effect(pair[0],pair[1],field)
+          def grp(items,a,b,k):
+              av=statistics.median(r[k] for r in items if r["context"]==a)
+              bv=statistics.median(r[k] for r in items if r["context"]==b)
+              return {"base_median":av,"test_median":bv,"delta_ms":bv-av,"ratio":bv/av}
+          for g in x["groups"]:
+              items=[r for r in experiment if r["group"]==g["group"]]
+              for c in ("build","read"):
+                  for s in ("wall","cpu"):
+                      assert g[c+"_"+s]==grp(items,"FRESH",c.upper(),"median_"+s+"_ms")
+          def shamfx(k):
+              av=statistics.median(s[k] for r in sham if r["label"]=="A" for s in r["samples"])
+              bv=statistics.median(s[k] for r in sham if r["label"]=="B" for s in r["samples"])
+              return {"A_median":av,"B_median":bv,"delta_ms":bv-av,"ratio":bv/av}
+          assert x["sham_wall"]==shamfx("wall_ms")
+          assert x["sham_cpu"]==shamfx("cpu_ms")
+          assert x["decision"] in ("READ_HISTORY_SUFFICIENT_IN_COURT","READ_INSUFFICIENT_BUILDER_CONTEXT_SUPPORTED","NOT_REPRODUCED_OR_AMBIGUOUS","INTERMEDIATE_AMBIGUOUS")
+          print("INDEPENDENT_RAW_AND_PHYSICAL_PASS",x["decision"])
+          Path("evidence/j24i54-independent-audit.json").write_text(json.dumps({"validated":True,"decision":x["decision"],"evidence_head":x["evidence_head"],"records":len(rows),"recomputed":True},sort_keys=True,indent=2)+"\n")
+          PY
+          sha256sum evidence/j24i54-prefix-read-result.json evidence/j24i54-binary-final.cmpct \
+            evidence/j24i54-native.so evidence/j24i54-independent-audit.json \
+            research/j24i54_builder_prefix_read_court.py \
+            > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: cmpct-j24i54-prefix-read-${{ env.EVIDENCE_HEAD }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
