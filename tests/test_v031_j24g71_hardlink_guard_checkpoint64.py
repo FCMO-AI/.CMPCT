@@ -14,7 +14,7 @@ import msgpack
 import pytest
 
 from cmpct.builder import Builder
-from cmpct.codec import FTR
+from cmpct.codec import FTR, K_HARDLINK
 from cmpct.reader import CMPCT
 from cmpct.transactions import append_delete, append_rename
 from cmpct.validation import preflight_archive
@@ -41,6 +41,12 @@ def test_63_signed_renames_reject_owner_delete_then_checkpoint_after_alias_delet
         Builder(tree, reproducible=True).build(archive)
         preflight_archive(archive)
         with CMPCT(archive) as reader:
+            # The first Windows court revealed that equal source bytes were
+            # not enough: the old Win32 Builder emitted two K_FILE rows.
+            # Require the exact physical alias *representation*, not merely
+            # success of a later guard or exact content equality.
+            assert reader.by["h.dat"][1] == K_HARDLINK
+            assert reader.by["h.dat"][6] == ["a.dat"]
             assert reader.read("h.dat") == reader.read("a.dat")
             assert reader.delta_depth == 0
 
