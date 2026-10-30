@@ -1,0 +1,62 @@
+name: J24G88 Ordinal Survivor O0
+
+on:
+  pull_request:
+    paths:
+      - "research/j24g88_ordinal_checkpoint_o0.py"
+      - "research/j24g88_independent_decode_micro.py"
+      - "docs/v031-research/2026-10-30-j24g88-survivor-ordinal-result.md"
+      - ".github/workflows/j24g88-ordinal-survivor-o0.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  signed-source-ordinal-o0:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install independent binary referee dependency
+        run: python -m pip install msgpack==1.1.1
+      - name: Recover original J24G83 exact physical hosted artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/j24g83"
+          gh run download 41061290836 \
+            --repo FCMO-AI/.CMPCT \
+            --name j24g83-fresh-reader-writer-full-physical-evidence \
+            --dir "$RUNNER_TEMP/j24g83"
+          test -f "$RUNNER_TEMP/j24g83/j24g80-8192-middle-public-valid.cmpct"
+          test -f "$RUNNER_TEMP/j24g83/j24g80-32768-tail-public-valid.cmpct"
+          sha256sum "$RUNNER_TEMP"/j24g83/*valid.cmpct > "$RUNNER_TEMP/j24g83/source-sha256sums.txt"
+      - name: Independent signed wire and ordinal checkpoint court
+        run: |
+          python research/j24g88_ordinal_checkpoint_o0.py "$RUNNER_TEMP/j24g83" "$RUNNER_TEMP/j24g88-result.json"
+          python - <<'PY'
+          import json, os
+          p=os.path.join(os.environ['RUNNER_TEMP'],'j24g88-result.json')
+          r=json.load(open(p))
+          assert r['decision']=='SURVIVOR_BITMAP_O0_BYTES_PASS'
+          assert all(v['frozen_k32_gate_pass'] for v in r['cases'].values())
+          print('Decision:',r['decision'])
+          PY
+      - name: Independent preverified-root CPU and sparse-delta court
+        run: |
+          python research/j24g88_independent_decode_micro.py "$RUNNER_TEMP/j24g83" "$RUNNER_TEMP/j24g88-independent-micro.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24g88-ordinal-survivor-o0-physical-source-court
+          path: |
+            ${{ runner.temp }}/j24g88-result.json
+            ${{ runner.temp }}/j24g88-independent-micro.json
+            ${{ runner.temp }}/j24g83/source-sha256sums.txt
+          retention-days: 30
+          if-no-files-found: error
