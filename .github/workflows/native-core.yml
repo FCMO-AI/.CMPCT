@@ -218,6 +218,15 @@ jobs:
         run: python tests/native_wavflac_component.py
       - name: Committed WAV-FLAC archive ABI gate
         run: python tests/native_wavflac_abi.py
+      - name: Public native complete-verify C11 header and fixed WAV/FLAC ABI court
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -c \
+            -I native/cmpct-core/include \
+            tests/native_complete_verify_header.c \
+            -o "$RUNNER_TEMP/cmpct-j24i50-verify-header.o"
+          python tests/native_complete_verify_abi.py
+
       - name: Committed virtual-ZIP archive ABI gate
         run: |
           set -o pipefail
