@@ -54,12 +54,51 @@ jobs:
         run: python -m pytest -q --noconftest tests/test_native_library_selection_preload.py
       - name: Inspect actual installed native object and verify roundtrip
         run: python tools/native_loader_install_receipt.py
+      # Independent packaging path: editable installs are not equivalent to
+      # the produced wheel. Probe a clean venv before/after reinstalling the
+      # *same* wheel without altering the package-owned selector itself.
+      - name: Build actual wheel from exact source
+        run: python -m pip wheel --no-deps --wheel-dir wheelhouse .
+      - name: Verify isolated wheel-native ownership and same-wheel reinstall
+        run: |
+          set -euo pipefail
+          python -m venv .j24p01b-wheel-venv
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            VENV_PY=".j24p01b-wheel-venv/Scripts/python.exe"
+          else
+            VENV_PY=".j24p01b-wheel-venv/bin/python"
+          fi
+          shopt -s nullglob
+          wheels=(wheelhouse/cmpct-*.whl)
+          test "${#wheels[@]}" -eq 1
+          "$VENV_PY" -m pip install "${wheels[0]}"
+          "$VENV_PY" -c 'import cmpct, sys; from pathlib import Path; p=Path(cmpct.__file__).resolve(); assert p.is_relative_to(Path(sys.prefix).resolve()), (p, sys.prefix); print("wheel site-packages import:",p)'
+          "$VENV_PY" tools/native_loader_install_receipt.py
+          cp native-loader-install-receipt.json native-loader-wheel-first.json
+          "$VENV_PY" -m pip install --force-reinstall --no-deps "${wheels[0]}"
+          "$VENV_PY" tools/native_loader_install_receipt.py
+          cp native-loader-install-receipt.json native-loader-wheel-reinstall.json
+          "$VENV_PY" - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("native-loader-wheel-first.json").read_text())
+          b=json.loads(Path("native-loader-wheel-reinstall.json").read_text())
+          for key in ("source_head","candidate_name","native_sha256","native_size_bytes","compressed_test_bytes"):
+              assert a[key]==b[key], (key,a[key],b[key])
+          for x in (a,b):
+              assert x["candidate_count"]==x["post_test_candidate_count"]==1
+              assert x["native_roundtrip"]=="pass" and x["injected_match_preload_refused"] is True
+          print("same-wheel physical native identity and pre-CDLL refusal: PASS")
+          PY
       - name: Preserve source-head bound package receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: native-loader-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
-          path: native-loader-install-receipt.json
+          path: |
+            native-loader-install-receipt.json
+            native-loader-wheel-first.json
+            native-loader-wheel-reinstall.json
           if-no-files-found: ignore
           retention-days: 30
 
