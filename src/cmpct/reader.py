@@ -24,7 +24,7 @@ def _safe_output_path(dest:Path,rel:str)->Path:
     return dest/pp
 
 # One replay owner for Reader, transaction checkpoints, and bounded preflight.
-from .journal_replay import _apply_journal_ops
+from .journal_replay import JournalReplayAdmissionError, _apply_journal_ops
 
 
 # --- Reader ----------------------------------------------------------------
@@ -57,7 +57,13 @@ class CMPCT:
         self.f.seek(footer_pos);fb=self.f.read(FTR.size)
         if len(fb)!=FTR.size:return None
         m,kind,codec,flags,res,cs,us,prev,ph=FTR.unpack(fb)
-        if m!=FMAGIC or cs>footer_pos:return None
+        # An index/footer SHA only authenticates bytes, not revision-24 grammar.
+        # Match bounded preflight's cheap footer admission *before* decoding.
+        archive_size=os.fstat(self.f.fileno()).st_size
+        if (m!=FMAGIC or kind not in (0,1) or codec not in (0,1)
+                or flags or res or cs>footer_pos
+                or (prev and (prev>=footer_pos or prev+FTR.size>archive_size))):
+            return None
         self.f.seek(footer_pos-cs);enc=self.f.read(cs)
         try:payload=enc if codec==0 else zd(enc,us)
         except Exception:return None
@@ -75,6 +81,11 @@ class CMPCT:
                     for b in delta.get('blobs',[]):idx['blobs'].append(b)
                     try:
                         _apply_journal_ops(idx, delta.get('ops', []))
+                    except JournalReplayAdmissionError as exc:
+                        # A digest-consistent unsupported operation is not a torn
+                        # append: silently rolling back would misrepresent the
+                        # committed instruction set as a valid older generation.
+                        raise IOError(f'unsupported committed r24 journal operation: {exc}') from exc
                     except (ValueError, TypeError, KeyError, IndexError):
                         # A malformed committed candidate cannot silently rebind metadata.
                         # Preserve the inherited ability to recover an older valid footer.

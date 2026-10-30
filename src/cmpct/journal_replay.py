@@ -10,6 +10,38 @@ and bounded preflight must replay one identical identity transformation.
 class JournalReplayLimitError(ValueError):
     """A journal insertion would exceed the caller's file-count budget."""
 
+class JournalReplayAdmissionError(ValueError):
+    """A checksum-consistent journal contains an unsupported/malformed operation."""
+
+
+def _validate_journal_ops(ops: list) -> None:
+    """One fail-closed r24 opcode grammar shared by Reader, writer and preflight.
+
+    A digest-valid but semantically unknown opcode must not be silently ignored,
+    nor can a known mutation execute before an invalid later operation is found.
+    MessagePack arrays decode to lists; accepting a new Python shape here would
+    create a different on-disk interpretation from bounded preflight.
+    """
+    if not isinstance(ops, list):
+        raise JournalReplayAdmissionError("transaction operations must be an array")
+    for op in ops:
+        if not isinstance(op, list) or not op:
+            raise JournalReplayAdmissionError("malformed transaction operation")
+        tag = op[0]
+        if tag == 'put' and len(op) == 2:
+            row = op[1]
+            if not isinstance(row, list) or not row or not isinstance(row[0], str):
+                raise JournalReplayAdmissionError("malformed put operation")
+        elif tag == 'del' and len(op) == 2 and isinstance(op[1], str):
+            continue
+        elif tag == 'ren' and len(op) == 3 and all(isinstance(x, str) for x in op[1:]):
+            continue
+        elif tag == 'put':
+            raise JournalReplayAdmissionError("malformed put operation")
+        else:
+            raise JournalReplayAdmissionError(f"unsupported transaction operation {tag!r}")
+
+
 
 def _apply_journal_ops(index: dict, ops: list, *, max_files: int | None = None) -> dict:
     """Apply r24 journal ops while binding positional fsmeta to logical path identity.
@@ -23,6 +55,8 @@ def _apply_journal_ops(index: dict, ops: list, *, max_files: int | None = None) 
     original archive's common owner but never another member's sparse overrides.
     A same-path put retains preexisting metadata; rename transfers it; delete removes it.
     """
+    # Validate the *entire* operation list before mutating any index state.
+    _validate_journal_ops(ops)
     rows = index['files']
     # The frequent replace-in-place journal op never changes row ordinals. Avoid
     # allocating a per-file lineage map or sorting a large index for that case.
@@ -60,6 +94,9 @@ def _apply_journal_ops(index: dict, ops: list, *, max_files: int | None = None) 
                     if old in lineage:
                         lineage[new] = lineage.pop(old)
                     break
+        else:
+            # Defensive if the list ever changes after grammar admission.
+            raise JournalReplayAdmissionError(f"unsupported transaction operation {kind!r}")
     rows.sort(key=lambda row: row[0])
     new_names = [row[0] for row in rows]
     fsmeta = index.get('fsmeta')

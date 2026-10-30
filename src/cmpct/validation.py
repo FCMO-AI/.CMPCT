@@ -14,7 +14,8 @@ from pathlib import Path
 import msgpack
 
 from .path_policy import canonical_logical_path
-from .journal_replay import JournalReplayLimitError, _apply_journal_ops
+from .journal_replay import (JournalReplayAdmissionError, JournalReplayLimitError,
+                             _apply_journal_ops, _validate_journal_ops)
 
 from .codec import (
     BHDR, BMAGIC, CODEC_DEFLATE, CODEC_RAW, CODEC_WAVFLAC, CODEC_ZSTD, CODEC_ZSTDDICT,
@@ -192,22 +193,12 @@ def _apply_delta(index: dict, delta: dict, limits: ParserLimits) -> None:
         raise ValidationError("checkpoint lacks files/blobs arrays")
     if len(blobs) + len(new_blobs) > limits.max_blobs:
         raise ResourceLimitError("blob count exceeds parser limit")
-    # Do not let the more trusting Reader helper convert a malformed signed
-    # operation into an unintended different operation or silently skip it.
-    for op in ops:
-        if not isinstance(op, list) or not op:
-            raise ValidationError("malformed transaction operation")
-        tag = op[0]
-        if tag == "put" and len(op) == 2:
-            row = op[1]
-            if not isinstance(row, list) or not row or not isinstance(row[0], str):
-                raise ValidationError("malformed put operation")
-        elif tag == "del" and len(op) == 2 and isinstance(op[1], str):
-            pass
-        elif tag == "ren" and len(op) == 3 and all(isinstance(x, str) for x in op[1:]):
-            pass
-        else:
-            raise ValidationError(f"unsupported transaction operation {tag!r}")
+    # One grammar rejects bad operations before either replay implementation
+    # mutates the effective index. Structural preflight retains its own limits.
+    try:
+        _validate_journal_ops(ops)
+    except JournalReplayAdmissionError as exc:
+        raise ValidationError(str(exc)) from exc
     blobs.extend(new_blobs)
     try:
         _apply_journal_ops(index, ops, max_files=limits.max_files)
