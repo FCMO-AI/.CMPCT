@@ -161,7 +161,7 @@ def main() -> None:
         hardlink_root = root / "source-hardlink"
         hardlink_root.mkdir()
         owner = hardlink_root / "a-owner.bin"
-        owner.write_bytes(b"hardlink-content-identity\\x00" * 1024)
+        owner.write_bytes(b"hardlink-content-identity\x00" * 1024)
         os.link(owner, hardlink_root / "z-alias.bin")
         hardlink_archive = root / "real-hardlink.cmpct"
         Builder(hardlink_root, workers=1).build(hardlink_archive)
