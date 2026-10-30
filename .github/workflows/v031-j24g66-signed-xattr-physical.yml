@@ -9,6 +9,7 @@ on:
       - agent/phased1-v031-j24g66-physical-signed-fsmeta-20261030
     paths:
       - 'research/j24g66_signed_fsmeta_physical_court.py'
+      - 'research/j24g66_detached_wire_audit.py'
       - 'docs/v031-research/*j24g66*'
       - '.github/workflows/v031-j24g66-signed-xattr-physical.yml'
   pull_request:
@@ -65,7 +66,7 @@ jobs:
           set -euo pipefail
           python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
           python -m pip freeze > evidence/pip-freeze.txt
-          python -m py_compile research/j24g66_signed_fsmeta_physical_court.py
+          python -m py_compile research/j24g66_signed_fsmeta_physical_court.py research/j24g66_detached_wire_audit.py
       - name: Demand authentic sparse xattr capture and identity through public Writer
         shell: bash
         run: |
@@ -73,6 +74,12 @@ jobs:
           python research/j24g66_signed_fsmeta_physical_court.py 2>&1 | tee evidence/j24g66.log
           test -s evidence/j24g66-result.json
           test -s evidence/j24g66-signed-physical.cmpct
+      - name: Authenticate physical footer sequence with independent non-CMPCT replay
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g66_detached_wire_audit.py evidence/j24g66-signed-physical.cmpct evidence/j24g66-result.json evidence/j24g66-detached-review.json 2>&1 | tee evidence/j24g66-detached.log
+          test -s evidence/j24g66-detached-review.json
       - name: Preserve exact outcome, including failures
         if: always()
         uses: actions/upload-artifact@v4
