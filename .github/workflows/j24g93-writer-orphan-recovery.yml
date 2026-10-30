@@ -1,0 +1,97 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G93 actual installed public Writer continuation after orphan tail (research only).
+name: J24G93 Public Writer Orphan Recovery Court
+
+on:
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g92-footer-parent-link-court-20261030
+    paths:
+      - 'research/j24g93_*'
+      - 'docs/v031-research/*j24g93*'
+      - '.github/workflows/j24g93-writer-orphan-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g93-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-public-writer:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G93_EVIDENCE: evidence/j24g93
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout source-exact experiment
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert immutable prereg, Reader, Writer and HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor d6bdcdf7 HEAD
+          git merge-base --is-ancestor f29561c5e2d36a8f47aa35f61191911c0611be6b HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c
+          mkdir -p "$J24G93_EVIDENCE"
+          git rev-parse HEAD > "$J24G93_EVIDENCE/checkout-head.txt"
+          git rev-parse HEAD:research/j24g93_orphan_writer_court.py > "$J24G93_EVIDENCE/instrument-git-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install unchanged CMPCT and separately parsed wire dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m pip freeze > "$J24G93_EVIDENCE/pip-freeze.txt"
+          python -m py_compile research/j24g93_orphan_writer_court.py research/j24g93_detached_referee.py
+      - name: Run actual Reader/Writer/preflight orphan recovery court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g93_orphan_writer_court.py 2>&1 | tee "$J24G93_EVIDENCE/run.log"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('evidence/j24g93/receipt.json')
+          r=json.loads(p.read_text())
+          assert r['status']=='PASS',r.get('fatal')
+          assert r['decision']=='PUBLIC_WRITER_SKIPS_SHA_VALID_UNROOTED_ORPHAN'
+          assert set(r['cases'])=={'16','128'}
+          for c in r['cases'].values():
+              assert c['before_count']-c['after_count']==1
+              assert c['writer_parent']==c['pre_existing_footer']
+              assert c['writer_parent']!=c['orphan_footer']
+              assert c['nearest_physical_sha_footer_is_not_writer_parent']
+          print('J24G93_REAL_WRITER_VERDICT',r['decision'])
+          PY
+      - name: Independently parse physical wire and source-bound receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g93_detached_referee.py "$J24G93_EVIDENCE" 2>&1 | tee "$J24G93_EVIDENCE/referee.log"
+          test -s "$J24G93_EVIDENCE/detached-referee.json"
+      - name: Preserve full physical archives, source witness and negative controls
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-j24g93-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/j24g93/
+          if-no-files-found: warn
+          retention-days: 30
