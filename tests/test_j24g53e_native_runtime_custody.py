@@ -195,3 +195,30 @@ def test_post_maps_rebind_cannot_publish_a_different_native_sha(repos, monkeypat
     # publish the different surrogate SHA under its mapped dev/inode identity.
     with pytest.raises(RuntimeError, match="mapped inode|native path rebound|native provenance probe failed"):
         court.attest(candidate, base, ch, bh, receipt)
+
+
+
+def test_post_digest_native_path_rebind_rejected(repos, monkeypatch):
+    """The final pathname check is independent of the descriptor-bound hash.
+
+    Swap a valid ELF B into the original name *after* A's same-FD digest and
+    post-fstat, but before the final path identity comparison. This is a
+    second controlled schedule, not a timing race or a real product change.
+    """
+    base, candidate, bh, ch, bd, cd, receipt = repos
+    assert bd != cd
+    package_dir = candidate / "src" / "cmpct"
+    shutil.copyfile(base / "src" / "cmpct" / "cmpct_core.so", package_dir / "surrogate.so")
+    original_probe = court.PROBE
+    marker = "        current = os.stat(path, follow_symlinks=False)"
+    assert original_probe.count(marker) == 1
+    injection = (
+        '        if root.name == "candidate":\n'
+        '            import shutil\n'
+        '            old_mapped = package_dir / "cmpct_core.so"\n'
+        '            old_mapped.rename(package_dir / "previously_mapped.so")\n'
+        '            shutil.copyfile(package_dir / "surrogate.so", old_mapped)\n'
+    )
+    monkeypatch.setattr(court, "PROBE", original_probe.replace(marker, injection + marker, 1))
+    with pytest.raises(RuntimeError, match="native path rebound"):
+        court.attest(candidate, base, ch, bh, receipt)
