@@ -1,0 +1,11 @@
+# J24I50b — installed-wheel complete verification symbol, prospective cross-host proof
+
+**Preregistration before changing the installed smoke consumer; dependent on J24I50.** The existing #803 installed package court proves a shipping `cmpct-core` codec ABI and 3/3 OS + 15/15 CPython wheel installation. It does **not** prove that J24I50's new complete-verification C symbol is present in the wheel, callable after installation or compatible with real Builder-created artifacts.
+
+## Question, strong control and falsifier
+Will the *identical installed wheel already exercised by `tests/installed_native_package_smoke.py`* export `cmpct_verify_complete`, accept the same representative real archive that installed Python `CMPCT.verify()` just accepted and report the same complete verified-member count, on Ubuntu/macOS/Windows and CPython 3.10–3.14? Use the same archive and already-loaded shipping cdylib; never reload a separately built native core or regenerate corpus between consumers. Also pass a null archive with a valid writable count to demand typed refusal and zeroed output. Do not change the earlier Zstd dictionary vector, source fingerprint, release gate or existing smoke assertions.
+
+The experiment is **killed** if any installed platform lacks the symbol, returns a different count, raises a foreign ABI error, reports success for a null archive, or changes previous shipping Zstd/Builder/Reader/extract checks. A green installed test is **ABI product-distribution evidence only**; it is not a Python `CMPCT.verify()` acceleration, cross-host benchmark or release gate. The independent corrupted fixed WAV/RAW physical tests remain exclusively in the native-core gate because the installed smoke input is not a fixed scientific vector.
+
+## Cost and opportunity
+The incremental entire-archive verification is intentionally charged as one extra full logical traversal in an installed smoke, making the distributed symbol test meaningful. The extra work is small for this two-entry representative archive; no production codec, archive format or public Reader behavior changes. If it passes, a future API owner can make an explicit opt-in Python binding and compare complete operation cost with safe fallbacks, rather than trusting Rust-only measurements.
