@@ -45,6 +45,10 @@ The within-arm flag is not a reliable automatic explanation for official reds:
 
 Conversely, #835 second contained 7 non-red CMPCT cells with a same-arm crossing. Neither a positive nor negative within-arm placebo is sufficient to classify official pairwise effects as engine regressions or host noise. **All seven historical official failures remain FAILURES under their original evaluator**. A passing #837 does not retroactively erase either #835 failing run.
 
+### Within-run temporal sign geometry (descriptive, not causal)
+
+The first #835 attempt has 5 material CMPCT same-arm shifts: **4 late-slower and 1 late-faster**. The second #835 attempt has 14 material CMPCT shifts: **all 14 late-faster**, across both arms, nine CLI and five library cells; ZIP has only **one** material crossing in that same attempt. #837 has none in either engine. This is inconsistent with interpreting the three attempts as one constant global timing multiplier shared by CMPCT and ZIP. A process/worktree/cache-history mechanism is plausible but unproven, and it still cannot classify the official source-identical pairwise reds. A model inferred after inspecting these shifts is posthoc and must not be used as a correction factor.
+
 ### Stronger negative: even two independently red A/B blocks do not identify a source regression
 
 The same original source comparison shows **4 of the 7 official red cells** also breach the numerical positive threshold *independently in both matching A and B blocks* (1/2 first #835, 3/5 second #835). The clearest counterexample is the same `nested/cli/create` case: the A-block pair differs by **+7.939105ms / +11.172%** and the B-block pair by **+7.328555ms / +10.077%**, despite zero product/benchmark source changes. Thus merely requiring an official red to reproduce in both A/B blocks cannot prove a causal source regression either. This **does not erase the release veto**; it narrows what block-to-block repeatability can justify. Worktree path, binary execution identity and environment/candidate label remain possible unisolated causes. No prospective causal randomization was performed.
