@@ -124,3 +124,23 @@ def test_source_tree_alias_rejected(repos):
     base, candidate, bh, ch, _, _, receipt = repos
     with pytest.raises(ValueError, match="same source tree"):
         court.attest(candidate, candidate, ch, ch, receipt)
+
+
+def test_original_abba_comparator_precedes_probe_and_receipt_upload():
+    # Historical thresholds and all four timed phases remain ahead of the observer.
+    # This is a custody/layout assertion, not a performance improvement claim.
+    workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "zip-parity.yml").read_text()
+    phase_names = (
+        "- name: Benchmark A — direct base",
+        "- name: Benchmark B — candidate",
+        "- name: Benchmark B — candidate repeat",
+        "- name: Benchmark A — direct base repeat",
+    )
+    comparator = workflow.index("- name: Reject performance regressions")
+    observer = workflow.index("- name: J24G53e post-ABBA native")
+    upload = workflow.index("- name: Upload release benchmark evidence")
+    assert all(workflow.index(name) < comparator for name in phase_names)
+    assert comparator < observer < upload
+    assert "--max-time-regression 0.05" in workflow
+    assert "--max-size-regression 0.01" in workflow
+    assert "if: always()" in workflow[observer:upload]
