@@ -17,7 +17,9 @@ mod codec_decoder_abi;
 mod projection;
 pub use projection::{execute_range, VirtualZipDispatchError};
 
-use crate::{Archive, CmpctError, Storage, CODEC_WAV_FLAC, MAX_DIRECT_DECODE_BYTES, MAX_INDEX_BYTES};
+use crate::{
+    Archive, CmpctError, Storage, CODEC_WAV_FLAC, MAX_DIRECT_DECODE_BYTES, MAX_INDEX_BYTES,
+};
 use sha2::{Digest, Sha256};
 use std::io::{Read, Seek, SeekFrom};
 
@@ -144,7 +146,9 @@ impl Archive {
             return Err(CmpctError::Unsupported);
         }
         let primary_uncompressed = u64::from_le_bytes(
-            header[20..28].try_into().map_err(|_| CmpctError::Unsupported)?
+            header[20..28]
+                .try_into()
+                .map_err(|_| CmpctError::Unsupported)?,
         );
         let primary_sha = &header[36..68];
 
@@ -164,16 +168,23 @@ impl Archive {
             return Err(CmpctError::Unsupported);
         }
         let compressed_len = u64::from_le_bytes(
-            footer[12..20].try_into().map_err(|_| CmpctError::Unsupported)?
+            footer[12..20]
+                .try_into()
+                .map_err(|_| CmpctError::Unsupported)?,
         );
         let uncompressed_len = u64::from_le_bytes(
-            footer[20..28].try_into().map_err(|_| CmpctError::Unsupported)?
+            footer[20..28]
+                .try_into()
+                .map_err(|_| CmpctError::Unsupported)?,
         );
         if compressed_len > MAX_INDEX_BYTES
             || uncompressed_len > MAX_INDEX_BYTES
             || uncompressed_len != primary_uncompressed
-            || self.data_end.checked_add(compressed_len)
-                .and_then(|end| end.checked_add(FOOTER_SIZE)) != Some(file_len)
+            || self
+                .data_end
+                .checked_add(compressed_len)
+                .and_then(|end| end.checked_add(FOOTER_SIZE))
+                != Some(file_len)
         {
             return Err(CmpctError::Unsupported);
         }
@@ -184,9 +195,15 @@ impl Archive {
             let mut chunk = [0u8; 64 * 1024];
             loop {
                 let got = source.read(&mut chunk)?;
-                if got == 0 { break; }
-                count = count.checked_add(got as u64).ok_or(CmpctError::IndexLimit)?;
-                if count > limit { return Err(CmpctError::IndexLimit); }
+                if got == 0 {
+                    break;
+                }
+                count = count
+                    .checked_add(got as u64)
+                    .ok_or(CmpctError::IndexLimit)?;
+                if count > limit {
+                    return Err(CmpctError::IndexLimit);
+                }
                 sha.update(&chunk[..got]);
             }
             Ok((sha.finalize().into(), count))
@@ -196,9 +213,7 @@ impl Archive {
         let (tail_sha, tail_len) = match footer[9] {
             0 => bounded_sha((&mut *file).take(compressed_len), uncompressed_len)?,
             1 => {
-                let decoder = zstd::stream::read::Decoder::new(
-                    (&mut *file).take(compressed_len)
-                )?;
+                let decoder = zstd::stream::read::Decoder::new((&mut *file).take(compressed_len))?;
                 bounded_sha(decoder, uncompressed_len)?
             }
             _ => return Err(CmpctError::Unsupported),
