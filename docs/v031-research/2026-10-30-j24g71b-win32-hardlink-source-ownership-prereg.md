@@ -1,0 +1,17 @@
+# J24G71b — Windows hardlink-source identity transferred from proven O47
+
+**Prospective follow-up, 2026-10-30 UTC, after a decisive hosted negative and before modifying Builder.** Original J24G71 prereg `81325831` is immutable. This follow-up is not retroactive promotion.
+
+## Decisive original observation
+J24G71 [#815] exact HEAD `aa0375ad8cf7b59cfefd3ca4d5c026bdf3041c73`, [original run #41021683098](https://github.com/FCMO-AI/.CMPCT/actions/runs/41021683098): Ubuntu/macOS focused courts SUCCESS; Windows **FAILURE, 7 failed / 2 passed** in the first physical test step. Source input `os.link` and `os.stat().st_ino` equality succeeded but installed Builder serialized both paths as independent ordinary files: guard correctly did not reject mutations of an owner path with no `K_HARDLINK` alias row. Windows physical extraction also used separate inodes. This is a product correctness deficit on the actual Windows input, not a CI-provider failure or a reason to weaken/skip the Windows assertions. The inherited #241 donor was POSIX-only; J24G71's previous 3-host claim was unproven.
+
+## Strongest already-proven control and owner
+O47 [#401](https://github.com/FCMO-AI/.CMPCT/pull/401), exact source `29d9688ae6bff6d1eccc27f019893866abe5b5c3`, Builder Git blob `6f60dfe63742ff4b777f959a15d6fb828ae29610`, identifies CPython Windows `DirEntry.stat` zeros for inode/device/link count. It uses a Win32-only `os.stat(path,follow_symlinks=False)` for physical identity, keeping cached DirEntry stat for mode/mtime. #625 already separately composes #401 with a different Reader #262, but not with #795 shared signed journal + #241 Writer guard. Do not reinvent and do not overwrite #401 or #625.
+
+## Question, predictions, alternatives and kill
+Can *only* transplant #401's precisely localized physical identity block into #795's Builder (which contains newer independent xattr/fidelity fixes, so **do not wholesale copy older Builder**) and have original unchanged 9 J24G71/241 focused tests plus exact O47's 2-case Windows hardlink/independent-copy test PASS on Ubuntu, macOS, Windows? Prediction: Windows now has one physical `K_HARDLINK` alias row; precommit guard refuses owner mutations and retains exact input bytes, 64th checkpoint passes; equal-byte separate copy must remain independent. POSIX behavior unchanged. Require original installed source identity and original hosted receipts.
+
+Falsifier: any Windows mismatch, new POSIX failure, O47 positive/negative failure, altered r24 grammar, source identity mismatch, new inherited J24G57 failure, or sign of changing evaluator/weaker filesystem semantics. Preservation of #795 Builder existing xattr code is mandatory. The cheaper alternative of skipping Windows would hide the product defect and is forbidden. Full Builder transplant would overwrite unrelated fixes and is rejected. One Win32-only additional `os.stat` per regular file is a material exported CPU/syscall cost and needs benchmark before product/release promotion. No prospective performance/size win from this court.
+
+## Ownership, integration and status
+This is a branch-local composition. #401 owns Win32 Builder capture, #241 owns Writer fail-closed, #795 owns signed replay, #625 owns its different Reader integration, #245/#247/#250 own additional unrelated Writer admission guards. Notify owners with concrete result after exact-head source trials. No merge/release/version/format/benchmark/Discovery State change. Original Windows red is preserved append-only.
