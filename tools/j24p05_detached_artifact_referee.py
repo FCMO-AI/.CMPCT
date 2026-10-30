@@ -72,7 +72,11 @@ def verify(artifact: Path) -> dict:
         hard_check(source["inert_sha256"] == digest(INERT), "inert source SHA mismatch")
         verified = {}
         observed_installed = {}
-        baseline = None
+        original_path = next((n for n in names if n.startswith("original/") and n.endswith(".whl")), None)
+        hard_check(original_path is not None, "missing positive control")
+        original_entries, _ = check_wheel(z.read(original_path), "original")
+        baseline = original_entries[NATIVE]
+        hard_check(digest(baseline) == source["primary_native_sha256"], "baseline primary SHA mismatch")
         for label in sorted(CASES):
             wheel_matches = [n for n in names if n.startswith(label + "/") and n.endswith(".whl")]
             hard_check(len(wheel_matches) == 1, label + ": missing physical wheel")
