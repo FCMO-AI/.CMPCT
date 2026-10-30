@@ -102,6 +102,31 @@ This is a representation-specific safety increment, not a replacement for full n
 5. Turn validated structural maxima and canonical encodings into the normative byte-level spec.
 6. Expand the Rust/Python cross-check beyond authenticated primary-index enumeration plus implemented direct/map/pack/virtual ranges to complete structural validation, representation-complete virtual member reads, extraction and tail/journal recovery before treating the native reader as an independent conformance implementation.
 
+## J24G57 candidate — signed journal admission parity (unmerged)
+
+A regression court on stacked v0.31 research (issues #792 and #793) established two **different**
+r24 Python Reader/preflight disagreements. A SHA-consistent committed delta containing an
+unrecognized opcode could be partially replayed by Reader while preflight refused it; and a
+SHA-consistent generation footer with nonzero `flags` or `reserved` could be selected by
+Reader when preflight recovered the earlier valid footer. An unkeyed SHA-256 digest attests
+bytes, not an external signer's identity or semantic permission.
+
+The isolated [J24G57 PR #795](https://github.com/FCMO-AI/.CMPCT/pull/795) is a candidate
+repair, **not a shipped guarantee**. It performs complete shared opcode-grammar admission
+before any journal index mutation, hard-refuses a checksum-consistent invalid instruction
+instead of silently applying a subset, and makes Reader reject unsupported footer fields and
+invalid predecessor bounds before payload decoding. The prior-generation fallback remains
+applicable to an invalid footer header or damaged digest, not to a deliberately unsupported
+committed instruction whose payload itself is digest-consistent.
+
+The acceptance court includes genuine revision-24 Builder artifacts, mixed known/unknown
+operation orders, malformed operations, invalid field and previous-pointer variants, corrupted
+digest control, inherited #789 checkpoint/recovery tests and a detached physical referee. At
+publication of this candidate note, exact-head hosted evidence must still be checked directly
+in the PR/Actions; a passing unit test or inherited green research negative cannot authorize
+promotion. Rust native journal parity, hostile resource budgets, full product CPU/RSS,
+power-loss recovery and all historical release gates remain separate, unresolved obligations.
+
 ## Revision rule
 
 No format revision bump is required for this increment because it writes **no new field, record, codec, transform or storage semantic**. If later hardening requires a reader-visible on-disk rule, that change must follow the repository's normal revision/spec/history/current-state/conformance gate.
