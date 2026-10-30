@@ -41,3 +41,7 @@ The scientific decision is **H1 survives authentic POSIX hardlink + sparse xattr
 Under #795/#817, test hardlink-owner rename/delete/recreate cases, same-inode conflicting xattrs, complete checkpoint-64 and fail-closed recovery, canonical source-hash ownership and independent parser hostility. Only then merge the single general replay into a private Decoder boundary, execute same-input official full product and native parity gates. Favor simple fallback whenever admission is not provable.
 
 **Product credit 0. No merge. No version or format change.**
+
+## Post-result falsifiability correction (same physical evidence, new HEAD)
+
+The original three-host harness emitted the same string `H1_PHYSICAL_PASS` on all platforms even though Windows encoded `z-alias.dat` as `K_FILE=0` rather than a physical hardlink and captured no xattrs. **The string overstates the Windows claim.** No test was relaxed: the harness was corrected prospectively for *future executions* to issue `H1_PHYSICAL_POSIX_PASS` only on native POSIX hosts and `LOGICAL_PASS_NO_NATIVE_HARDLINK` on Windows. The no-CMPCT referee now separately rejects a receipt claiming physical Windows fidelity. Source repair commits `e3fcb7bc16f1af0c546e0548324da0428c3def67` and `70c208ac7054e733eba1ccbb2b3810e3323fa35d`. Earlier original source-head physical artifacts, independent reconstruction, and SHA results are unmodified; the refined evidence gate must pass at its **new exact head**. This is a narrow improvement in claim honesty rather than a change to physical semantics or a release win.
