@@ -1,4 +1,4 @@
-# ci-lane: focused
+# ci-lane: fast
 name: CMPCT package-native loader ownership
 
 on:
