@@ -1,0 +1,84 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G61 attribution only; immutable parent J24G60 physical oracle.
+name: CMPCT J24G61 one-op chain replay attribution
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g61-signed-chain-cost-attribution-20261030
+    paths:
+      - 'research/j24g61_signed_chain_attribution.py'
+      - 'docs/v031-research/*j24g61*'
+      - '.github/workflows/v031-j24g61-signed-chain-attribution.yml'
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g60-public-chain-coldopen-20261030
+    paths:
+      - 'research/j24g61_signed_chain_attribution.py'
+      - 'docs/v031-research/*j24g61*'
+      - '.github/workflows/v031-j24g61-signed-chain-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g61-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-cost-attribution:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G61_RESULT: evidence/j24g61-result.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Attest exact parent and immutable Reader Writer replay source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor fb5d96cdb8855fe3e01868792e65b79d3d61661d HEAD
+          git merge-base --is-ancestor 8eaa7460825fde317aa7338db3f557a2dd9e45bf HEAD
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = a2160a2f6b1ca3ef8cd94897cb68bb2fcb74ebc2
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 3eef7fdc3f6deca5ddd6d9edf1292c7e2c864f11
+          test "$(git rev-parse HEAD:src/cmpct/journal_replay.py)" = 03743ca2a06c022c2ec64243a90fe373cf91e899
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 5ea3b8f26058b0983c9686295c73f15472bc3ffe
+          git rev-parse HEAD > evidence/head.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install source-exact CMPCT and independent wire parser
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'zstandard>=0.22' 'msgpack>=1.0'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python -m py_compile research/j24g61_signed_chain_attribution.py
+      - name: Run same-state signed-history phase attribution
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g61_signed_chain_attribution.py 2>&1 | tee evidence/j24g61-court.log
+          test -s evidence/j24g61-result.json
+      - name: Archive evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g61-replay-attribution-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
