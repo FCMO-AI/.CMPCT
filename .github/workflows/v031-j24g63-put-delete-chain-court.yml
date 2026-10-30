@@ -4,14 +4,6 @@
 name: CMPCT J24G63 public put/delete one-op chain court
 
 on:
-  push:
-    branches:
-      - agent/phased2-v031-j24g63-public-put-delete-chain-court-20261030
-    paths:
-      - 'research/j24g63_public_put_delete_chain_court.py'
-      - 'research/j24g63_independent_receipt_audit.py'
-      - 'docs/v031-research/*j24g63*'
-      - '.github/workflows/v031-j24g63-put-delete-chain-court.yml'
   pull_request:
     branches:
       - agent/phased1-v031-j24g60-public-chain-coldopen-20261030
@@ -26,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  # Push and PR for the same head share one compute lane, avoiding duplicate 3-host runs.
+  # One PR-triggered compute lane; workflow_dispatch remains available for replication.
   group: cmpct-j24g63-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
