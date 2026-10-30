@@ -1,9 +1,10 @@
-"""J24G52 narrow same-source replay discrepancy probe: never edit frozen validators.
+"""J24G52 regression: signed sparse inode metadata must replay identically.
 
-This is a source-level negative discriminator, not evidence that a whole on-disk
-multi-generation archive reconstructs incorrectly under preflight. It tests
-an adjacent ownership boundary so the next activation can choose a physical
-falsifier instead of silently assuming Reader and preflight agree.
+The historical version of this court expected a ghost ordinal after delete and
+correctly failed once shared replay repaired that defect. Retain the exact hostile
+input, but now require both independent admission routes to bind xattrs to the
+same surviving physical owner and alias. This complements, not substitutes for,
+the real 63-generation archive court on the stacked Reader.
 """
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ from cmpct.reader import _apply_journal_ops
 from cmpct.validation import _apply_delta, ParserLimits
 
 
-def test_signed_sparse_xattrs_have_different_ordinals_after_delete():
+def test_signed_sparse_xattrs_preserve_same_logical_owners_after_delete():
     original = {
         "files": [
             ["a-owner", 0, 0, 0, 0, None, None],
@@ -46,9 +47,17 @@ def test_signed_sparse_xattrs_have_different_ordinals_after_delete():
     reader = names_and_xattrs(reader_index)
     print("J24G52_JOURNAL_PREFLIGHT", preflight)
     print("J24G52_JOURNAL_READER", reader)
-    # Preserve the actual independently checked source result rather than
-    # assuming correctness. This test will fail if the mechanism changes;
-    # the physical archive still needs an independent hosted test.
-    assert preflight[2][0] is None
-    assert reader[1][0] == "z-alias"
-    assert preflight != reader
+    # A signed deletion moves the surviving alias from ordinal 2 to ordinal 1.
+    # Both paths must migrate the authenticated xattrs, not leave stale ordinals
+    # that either disappear or bind metadata to the wrong physical inode.
+    expected = {
+        0: ("a-owner", [["user.same", b"same"]]),
+        1: ("z-alias", [["user.same", b"same"]]),
+    }
+    assert preflight == expected
+    assert reader == expected
+    assert preflight == reader
+    assert preflight_index["files"] == reader_index["files"]
+    assert preflight_index["fsmeta"]["xattrs"] == reader_index["fsmeta"]["xattrs"]
+    assert len(preflight_index["files"]) == 2
+    assert 2 not in preflight and 2 not in reader
