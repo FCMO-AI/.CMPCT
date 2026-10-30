@@ -108,6 +108,28 @@ def verify(artifact: Path) -> dict:
                        label + ": installed byte receipt mismatch")
             eq_original, eq_inert = installed_bytes == baseline, installed_bytes == INERT
             hard_check(eq_original != eq_inert, label + ": installed data neither original nor inert")
+            # Independently read the exact post-pip RECORD, rather than trusting
+            # the reporter's extracted fields or treating self-consistency as signature.
+            physical_record = "installed-native/" + label + ".RECORD.csv"
+            hard_check(physical_record in names, label + ": missing installed RECORD artifact")
+            native_rows = [row for row in csv.reader(io.StringIO(z.read(physical_record).decode("utf-8")))
+                           if len(row) == 3 and row[0] == NATIVE]
+            hard_check(len(native_rows) == 1, label + ": installed RECORD must contain one primary native row")
+            native_row = native_rows[0]
+            baseline_hash = "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(baseline).digest()).decode("ascii").rstrip("=")
+            installed_hash = "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(installed_bytes).digest()).decode("ascii").rstrip("=")
+            hard_check(native_row[1] == baseline_hash and native_row[2] == str(len(baseline)),
+                       label + ": installed RECORD does not retain original native identity")
+            record_matches = native_row[1] == installed_hash and native_row[2] == str(len(installed_bytes))
+            hard_check(record_matches == eq_original, label + ": unexpected RECORD/native mismatch")
+            claimed = info.get("installed_record_native")
+            hard_check(isinstance(claimed, dict), label + ": missing RECORD scientific observation")
+            hard_check(claimed["advertised_hash"] == native_row[1] and
+                       claimed["advertised_size"] == native_row[2] and
+                       claimed["actual_hash"] == installed_hash and
+                       claimed["actual_size"] == str(len(installed_bytes)) and
+                       claimed["matches_physical_file"] == record_matches,
+                       label + ": RECORD self-report contradicted physical installed receipt")
             hard_check(info["primary_native_retained"] is eq_original and
                        info["inert_collision_won"] is eq_inert, label + ": self-report contradicted actual installed data")
             expected_overwrite = label in ALIASES or (system == "Darwin" and label == "collision_after")
@@ -115,7 +137,8 @@ def verify(artifact: Path) -> dict:
             observed_installed[label] = {"actual_bytes":len(installed_bytes),
                                          "actual_sha256":digest(installed_bytes),
                                          "equivalent_to":("inert" if eq_inert else "original"),
-                                         "aliases_baseline_path": bool(expected_overwrite)}
+                                         "aliases_baseline_path": bool(expected_overwrite),
+                                         "installed_record_matches_physical_native":record_matches}
             verified[label] = {"wheel_bytes":len(wheel_data),
                                "wheel_sha256":digest(wheel_data),
                                "raw_wheel_members":len(paths),
