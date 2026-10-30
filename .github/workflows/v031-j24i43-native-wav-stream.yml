@@ -1,0 +1,235 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: J24I43 Native WAV Streaming Product Court
+on:
+  pull_request:
+    paths:
+      - 'native/cmpct-core/src/wavflac.rs'
+      - 'native/cmpct-core/src/vzip_dispatch.rs'
+      - 'research/j24i43/**'
+      - 'docs/v031-research/*j24i43*'
+      - '.github/workflows/v031-j24i43-native-wav-stream.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i43-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  direct-wav-product-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify actual latest HEAD (not accumulated PR paths)
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff-tree --no-commit-id --name-only -r HEAD > j24i43-scope.txt
+          if grep -Eq '^(native/cmpct-core/src/(wavflac|vzip_dispatch)[.]rs|research/j24i43/|docs/v031-research/.*j24i43|[.]github/workflows/v031-j24i43-native-wav-stream[.]yml)' j24i43-scope.txt; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Exact source and comparison control
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee j24i43-head.txt
+          git diff --name-only 0faa25827e7393f927252876d40e9f6cb53e5a24 HEAD | tee j24i43-diff.txt
+          if grep -Eq '^(src/cmpct/|native/cmpct-core/src/lib[.]rs|native/cmpct-core/Cargo|tests/conformance/|benchmarks/)' j24i43-diff.txt; then
+            echo 'Out-of-scope source change'; exit 1
+          fi
+          git worktree add --detach "$RUNNER_TEMP/j24i43-old-src" 0faa25827e7393f927252876d40e9f6cb53e5a24
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
+      - name: Build exact baseline and candidate probes
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          old="$RUNNER_TEMP/j24i43-old-src"
+          mkdir -p "$old/native/cmpct-core/src/bin" native/cmpct-core/src/bin
+          cp research/j24i43/native_verify_probe.rs "$old/native/cmpct-core/src/bin/j24i43_probe.rs"
+          cp research/j24i43/native_verify_probe.rs native/cmpct-core/src/bin/j24i43_probe.rs
+          cp research/j24i43/native_rebind_probe.rs native/cmpct-core/src/bin/j24i43_rebind.rs
+          CARGO_TARGET_DIR="$RUNNER_TEMP/j24i43-old-target" cargo build --release --locked --manifest-path "$old/native/cmpct-core/Cargo.toml" --bin j24i43_probe
+          CARGO_TARGET_DIR="$RUNNER_TEMP/j24i43-new-target" cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i43_probe
+          CARGO_TARGET_DIR="$RUNNER_TEMP/j24i43-new-target" cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i43_rebind
+      - name: Authentic WAV corpus and detached physical audit
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . numpy soundfile msgpack zstandard
+          python research/j24i38/generate_builder_wav.py --output j24i43-cases
+          python research/j24i38/audit_builder_wav.py --case-dir j24i43-cases
+          python research/j24i39/extract_signed_wav_flac.py --case-dir j24i43-cases
+          python research/j24i42/derive_spans.py --case-dir j24i43-cases > j24i43-span-audit.json
+          python research/j24i43/physical_mutants.py --case-dir j24i43-cases > j24i43-mutation-audit.json
+      - name: Run native product-versus-product A/B and negatives
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > j24i43-raw.txt
+          : > j24i43-hostile.txt
+          "$RUNNER_TEMP/j24i43-new-target/release/j24i43_rebind" \
+            "$PWD/j24i43-cases/builder-wav-8m.cmpct" \
+            "$PWD/j24i43-cases/badmagic-original-container-8m.cmpct" \
+            "$RUNNER_TEMP/j24i43-rebind" | tee j24i43-rebind.txt
+          grep -q '^J24I43_REBIND_PASS' j24i43-rebind.txt
+          for lane in A B B A B A A B; do
+            if [ "$lane" = A ]; then exe="$RUNNER_TEMP/j24i43-old-target/release/j24i43_probe"; else exe="$RUNNER_TEMP/j24i43-new-target/release/j24i43_probe"; fi
+            for mib in 8 32; do
+              "$exe" "$PWD/j24i43-cases/builder-wav-${mib}m.cmpct" expected-pass "$mib" | sed "s/^/$lane /" | tee -a j24i43-raw.txt
+            done
+          done
+          for lane in A B; do
+            if [ "$lane" = A ]; then exe="$RUNNER_TEMP/j24i43-old-target/release/j24i43_probe"; else exe="$RUNNER_TEMP/j24i43-new-target/release/j24i43_probe"; fi
+            for mib in 8 32; do
+              for kind in crc-only flac-mid; do
+                "$exe" "$PWD/j24i43-cases/j24i43-${kind}-${mib}m.cmpct" expected-fail "$mib" | sed "s/^/$lane /" | tee -a j24i43-hostile.txt
+              done
+              "$exe" "$PWD/j24i43-cases/badmagic-original-container-${mib}m.cmpct" expected-fail "$mib" | sed "s/^/$lane /" | tee -a j24i43-hostile.txt
+            done
+          done
+          test "$(grep -c 'J24I43_REJECTED' j24i43-hostile.txt)" = 12
+          test "$(grep -c '^B J24I43 iter=' j24i43-raw.txt)" = 32
+          test "$(grep -c '^A J24I43 iter=' j24i43-raw.txt)" = 32
+          python research/j24i43/summarize_product_ab.py \
+            --raw j24i43-raw.txt --out j24i43-product-ab.json | tee j24i43-product-summary.txt
+          test -s j24i43-product-ab.json
+          find j24i43-cases -type f -print0 | sort -z | xargs -0 sha256sum > j24i43-files.sha256
+          sha256sum j24i43-head.txt j24i43-raw.txt j24i43-hostile.txt j24i43-product-ab.json > j24i43-receipt.sha256
+          tar -czf j24i43-evidence.tar.gz j24i43-cases j24i43-head.txt j24i43-scope.txt j24i43-diff.txt j24i43-raw.txt j24i43-hostile.txt j24i43-product-ab.json j24i43-product-summary.txt j24i43-rebind.txt j24i43-files.sha256 j24i43-receipt.sha256
+          test -s j24i43-evidence.tar.gz
+          ls -lh j24i43-evidence.tar.gz j24i43-raw.txt j24i43-product-ab.json
+      - name: Preserve scientific evidence including failures
+        if: ${{ always() && steps.scope.outputs.run == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i43-product-court-${{ github.run_id }}
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+          path: |
+            j24i43-*.txt
+            j24i43-*.json
+            j24i43-*.sha256
+            j24i43-evidence.tar.gz
+
+  native-wav-cross-host-court:
+    name: native-wav-integrity (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2025]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Record exact candidate source and runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > j24i43-crosshost-head.txt
+          git diff-tree --no-commit-id --name-only -r HEAD > j24i43-crosshost-scope.txt
+          git hash-object native/cmpct-core/src/wavflac.rs native/cmpct-core/src/vzip_dispatch.rs > j24i43-crosshost-source-blobs.txt
+          printf 'runner_os=%s\nrunner_arch=%s\n' "$RUNNER_OS" "$RUNNER_ARCH" > j24i43-crosshost-runner.txt
+          cat j24i43-crosshost-head.txt j24i43-crosshost-source-blobs.txt j24i43-crosshost-runner.txt
+      - name: Build native product verifier (not research decoder)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native/cmpct-core/src/bin
+          cp research/j24i43/native_verify_probe.rs native/cmpct-core/src/bin/j24i43_probe.rs
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i43_probe
+      - name: Builder-authentic WAV and independent physical audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . numpy soundfile msgpack zstandard
+          python research/j24i38/generate_builder_wav.py --output j24i43-port-cases
+          python research/j24i38/audit_builder_wav.py --case-dir j24i43-port-cases | tee j24i43-crosshost-audit.txt
+          python research/j24i39/extract_signed_wav_flac.py --case-dir j24i43-port-cases
+          python research/j24i42/derive_spans.py --case-dir j24i43-port-cases > j24i43-crosshost-spans.json
+          python research/j24i43/physical_mutants.py --case-dir j24i43-port-cases > j24i43-crosshost-mutations.json
+      - name: Exact product acceptance and physical single-bit rejects
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''
+          if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; fi
+          exe="$PWD/native/cmpct-core/target/release/j24i43_probe${suffix}"
+          test -f "$exe"
+          : > j24i43-crosshost-positive.txt
+          : > j24i43-crosshost-negative.txt
+          for mib in 8 32; do
+            "$exe" "$PWD/j24i43-port-cases/builder-wav-${mib}m.cmpct" expected-pass "$mib" | tee -a j24i43-crosshost-positive.txt
+            for kind in crc-only flac-mid; do
+              "$exe" "$PWD/j24i43-port-cases/j24i43-${kind}-${mib}m.cmpct" expected-fail "$mib" | tee -a j24i43-crosshost-negative.txt
+            done
+            "$exe" "$PWD/j24i43-port-cases/badmagic-original-container-${mib}m.cmpct" expected-fail "$mib" | tee -a j24i43-crosshost-negative.txt
+          done
+          test "$(grep -c '^J24I43_REJECTED' j24i43-crosshost-negative.txt)" -eq 6
+          test "$(grep -c '^J24I43 iter=' j24i43-crosshost-positive.txt)" -eq 8
+          python - <<'PY'
+          import hashlib, json, os, pathlib, platform
+          root = pathlib.Path("j24i43-port-cases")
+          records = {}
+          for path in sorted(root.rglob("*")):
+              if path.is_file():
+                  digest = hashlib.sha256()
+                  with path.open("rb") as stream:
+                      for chunk in iter(lambda: stream.read(1 << 20), b""):
+                          digest.update(chunk)
+                  records[path.as_posix()] = digest.hexdigest()
+          receipt = {
+              "schema": "j24i43-crosshost-exact-native-integrity-v1",
+              "source_sha": pathlib.Path("j24i43-crosshost-head.txt").read_text().strip(),
+              "runner_os": os.environ["RUNNER_OS"],
+              "runner_arch": os.environ["RUNNER_ARCH"],
+              "python": platform.python_version(),
+              "originals_accepted": 2,
+              "mutants_rejected": 6,
+              "file_sha256": records,
+              "claim": "integrity-only; no cross-runner performance or release credit",
+          }
+          pathlib.Path("j24i43-crosshost-receipt.json").write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+          print("J24I43_CROSSHOST_PASS", receipt["runner_os"], receipt["source_sha"])
+          PY
+          tar -czf j24i43-crosshost-evidence.tar.gz j24i43-port-cases j24i43-crosshost-head.txt j24i43-crosshost-runner.txt j24i43-crosshost-source-blobs.txt j24i43-crosshost-positive.txt j24i43-crosshost-negative.txt j24i43-crosshost-receipt.json j24i43-crosshost-spans.json j24i43-crosshost-mutations.json j24i43-crosshost-audit.txt
+          test -s j24i43-crosshost-evidence.tar.gz
+      - name: Preserve exact-platform evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i43-crosshost-${{ matrix.os }}-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          # GitHub checks out this repository into a dot-prefixed .CMPCT path.
+          # Upload-artifact excludes hidden path components unless explicitly enabled.
+          include-hidden-files: true
+          path: |
+            j24i43-crosshost-*.txt
+            j24i43-crosshost-*.json
+            j24i43-crosshost-evidence.tar.gz

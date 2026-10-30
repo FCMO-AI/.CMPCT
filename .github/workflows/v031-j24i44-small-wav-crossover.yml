@@ -1,0 +1,118 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: J24I44 Native Small WAV Crossover Court
+on:
+  pull_request:
+    paths:
+      - 'research/j24i44/**'
+      - 'docs/v031-research/*j24i44*'
+      - '.github/workflows/v031-j24i44-small-wav-crossover.yml'
+      - 'native/cmpct-core/src/wavflac.rs'
+      - 'native/cmpct-core/src/vzip_dispatch.rs'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i44-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-small-wav-crossover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify actual latest HEAD (not inherited accumulated PR paths)
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff-tree --no-commit-id --name-only -r HEAD > j24i44-scope.txt
+          if grep -Eq '^(research/j24i44/|docs/v031-research/.*j24i44|[.]github/workflows/v031-j24i44-small-wav-crossover[.]yml|native/cmpct-core/src/(wavflac|vzip_dispatch)[.]rs)' j24i44-scope.txt; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Freeze exact source, baseline and native probe
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee j24i44-head.txt
+          git hash-object native/cmpct-core/src/wavflac.rs native/cmpct-core/src/vzip_dispatch.rs | tee j24i44-source-blobs.txt
+          git diff --name-only 0faa25827e7393f927252876d40e9f6cb53e5a24 HEAD > j24i44-diff.txt
+          if grep -Eq '^(src/cmpct/|native/cmpct-core/src/lib[.]rs|native/cmpct-core/Cargo|tests/conformance/|benchmarks/)' j24i44-diff.txt; then
+            echo 'Unexpected product-input mutation; no valid comparison'; exit 1
+          fi
+          git worktree add --detach "$RUNNER_TEMP/j24i44-old-src" 0faa25827e7393f927252876d40e9f6cb53e5a24
+          test "$(git -C "$RUNNER_TEMP/j24i44-old-src" rev-parse HEAD)" = 0faa25827e7393f927252876d40e9f6cb53e5a24
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.run == 'true'
+      - name: Build two actual native verification engines from source
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          old="$RUNNER_TEMP/j24i44-old-src"
+          mkdir -p "$old/native/cmpct-core/src/bin" native/cmpct-core/src/bin
+          cp research/j24i44/native_small_wav_probe.rs "$old/native/cmpct-core/src/bin/j24i44_probe.rs"
+          cp research/j24i44/native_small_wav_probe.rs native/cmpct-core/src/bin/j24i44_probe.rs
+          CARGO_TARGET_DIR="$RUNNER_TEMP/j24i44-old-target" cargo build --release --locked --manifest-path "$old/native/cmpct-core/Cargo.toml" --bin j24i44_probe
+          CARGO_TARGET_DIR="$RUNNER_TEMP/j24i44-new-target" cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i44_probe
+      - name: Generate unchanged Builder admission and audit physically
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . numpy soundfile msgpack zstandard
+          python research/j24i44/generate_small_builder_wav.py --output j24i44-cases | tee j24i44-admission.txt
+          python research/j24i44/audit_small_builder_wav.py --case-dir j24i44-cases | tee j24i44-detached.txt
+          test -s j24i44-cases/detached-audit.json
+      - name: Run matched physical native A/B with A/A drift witness
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,pathlib
+          m=json.loads(pathlib.Path("j24i44-cases/manifest.json").read_text())
+          selected=sorted(int(k) for k,v in m["records"].items() if v["selected_flac"])
+          assert selected
+          pathlib.Path("j24i44-selected.txt").write_text("\n".join(map(str,selected))+"\n")
+          print("J24I44_SELECTED",selected)
+          PY
+          : > j24i44-raw.txt
+          for arm in A B B A B A A B; do
+            if [ "$arm" = A ]; then exe="$RUNNER_TEMP/j24i44-old-target/release/j24i44_probe"; else exe="$RUNNER_TEMP/j24i44-new-target/release/j24i44_probe"; fi
+            while IFS= read -r kib; do
+              "$exe" "$PWD/j24i44-cases/builder-wav-${kib}k.cmpct" "$kib" | sed "s/^/$arm /" | tee -a j24i44-raw.txt
+            done < j24i44-selected.txt
+          done
+          python research/j24i44/summarize_small_ab.py --raw j24i44-raw.txt --manifest j24i44-cases/manifest.json --out j24i44-summary.json | tee j24i44-summary.txt
+          test -s j24i44-summary.json
+          find j24i44-cases -type f -print0 | sort -z | xargs -0 sha256sum > j24i44-files.sha256
+          sha256sum j24i44-head.txt j24i44-raw.txt j24i44-summary.json j24i44-cases/detached-audit.json > j24i44-receipt.sha256
+          tar -czf j24i44-evidence.tar.gz j24i44-cases j24i44-head.txt j24i44-source-blobs.txt j24i44-scope.txt j24i44-diff.txt j24i44-selected.txt j24i44-admission.txt j24i44-detached.txt j24i44-raw.txt j24i44-summary.txt j24i44-summary.json j24i44-files.sha256 j24i44-receipt.sha256
+          test -s j24i44-evidence.tar.gz
+          ls -lh j24i44-evidence.tar.gz j24i44-summary.json
+      - name: Preserve real evidence, fail on absence
+        if: ${{ always() && steps.scope.outputs.run == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i44-small-wav-${{ github.run_id }}
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+          path: |
+            j24i44-*.txt
+            j24i44-*.json
+            j24i44-*.sha256
+            j24i44-evidence.tar.gz
