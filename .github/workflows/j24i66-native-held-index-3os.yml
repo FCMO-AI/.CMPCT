@@ -1,0 +1,123 @@
+# ci-lane: deep
+# J24I66: candidate native C ABI same-inode custody on actual Linux/macOS/Windows.
+# Scientific portability court only: NOT release/format or installed wheel evidence.
+name: CMPCT J24I66 Native Held-Index 3OS Court
+
+on:
+  pull_request:
+    paths:
+      - "native/cmpct-core/**"
+      - "tests/native_verify_held_index_3os.py"
+      - ".github/workflows/j24i66-native-held-index-3os.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24i66-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  held-index:
+    name: Actual C ABI — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind the actual checkout and pinned Rust graph to candidate HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch native/cmpct-core/Cargo.lock >/dev/null
+          git diff --exit-code -- native/cmpct-core/Cargo.lock
+          python -c 'import sys; print(sys.platform)'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Compile the actual platform-native Rust cdylib and CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo --version
+          rustc --version
+          cargo build --locked --release --manifest-path native/cmpct-core/Cargo.toml
+          git diff --exit-code -- native/cmpct-core/Cargo.lock
+      - name: Assert live C ABI positive/negative/stale/restored identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/native_verify_held_index_3os.py --output j24i66-result.json
+      - name: Persist source-exact physical result even on failing science
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i66-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: j24i66-result.json
+          if-no-files-found: error
+          retention-days: 14
+
+  independent-aggregate:
+    if: always()
+    needs: [held-index]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      MATRIX_RESULT: ${{ needs.held-index.result }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: j24i66-*-${{ env.EVIDENCE_HEAD }}
+          path: receipts
+      - name: Fail closed on missing host, wrong source, missing result or false success
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          assert os.environ['MATRIX_RESULT'] == 'success', os.environ['MATRIX_RESULT']
+          head = os.environ['EVIDENCE_HEAD']
+          files = sorted(Path('receipts').rglob('j24i66-result.json'))
+          assert len(files) == 3, files
+          expected = {'Linux', 'macOS', 'Windows'}
+          seen = set()
+          for file in files:
+              r = json.loads(file.read_text(encoding='utf-8'))
+              host = r['runner_os']
+              assert host in expected and host not in seen, (host, seen)
+              seen.add(host)
+              assert r['schema'] == 'cmpct-j24i66-native-held-index-3os-v1'
+              assert r['source_sha'] == head, (host, r['source_sha'], head)
+              assert r['passed'] is True and r['error'] is None, (host, r['error'])
+              assert r['fixtures']['length'] == 386
+              assert r['fixtures']['identical_cma4_bytes'] == 128
+              assert r['fresh_a'] == [0, 1] and r['fresh_b'] == [0, 1]
+              assert r['held_a_over_b'] == [-7, 0]
+              assert r['fresh_b_after_rewrite'] == [0, 1]
+              assert r['held_a_restored'] == [0, 1]
+              assert r['fresh_a_restored'] == [0, 1]
+              assert r['null_handle'] == [-1, 0]
+              for event in ['cli_a', 'cli_b', 'cli_after_b_rewrite', 'cli_a_restored']:
+                  assert r[event] == {'revision': 24, 'verified': 1}
+              assert r['original_identity']['dev'] == r['after_b_rewrite']['dev'] == r['after_a_restore']['dev']
+              assert r['original_identity']['ino'] == r['after_b_rewrite']['ino'] == r['after_a_restore']['ino']
+              assert r['native']['sha256'] and len(r['native']['sha256']) == 64
+              print(json.dumps({'host':host, 'head':head, 'native_sha':r['native']['sha256'],
+                                'stale_status':r['held_a_over_b'], 'restored':r['held_a_restored']}))
+          assert seen == expected, seen
+          print('J24I66: all three actual C ABI hosts passed, no release credit')
+          PY
