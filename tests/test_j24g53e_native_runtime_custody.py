@@ -144,3 +144,24 @@ def test_original_abba_comparator_precedes_probe_and_receipt_upload():
     assert "--max-time-regression 0.05" in workflow
     assert "--max-size-regression 0.01" in workflow
     assert "if: always()" in workflow[observer:upload]
+
+
+def test_same_name_different_inode_after_ctypes_load_rejected(repos):
+    # Distinguishes a pathname that remains constant from a mapped inode
+    # replaced after dlopen. A name-only check would incorrectly accept this.
+    base, candidate, bh, ch, _, _, receipt = repos
+    pkg = candidate / 'src' / 'cmpct'
+    src = base / 'src' / 'cmpct' / 'cmpct_core.so'
+    shutil.copyfile(src, pkg / 'surrogate.so')
+    mod = pkg / 'native_codec.py'
+    mod.write_text(
+        'from pathlib import Path\nimport ctypes, shutil\n'
+        '_lib = Path(__file__).parent / "cmpct_core.so"\n'
+        '_core = ctypes.CDLL(str(_lib))\n'
+        '_lib.rename(Path(__file__).parent / "old_loaded_inode.so")\n'
+        'shutil.copyfile(Path(__file__).parent / "surrogate.so", _lib)\n'
+        'def _library_path():\n    return _lib\n'
+    )
+    ch = _commit(candidate)
+    with pytest.raises(RuntimeError, match='native binary not mapped'):
+        court.attest(candidate, base, ch, bh, receipt)
