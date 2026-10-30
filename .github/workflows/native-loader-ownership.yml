@@ -22,7 +22,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-2022]
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    # macos-14 is in GitHub's 2026-10-30 brownout and retires 2026-11-02.
+    # macos-15 retains an ARM64 host for the wheel-tag/Mach-O test.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 18
     env:
