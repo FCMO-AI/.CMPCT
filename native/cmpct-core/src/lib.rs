@@ -144,6 +144,9 @@ pub struct Archive {
     dict_blob: Option<usize>,
     data_base: u64,
     data_end: u64,
+    // The parsed entries were authenticated at open. Do not rebind their
+    // identity to another current header after a same-inode rewrite.
+    opened_primary_header: [u8; HEADER_SIZE],
     file: Mutex<File>,
 }
 
@@ -219,6 +222,7 @@ impl Archive {
             dict_blob,
             data_base,
             data_end,
+            opened_primary_header: header,
             file: Mutex::new(file),
         })
     }
