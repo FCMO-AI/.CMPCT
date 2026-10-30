@@ -1,0 +1,67 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24G78 Writer 63-delete copy/Reader/fsync causal court
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24g78-writer-copy-elision-court-20261030
+    paths:
+      - 'research/j24g78_*'
+      - 'docs/v031-research/*j24g78*'
+      - '.github/workflows/v031-j24g78-writer-stage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g78-writer-stage
+  cancel-in-progress: true
+
+jobs:
+  writer-stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      J24G78_EVIDENCE_DIR: evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert exact candidate checkout and parent+prereg source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 6b68197c64b8de0654dd2f854a5185b45a00d2b9 HEAD
+          git merge-base --is-ancestor 1ba82c6e969f90e62ec67dd35e8a0de5a4c864ae HEAD
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 71bbc8a989d1da79d0f0dbe44f7f5c39f3304854
+          git rev-parse HEAD > evidence/head.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install source-exact CMPCT and verify research instrument syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m py_compile research/j24g78_writer_stage.py
+          python -m pip freeze > evidence/pip-freeze.txt
+      - name: Exact-archive Writer A/B/B/A stage court
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g78_writer_stage.py 2>&1 | tee evidence/j24g78-run.log
+          test -s evidence/j24g78-result.json
+      - name: Preserve raw evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g78-writer-stage-receipts
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
