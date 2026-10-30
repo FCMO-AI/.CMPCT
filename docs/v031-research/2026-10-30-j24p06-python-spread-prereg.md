@@ -1,0 +1,19 @@
+# J24P06 — Package-code ownership after PEP 427 spread (preregistered hosted replication)
+
+**Date:** 2026-10-30. **Source/parent:** `FCMO-AI/.CMPCT` stacked directly on J24P05 PR #858 at `d46d6b1f402aae085f920b93a91e40a75117df81`; its unchanged physical validator comes from #854 at `57bc9a00a6dbba079131de15f88995fd75ea91b6`. **Science only:** no published product, on-disk format, native ABI, benchmark, comparator, threshold or release change.
+
+## Question / falsifiable prediction
+A proposed cheapest repair to J24P05 is to compare *only the installed native binary* SHA-256 to the trusted wheel's native-member SHA-256. Is that sufficient to establish installed **CMPCT package** identity? **Prediction: no.** In a complete, RECORD-self-consistent wheel, an additional PEP 427 `.data/purelib/cmpct/native_codec.py` or `.data/platlib/cmpct/native_codec.py` member can overwrite an existing `cmpct/native_codec.py` in actual pip installation, while keeping the native Mach-O payload byte-identical and passing #854's physical wheel validator.
+
+**Strong simpler control:** baseline wheel with no `.data` member; wheel with genuinely disjoint `.data/purelib` content. Both installed package module and native payload should retain original SHA-256. **Alternative explanation:** the effect may be specific to the pip `--target` install scheme, Python version, OS, or entry ordering, rather than wheel semantics in all installers. The same-source hosted court runs both before/after ZIP member orders and both purelib/platlib schemes, with identical original wheel bytes and exact native payload.
+
+**Kill/narrow conditions:** if any hosted host refuses the wheel, rejects it under the unchanged #854 validator, changes native SHA, or preserves the original Python module in all collision variants, the broad claim is not established; preserve per-host outcomes, not a constructed PASS. No import or execution of replacement Python or foreign Mach-O bytes.
+
+## Evidence tiers, scope, and costs
+- *Exploratory local O0 observed **before** this GitHub preregistration:* Linux Python 3.13 pip `--target --platform macosx_10_12_universal2` accepted six self-consistent synthetic wheels; four .data spread variants retained the native SHA but replaced an inert Python module's bytes. This is **not** the prospectively registered hosted result.
+- *Prospective hosted verification:* distinct Github Actions Python 3.11 runners for Ubuntu, macOS and Windows, using fixed #854 Mach-O fixture + physical validator, real pip and SHA-256 receipts for source wheel members, installed native, installed Python module and installed RECORD rows. No engine/native execution. CI success only means the instrument completed; product claim remains limited to installed-path bytes under this installation mode.
+- *Owner/collision discipline:* J24P05 #858 owns native-path collision research, #854 owns the physical gate, #850 owns release packaging. This adjacent question tests whether **native-only sealing** is an adequate product remediation. Do not modify their logic, shared `docs/discovery/STATE.json` (#574), or duplicate a shipping validator.
+
+**Decision unlocked:** native-only digest comparison may attest the native binary, but cannot attest complete installed Python package if package-code collision is physically observed. A release solution must bind the whole installed destination set (or reject collision-prone wheel mapping before installation), not silently label a native-only check as whole-package verification.
+
+**Risk and performance accounting:** inert source text and synthetically small Mach-O header, no third-party code imported. Tests do consume wheel construction, one pip subprocess per variant and small temporary disk; no archive size, create, extract, RSS or read performance claim. This experiment does not establish wheel publisher authenticity, installer tamper resistance, atomic install, or race-free operation.
