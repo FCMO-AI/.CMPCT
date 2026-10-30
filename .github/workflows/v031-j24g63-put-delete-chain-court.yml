@@ -1,0 +1,95 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G63 pure Writer put/delete cross-generation cold-open court (no product changes).
+name: CMPCT J24G63 public put/delete one-op chain court
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g63-public-put-delete-chain-court-20261030
+    paths:
+      - 'research/j24g63_public_put_delete_chain_court.py'
+      - 'research/j24g63_independent_receipt_audit.py'
+      - 'docs/v031-research/*j24g63*'
+      - '.github/workflows/v031-j24g63-put-delete-chain-court.yml'
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g60-public-chain-coldopen-20261030
+    paths:
+      - 'research/j24g63_public_put_delete_chain_court.py'
+      - 'research/j24g63_independent_receipt_audit.py'
+      - 'docs/v031-research/*j24g63*'
+      - '.github/workflows/v031-j24g63-put-delete-chain-court.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g63-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-public-put-delete:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G63_RESULT: evidence/j24g63-result.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin preregistration, exact product source and measurement baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor fb5d96cdb8855fe3e01868792e65b79d3d61661d HEAD
+          git merge-base --is-ancestor aa550b7a928dc9a34d363665713379004e331270 HEAD
+          git diff --exit-code fb5d96cdb8855fe3e01868792e65b79d3d61661d HEAD -- src/cmpct/ tests/conformance/ benchmarks/history/
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = a2160a2f6b1ca3ef8cd94897cb68bb2fcb74ebc2
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 3eef7fdc3f6deca5ddd6d9edf1292c7e2c864f11
+          test "$(git rev-parse HEAD:src/cmpct/journal_replay.py)" = 03743ca2a06c022c2ec64243a90fe373cf91e899
+          test "$(git rev-parse HEAD:src/cmpct/validation.py)" = 5ea3b8f26058b0983c9686295c73f15472bc3ffe
+          git rev-parse HEAD > evidence/head.txt
+          git rev-parse HEAD:src/cmpct/reader.py > evidence/reader-blob.txt
+          git rev-parse HEAD:src/cmpct/transactions.py > evidence/writer-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install physically identical source and compile experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'zstandard>=0.22' 'msgpack>=1.0'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python -m py_compile research/j24g60_single_delta_chain_court.py research/j24g63_public_put_delete_chain_court.py research/j24g63_independent_receipt_audit.py
+      - name: Build authentic public put/delete histories and measure paired opens
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g63_public_put_delete_chain_court.py 2>&1 | tee evidence/j24g63-court.log
+          test -s evidence/j24g63-result.json
+      - name: Referee independent raw, physical SHA and hostile receipt mutations
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g63_independent_receipt_audit.py evidence/j24g63-result.json "$EXPECTED_HEAD" evidence/j24g63-independent-audit.json 2>&1 | tee evidence/j24g63-audit.log
+          test -s evidence/j24g63-independent-audit.json
+      - name: Persist evidence even if experiment fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g63-put-delete-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
