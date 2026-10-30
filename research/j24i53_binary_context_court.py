@@ -166,7 +166,11 @@ def main() -> None:
                 env["PYTHONPATH"]=str(root/"src")
                 cmd=[sys.executable,"-c",CHILD,str(root),str(corp),str(outfile),
                      context,str(args.reps)]
-                run=subprocess.run(cmd,text=True,capture_output=True,env=env,check=True)
+                run=subprocess.run(cmd,text=True,capture_output=True,env=env)
+                if run.returncode:
+                    print('CHILD_STDERR', run.stderr, file=sys.stderr)
+                    print('CHILD_STDOUT', run.stdout, file=sys.stderr)
+                    raise RuntimeError(f'child failed: group={group}, slot={slot}, context={context}, rc={run.returncode}')
                 # Non-JSON tool chatter would make the experiment invalid, not get silently ignored.
                 entry=json.loads(run.stdout)
                 entry.update({"court":court,"group":group,"slot":slot,
@@ -210,7 +214,9 @@ def main() -> None:
         def big(x):
             return x["ratio"]>1.05 and x["delta_ms"]>3
         ok_sign=all(g["wall"]["delta_ms"]>0 and g["cpu"]["delta_ms"]>0 for g in per_group)
-        if big(sw) or big(sc):
+        def sham_drift(x):
+            return abs(x['delta_ms'])>3 and (x['ratio']>1.05 or x['ratio']<1/1.05)
+        if sham_drift(sw) or sham_drift(sc):
             decision="AMBIGUOUS_SHAM_DRIFT"
         elif big(wall) and big(cpu) and ok_sign:
             decision="CONTEXT_COST_SUPPORTED"
