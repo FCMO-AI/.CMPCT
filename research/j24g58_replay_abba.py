@@ -32,8 +32,8 @@ def case(n):
     index = {"files": rows,
              "fsmeta": {"xattrs": [[i, [[b"user.id", str(i).encode()]]]
                                     for i in range(0, n, max(1, n // 8))],
-                        "owner_overrides": [[i, 1000+i, 3000+i]]
-                                            for i in range(0, n, max(1, n // 16))}}
+                        "owner_overrides": [[i, 1000+i, 3000+i]
+                                            for i in range(0, n, max(1, n // 16))]}}
     ops = [["ren", f"old{i:06}", f"new{i:06}"] for i in range(n)]
     return index, ops
 
