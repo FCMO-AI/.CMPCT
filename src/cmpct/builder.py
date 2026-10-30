@@ -100,8 +100,16 @@ class Builder:
                 if stat.S_ISDIR(st.st_mode):
                     self.files.append([rel,K_DIR,mode,st.st_mtime_ns,0,b'',None]);walk(e.path,rel);continue
                 if not stat.S_ISREG(st.st_mode):continue
-                if st.st_nlink>1:
-                    ik=(st.st_dev,st.st_ino)
+                # CPython's Windows DirEntry.stat() reports st_ino/st_dev/st_nlink
+                # as zero even for genuine Win32 hardlinks. The cheap directory
+                # entry metadata remains the owner of normal mode/size/mtime;
+                # refresh only the physical-identity fact needed for link capture.
+                ownership_st = (os.stat(e.path, follow_symlinks=False)
+                                if os.name == 'nt' else st)
+                if not stat.S_ISREG(ownership_st.st_mode):
+                    raise OSError(f'file type changed during archive scan: {rel}')
+                if ownership_st.st_nlink>1:
+                    ik=(ownership_st.st_dev,ownership_st.st_ino)
                     if ik in self.inode_first:
                         self.files.append([rel,K_HARDLINK,mode,st.st_mtime_ns,st.st_size,None,[self.inode_first[ik]]]);continue
                     self.inode_first[ik]=rel
