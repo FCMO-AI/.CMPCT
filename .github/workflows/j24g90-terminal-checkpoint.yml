@@ -80,7 +80,13 @@ jobs:
           assert len(d['cases']) == 2
           print('H1 materiality (research only):',d['H1_survives'])
           PY
-      - name: Reconstruct signed generations and raw medians independently\n        shell: bash\n        run: |\n          set -euo pipefail\n          python research/j24g90_detached_referee.py "$J24G90_EVIDENCE" 2>&1 | tee "$J24G90_EVIDENCE/audit.log"\n          test -s "$J24G90_EVIDENCE/detached-audit.json"\n      - name: Preserve exact physical input and raw evidence
+      - name: Reconstruct signed generations and raw medians independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g90_detached_referee.py "$J24G90_EVIDENCE" 2>&1 | tee "$J24G90_EVIDENCE/audit.log"
+          test -s "$J24G90_EVIDENCE/detached-audit.json"
+      - name: Preserve exact physical input and raw evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
