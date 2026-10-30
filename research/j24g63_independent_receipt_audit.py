@@ -77,8 +77,12 @@ def audit(data: dict, path: Path, expected_head: str, physical: bool = True) -> 
                 assert cell["checkpoint_premium_bytes"] == (
                     cell["archive_bytes"]["checkpoint"] - cell["archive_bytes"]["chain"])
                 assert len(cell["wire"]) == d
-                assert [x["name"] for x in cell["wire"]] == [
-                    f"f{i:04d}.dat" for i in reversed(range(d))]
+                total = n if kind == "put" else n + 63
+                prospective_names = [f"f{((2*i + 1)*total)//126:04d}.dat"
+                                     for i in range(63)]
+                assert len(set(prospective_names)) == 63
+                assert cell["selected_paths"] == prospective_names[:d]
+                assert [x["name"] for x in cell["wire"]] == list(reversed(prospective_names[:d]))
                 assert {x["tag"] for x in cell["wire"]} == (
                     {"put"} if kind == "put" else {"del"})
                 per_case = [x for x in observed if
@@ -141,13 +145,15 @@ def audit(data: dict, path: Path, expected_head: str, physical: bool = True) -> 
             assert len(chain_ledger) == 64
             assert all(k == 1 for k, _ in chain_ledger[:63])
             assert chain_ledger[63][0] == 0
+            total = 2048 if kind == "put" else 2111
+            selected = [f"f{((2*i + 1)*total)//126:04d}.dat" for i in range(63)]
             for i, (k, delta) in enumerate(chain_ledger[:63]):
                 ops = delta.get("ops")
                 assert isinstance(ops, list) and len(ops) == 1
                 op = ops[0]
                 assert op[0] == ("put" if kind == "put" else "del")
                 name = op[1][0] if kind == "put" else op[1]
-                assert name == f"f{62-i:04d}.dat"
+                assert name == selected[62-i]
             # Exact final footer at EOF (not a magic substring guessed from unrelated bytes).
             chk_pos = len(checkpoint_bytes) - FTR.size
             final = parse_wire(checkpoint_bytes, chk_pos)
