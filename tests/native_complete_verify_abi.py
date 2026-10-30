@@ -10,12 +10,14 @@ import base64
 import ctypes
 import hashlib
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
 
 from cmpct.reader import CMPCT
-from cmpct.codec import BHDR
+from cmpct.codec import BHDR, K_FILE, K_HARDLINK
+from cmpct.builder import Builder
 
 ROOT = Path(__file__).resolve().parents[1]
 LIB = ROOT / "native/cmpct-core/target/release/libcmpct_core.so"
@@ -153,6 +155,26 @@ def main() -> None:
         raw_bad_cli = run_cli(raw_bad_path)
         assert raw_bad_cli.returncode != 0 and raw_bad_cli.stdout == b""
 
+        # J24I50c prospective control: native "verified" counts authenticated
+        # payload owners, whereas Python verify counts logical hardlink aliases too.
+        # This is Builder-derived regression evidence, NOT a frozen format oracle.
+        hardlink_root = root / "source-hardlink"
+        hardlink_root.mkdir()
+        owner = hardlink_root / "a-owner.bin"
+        owner.write_bytes(b"hardlink-content-identity\\x00" * 1024)
+        os.link(owner, hardlink_root / "z-alias.bin")
+        hardlink_archive = root / "real-hardlink.cmpct"
+        Builder(hardlink_root, workers=1).build(hardlink_archive)
+        with CMPCT(hardlink_archive) as py_links:
+            kinds = sorted(row[1] for row in py_links.files)
+            assert kinds == [K_FILE, K_HARDLINK], kinds
+            python_hardlink_count = py_links.verify()
+            assert python_hardlink_count == 2
+        assert verify_abi(hardlink_archive) == (0, 1)
+        links_cli = run_cli(hardlink_archive)
+        assert links_cli.returncode == 0, links_cli.stderr
+        assert json.loads(links_cli.stdout) == {"revision": 24, "verified": 1}
+
         print(json.dumps({
             "schema": "cmpct-j24i50-native-public-verify-v1",
             "fixed_vector_sha256": vector["archive_sha256"],
@@ -166,6 +188,8 @@ def main() -> None:
             "raw_late_corrupt_early_range": "accepted-local",
             "raw_late_corrupt_complete_abi": "rejected-count-0",
             "raw_late_corrupt_complete_cli": "rejected-empty-stdout",
+            "hardlink_python_logical_count": 2,
+            "hardlink_native_payload_owner_count": 1,
         }, sort_keys=True))
 
 
