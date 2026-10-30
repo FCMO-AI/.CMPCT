@@ -6,9 +6,11 @@ on:
   push:
     branches:
       - agent/phased1-v031-j24g71-hardlink-owner-guard-x-signed-replay-20261030
+      - agent/phased1-v031-j24g72-hardlink-custody-unblock-20261030
   pull_request:
     branches:
       - agent/phased2-v031-j24g57-failclosed-journal-footer-20261030
+      - agent/phased1-v031-j24g71-hardlink-owner-guard-x-signed-replay-20261030
   workflow_dispatch:
 permissions:
   contents: read

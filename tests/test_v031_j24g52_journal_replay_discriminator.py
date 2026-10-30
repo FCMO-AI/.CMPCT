@@ -56,3 +56,17 @@ def test_signed_sparse_xattrs_remap_with_same_identity_after_delete():
     assert names_and_xattrs(reader_index) == expected
     assert names_and_xattrs(preflight_index) == expected
     assert preflight_index == reader_index, "same signed input must yield the same full logical state"
+
+    # A subsequent signed rename must follow the *remapped identity*, not the
+    # deleted ordinal. This protects continuity across separately committed deltas.
+    second = {"blobs": [], "ops": [["ren", "z-alias", "zz-alias"]]}
+    _apply_delta(preflight_index, second, ParserLimits())
+    _apply_journal_ops(reader_index, second["ops"])
+    assert [row[0] for row in reader_index["files"]] == ["a-owner", "zz-alias"]
+    assert reader_index["files"][1][-1] == ["a-owner"]
+    assert names_and_xattrs(reader_index) == {
+        0: ("a-owner", [["user.same", b"same"]]),
+        1: ("zz-alias", [["user.same", b"same"]]),
+    }
+    assert preflight_index == reader_index, "later rename must preserve prior signed-xattr remap"
+    assert original == immutable_input
