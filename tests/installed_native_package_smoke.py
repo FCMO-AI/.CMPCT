@@ -27,6 +27,8 @@ def guarded_find_library(name):
     return real_find_library(name)
 ctypes.util.find_library=guarded_find_library
 archive_sha=None
+native_complete_verified_count=None
+native_complete_corrupt_physical_sha_rejected=False
 try:
     from cmpct.codec import zc, zcd, zd
     from cmpct.native_codec import DictDecoder
@@ -49,10 +51,57 @@ try:
             assert reader.verify()==len(expected)
             for rel,data in expected.items(): assert reader.read(rel)==data
             reader.extractall(dst,metadata=False)
+        # J24I50b: exercise the **installed** cdylib (not a private Cargo build)
+        # against the very same physical archive just verified by the Python Reader.
+        # This establishes a callable shipping C ABI across the existing OS/CPython
+        # matrix, without claiming that CMPCT.verify() already delegates to Rust.
+        lib.cmpct_open.argtypes=[ctypes.c_char_p,ctypes.POINTER(ctypes.c_void_p)]
+        lib.cmpct_open.restype=ctypes.c_int32
+        lib.cmpct_close.argtypes=[ctypes.c_void_p]
+        lib.cmpct_verify_complete.argtypes=[ctypes.c_void_p,ctypes.POINTER(ctypes.c_size_t)]
+        lib.cmpct_verify_complete.restype=ctypes.c_int32
+        handle=ctypes.c_void_p()
+        assert lib.cmpct_open(str(arc).encode('utf-8'),ctypes.byref(handle))==0
+        assert handle.value is not None
+        try:
+            count=ctypes.c_size_t(999)
+            assert lib.cmpct_verify_complete(handle,ctypes.byref(count))==0
+            assert count.value==len(expected)
+            native_complete_verified_count=count.value
+        finally:
+            lib.cmpct_close(handle)
+        count=ctypes.c_size_t(999)
+        assert lib.cmpct_verify_complete(None,ctypes.byref(count))==-1
+        assert count.value==0
+        # Native strong verify must reject a corruption outside an optional
+        # early range. This is an installed-wheel Builder-derived regression
+        # case, independent of the builder-free fixed-vector native-core court.
+        with CMPCT(arc) as physical:
+            direct=next(
+                (row for row in physical.files if row[1]==0 and row[6][0]==0),
+                None
+            )
+            assert direct is not None,"representative archive has no direct blob"
+            blob_pos=physical.record_base+physical.blobs[direct[6][1]][0]
+        mutated=bytearray(arc.read_bytes())
+        assert mutated[blob_pos:blob_pos+4]==b'CMA4'
+        mutated[blob_pos+32]^=1
+        assert hashlib.sha256(mutated).hexdigest()!=archive_sha
+        corrupt_archive=root/'invalid-physical-sha.cmpct'
+        corrupt_archive.write_bytes(mutated)
+        bad_handle=ctypes.c_void_p()
+        assert lib.cmpct_open(str(corrupt_archive).encode('utf-8'),ctypes.byref(bad_handle))==0
+        try:
+            bad_count=ctypes.c_size_t(999)
+            assert lib.cmpct_verify_complete(bad_handle,ctypes.byref(bad_count))==-3
+            assert bad_count.value==0
+            native_complete_corrupt_physical_sha_rejected=True
+        finally:
+            lib.cmpct_close(bad_handle)
         for rel,data in expected.items():
             actual=(dst/rel).read_bytes()
             assert actual==data,{"member":rel,"expected_len":len(data),"actual_len":len(actual),"expected_sha":hashlib.sha256(data).hexdigest(),"actual_sha":hashlib.sha256(actual).hexdigest(),"first_mismatch":next((i for i,(a,b) in enumerate(zip(data,actual)) if a!=b),None)}
 finally:
     ctypes.util.find_library=real_find_library
 
-print(json.dumps({"schema":"cmpct-installed-native-package-smoke-v5","library":str(candidates[0]),"symbols":"ok","requires_python":requires_python,"dict_vector_bytes":104,"dict_vector_sha256":expected_sha,"roundtrip":True,"representative_archive_create_read_extract":True,"representative_archive_sha256":archive_sha,"shipping_python_no_ambient_zstd":True,"python_zstandard_absent":True}))
+print(json.dumps({"schema":"cmpct-installed-native-package-smoke-v5","library":str(candidates[0]),"symbols":"ok","requires_python":requires_python,"dict_vector_bytes":104,"dict_vector_sha256":expected_sha,"roundtrip":True,"representative_archive_create_read_extract":True,"representative_archive_sha256":archive_sha,"native_complete_verify_available":True,"native_complete_verified_count":native_complete_verified_count,"native_complete_corrupt_physical_sha_rejected":native_complete_corrupt_physical_sha_rejected,"shipping_python_no_ambient_zstd":True,"python_zstandard_absent":True}))

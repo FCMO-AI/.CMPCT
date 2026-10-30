@@ -58,7 +58,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          # Independent Python WAV/FLAC reference needs the optional audio backend; this is test-only.
+          python -m pip install -e '.[test,audio]'
       - name: Rust format
         working-directory: native/cmpct-core
         run: cargo fmt --check
@@ -218,6 +219,15 @@ jobs:
         run: python tests/native_wavflac_component.py
       - name: Committed WAV-FLAC archive ABI gate
         run: python tests/native_wavflac_abi.py
+      - name: Public native complete-verify C11 header and fixed WAV/FLAC ABI court
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -c \
+            -I native/cmpct-core/include \
+            tests/native_complete_verify_header.c \
+            -o "$RUNNER_TEMP/cmpct-j24i50-verify-header.o"
+          python tests/native_complete_verify_abi.py
+
       - name: Committed virtual-ZIP archive ABI gate
         run: |
           set -o pipefail

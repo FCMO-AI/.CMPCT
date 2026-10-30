@@ -76,6 +76,25 @@ The compressed direct-member paths are intentionally correctness-first. Ordinary
 
 The native CLI is an implementation milestone, not yet a benchmark claim or shipping package. Its purpose is to make metadata lookup, bounded member reads and selective range paths independently measurable without CPython startup so future ZIP-parity records can compare CLI-vs-CLI on symmetric process boundaries.
 
+### v0.31 experimental complete-verification public bridge (J24I50)
+
+A dependent **unmerged** candidate on #803 exposes the existing r24 native
+`Archive::verify_complete()` through `cmpct_verify_complete` in
+`native/cmpct-core/include/cmpct.h` and the `cmpct-native verify ARCHIVE`
+process command. Both use the already-open archive handle and the identical
+strong member verifier, not a loop of selective `cmpct_entry_read_range` calls.
+C callers receive a zeroed verified-count output on failure and a success
+status only after all content-owning members pass; CLI prints a JSON result only
+after success. The ABI and CLI paths require exact-head non-Rust conformance,
+including a physically modified fixed golden and null-pointer checks.
+
+**This is a candidate API addition, not an installed Python integration or
+published v0.31 capability.** `CMPCT.verify()` still uses the Python Reader.
+It is invalid to credit the native WAV verification speedups to installed
+Python users before the shipping binding, fallback parity and whole-product
+benchmarks prove it. Revision-24 bytes, selective read behavior, frozen
+vectors, release gates and packaging identity remain unchanged.
+
 ## Integrity boundary
 
 Direct RAW partial reads cross-check authenticated index metadata and physical framing, but a partial RAW read does not claim to authenticate the unseen remainder of the member.

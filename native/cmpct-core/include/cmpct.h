@@ -60,6 +60,15 @@ int32_t cmpct_entry_read_range(
     size_t *out_read
 );
 
+/*
+ * Verify every content-owning entry against its complete authenticated identity
+ * under the native Reader contract, including direct physical CRC where present.
+ * This uses the already-open archive handle and never exposes a partially verified
+ * member. `out_verified` is set to zero on any failure; status 0 is authoritative.
+ * The caller must not concurrently close or mutate the handle during this call.
+ */
+int32_t cmpct_verify_complete(const CmpctArchive *archive, size_t *out_verified);
+
 #ifdef __cplusplus
 }
 #endif
