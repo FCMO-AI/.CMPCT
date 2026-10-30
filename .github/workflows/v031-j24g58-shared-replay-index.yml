@@ -9,6 +9,7 @@ on:
     paths:
       - 'src/cmpct/journal_replay.py'
       - 'tests/test_v031_j24g58_indexed_shared_replay.py'
+      - 'tests/test_v031_j24g58_physical_multiop_replay.py'
       - 'research/j24g58_*.py'
       - 'docs/v031-research/*j24g58*'
       - '.github/workflows/v031-j24g58-shared-replay-index.yml'
@@ -65,6 +66,7 @@ jobs:
           python -m pytest --noconftest -q -s \
             --junitxml=evidence/pytest.xml \
             tests/test_v031_j24g58_indexed_shared_replay.py \
+            tests/test_v031_j24g58_physical_multiop_replay.py \
             2>&1 | tee evidence/pytest.log
       - name: Same-source alternating ABBA with raw CPU and allocation
         shell: bash
