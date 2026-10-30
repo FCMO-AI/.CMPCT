@@ -48,13 +48,13 @@ def main():
     assert len(archive) == result["physical_archive"]["size"]
     decode = zstd_decoder()
     magic,version,flags,cs,us,span,indexhash = HDR.unpack_from(archive,0)
-    assert (magic,version,flags) == (b"CMPCT24\\x00",24,0)
+    assert (magic,version,flags) == (b"CMPCT24\x00",24,0)
     raw_index = decode(archive[HDR.size:HDR.size+cs],us)
     assert hashlib.sha256(raw_index).digest() == indexhash
     idx = msgpack.unpackb(raw_index,raw=False)
     tail = HDR.size+cs+span
     assert archive[tail:tail+cs] == archive[HDR.size:HDR.size+cs]
-    assert FTR.unpack_from(archive,tail+cs) == (b"CMPTF24\\x00",0,1,0,0,cs,us,0,indexhash)
+    assert FTR.unpack_from(archive,tail+cs) == (b"CMPTF24\x00",0,1,0,0,cs,us,0,indexhash)
     assert len(archive) == tail+cs+FTR.size
     end = 0
     stats = {"RAW":0,"ZSTD":0,"decoded_bytes":0}
@@ -82,7 +82,7 @@ def main():
              "blob_count":len(idx["blobs"]),"file_count":len(idx["files"]),
              "stats":stats,"decision_as_recorded":result["decision"],"physical_proof":"PASS"}
     if len(sys.argv)==4:
-        Path(sys.argv[3]).write_text(json.dumps(receipt,sort_keys=True,indent=2)+"\\n")
+        Path(sys.argv[3]).write_text(json.dumps(receipt,sort_keys=True,indent=2)+"\n")
     print("INDEPENDENT_PHYSICAL_PROOF",json.dumps(receipt,sort_keys=True))
 
 if __name__=="__main__":
