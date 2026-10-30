@@ -49,3 +49,19 @@ The independent DELETE diagnosis **confirms** the same broad cost owner that #80
 The next highest-value action is **not** another deletion-specific threshold or expensive full matrix. [#808](https://github.com/FCMO-AI/.CMPCT/pull/808) owns a nonduplicative mixed-op plus signed fsmeta cross-generation factoring oracle: require it to prove exactness and cost first, then integrate under the shared [#795](https://github.com/FCMO-AI/.CMPCT/pull/795) Reader/preflight owner only after source-exact real public Writer cold-open, journal recovery, xattr/hardlink integrity and whole-system CPU/RSS/bytes/portability gates. If the mixed oracle fails, the next smaller route is to amortize O(N) per-generation DELETE lineage state (without changing r24 bytes), using the same physical archive and original helper as control.
 
 Discovery policy/state unchanged: #574 owns stale state reconciliation; this new causal result is preserved here and on #809. No concurrency collision or self-modifying policy lesson earned. Product/release credit **0**.
+
+## Post-result secondary robustness analysis (non-preregistered; no additional success gate)
+
+After the original decision, a separate script recomputed *secondary* scope/shape checks directly from the original 3 ZIPs, without rebuilding any corpus or changing evaluation criteria. These are descriptive supporting observations, not a fourth prospective test or a product benchmark.
+
+| Host | 512 files / 63 DELETE: extra replay (ms) | 2,048 / 1: extra replay (ms) | 2,048 / 32: extra replay (ms) | 2,048 / 63: extra replay (ms) |
+|---|---:|---:|---:|---:|
+| Ubuntu | 13.377 | 1.094 | 27.734 | 53.475 |
+| macOS | 11.433 | 0.886 | 31.795 | 48.047 |
+| Windows | 15.178 | 1.233 | 30.802 | 59.187 |
+
+The growth across these four physical cases is consistent with repeated full-index work as both member count and depth increase; **only two member-count scales and three depths do not establish formal asymptotic complexity**. The footer excess at 2,048/63 is small and positive across all three (0.544/0.348/0.928ms), despite chain validification of 64 genuine footers.
+
+To test whether the primary 63-depth attribution was a single-block artifact, independently computed within-block **mean** ratios replay excess / Reader-open excess. Across the four alternating blocks they range 0.985–1.012 Ubuntu, 0.970–1.015 macOS, 0.973–0.977 Windows. Fractions above 1 are possible from measurement noise and non-identical averaged timer components; they must **not** be read as the physical replay timer consuming more than total wall or as improved product speed. The prospective decision uses paired **medians** and its distinct perturbation guard, not these posthoc means.
+
+**Counterfactual discriminator:** an inexpensive source-visible count of `_apply_journal_ops` per real committed generation plus n=512/depth63 micro-attribution would already have shown a strong plausible replay cost (11–15ms) and indicated that an additional broad synthetic optimization exercise would have low marginal value. That observable would have been prospectively recognizable, but it alone would **not** prove >60% attribution at 2,048/63 or pass the host perturbation gate; therefore this is a local research-sequencing lesson, not an earned modification to the Discovery Engine policy. The strongest remaining question is actual mixed signed-fsmeta applicability in the public Reader, already owned by #808.
