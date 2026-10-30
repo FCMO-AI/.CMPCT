@@ -17,7 +17,9 @@ mod codec_decoder_abi;
 mod projection;
 pub use projection::{execute_range, VirtualZipDispatchError};
 
-use crate::{Archive, CmpctError, Storage, CODEC_WAV_FLAC, MAX_DIRECT_DECODE_BYTES};
+use crate::{
+    Archive, CmpctError, Storage, CODEC_WAV_FLAC, MAX_DIRECT_DECODE_BYTES, MAX_INDEX_BYTES,
+};
 use sha2::{Digest, Sha256};
 use std::io::{Read, Seek, SeekFrom};
 
@@ -119,6 +121,109 @@ impl Archive {
         Ok(())
     }
 
+    /// Refuse to certify a stale primary checkpoint as the latest archive generation.
+    ///
+    /// Native open/list/range currently address the primary r24 index only. The public
+    /// Python Reader replays signed appended PUT/DELETE generations. Until native
+    /// recovery has its own conformance court, a whole-archive SUCCESS must only
+    /// cover a terminal checkpoint whose *decoded* index matches that primary.
+    /// This reads the same held File, never a new pathname (the C handle can
+    /// survive rename/rebinding), and bounds decompression by the r24 index cap.
+    fn require_primary_generation_for_complete_verify(&self) -> Result<(), CmpctError> {
+        use crate::{HEADER_SIZE, MAGIC};
+        const FOOTER_SIZE: u64 = 68;
+        const FOOTER_MAGIC: &[u8; 8] = b"CMPTF24\0";
+
+        let mut file = self.file.lock().map_err(|_| CmpctError::Unsupported)?;
+        let file_len = file.metadata()?.len();
+        if file_len < FOOTER_SIZE {
+            return Err(CmpctError::Unsupported);
+        }
+        file.seek(SeekFrom::Start(0))?;
+        let mut header = [0u8; HEADER_SIZE];
+        file.read_exact(&mut header)?;
+        if &header[..8] != MAGIC {
+            return Err(CmpctError::Unsupported);
+        }
+        let primary_uncompressed = u64::from_le_bytes(
+            header[20..28]
+                .try_into()
+                .map_err(|_| CmpctError::Unsupported)?,
+        );
+        let primary_sha = &header[36..68];
+
+        file.seek(SeekFrom::Start(file_len - FOOTER_SIZE))?;
+        let mut footer = [0u8; FOOTER_SIZE as usize];
+        file.read_exact(&mut footer)?;
+        // 0 = complete checkpoint, 1 = delta; prev != 0 means this checkpoint
+        // follows a signed history and may represent a different logical tree.
+        if &footer[..8] != FOOTER_MAGIC
+            || footer[8] != 0
+            || footer[9] > 1
+            || footer[10] != 0
+            || footer[11] != 0
+            || footer[28..36] != [0u8; 8]
+            || &footer[36..68] != primary_sha
+        {
+            return Err(CmpctError::Unsupported);
+        }
+        let compressed_len = u64::from_le_bytes(
+            footer[12..20]
+                .try_into()
+                .map_err(|_| CmpctError::Unsupported)?,
+        );
+        let uncompressed_len = u64::from_le_bytes(
+            footer[20..28]
+                .try_into()
+                .map_err(|_| CmpctError::Unsupported)?,
+        );
+        if compressed_len > MAX_INDEX_BYTES
+            || uncompressed_len > MAX_INDEX_BYTES
+            || uncompressed_len != primary_uncompressed
+            || self
+                .data_end
+                .checked_add(compressed_len)
+                .and_then(|end| end.checked_add(FOOTER_SIZE))
+                != Some(file_len)
+        {
+            return Err(CmpctError::Unsupported);
+        }
+
+        fn bounded_sha<R: Read>(mut source: R, limit: u64) -> Result<([u8; 32], u64), CmpctError> {
+            let mut sha = Sha256::new();
+            let mut count = 0u64;
+            let mut chunk = [0u8; 64 * 1024];
+            loop {
+                let got = source.read(&mut chunk)?;
+                if got == 0 {
+                    break;
+                }
+                count = count
+                    .checked_add(got as u64)
+                    .ok_or(CmpctError::IndexLimit)?;
+                if count > limit {
+                    return Err(CmpctError::IndexLimit);
+                }
+                sha.update(&chunk[..got]);
+            }
+            Ok((sha.finalize().into(), count))
+        }
+
+        file.seek(SeekFrom::Start(self.data_end))?;
+        let (tail_sha, tail_len) = match footer[9] {
+            0 => bounded_sha((&mut *file).take(compressed_len), uncompressed_len)?,
+            1 => {
+                let decoder = zstd::stream::read::Decoder::new((&mut *file).take(compressed_len))?;
+                bounded_sha(decoder, uncompressed_len)?
+            }
+            _ => return Err(CmpctError::Unsupported),
+        };
+        if tail_len != uncompressed_len || tail_sha.as_slice() != primary_sha {
+            return Err(CmpctError::Unsupported);
+        }
+        Ok(())
+    }
+
     /// Stream every regular file and symlink payload and authenticate its complete logical identity.
     ///
     /// This is deliberately stronger than treating a successful range read as verification. Direct RAW range
@@ -127,6 +232,7 @@ impl Archive {
     /// identity when that is the only checksum the r24 grammar contains. Chunking the verifier also removes the
     /// old portable wrapper's 256 MiB materialization ceiling for large RAW/chunked/sparse members.
     pub fn verify_complete(&self) -> Result<usize, CmpctError> {
+        self.require_primary_generation_for_complete_verify()?;
         let mut verified = 0usize;
         for (entry_index, entry) in self.entries.iter().enumerate() {
             // A symlink target is an archived payload too: skipping kind=2 silently certified

@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 from cmpct.reader import CMPCT
-from cmpct.codec import BHDR, K_FILE, K_HARDLINK
+from cmpct.codec import BHDR, FTR, FMAGIC, K_FILE, K_HARDLINK
 from cmpct.builder import Builder
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -240,6 +240,62 @@ def main() -> None:
         assert links_cli.returncode == 0, links_cli.stderr
         assert json.loads(links_cli.stdout) == {"revision": 24, "verified": 1}
 
+        # J24I62: latest signed generations must never inherit a false
+        # native full-verify SUCCESS for the old primary member set.
+        # J24I51 already proved this same-inode mismatch on authentic public
+        # Writer operations; this test is the prospective repair gate.
+        from cmpct.transactions import append_update, append_delete, append_rename
+        journal = root / "same-inode-signed-generations.cmpct"
+        journal.write_bytes(raw)
+        original_inode = journal.stat().st_ino
+        source = root / "new-physical-member.bin"
+        source.write_bytes(b"new signed generation content\\0" * 111)
+        append_update(journal, "new-member.bin", source)
+        _, latest_kind, _, _, _, _, _, latest_prev, _ = FTR.unpack(journal.read_bytes()[-FTR.size:])
+        assert latest_kind == 1 and latest_prev != 0
+        with CMPCT(journal) as current:
+            assert current.verify() == 2
+            assert "new-member.bin" in current.by and vector["name"] in current.by
+        status, count = verify_abi(journal)
+        assert status == -7 and count == 0, ("signed put must be unsupported", status, count)
+        rejected_put = run_cli(journal)
+        assert rejected_put.returncode != 0 and rejected_put.stdout == b""
+        append_delete(journal, vector["name"])
+        latest_footer = FTR.unpack(journal.read_bytes()[-FTR.size:])
+        assert latest_footer[0] == FMAGIC and latest_footer[1] == 1 and latest_footer[7] != 0
+        assert journal.stat().st_ino == original_inode
+        assert journal.read_bytes().startswith(raw)
+        with CMPCT(journal) as current:
+            assert current.verify() == 1
+            assert "new-member.bin" in current.by and vector["name"] not in current.by
+        status, count = verify_abi(journal)
+        assert status == -7 and count == 0, ("signed delete must be unsupported", status, count)
+        rejected_delete = run_cli(journal)
+        assert rejected_delete.returncode != 0 and rejected_delete.stdout == b""
+
+        # Checkpoint at generation 64 has kind=0 but prev!=0. A test that
+        # only rejects kind=1 deltas would incorrectly certify this stale root.
+        checkpoint = root / "signed-checkpoint64.cmpct"
+        checkpoint.write_bytes(raw)
+        current_name = vector["name"]
+        alternative_name = "rotated-wav-member.wav"
+        for _ in range(64):
+            next_name = alternative_name if current_name == vector["name"] else vector["name"]
+            append_rename(checkpoint, current_name, next_name)
+            current_name = next_name
+        # Require the *actual* terminal kind=0 signed checkpoint, not a delta
+        # unexpectedly left by a failed test generator.
+        checkpoint_footer = FTR.unpack(checkpoint.read_bytes()[-FTR.size:])
+        assert checkpoint_footer[0] == FMAGIC
+        assert checkpoint_footer[1] == 0 and checkpoint_footer[7] != 0
+        with CMPCT(checkpoint) as current:
+            assert current.verify() == 1
+            assert current_name in current.by
+        status, count = verify_abi(checkpoint)
+        assert status == -7 and count == 0, ("signed checkpoint must be unsupported", status, count)
+        rejected_checkpoint = run_cli(checkpoint)
+        assert rejected_checkpoint.returncode != 0 and rejected_checkpoint.stdout == b""
+
         print(json.dumps({
             "schema": "cmpct-j24i50-native-public-verify-v1",
             "fixed_vector_sha256": vector["archive_sha256"],
@@ -258,6 +314,8 @@ def main() -> None:
             "raw_late_corrupt_complete_cli": "rejected-empty-stdout",
             "hardlink_python_logical_count": 2,
             "hardlink_native_payload_owner_count": 1,
+            "latest_signed_put_delete_native": "typed-unsupported-count-0",
+            "latest_signed_checkpoint64_native": "typed-unsupported-count-0",
         }, sort_keys=True))
 
 
