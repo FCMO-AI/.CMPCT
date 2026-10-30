@@ -1,0 +1,94 @@
+# ci-lane: fast
+name: J24I69 source-identical within-arm temporal placebo
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/j24i69-intraarm-placebo.yml"
+      - "research/j24i69_*"
+      - "research/test_j24i69_*"
+      - "docs/v031-research/2026-10-30-j24i69-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: j24i69-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  provider-identity-and-temporal-placebo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Check out exact source head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require exact head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download three exact original GitHub Actions artifacts without unpacking member evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p j24i69-evidence
+          for pair in \
+            12981944713:cmpct_p835_firstfailure_12981944713.zip \
+            12986955317:cmpct_source_identical_835_12986955317.zip \
+            12988780098:cmpct_source_identical_837_12988780098.zip; do
+            id="${pair%%:*}"
+            filename="${pair#*:}"
+            curl --fail --show-error --silent --location --retry 2 \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GH_REPO}/actions/artifacts/${id}/zip" \
+              --output "j24i69-evidence/${filename}"
+          done
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_STORED
+          p = Path("j24i69-evidence")
+          with ZipFile(p / "original_provider_bundle.zip", "w", ZIP_STORED) as z:
+              for filename in sorted(p.glob("cmpct_*.zip")):
+                  z.write(filename, arcname=filename.name)
+          PY
+      - name: Run 14 hostile admission tests and original provider audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/test_j24i69_withinarm_referee.py -v
+          python research/j24i69_withinarm_referee.py \
+            j24i69-evidence/original_provider_bundle.zip \
+            --output j24i69-evidence/J24I69_original_provider_effects.json
+          python - <<'PY'
+          import json
+          data = json.load(open("j24i69-evidence/J24I69_original_provider_effects.json"))
+          assert len(data["trials"]) == 3
+          assert sum(len(x["effects"]) for x in data["trials"]) == 384
+          assert sum(len(x["official_cmpct"]) for x in data["trials"]) == 96
+          assert [(v["within_arm_magnitude_crossings"]["cmpct"], v["official_cmpct_positive_reds"]) for v in data["summaries"].values()] == [(5, 2), (14, 5), (0, 0)]
+          print("J24I69 original three provider identities and historical post-hoc results reproduced")
+          PY
+      - name: Preserve complete source-exact evidence even if the court fails
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24i69-original-provider-intraarm-evidence
+          path: j24i69-evidence/
+          retention-days: 30
