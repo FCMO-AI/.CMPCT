@@ -239,6 +239,13 @@ jobs:
                   'wheel_name':wheel.name,
                   'wheel_sha256':hashlib.sha256(wheel.read_bytes()).hexdigest(),
               }
+          # Fixed codec-vector bytes must agree across independently installed OS wheels.
+          # Physical archive SHAs may differ with authentic original filesystem metadata.
+          vector_digests={row['dict_vector_sha256'] for row in platform.values()}
+          assert len(vector_digests)==1 and all(
+              len(digest)==64 and all(c in '0123456789abcdef' for c in digest)
+              for digest in vector_digests
+          ), vector_digests
           evidence={
               'schema':'cmpct-v031-desktop-package-evidence-v1',
               'candidate_source_receipt_schema':'cmpct-v031-candidate-source-receipt-v1',
