@@ -29,6 +29,7 @@ jobs:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       J24G71_PHYSICAL: evidence/signed-checkpoint64.cmpct
       J24G71_RECEIPT: evidence/signed-checkpoint64.json
+      J24G72_XATTR_SAMPLE: evidence/signed-xattr-checkpoint64.cmpct
     steps:
       - uses: actions/checkout@v4
         with:
