@@ -82,9 +82,35 @@ if not matching:
     raise RuntimeError("ctypes native binary not mapped under declared device/inode")
 if not any("x" in p for p in matching):
     raise RuntimeError("native binary has no executable mapping")
+def sha256_mapped_inode(path, mapped_stat):
+    # A pathname checked against /proc/self/maps can be rebound between
+    # that check and a later Path.open(). Hash the same opened descriptor
+    # whose physical inode matches the executable mapping.
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags)
+    try:
+        before = os.fstat(fd)
+        if (before.st_dev, before.st_ino) != (mapped_stat.st_dev, mapped_stat.st_ino):
+            raise RuntimeError("native mapped inode changed before digest")
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: os.read(fd, 1024 * 1024), b""):
+            digest.update(chunk)
+        after = os.fstat(fd)
+        stable = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+        if any(getattr(after, field) != getattr(before, field) for field in stable):
+            raise RuntimeError("native mapped inode mutated during digest")
+        # A final path check rejects a post-open replacement. This is
+        # best-effort mutation detection, not an atomic in-place snapshot.
+        current = os.stat(path, follow_symlinks=False)
+        if (current.st_dev, current.st_ino) != (before.st_dev, before.st_ino):
+            raise RuntimeError("native path rebound after mapped-inode digest")
+        return digest.hexdigest()
+    finally:
+        os.close(fd)
+
 print(json.dumps({
     "source": sources,
-    "native": {"file": lib_loaded.name, "sha256": sha256(lib_loaded),
+    "native": {"file": lib_loaded.name, "sha256": sha256_mapped_inode(lib_loaded, stat),
                "bytes": stat.st_size, "dev": stat.st_dev, "inode": stat.st_ino,
                "mapped_regions": len(matching), "has_executable_mapping": True},
     "python_version": sys.version.split()[0], "pid": os.getpid(),
