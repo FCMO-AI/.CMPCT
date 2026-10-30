@@ -1,0 +1,78 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G59 scientific reachability, not product performance or release certification.
+name: CMPCT J24G59 real Writer replay reachability
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g59-writer-opwidth-admission-court-20261030
+    paths:
+      - 'research/j24g59_writer_opwidth_court.py'
+      - 'docs/v031-research/*j24g59*'
+      - '.github/workflows/v031-j24g59-writer-opwidth-court.yml'
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g58-shared-replay-ownership-cost-20261030
+    paths:
+      - 'research/j24g59_writer_opwidth_court.py'
+      - 'docs/v031-research/*j24g59*'
+      - '.github/workflows/v031-j24g59-writer-opwidth-court.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24g59-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  writer-physical-court:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G59_RESULT: evidence/j24g59-result.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin exact source and preserved preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor cd75aca5df40ff5dd2dbdab67b7770604bc8404f HEAD
+          git merge-base --is-ancestor 194582327db15b2d18205c250d3899cf5d396da8 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/journal_replay.py)" = ba5ac2d01be9757651576a6fb5d640c4d212a62a
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 3eef7fdc3f6deca5ddd6d9edf1292c7e2c864f11
+          git rev-parse HEAD > evidence/head.txt
+          git rev-parse HEAD:src/cmpct/journal_replay.py > evidence/dispatcher-blob.txt
+          git rev-parse HEAD:src/cmpct/transactions.py > evidence/writer-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact CMPCT product plus detached wire parser
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'zstandard>=0.22' 'msgpack>=1.0'
+          python -m pip freeze > evidence/pip-freeze.txt
+      - name: Real Builder Writer and Reader physical footer/dispatch proof
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g59_writer_opwidth_court.py 2>&1 | tee evidence/court.log
+          test -s evidence/j24g59-result.json
+      - name: Archive all evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g59-writer-reachability-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
