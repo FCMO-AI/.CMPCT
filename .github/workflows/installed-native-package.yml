@@ -22,7 +22,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-2025]
+        # macOS 14 runner brownout 2026-10-30; GitHub retires it 2026-11-02.
+        # Preserve ARM+Intel universal2 checks on the supported macOS 15 host.
+        os: [ubuntu-24.04, macos-15, windows-2025]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     concurrency:
@@ -94,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-2025]
+        os: [ubuntu-24.04, macos-15, windows-2025]
         python: ['3.10','3.11','3.12','3.13','3.14']
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
@@ -159,7 +161,7 @@ jobs:
           import hashlib, json, os, subprocess
           from pathlib import Path
           root=Path('installed-evidence')
-          expected={'ubuntu-24.04','macos-14','windows-2025'}
+          expected={'ubuntu-24.04','macos-15','windows-2025'}
           found={}
           for os_name in expected:
               matches=[p for p in root.iterdir() if p.is_dir() and p.name.startswith('installed-native-'+os_name+'-')]
