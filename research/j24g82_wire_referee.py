@@ -9,7 +9,7 @@ import zstandard as zstd
 FTR = struct.Struct("<8sBBBBQQQ32s")
 FMAGIC = b"CMPTF24\x00"
 N = 192
-HEAD_ORIGINAL = "00d35197962ec88775206c7202e6482e78d22e10"
+
 CUTS = {"fully_committed", "first_uncommitted_byte", "last_payload_byte",
         "footer_start", "footer_mid", "footer_last_byte", "flipped_sha"}
 
@@ -37,7 +37,7 @@ def state_digest(names: set[str]) -> str:
 
 def audit(receipt: dict, images: dict[str, bytes]) -> dict:
     assert receipt["status"] == "PASS"
-    assert receipt["source"]["head"] == HEAD_ORIGINAL
+    assert receipt["source"]["head"] == images["_head"]
     assert receipt["source"]["writer_blob"] == "71bbc8a989d1da79d0f0dbe44f7f5c39f3304854"
     assert receipt["source"]["source_blob"] == "4b29db0e5818faedc77ea9ff2c32b63c8b6ad2da"
     assert receipt["checked_cases_per_variant"] == 448
@@ -116,6 +116,7 @@ def main():
     original = json.loads((root/"j24g82-result.json").read_text())
     images = {v:(root/f"j24g80-192-middle-{v}-valid.cmpct").read_bytes()
               for v in ("public", "owned")}
+    images["_head"] = (root/"head.txt").read_text().strip()
     result = audit(original, images)
     mutation_cases = [
         lambda r:r["cases"]["public"]["checks"][0].__setitem__("recovered_generation", -1),
