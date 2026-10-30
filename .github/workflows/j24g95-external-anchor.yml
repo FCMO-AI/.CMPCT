@@ -7,7 +7,7 @@ on:
     branches:
       - agent/phased1-v031-j24g92-footer-parent-link-court-20261030
     paths:
-      - 'research/j24g95_*'
+      - 'research/j24g95*'
       - 'docs/v031-research/*j24g95*'
       - '.github/workflows/j24g95-external-anchor.yml'
   workflow_dispatch:
@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
           python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
           python -m pip freeze > "$J24G95_EVIDENCE/pip-freeze.txt"
-          python -m py_compile research/j24g95_anchor_court.py research/j24g95_detached_referee.py
+          python -m py_compile research/j24g95_anchor_court.py research/j24g95_detached_referee.py research/j24g95b_consumption_custody.py research/j24g95b_detached_referee.py
       - name: Real Writer, trusted snapshot identity and same-host costs
         shell: bash
         run: |
@@ -76,6 +76,14 @@ jobs:
           set -euo pipefail
           python research/j24g95_detached_referee.py "$J24G95_EVIDENCE" 2>&1 | tee "$J24G95_EVIDENCE/detached.log"
           test -s "$J24G95_EVIDENCE/detached-audit.json"
+      - name: Deterministic verification-to-Reader consumption custody falsifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 8b733845aef879ce7cb5eda8ff168e7116cd6286 HEAD
+          python research/j24g95b_consumption_custody.py 2>&1 | tee "$J24G95_EVIDENCE/consumption.log"
+          python research/j24g95b_detached_referee.py "$J24G95_EVIDENCE" 2>&1 | tee "$J24G95_EVIDENCE/detached-custody.log"
+          test -s "$J24G95_EVIDENCE/detached-custody-audit.json"
       - name: Retain original archives, signed-anchor controls, all raw samples
         if: always()
         uses: actions/upload-artifact@v4
