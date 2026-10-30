@@ -70,7 +70,7 @@ def validate(path: str | Path) -> dict[str, object]:
         infos = whl.infolist()
         if len(infos) > MAX_ENTRIES:
             raise ValueError('wheel exceeds entry limit')
-        named = [(i, _name_parts(i.filename)) for i in infos]
+        named = [(i, _name_parts(i.orig_filename)) for i in infos]  # Inspect raw central-directory names, not Win32-normalized ZipInfo.filename
         dist_infos = {p[0][:-10] for _, p in named if len(p) == 2 and p[0].endswith('.dist-info') and p[1] == 'WHEEL'}
         if len(dist_infos) != 1:
             raise ValueError('expected exactly one root .dist-info/WHEEL file')
