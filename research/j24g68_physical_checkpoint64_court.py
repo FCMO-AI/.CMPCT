@@ -92,11 +92,11 @@ def main() -> None:
         before_index = copy.deepcopy(reader.index)
         before_data = {name: reader.read(name) for name in reader.by}
         before_xattrs = projection(reader.index)
-        assert len(before_data) == prior_receipt["final_members"] == 117
+        assert len(before_data) == prior_receipt["final_members"] == 118
         assert OLD in before_data and NEW not in before_data
         assert OLD in before_xattrs and before_xattrs[OLD], "tagged rename witness absent"
         assert "f0042.dat" in before_data and "f0042.dat" not in before_xattrs
-        assert reader.verify() == 117
+        assert reader.verify() == 118
     assert len(prior_receipt["final_tagged_paths"]) == 5
     shutil.copyfile(before, after)
     before_after_inode = after.stat().st_ino
@@ -126,7 +126,7 @@ def main() -> None:
         assert reader.latest_footer_pos == checkpoint_chain[0]["offset"]
         identical_bytes(expected, reader.index)
         assert projection(reader.index) == expected_xattrs
-        assert reader.verify() == 117
+        assert reader.verify() == 118
         assert set(reader.by) == set(expected_data)
         for name, raw in expected_data.items():
             assert reader.read(name) == raw, ("post-checkpoint content", name)
@@ -140,7 +140,7 @@ def main() -> None:
                 assert xget_opt(extracted, key) == expected_xattrs.get(name, {}).get(key), (
                     "signed xattr rekey lost/resurrected", name, key)
     pf = preflight_archive(after)
-    assert pf["files"] == 117 and pf["delta_depth"] == 0, pf
+    assert pf["files"] == 118 and pf["delta_depth"] == 0, pf
     assert sha256_file(before) == prior_receipt["archive_sha256"]
 
     corrupt = out / "j24g68-corrupt-checkpoint.cmpct"
@@ -188,7 +188,7 @@ def main() -> None:
             msgpack.packb(expected, use_bin_type=True)).hexdigest(),
         "checkpoint_writer_wall_ns": append_wall_ns,
         "checkpoint_writer_cpu_ns": append_cpu_ns,
-        "strict_extraction_full_members": 117,
+        "strict_extraction_full_members": 118,
         "corrupt_last_footer_recovers_prior_signed_generation": True,
         "limitations": [
             "No full-product cold-open A/B, create/extract benchmark, or native RSS",
