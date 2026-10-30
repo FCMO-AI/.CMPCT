@@ -132,6 +132,7 @@ def main() -> None:
         raise AssertionError(("exact-head mismatch",head,os.environ.get("EVIDENCE_HEAD")))
     for ancestor in (PREREG,SOURCE,"1c073d024111be00a1246e67b1138a3d4232b3b9"):
         subprocess.run(["git","merge-base","--is-ancestor",ancestor,head],check=True)
+    sys.path.insert(0,str(root / 'benchmarks'))
     import universal_bench as universal
     scratch=Path(tempfile.mkdtemp(prefix="cmpct-j24i53-"))
     try:
@@ -204,7 +205,7 @@ def main() -> None:
             b=[s[k] for x in sham if x["label"]=="B" for s in x["samples"]]
             av,bv=statistics.median(a),statistics.median(b)
             return {"A_median":av,"B_median":bv,"delta_ms":bv-av,"ratio":bv/av}
-        sw=scam_wall=sham_effect("wall_ms")
+        sw=sham_effect("wall_ms")
         sc=sham_effect("cpu_ms")
         def big(x):
             return x["ratio"]>1.05 and x["delta_ms"]>3
