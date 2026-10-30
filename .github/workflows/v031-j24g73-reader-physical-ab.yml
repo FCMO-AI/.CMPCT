@@ -66,7 +66,7 @@ jobs:
           set -euo pipefail
           python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22' 'psutil>=5.9'
           python -m pip freeze > evidence/pip-freeze.txt
-          python -m py_compile research/j24g73_reader_open.py research/j24g73_detached_referee.py
+          python -m py_compile research/j24g73_reader_open.py research/j24g73_detached_referee.py research/j24g73_independent_wire.py
       - name: Physical Builder Writer Reader baseline and subclass test
         shell: bash
         run: |
@@ -79,6 +79,12 @@ jobs:
           set -o pipefail
           python research/j24g73_detached_referee.py evidence/j24g73-result.json evidence "$EXPECTED_HEAD" 2>&1 | tee evidence/j24g73-referee.log
           test -s evidence/j24g73-referee.json
+      - name: Independent no-CMPCT physical footer and xattr interpreter
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g73_independent_wire.py evidence/j24g73-result.json evidence 2>&1 | tee evidence/j24g73-wire.log
+          test -s evidence/j24g73-independent-wire.json
       - name: Preserve original raw data even on red
         if: always()
         uses: actions/upload-artifact@v4
