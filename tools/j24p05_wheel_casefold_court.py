@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""J24P05: independent, inert wheel-name casefold/installed-path identity court.
+
+No CMPCT native library is executed; Mach-O bytes come from J24P04's offline
+synthetic fixture. The source-exact current gate runs before a real pip --target
+installation on each host, recording both policy admission and physical path
+identity. This is science, not a shipping archive or release gate.
+"""
+from __future__ import annotations
+
+import argparse
+import base64
+import csv
+import hashlib
+import importlib.util
+import io
+import json
+import os
+from pathlib import Path
+import platform
+import subprocess
+import sys
+import tempfile
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tests"))
+from test_macos_wheel_physical_contract import good_fat, wheel as make_fixture_wheel
+
+SPEC = importlib.util.spec_from_file_location("j24p05_gate", ROOT / "tools" / "validate_macos_wheel_abi.py")
+GATE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(GATE)
+NATIVE = "cmpct/cmpct_core.cpython-311-darwin.so"
+RECORD = "cmpct-0.30.0.dist-info/RECORD"
+NAME = "cmpct-0.30.0-cp311-cp311-macosx_10_12_universal2.whl"
+INERT = b"J24P05_INERT_CASEFOLD_BYTES_NO_NATIVE_CODE\n"
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+def build(root: Path, label: str, extra: str | None, before: bool) -> Path:
+    folder = root / label
+    folder.mkdir(parents=True, exist_ok=True)
+    original = folder / NAME
+    make_fixture_wheel(original, good_fat())
+    if extra is None:
+        return original
+    with zipfile.ZipFile(original) as z:
+        src = {info.filename: z.read(info) for info in z.infolist() if info.filename != RECORD}
+    entries = {}
+    if before:
+        entries[extra] = INERT
+    entries.update(src)
+    if not before:
+        entries[extra] = INERT
+    rows = []
+    for name, data in entries.items():
+        digest = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).decode().rstrip("=")
+        rows.append([name, "sha256=" + digest, str(len(data))])
+    rows.append([RECORD, "", ""])
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerows(rows)
+    entries[RECORD] = buf.getvalue().encode("utf-8")
+    with zipfile.ZipFile(original, "w", compression=zipfile.ZIP_STORED) as z:
+        for name, data in entries.items():
+            z.writestr(name, data)
+    return original
+
+def host_casefold(root: Path) -> bool:
+    case = root / "caseprobe"
+    case.mkdir()
+    (case / "A").write_bytes(b"casefold")
+    return (case / "a").exists()
+
+def install(path: Path, root: Path, label: str) -> dict:
+    target = root / ("installed-" + label)
+    cmd = [sys.executable, "-m", "pip", "install", "--no-index", "--no-deps",
+           "--no-compile", "--ignore-installed", "--target", str(target), str(path)]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    actual = target / NATIVE
+    raw = actual.read_bytes() if actual.is_file() else None
+    return {
+        "returncode": p.returncode,
+        "stdout_tail": p.stdout[-1000:],
+        "stderr_tail": p.stderr[-1400:],
+        "installed_native_exists": raw is not None,
+        "installed_native_sha256": sha(raw) if raw is not None else None,
+        "installed_native_nbytes": len(raw) if raw is not None else None,
+        "primary_native_retained": raw == good_fat() if raw is not None else None,
+        "inert_collision_won": raw == INERT if raw is not None else None,
+    }
+
+def run(root: Path) -> dict:
+    root.mkdir(parents=True, exist_ok=True)
+    equivalent_name = "cmpct/CMPCT_CORE.cpython-311-darwin.so"
+    assert NATIVE.casefold() == equivalent_name.casefold()
+    samples = {
+        "original": build(root, "original", None, False),
+        "unrelated": build(root, "unrelated", "cmpct/UNRELATED.txt", False),
+        "collision_before": build(root, "collision_before", equivalent_name, True),
+        "collision_after": build(root, "collision_after", equivalent_name, False),
+    }
+    result = {
+        "schema": "cmpct-j24p05-path-equivalence-court-v1",
+        "host": {"system": platform.system(), "release": platform.release(),
+                 "machine": platform.machine(), "python": sys.version.split()[0],
+                 "pip": subprocess.run([sys.executable, "-m", "pip", "--version"],
+                                     capture_output=True, text=True).stdout.strip(),
+                 "casefold_equivalent": host_casefold(root)},
+        "source": {"gate_sha256": sha((ROOT / "tools" / "validate_macos_wheel_abi.py").read_bytes()),
+                   "fixture_sha256": sha((ROOT / "tests" / "test_macos_wheel_physical_contract.py").read_bytes()),
+                   "primary_native_sha256": sha(good_fat()),
+                   "inert_sha256": sha(INERT)},
+        "cases": {},
+    }
+    for label, path in samples.items():
+        try:
+            guard = GATE.inspect(path)
+            verdict = {"pass": True, "native_sha256": guard["native_sha256"]}
+        except (ValueError, OSError, RuntimeError, zipfile.BadZipFile) as exc:
+            verdict = {"pass": False, "reason": str(exc)}
+        result["cases"][label] = {
+            "wheel": path.name, "wheel_sha256": sha(path.read_bytes()),
+            "size": path.stat().st_size, "gate": verdict,
+            "pip": install(path, root, label) if platform.system() == "Darwin" else
+                   {"not_executed": "incompatible wheel tag on non-macOS host"}
+        }
+    # Positive-control failures mean that this court did not establish its baseline.
+    assert result["cases"]["original"]["gate"]["pass"], "positive gate control failed"
+    assert result["cases"]["unrelated"]["gate"]["pass"], "distinct-name control failed"
+    if platform.system() == "Darwin":
+        assert result["cases"]["original"]["pip"]["returncode"] == 0, "positive pip control failed"
+        assert result["cases"]["original"]["pip"]["primary_native_retained"], "positive pip native changed"
+    return result
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output-dir", type=Path, default=Path("j24p05-results"))
+    args = parser.parse_args()
+    result = run(args.output_dir)
+    dest = args.output_dir / "court.json"
+    dest.write_text(json.dumps(result, sort_keys=True, indent=2) + "\n")
+    print(json.dumps(result, sort_keys=True, indent=2))
+    print("J24P05 RESEARCH COURT COMPLETE; gate acceptance is NOT installation authority")
+
+if __name__ == "__main__":
+    main()
