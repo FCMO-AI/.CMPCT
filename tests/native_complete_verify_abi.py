@@ -84,6 +84,7 @@ def main() -> None:
         # the *pathname* is rebound to different (index-admissible) archive bytes.
         # Only the old handle may certify the original inode. New pathname opens
         # and the CLI must reject the mutated physical SHA; no Python delegation.
+        py_owned = CMPCT(original)
         owned = ctypes.c_void_p()
         assert lib.cmpct_open(str(original).encode(), ctypes.byref(owned)) == 0
         assert owned.value is not None
@@ -97,6 +98,9 @@ def main() -> None:
         assert hashlib.sha256(original.read_bytes()).hexdigest() != vector["archive_sha256"]
         assert retained.stat().st_ino != original.stat().st_ino
         try:
+            # A Python Reader already open on the original source must not be
+            # accidentally conflated with a late pathname-opened native handle.
+            assert py_owned.verify() == 1
             old_count = ctypes.c_size_t(999)
             assert lib.cmpct_verify_complete(owned, ctypes.byref(old_count)) == 0
             assert old_count.value == 1
@@ -110,6 +114,7 @@ def main() -> None:
             assert json.loads(good_retained_cli.stdout) == {"revision": 24, "verified": 1}
         finally:
             lib.cmpct_close(owned)
+            py_owned.close()
             original.unlink()
             retained.rename(original)
         assert hashlib.sha256(original.read_bytes()).hexdigest() == vector["archive_sha256"]
@@ -215,6 +220,8 @@ def main() -> None:
             "fixed_vector": vector["name"],
             "normal_abi": "success-1",
             "normal_cli": "success-1",
+            "opened_handle_rebind": "original-inode-pass-fresh-replacement-rejected",
+            "python_native_path_reopen": "held-python-original-pass-fresh-native-rejected",
             "corrupt_sha_abi": "fail-closed-count-0",
             "corrupt_sha_cli": "fail-closed-empty-stdout",
             "python_reference_corruption": "rejected",
