@@ -56,7 +56,7 @@ def review(document: dict, expected_head: str) -> dict:
     assert physical.get("admission_route") == "factored"
     assert physical.get("reader_and_preflight_verified") is True
     assert re.fullmatch(r"[a-f0-9]{64}", physical.get("source_index_msgpack_sha256", ""))
-    assert physical.get("retained_archive") == "evidence/j24g64b-physical.cmpct"
+    # Windows Path.__str__ uses backslashes; normalize notation without changing\n    # the required relative artifact identity or accepting arbitrary paths.\n    assert physical.get("retained_archive", "").replace("\\\\", "/") == "evidence/j24g64b-physical.cmpct"
     original_file = Path(physical["retained_archive"])
     assert original_file.is_file()
     assert original_file.stat().st_size == physical.get("physical_archive_bytes")
