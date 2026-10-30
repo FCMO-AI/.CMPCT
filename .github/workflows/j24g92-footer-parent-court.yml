@@ -1,0 +1,92 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G92 source-exact installed Reader/preflight footer-link integrity research.
+name: J24G92 Installed Footer Parent Link Court
+
+on:
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g91-delete-replay-vs-checkpoint-20261030
+    paths:
+      - 'research/j24g92_*'
+      - 'docs/v031-research/*j24g92*'
+      - '.github/workflows/j24g92-footer-parent-court.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g92-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  installed-physical:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G92_EVIDENCE: evidence/j24g92
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Establish immutable prereg, inherited Reader and source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 0b27b674ee76263882cfee0883a2150091f2a65e HEAD
+          git merge-base --is-ancestor 129edec976efe8bb604584517de39553487fec34 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          mkdir -p "$J24G92_EVIDENCE"
+          git rev-parse HEAD > "$J24G92_EVIDENCE/checkout-head.txt"
+          git rev-parse HEAD:research/j24g92_footer_link_court.py > "$J24G92_EVIDENCE/instrument-git-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual unchanged CMPCT + independent wire codecs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m pip freeze > "$J24G92_EVIDENCE/pip-freeze.txt"
+          python -m py_compile research/j24g92_footer_link_court.py research/j24g92_detached_referee.py
+      - name: Execute real Reader and strict preflight against physical mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g92_footer_link_court.py 2>&1 | tee "$J24G92_EVIDENCE/run.log"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('evidence/j24g92/receipt.json').read_text())
+          assert r['status']=='PASS',r.get('fatal')
+          assert set(r['cases'])=={'16','128'}
+          print('SCIENTIFIC_VERDICT',r['decision'])
+          for n,c in r['cases'].items():
+              assert c['original_footer_payload_sha256']==c['modified_footer_payload_sha256']
+              assert 1<=len(c['changed_byte_positions'])<=8
+              print('CASE',n,c['installed_reader_silent_rewire'],c['installed_preflight_silent_rewire'])
+          PY
+      - name: Detached independent physical-footer and receipt referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g92_detached_referee.py "$J24G92_EVIDENCE" 2>&1 | tee "$J24G92_EVIDENCE/referee.log"
+          test -s "$J24G92_EVIDENCE/detached-referee.json"
+      - name: Preserve physical archives, exact source, raw installed results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-j24g92-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/j24g92/
+          if-no-files-found: warn
+          retention-days: 30
