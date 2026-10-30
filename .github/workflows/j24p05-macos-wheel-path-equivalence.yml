@@ -74,5 +74,9 @@ jobs:
             j24p05-results/unrelated/*.whl
             j24p05-results/collision_before/*.whl
             j24p05-results/collision_after/*.whl
+            j24p05-results/alias_parent/*.whl
+            j24p05-results/alias_dot/*.whl
+            j24p05-results/alias_repeated_separator/*.whl
+            j24p05-results/alias_internal_dot/*.whl
           if-no-files-found: warn
           retention-days: 30
