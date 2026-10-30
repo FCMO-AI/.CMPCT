@@ -1,0 +1,103 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Research-only: this green lane is not a product release gate.
+name: CMPCT J24G67 physical DELETE bisect onepass research court
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g67-delete-bisect-onepass-20261030
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24g67-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  delete-bisect:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.sha }}
+      J24G67_RESULT: evidence/j24g67-result.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Attest exact source ancestry and no product edits
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 7f509d244325d4b6ea6d0e752ea365f79c33a742 HEAD
+          git merge-base --is-ancestor 8b34b8a41cc890f0668fa944a245b80e6451dd3a HEAD
+          git diff --exit-code 7f509d244325d4b6ea6d0e752ea365f79c33a742 HEAD -- src/cmpct/ tests/ benchmarks/history/
+          test "$(git rev-parse HEAD:src/cmpct/journal_replay.py)" = 03743ca2a06c022c2ec64243a90fe373cf91e899
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
+          git rev-parse HEAD > evidence/head.txt
+          git rev-parse HEAD:research/j24g67_delete_bisect_onepass.py > evidence/experiment-source.txt
+          git rev-parse HEAD:docs/v031-research/2026-10-30-j24g67-delete-bisect-prereg.md > evidence/prereg-blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install authentic exact-head CMPCT and detached parser dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'zstandard>=0.22' 'msgpack>=1.0'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python -m py_compile research/j24g67_delete_bisect_onepass.py
+      - name: Run Writer-real DELETE replay A/B and exactness hostiles
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g67_delete_bisect_onepass.py 2>&1 | tee evidence/j24g67.log
+          test -s evidence/j24g67-result.json
+          test -s evidence/j24g67-authentic-delete.cmpct
+      - name: Detached raw receipt arithmetic / hostile tamper sanity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,pathlib,statistics
+          p=pathlib.Path('evidence/j24g67-result.json')
+          r=json.loads(p.read_text())
+          raw=r['raw']
+          assert len(raw)==32
+          assert hashlib.sha256(json.dumps(raw,sort_keys=True,separators=(',',':')).encode()).hexdigest()==r['raw_sha256']
+          groups={k:[v for v in raw if v['variant']==k] for k in ('candidate','reference')}
+          assert all(len(v)==16 for v in groups.values())
+          ref=statistics.median(q['open_wall_ns'] for q in groups['reference'])
+          opt=statistics.median(q['open_wall_ns'] for q in groups['candidate'])
+          assert ref==r['median_reference_wall_ns'] and opt==r['median_candidate_wall_ns']
+          assert abs(ref/opt-r['speedup'])<1e-10
+          assert ref-opt==r['saving_wall_ns']
+          assert set(q['index_sha256'] for q in raw)=={r['physical']['index_sha256']}
+          a=pathlib.Path('evidence/j24g67-authentic-delete.cmpct')
+          assert hashlib.sha256(a.read_bytes()).hexdigest()==r['physical']['sha256']
+          assert a.stat().st_size==r['physical']['archive_bytes']
+          assert r['physical']['delta_operations']==63 and r['physical']['footers']==64
+          assert len(r['hostile']['named'])==12
+          assert r['hostile']['randomized_sequences']==500
+          altered=json.loads(p.read_text())
+          altered['raw'][0]['open_wall_ns']+=1
+          assert hashlib.sha256(json.dumps(altered['raw'],sort_keys=True,separators=(',',':')).encode()).hexdigest()!=r['raw_sha256']
+          altered=json.loads(p.read_text())
+          altered['physical']['sha256']='0'*64
+          assert hashlib.sha256(a.read_bytes()).hexdigest()!=altered['physical']['sha256']
+          print("J24G67_DETACHED_ARITHMETIC_AND_TAMPER_PASS",len(raw))
+          PY
+      - name: Preserve signed archive and raw receipts even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g67-delete-bisect-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
