@@ -1,0 +1,23 @@
+# J24I46 — single-FLAC seeking versus independent decode islands (prospective BONK)
+Date: 2026-10-30 UTC
+Status: **RESEARCH ONLY / preregistered before data or instrument / no product, format, benchmark, ABI or release claim**.
+
+## Authority, existing evidence, and concurrency
+Released baseline: `main@80c358f8824ec1b20d349c92ed94c898090969b0`, v0.30.0/revision-24. Active native complete-verifier owner: [#788](https://github.com/FCMO-AI/.CMPCT/pull/788), stacked on #784/#765; held-out stereo court #794. J24I37–J24I45 already proved repeated **complete-verification** work and tested one-pass complete verify. This research **does not** touch any owner code or assert fresh native product gains. Search of active PR/issues/branches found no J24I46 claim at preregistration. Main discovery STATE is stale (v0.30 compact-r24 primary); #574 owns its reconciliation; do not overwrite it.
+
+## Frame review and PARETOBONK
+After successive codec-2 verifier experiments, do not continue threshold gardening. Select a **different execution/representation boundary**: targeted **selective reads** of an existing single FLAC, not full verification. Compare (A) retain direct FLAC and decode from start, (B) seek to an exact PCM frame using a mature decoder on the **same physical FLAC** with *zero archive-byte change*, and (C) separate independently compressed FLAC islands **only if B does not already dominate**. A format-preserving seek is the stronger simpler control that can cheaply falsify the need for extra chunk indexes/metadata/decoder instances. Also preserve no-op baseline.
+
+## Primary falsifiable question
+For exact PCM16 frames reconstructed from two deterministically generated and structurally distinct 32MiB WAV workloads (correlated stereo and mono/nonperiodic), is libsndfile frame seeking over one existing FLAC a materially better selective-read control than full sequential decoding **including cold open, seek, decode, compressed bytes actually read and RSS**, while preserving requested PCM bytes exactly?
+
+Precommitted positions: 25%, 75%, and tail minus 4 KiB (rounded to complete PCM frames); range 4KiB logical PCM. Warm-cache and cold-reader measurements both include the full source opening cost. Compare one full-decode control from the *same libsndfile version* with the seek approach. At least 12 ABBA/BAAB measurements for each position/path; preserve raw samples, A/A drift when practical. Audit complete logical WAV/FLAC identities. Report relevant platform, codec version, decoded-output count, complete FLAC bytes, read/seek counters, wall, CPU and peak RSS, with strong caveats about Python and OS cache; do not conflate read counters with true internal decoded work.
+
+### Expected and kill / narrow conditions
+Hypothesis: for late sparse ranges, frame seek reduces median open+extract wall by >=4x and bytes returned by the underlying FLAC file by >=2x, without any stored-byte premium. Falsifier: exact byte mismatch, absent stable gain, full compressed scan required on open, or meaningful additional RSS invalidates a free locality claim. If seeking performs well, retire **independent FLAC islands as the default** pending only a native Claxon-compatible seek feasibility/cost test. If it fails, measure a **fully charged** chunk-island lower rung (encoded bytes + one immutable WAV header + per-island codec/index/digest/backup metadata; creator CPU; random extract CPU/RSS) rather than assuming chunk savings are free.
+
+## Threats, semantics and costs
+The experiment forces two FLAC-coded input streams as *oracles*, not proof Builder would generically admit them. Existing native Rust uses Claxon, not libsndfile; replacing it or adding a dependency has complexity and portability costs. No broad random-read product claim from a specialized Python/soundfile oracle. The test is same-input and same-codec semantics for one PCM range, but not equivalent to full CMPCT Archive::read_range or verify_complete, nor does it authenticate CMA4/index/footer. No release credits, version change or corpus-specific encoder selection. Fallback to existing r24 remains authoritative.
+
+## Decision and continuation
+The cheapest decisive result is a reproducible, independent local native-library seek vs full scan benchmark and its exact-source script/JSON receipt. Only if strong favor persists should a separately owned native candidate with source identity, fully authenticated physical archive and real selective-read throughput/RSS be considered. If no gain, write down the negative and use a different representation frame or retire. Do not self-modify Discovery Engine from one result.
