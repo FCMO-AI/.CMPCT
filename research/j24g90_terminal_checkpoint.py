@@ -167,15 +167,21 @@ def check_semantics(case):
 
 
 def timed_open(path):
+    # Windows process_time_ns has a coarse quantum on hosted CPython: sub-quantum
+    # genuine Reader opens otherwise yield a zero CPU median. Hold exact source and
+    # operation semantics fixed; amortize 64 fresh opens per reported sample there.
+    batch = 64 if sys.platform == "win32" else 1
     t0 = time.perf_counter_ns()
     c0 = time.process_time_ns()
-    with CMPCT(path) as reader:
-        assert len(reader.by) > 0
-        depth = reader.delta_depth
-    return {"wall_ns": time.perf_counter_ns() - t0,
-            "cpu_ns": time.process_time_ns() - c0,
-            "depth": depth}
-
+    depths = set()
+    for _ in range(batch):
+        with CMPCT(path) as reader:
+            assert len(reader.by) > 0
+            depths.add(reader.delta_depth)
+    assert len(depths) == 1, "inconsistent archive state within timed batch"
+    return {"wall_ns": (time.perf_counter_ns() - t0) / batch,
+            "cpu_ns": (time.process_time_ns() - c0) / batch,
+            "depth": depths.pop(), "batch_repetitions": batch}
 
 def measure(case):
     paths = case["paths"]
