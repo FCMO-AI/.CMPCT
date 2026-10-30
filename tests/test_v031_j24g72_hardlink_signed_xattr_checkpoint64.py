@@ -5,6 +5,7 @@ physical courts lack hardlinks. This test does not patch product code.
 """
 from __future__ import annotations
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -91,6 +92,29 @@ def test_hardlink_signed_xattrs_and_64th_checkpoint(tmp_path: Path):
         assert not (dest / "h.dat").exists()
     preflight_archive(archive)
 
+    # Evidence-only retention of the *physical signed-xattr intersection* artifact.
+    # The earlier J24G71 donor sample has no xattrs and is not this specimen.
+    evidence_target = os.environ.get("J24G72_XATTR_SAMPLE")
+    if evidence_target:
+        evidence_path = Path(evidence_target)
+        evidence_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(archive, evidence_path)
+        evidence_receipt = {
+            "schema": "cmpct-j24g72-physical-signed-hardlink-xattr-v1",
+            "source_head": os.environ.get("EXPECTED_HEAD", ""),
+            "host": sys.platform,
+            "physical_archive_bytes": evidence_path.stat().st_size,
+            "physical_archive_sha256": hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
+            "signed_owner_path": "a.dat",
+            "removed_hardlink_alias": "h.dat",
+            "unchanged_neutral_path": current,
+            "signed_xattr_name": key,
+            "signed_xattr_value_hex": value.hex(),
+            "generation_64_checkpoint_confirmed": True,
+            "reader_preflight_strict_restore": "pass",
+            "rejected_owner_mutations_before_checkpoint": 2,
+        }
+
     damaged = tmp_path / "damaged.cmpct"
     shutil.copyfile(archive, damaged)
     with damaged.open("r+b") as handle:
@@ -107,3 +131,13 @@ def test_hardlink_signed_xattrs_and_64th_checkpoint(tmp_path: Path):
         assert reader.read("a.dat") == reader.read("h.dat") == raw
         assert reader.verify() == 3
     assert hashlib.sha256(archive.read_bytes()).digest() != hashlib.sha256(damaged.read_bytes()).digest()
+    if evidence_target:
+        corrupted_path = evidence_path.with_name(evidence_path.stem + "-corrupt-last-footer.cmpct")
+        shutil.copyfile(damaged, corrupted_path)
+        evidence_receipt["corrupt_last_footer_archive_sha256"] = hashlib.sha256(corrupted_path.read_bytes()).hexdigest()
+        evidence_receipt["corrupt_last_footer_archive_bytes"] = corrupted_path.stat().st_size
+        evidence_receipt["corrupt_footer_recovered_signed_hardlink_generation_63"] = True
+        evidence_path.with_suffix(".json").write_text(
+            json.dumps(evidence_receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+
