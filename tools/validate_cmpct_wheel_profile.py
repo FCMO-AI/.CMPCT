@@ -52,7 +52,7 @@ def validate(path: str | Path) -> dict[str, object]:
         seen = {}
         file_keys = set()
         for info in infos:
-            parts = _components(info.filename)
+            parts = _components(info.orig_filename)  # Python zipfile normalizes backslashes on Windows
             # J24P07's physically measured .data/data scheme collision showed
             # a general static relocation map is NOT a trustworthy solution.
             # The current CMPCT shipping package has no .data scheme payloads.
