@@ -251,6 +251,7 @@ jobs:
               'candidate_source_receipt_schema':'cmpct-v031-candidate-source-receipt-v1',
               'candidate_fingerprint':os.environ['FP'].strip(),
               'candidate_sha':expected_head,
+              'cross_host_dict_vector_sha256':next(iter(vector_digests)),
               'facts':{
                   'sdist_first_wheel_build':True,
                   'linux_clean_install_green':True,
