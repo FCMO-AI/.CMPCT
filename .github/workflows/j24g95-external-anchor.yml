@@ -14,7 +14,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cmpct-j24g95-${{ github.event.pull_request.head.sha || github.sha }}
+  group: cmpct-j24g95-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   external-anchor-physical:
