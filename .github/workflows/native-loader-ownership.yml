@@ -47,8 +47,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pytest
+      # This standalone import-time unit does not require the historical corpus
+      # fixtures in tests/conftest.py (which load host-specific legacy libzstd).
+      # The complete inherited regression suite runs unchanged in tests.yml.
       - name: Verify pre-CDLL selection adversaries
-        run: python -m pytest -q tests/test_native_library_selection_preload.py
+        run: python -m pytest -q --noconftest tests/test_native_library_selection_preload.py
       - name: Inspect actual installed native object and verify roundtrip
         run: python tools/native_loader_install_receipt.py
       - name: Preserve source-head bound package receipt
