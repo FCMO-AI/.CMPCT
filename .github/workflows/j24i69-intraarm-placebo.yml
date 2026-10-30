@@ -68,7 +68,7 @@ jobs:
               for filename in sorted(p.glob("cmpct_*.zip")):
                   z.write(filename, arcname=filename.name)
           PY
-      - name: Run 15 hostile admission tests and original provider audit
+      - name: Run 17 hostile admission tests and original provider audit
         shell: bash
         run: |
           set -euo pipefail
