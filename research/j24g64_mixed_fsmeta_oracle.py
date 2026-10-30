@@ -381,6 +381,100 @@ def measure(base, deltas, variant):
     return result, {"variant": variant, "wall_ns": wall, "cpu_ns": cpu}
 
 
+def physical_mixed_writer_check():
+    """J24G64b: actual Builder/public Writer 63x mixed signed-archive oracle.
+
+    Run after replay microtiming: archive generation must not affect A/B cache
+    state or get mistaken for an end-to-end measured speedup.
+    """
+    import shutil
+    import tempfile
+    from cmpct.builder import Builder
+    from cmpct.reader import CMPCT
+    from cmpct.validation import preflight_archive
+    from cmpct import transactions as tx
+    from j24g60_single_delta_chain_court import footer_chain, sha256_file, verify_source
+    from j24g62_crossgen_rename_oracle import read_wire
+
+    physical_sources = verify_source()
+    expected = {
+        f"f{i:04d}.dat": hashlib.sha256(f"mixed-physical-{i}".encode()).digest() * 2
+        for i in range(128)
+    }
+    with tempfile.TemporaryDirectory(prefix="cmpct-j24g64b-") as temp:
+        root = Path(temp)
+        tree = root / "tree"
+        tree.mkdir()
+        for name, content in expected.items():
+            (tree / name).write_bytes(content)
+        archive = root / "mixed-public-writer.cmpct"
+        Builder(tree, workers=1, reproducible=True).build(archive)
+        assert len(footer_chain(archive)) == 1
+        for i in range(21):
+            old, new = f"f{i:04d}.dat", f"r{i:04d}.dat"
+            tx.append_rename(archive, old, new)
+            expected[new] = expected.pop(old)
+
+            removed = f"f{32+i:04d}.dat"
+            tx.append_delete(archive, removed)
+            del expected[removed]
+
+            replacement = hashlib.sha256(f"changed-physical-{i}".encode()).digest() * 2
+            source = root / f"update-source-{i:04d}.dat"
+            source.write_bytes(replacement)
+            target = (f"f{64+i:04d}.dat" if i % 2 == 0
+                      else f"new{i:04d}.dat")
+            tx.append_update(archive, target, source)
+            expected[target] = replacement
+
+        before_sha = sha256_file(archive)
+        wire = footer_chain(archive)
+        assert len(wire) == 64
+        assert all(entry["kind"] == 1 and entry["op_width"] == 1
+                   for entry in wire[:-1])
+        assert wire[-1]["kind"] == 0
+        base, deltas = read_wire(archive)
+        assert len(deltas) == 63
+        names = [delta["ops"][0][0] for delta in deltas]
+        assert names.count("ren") == names.count("del") == names.count("put") == 21
+        baseline = reference(base, deltas)
+        candidate, route = factored(base, deltas)
+        assert route == "factored", ("physical mixed candidate not admitted", route)
+        assert candidate == baseline
+        assert fingerprint(candidate) == fingerprint(baseline)
+        with CMPCT(archive) as reader:
+            assert reader.delta_depth == 63
+            assert reader.index == candidate
+            assert reader.verify() == len(expected)
+            assert set(reader.by) == set(expected)
+            for name, payload in expected.items():
+                assert reader.read(name) == payload, name
+        preflight = preflight_archive(archive)
+        assert preflight["files"] == len(expected)
+        assert preflight["delta_depth"] == 63
+        assert sha256_file(archive) == before_sha, "physical archive was mutated"
+
+        dest = Path(os.environ.get("J24G64_PHYSICAL", "evidence/j24g64b-physical.cmpct"))
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(archive, dest)
+        assert sha256_file(dest) == before_sha
+        return {
+            "prereg_commit": "bce038172d6d1c0c68945512bb354b6f25ddef6e",
+            "source": physical_sources,
+            "initial_members": 128, "final_members": len(expected),
+            "delta_depth": 63,
+            "operation_counts": {"ren": 21, "del": 21, "put": 21},
+            "physical_footer_count": len(wire),
+            "physical_archive_bytes": archive.stat().st_size,
+            "physical_archive_sha256": before_sha,
+            "source_index_msgpack_sha256": fingerprint(candidate),
+            "admission_route": route,
+            "reader_and_preflight_verified": True,
+            "retained_archive": str(dest),
+            "scope": "research-only authentic single-op mixed Writer corpus; no physical sparse xattrs",
+        }
+
+
 def main():
     source = source_attestation()
     outcomes = differential()
@@ -409,10 +503,11 @@ def main():
     extra = memory["factored"]["peak_traced_bytes"] - memory["reference"]["peak_traced_bytes"]
     decision = ("MIXED_FSMETA_REPLAY_SEED" if a / b >= 2 and extra <= 2 * 1024 * 1024
                 else "NO_BOUNDED_MIXED_FSMETA_WIN")
+    physical = physical_mixed_writer_check()
     report = {
         "schema": "cmpct-j24g64-mixed-fsmeta-research-v1",
         "decision": decision, "source": source, "platform": platform.platform(),
-        "python": platform.python_version(), "differential": outcomes, "targeted_semantic_edges": edges,
+        "python": platform.python_version(), "differential": outcomes, "targeted_semantic_edges": edges, "physical_mixed_public_writer": physical,
         "members": len(base["files"]), "generations": len(deltas),
         "sparse_xattr_records": len(base["fsmeta"]["xattrs"]),
         "sparse_owner_records": len(base["fsmeta"]["owner_overrides"]),
@@ -423,7 +518,7 @@ def main():
         "archive_bytes_added": 0,
         "limitations": [
             "Research-only Python helper oracle; not installed into Reader/Writer",
-            "Mixed histories are synthetic logical operations, not physically signed public archives",
+            "Synthetic performance workload is not a physically signed public archive",\n            "Separate physical Writer mixed check lacks deliberately signed sparse xattrs",
             "No end-to-end Reader open, read, extract, recovery or 64th checkpoint evidence",
             "No actual archive bytes changed; physical storage savings not measured",
             "Tracemalloc is not RSS; no external codec/ZIP/Zstd benchmark",
