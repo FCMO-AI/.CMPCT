@@ -197,13 +197,20 @@ def inspect(path: Path) -> dict:
             reject("internal WHEEL tag coverage disagrees with filename")
         binary = z.read(native[0])
         physical = physical_slices(binary)
+        # Bind the outer digest to the same open archive descriptor, not a later
+        # pathname lookup that could resolve a replacement wheel after closing.
+        digest = hashlib.sha256()
+        z.fp.seek(0)
+        for chunk in iter(lambda: z.fp.read(1 << 20), b""):
+            digest.update(chunk)
+        wheel_digest = digest.hexdigest()
     if not required.issubset(physical):
         reject("wheel advertises missing physical architecture(s): " + ",".join(sorted(required - set(physical))))
     for arch in required:
         minimum_allowed = max(platform_min, (11, 0, 0)) if arch == "arm64" else platform_min
         if physical[arch]["min_os"] > minimum_allowed:
             reject(f"{arch} minimum macOS {physical[arch]['min_os']} exceeds declared {minimum_allowed}")
-    return {"pass": True, "wheel": name, "wheel_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    return {"pass": True, "wheel": name, "wheel_sha256": wheel_digest,
             "native_member": native[0], "native_sha256": hashlib.sha256(binary).hexdigest(),
             "platform": platform, "required": sorted(required), "physical": physical,
             "claim_scope": "physical wheel ABI and RECORD only; not runtime Intel/ARM launch, signature or source provenance"}

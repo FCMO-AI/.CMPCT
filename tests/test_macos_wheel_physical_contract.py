@@ -2,6 +2,8 @@
 import base64
 import csv
 import hashlib
+import os
+from unittest import mock
 import importlib.util
 import io
 import pathlib
@@ -127,6 +129,31 @@ class TestPhysicalWheelGuard(unittest.TestCase):
         self.assertTrue(gate.inspect(wheel(p, good_fat(), metadata_python_tags=["cp310", "cp311"]))["pass"])
         with self.assertRaisesRegex(ValueError, "WHEEL tag coverage"):
             gate.inspect(wheel(p, good_fat(), metadata_python_tags=["cp311"]))
+
+    def test_outer_wheel_digest_is_bound_to_original_open_descriptor(self):
+        # A real pathname replacement after closing ZipFile must not change the
+        # digest attributed to the native Mach-O and authenticated RECORD.
+        original = self.root / "original" / "cmpct-0.30.0-cp311-cp311-macosx_10_12_universal2.whl"
+        replacement = self.root / "replacement" / original.name
+        original.parent.mkdir()
+        replacement.parent.mkdir()
+        wheel(original, good_fat())
+        wheel(replacement, good_fat() + b"new-native-padding")
+        original_sha = hashlib.sha256(original.read_bytes()).hexdigest()
+        new_sha = hashlib.sha256(replacement.read_bytes()).hexdigest()
+        self.assertNotEqual(original_sha, new_sha)
+        original_zip = gate.zipfile.ZipFile
+
+        class SwapAfterParsing(original_zip):
+            def __exit__(self, exc_type, exc_value, traceback):
+                result = super().__exit__(exc_type, exc_value, traceback)
+                os.replace(replacement, original)
+                return result
+
+        with mock.patch.object(gate.zipfile, "ZipFile", SwapAfterParsing):
+            result = gate.inspect(original)
+        self.assertEqual(result["wheel_sha256"], original_sha)
+        self.assertEqual(hashlib.sha256(original.read_bytes()).hexdigest(), new_sha)
 
     def test_non_macos_build_version_rejected(self):
         with self.assertRaisesRegex(ValueError, "not for macOS"):
