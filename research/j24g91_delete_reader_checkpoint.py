@@ -24,7 +24,7 @@ import msgpack
 from cmpct.reader import CMPCT
 from cmpct.transactions import append_rename
 from j24g90_terminal_checkpoint import (
-    make_court, check_semantics, digest, index_fingerprint, source_receipt
+    FOOTER, make_court, check_semantics, digest, index_fingerprint, source_receipt
 )
 
 PREREG = "78d8ae137cb83ec1846c4a07b8cc7cda0c2bb6d2"
@@ -152,6 +152,17 @@ def assert_parity(case, n):
     with tempfile.TemporaryDirectory(prefix="j24g91-fallback-") as td:
         altered = Path(td) / "noneligible.cmpct"
         shutil.copyfile(case["paths"]["A"], altered)
+        # At depth 63, public append_rename would AUTO-CHECKPOINT and fail
+        # to exercise the mixed-delta fallback. Retain the genuine signed
+        # generation-62 prefix, then append one real RENAME as generation 63.
+        # This preserves the true public Writer semantic path.
+        with altered.open("r+b") as stream:
+            stream.seek(-FOOTER.size, os.SEEK_END)
+            tail = FOOTER.unpack(stream.read(FOOTER.size))
+            assert tail[0] == b"CMPTF24\\x00".replace(b"\\x00", b"\x00")
+            previous_pos = tail[7]
+            assert 0 < previous_pos < stream.tell() - FOOTER.size
+            stream.truncate(previous_pos + FOOTER.size)
         old = "f00100.dat"
         new = "j24g91-renamed.dat"
         append_rename(altered, old, new)
@@ -159,7 +170,7 @@ def assert_parity(case, n):
             assert private._research_route == "inherited-fallback"
             assert index_fingerprint(reference.index) == index_fingerprint(private.index)
             assert reference.read(new) == private.read(new)
-            assert reference.verify() == private.verify() == len(names)
+            assert reference.verify() == private.verify() == len(names) + 1
             negative = {"route": private._research_route,
                         "semantic_hash": index_fingerprint(private.index),
                         "signed_rename": [old, new]}
