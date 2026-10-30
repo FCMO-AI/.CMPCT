@@ -15,6 +15,7 @@ import tempfile
 from pathlib import Path
 
 from cmpct.reader import CMPCT
+from cmpct.codec import BHDR
 
 ROOT = Path(__file__).resolve().parents[1]
 LIB = ROOT / "native/cmpct-core/target/release/libcmpct_core.so"
@@ -33,6 +34,11 @@ def main() -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.cmpct_verify_complete.restype = ctypes.c_int32
+    lib.cmpct_entry_read_range.argtypes = [
+        ctypes.c_void_p, ctypes.c_size_t, ctypes.c_uint64,
+        ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.cmpct_entry_read_range.restype = ctypes.c_int32
 
     def run_cli(path: Path, extra: tuple[str, ...] = ()) -> subprocess.CompletedProcess[bytes]:
         return subprocess.run(
@@ -107,6 +113,46 @@ def main() -> None:
         assert extra_cli.returncode != 0
         assert extra_cli.stdout == b""
 
+        # A RAW partial read is deliberately local: untouched bytes can be
+        # served without certifying the entire member. Full verify must catch
+        # late physical corruption despite a successful early range result.
+        direct = json.loads(
+            (ROOT / "tests/conformance/v24-direct-codecs.json").read_text()
+        )
+        raw_vector = next(v for v in direct["vectors"] if v["codec"] == 0)
+        raw_bytes = base64.b64decode(raw_vector["archive_base64"])
+        assert hashlib.sha256(raw_bytes).hexdigest() == raw_vector["archive_sha256"]
+        raw_path = root / "fixed-raw.cmpct"
+        raw_path.write_bytes(raw_bytes)
+        assert verify_abi(raw_path) == (0, 1)
+        with CMPCT(raw_path) as ar:
+            row = ar.by[raw_vector["name"]]
+            off, usize, csize, codec, mlen = ar.blobs[row[6][1]]
+            assert codec == 0 and csize == usize and usize == 64
+            payload_pos = ar.record_base + off + BHDR.size + mlen
+        raw_mutation = bytearray(raw_bytes)
+        raw_mutation[payload_pos + csize - 1] ^= 1
+        raw_bad_path = root / "fixed-raw-corrupt-late.cmpct"
+        raw_bad_path.write_bytes(raw_mutation)
+        handle = ctypes.c_void_p()
+        assert lib.cmpct_open(str(raw_bad_path).encode(), ctypes.byref(handle)) == 0
+        try:
+            early = ctypes.create_string_buffer(1)
+            got = ctypes.c_size_t()
+            assert lib.cmpct_entry_read_range(
+                handle, 0, 0, early, 1, ctypes.byref(got)
+            ) == 0
+            assert got.value == 1
+            # The selected byte is unmodified even though the archive is not intact.
+            assert early.raw == raw_bytes[payload_pos:payload_pos + 1]
+            count = ctypes.c_size_t(777)
+            assert lib.cmpct_verify_complete(handle, ctypes.byref(count)) != 0
+            assert count.value == 0
+        finally:
+            lib.cmpct_close(handle)
+        raw_bad_cli = run_cli(raw_bad_path)
+        assert raw_bad_cli.returncode != 0 and raw_bad_cli.stdout == b""
+
         print(json.dumps({
             "schema": "cmpct-j24i50-native-public-verify-v1",
             "fixed_vector_sha256": vector["archive_sha256"],
@@ -117,6 +163,9 @@ def main() -> None:
             "corrupt_sha_cli": "fail-closed-empty-stdout",
             "python_reference_corruption": "rejected",
             "null_pointer_tests": 2,
+            "raw_late_corrupt_early_range": "accepted-local",
+            "raw_late_corrupt_complete_abi": "rejected-count-0",
+            "raw_late_corrupt_complete_cli": "rejected-empty-stdout",
         }, sort_keys=True))
 
 
