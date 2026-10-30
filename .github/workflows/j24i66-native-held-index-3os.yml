@@ -33,6 +33,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2  # diff-tree needs HEAD's parent; depth=1 silently reports no changed files
       - name: Select only a relevant latest commit (not accumulated PR paths)
         id: changed
         shell: bash
