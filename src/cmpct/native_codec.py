@@ -8,6 +8,7 @@ buffers plus the lifetime of opaque decoder handles.
 """
 
 import ctypes
+import stat
 from pathlib import Path
 
 _sz = ctypes.c_size_t
@@ -16,14 +17,24 @@ _voidpp = ctypes.POINTER(ctypes.c_void_p)
 
 def _library_path() -> Path:
     root = Path(__file__).resolve().parent
+    # A package exports one NoBinding library. Filename ordering cannot prove
+    # which of multiple binaries belongs to this build; reject before CDLL.
     candidates = sorted(
         p for pattern in ("cmpct_core*.so", "cmpct_core*.pyd", "cmpct_core*.dll", "cmpct_core*.dylib")
         for p in root.glob(pattern)
-        if p.is_file()
     )
     if not candidates:
         raise RuntimeError("package-owned cmpct_core codec library is missing")
-    return candidates[0]
+    if len(candidates) != 1:
+        raise RuntimeError("ambiguous package-owned cmpct_core codec libraries")
+    candidate = candidates[0]
+    try:
+        mode = candidate.lstat().st_mode
+    except OSError as exc:
+        raise RuntimeError("package-owned cmpct_core codec library is not a regular file") from exc
+    if not stat.S_ISREG(mode):
+        raise RuntimeError("package-owned cmpct_core codec library is not a regular file")
+    return candidate
 
 
 _core = ctypes.CDLL(str(_library_path()))

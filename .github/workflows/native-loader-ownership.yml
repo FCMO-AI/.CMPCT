@@ -1,0 +1,169 @@
+# ci-lane: fast
+name: CMPCT package-native loader ownership
+
+on:
+  pull_request:
+    paths:
+      - "src/cmpct/native_codec.py"
+      - "tests/test_native_library_selection_preload.py"
+      - "tools/native_loader_install_receipt.py"
+      - ".github/workflows/native-loader-ownership.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-native-loader-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-native-owner:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    # macos-14 is in GitHub's 2026-10-30 brownout and retires 2026-11-02.
+    # macos-15 retains an ARM64 host for the wheel-tag/Mach-O test.
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out exact source HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Verify checkout identity
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Install Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install actual package through editable build
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+      # This standalone import-time unit does not require the historical corpus
+      # fixtures in tests/conftest.py (which load host-specific legacy libzstd).
+      # The complete inherited regression suite runs unchanged in tests.yml.
+      - name: Verify pre-CDLL selection adversaries
+        run: python -m pytest -q --noconftest tests/test_native_library_selection_preload.py
+      - name: Inspect actual installed native object and verify roundtrip
+        run: python tools/native_loader_install_receipt.py
+      # Independent packaging path: editable installs are not equivalent to
+      # the produced wheel. Probe a clean venv before/after reinstalling the
+      # *same* wheel without altering the package-owned selector itself.
+      - name: Build actual wheel from exact source
+        run: python -m pip wheel --no-deps --wheel-dir wheelhouse .
+      - name: Verify isolated wheel-native ownership and same-wheel reinstall
+        run: |
+          set -euo pipefail
+          python -m venv .j24p01b-wheel-venv
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            VENV_PY=".j24p01b-wheel-venv/Scripts/python.exe"
+          else
+            VENV_PY=".j24p01b-wheel-venv/bin/python"
+          fi
+          shopt -s nullglob
+          wheels=(wheelhouse/cmpct-*.whl)
+          test "${#wheels[@]}" -eq 1
+          "$VENV_PY" -m pip install "${wheels[0]}"
+          "$VENV_PY" -c 'import cmpct, sys; from pathlib import Path; p=Path(cmpct.__file__).resolve(); assert p.is_relative_to(Path(sys.prefix).resolve()), (p, sys.prefix); print("wheel site-packages import:",p)'
+          "$VENV_PY" tools/native_loader_install_receipt.py
+          cp native-loader-install-receipt.json native-loader-wheel-first.json
+          "$VENV_PY" -m pip install --force-reinstall --no-deps "${wheels[0]}"
+          "$VENV_PY" tools/native_loader_install_receipt.py
+          cp native-loader-install-receipt.json native-loader-wheel-reinstall.json
+          "$VENV_PY" - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("native-loader-wheel-first.json").read_text())
+          b=json.loads(Path("native-loader-wheel-reinstall.json").read_text())
+          for key in ("source_head","candidate_name","native_sha256","native_size_bytes","compressed_test_bytes"):
+              assert a[key]==b[key], (key,a[key],b[key])
+          for x in (a,b):
+              assert x["candidate_count"]==x["post_test_candidate_count"]==1
+              assert x["native_roundtrip"]=="pass" and x["injected_match_preload_refused"] is True
+          print("same-wheel physical native identity and pre-CDLL refusal: PASS")
+          PY
+          "$VENV_PY" - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import zipfile
+          wheels=list(Path("wheelhouse").glob("cmpct-*.whl"))
+          assert len(wheels)==1, wheels
+          wheel=wheels[0]
+          with zipfile.ZipFile(wheel) as f:
+              names=[n for n in f.namelist() if n.startswith("cmpct/cmpct_core") and n.endswith((".so",".pyd",".dll",".dylib"))]
+              assert len(names)==1, names
+              member=names[0]
+              member_sha=hashlib.sha256(f.read(member)).hexdigest()
+          receipts=[json.loads(Path(p).read_text()) for p in ("native-loader-wheel-first.json","native-loader-wheel-reinstall.json")]
+          assert all(r["native_sha256"]==member_sha for r in receipts), (member, member_sha, receipts)
+          record={"wheel_filename":wheel.name,"wheel_sha256":hashlib.sha256(wheel.read_bytes()).hexdigest(),
+                  "native_member":member,"native_member_sha256":member_sha,
+                  "first_and_reinstall_installed_sha_equal_to_wheel_member":True,
+                  "source_head":receipts[0]["source_head"],
+                  "claim_scope":"source-exact wheel bytes and installed library on this host"}
+          Path("native-loader-wheel-package.json").write_text(json.dumps(record,indent=2,sort_keys=True))
+          print("wheel ZIP member and two installed native SHA identities: PASS", member_sha)
+          PY
+      # Wheel tag is an interoperability contract, distinct from a successful
+      # ARM-only local import. Preserve the observed Mach-O slices even on FAIL.
+      - name: Verify macOS wheel advertised architecture matches native Mach-O
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          import sys
+          d=json.loads(Path("native-loader-wheel-package.json").read_text())
+          exe=".j24p01b-wheel-venv/bin/python"
+          path=subprocess.check_output([exe,"-c","from pathlib import Path; import cmpct,cmpct.native_codec as n;print(Path(n.__file__).parent/n._library_path().name)"],text=True).strip()
+          native=Path(path)
+          assert native.is_file(), native
+          archs=subprocess.check_output(["/usr/bin/lipo","-archs",str(native)],text=True).strip().split()
+          inspect=subprocess.check_output(["/usr/bin/file",str(native)],text=True).strip()
+          label=d["wheel_filename"]
+          record={"source_head":d["source_head"],"wheel_filename":label,"native_member":d["native_member"],
+                  "installed_native_path":str(native),"mach_o_architectures":sorted(archs),
+                  "file_description":inspect,
+                  "tag_universal2":bool("universal2" in label)}
+          Path("native-loader-macos-arch.json").write_text(json.dumps(record,sort_keys=True,indent=2))
+          print(json.dumps(record,sort_keys=True))
+          if "universal2" in label:
+              assert {"arm64","x86_64"}.issubset(set(archs)), ("universal2 tag missing native slice",label,archs)
+          elif "_arm64.whl" in label:
+              assert "arm64" in archs, ("arm64 wheel missing native slice",label,archs)
+          elif "_x86_64.whl" in label:
+              assert "x86_64" in archs, ("x86_64 wheel missing native slice",label,archs)
+          else:
+              raise AssertionError(("unrecognized macOS wheel architecture platform tag",label))
+          print("macOS wheel platform tag matches native architecture: PASS")
+          PY
+      - name: Preserve source-head bound package receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-loader-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: |
+            native-loader-install-receipt.json
+            native-loader-wheel-first.json
+            native-loader-wheel-reinstall.json
+            native-loader-wheel-package.json
+            native-loader-macos-arch.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+# Native codec admission remains mandatory in r24; optional Deflate/media
+# accelerators are separate fallback surfaces. This lane is not a release gate.
+# Original comparator/corpus/thresholds remain unchanged.
