@@ -142,6 +142,12 @@ impl Archive {
         file.seek(SeekFrom::Start(0))?;
         let mut header = [0u8; HEADER_SIZE];
         file.read_exact(&mut header)?;
+        // A valid same-inode replacement after Archive::open can have a
+        // different authenticated index yet reuse the same payload geometry.
+        // Never certify the old cached entry table against that new header.
+        if header != self.opened_primary_header {
+            return Err(CmpctError::Unsupported);
+        }
         if &header[..8] != MAGIC {
             return Err(CmpctError::Unsupported);
         }
