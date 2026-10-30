@@ -1441,6 +1441,40 @@ pub unsafe extern "C" fn cmpct_entry_read_range(
     }
 }
 
+/// Authenticate every content-owning member through the existing Reader-owned archive handle.
+/// A successful return is the only state in which `out_verified` is nonzero.
+/// Unlike `cmpct_entry_read_range`, this operation verifies complete logical identities.
+///
+/// # Safety
+/// `archive` must be a live pointer from `cmpct_open`, and `out_verified`
+/// must be writable for one `usize`. No concurrent call may close the handle.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_verify_complete(
+    archive: *const Archive,
+    out_verified: *mut usize,
+) -> c_int {
+    let Some(out_verified) = out_verified.as_mut() else {
+        return CmpctStatus::Null as c_int;
+    };
+    *out_verified = 0;
+    let Some(archive) = archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
+    // A foreign caller must never receive a Rust panic across its ABI boundary.
+    // Reuse the exact Reader verifier; partial range success is not integrity proof.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        archive.verify_complete()
+    }));
+    match result {
+        Ok(Ok(verified)) => {
+            *out_verified = verified;
+            CmpctStatus::Ok as c_int
+        }
+        Ok(Err(error)) => error_status(&error) as c_int,
+        Err(_) => CmpctStatus::Panic as c_int,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
