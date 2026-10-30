@@ -155,7 +155,8 @@ def main() -> None:
             "sha256": receipt["sha256"],
         })
     out = {"question": "J24G56 authenticated unsupported-op replay mismatch",
-           "archive_count": len(results) + 3, "authenticated_op_samples": results,\n           "invalid_footer_header_samples": invalid_header,
+           "archive_count": len(results) + 3, "authenticated_op_samples": results,
+           "invalid_footer_header_samples": invalid_header,
            "tamper_controls_rejected": 2 * len(results) + 3,
            "claim": "wire-only; Reader/preflight outcome comes from installed tests"}
     (root / "independent_wire_referee.json").write_text(json.dumps(out, indent=2, sort_keys=True))
