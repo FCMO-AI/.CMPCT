@@ -159,7 +159,7 @@ def assert_parity(case, n):
         with altered.open("r+b") as stream:
             stream.seek(-FOOTER.size, os.SEEK_END)
             tail = FOOTER.unpack(stream.read(FOOTER.size))
-            assert tail[0] == b"CMPTF24\\x00".replace(b"\\x00", b"\x00")
+            assert tail[0] == b"CMPTF24\x00"
             previous_pos = tail[7]
             assert 0 < previous_pos < stream.tell() - FOOTER.size
             stream.truncate(previous_pos + FOOTER.size)
