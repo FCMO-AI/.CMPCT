@@ -1,0 +1,65 @@
+name: J24G89 Signed Journal Replay Headroom O0
+
+on:
+  pull_request:
+    paths:
+      - "research/j24g89_replay_headroom.py"
+      - "docs/v031-research/2026-10-30-j24g89-owned-replay-headroom-*.md"
+      - ".github/workflows/j24g89-replay-headroom.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  physical-replay-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Freeze source ancestry and dependencies
+        run: |
+          git merge-base --is-ancestor c5c243a1621fb75d25cfaeed28bda5d881938c23 HEAD
+          python -m pip install msgpack==1.1.1
+          git rev-parse HEAD > "$RUNNER_TEMP/j24g89-head.txt"
+          sha256sum research/j24g89_replay_headroom.py > "$RUNNER_TEMP/j24g89-script-sha256.txt"
+      - name: Recover authentic J24G83 physical source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/j24g83"
+          gh run download 41061290836 --repo FCMO-AI/.CMPCT \
+            --name j24g83-fresh-reader-writer-full-physical-evidence \
+            --dir "$RUNNER_TEMP/j24g83"
+          test -f "$RUNNER_TEMP/j24g83/j24g83-8192-middle-fresh-valid.cmpct"
+          test -f "$RUNNER_TEMP/j24g83/j24g83-32768-tail-fresh-valid.cmpct"
+          sha256sum "$RUNNER_TEMP"/j24g83/j24g83-*-fresh-valid.cmpct \
+            > "$RUNNER_TEMP/j24g89-physical-sha256.txt"
+      - name: Execute one-pass replay-only bound
+        run: |
+          python research/j24g89_replay_headroom.py \
+            "$RUNNER_TEMP/j24g83" "$RUNNER_TEMP/j24g89-result.json" 151
+          python - <<'PY'
+          import json,os
+          d=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'j24g89-result.json')))
+          assert d['status']=='PASS'
+          assert len(d['cases'])==2
+          assert all(c['checkpoint64_index_parity'] and c['tamper_rejected']
+                     and c['signed_footers']==65 for c in d['cases'].values())
+          print('Decision (no product credit):',d['decision'])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24g89-replay-headroom-raw-evidence
+          path: |
+            ${{ runner.temp }}/j24g89-result.json
+            ${{ runner.temp }}/j24g89-head.txt
+            ${{ runner.temp }}/j24g89-script-sha256.txt
+            ${{ runner.temp }}/j24g89-physical-sha256.txt
+          retention-days: 30
+          if-no-files-found: warn
