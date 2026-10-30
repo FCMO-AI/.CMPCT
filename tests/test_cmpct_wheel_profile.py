@@ -108,9 +108,21 @@ class StrictProfile(unittest.TestCase):
         with zipfile.ZipFile(self.wheel, 'w') as dst:
             for name, payload in files:
                 if name == LOADER:
-                    payload += b'\n# inert RECORD mismatch\n'
+                    payload = payload.replace(b'original loader placeholder', b'orIginal loader placeholder')  # same bytes length, different SHA
                 dst.writestr(name, payload)
         with self.assertRaisesRegex(ValueError, 'RECORD SHA-256 mismatches'):
+            validate(self.wheel)
+
+    def test_37_reject_stale_python_size_after_zip_repack(self):
+        fixture(self.wheel)
+        with zipfile.ZipFile(self.wheel) as src:
+            files = [(i.filename, src.read(i.filename)) for i in src.infolist()]
+        with zipfile.ZipFile(self.wheel, 'w') as dst:
+            for name, payload in files:
+                if name == LOADER:
+                    payload += b'\n# inert extra bytes\n'
+                dst.writestr(name, payload)
+        with self.assertRaisesRegex(ValueError, 'RECORD missing valid SHA-256 or size'):
             validate(self.wheel)
 
     def test_35_reject_record_row_omission(self):
