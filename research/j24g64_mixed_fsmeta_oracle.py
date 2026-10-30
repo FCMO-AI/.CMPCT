@@ -279,6 +279,70 @@ def differential():
     return counts
 
 
+def targeted_semantic_edges():
+    """Named adversaries against identity leakage and ordinal-rekey shortcuts."""
+    initial = {
+        "files": [["a", 1, ["opaque-hardlink", "b"]],
+                  ["b", 2, ["opaque-hardlink", "a"]],
+                  ["c", 3, ["regular", b"bytes"]]],
+        "blobs": [["checkpoint-blob", 0]],
+        "fsmeta": {
+            "owner": [11, 12],
+            "xattrs": [[0, [[b"user.a", b"first"]]],
+                       [1, [[b"user.b", b"second"]]]],
+            "owner_overrides": [[0, 111, 112], [2, 311, 312]],
+        },
+    }
+    paths = {
+        "delete-and-recreate-same-name": [
+            ["del", "a"], ["put", ["a", 99, ["new-identity"]]]],
+        "rename-then-reuse-old-name": [
+            ["ren", "a", "z"], ["put", ["a", 99]], ["del", "c"]],
+        "rename-return-cycle": [
+            ["ren", "a", "z"], ["ren", "z", "a"], ["put", ["a", 99]]],
+        "rename-transfer-metadata": [
+            ["ren", "a", "z"], ["del", "b"], ["put", ["fresh", 99]]],
+        "retain-metadata-on-replace": [
+            ["put", ["a", 100]], ["ren", "a", "z"], ["put", ["z", 200]]],
+        "delete-put-rename-recreate": [
+            ["del", "a"], ["put", ["a", 100]], ["ren", "a", "z"],
+            ["put", ["a", 101]]],
+        "self-rename-no-rekey": [
+            ["ren", "a", "a"], ["put", ["b", 100]], ["ren", "c", "c"]],
+        "replace-only-retains-original-order": [
+            ["put", ["a", 100]], ["put", ["c", 101]]],
+        "collision-fallback": [
+            ["ren", "a", "b"], ["put", ["b", 100]]],
+        "missing-source-fallback": [
+            ["ren", "absent", "z"], ["put", ["a", 100]]],
+        "missing-delete-fallback": [
+            ["del", "absent"], ["ren", "b", "z"]],
+        "future-op-exact-failure": [
+            ["put", ["a", 100]], ["future", "a"]],
+        "file-limit-exact-failure": [
+            ["put", ["new1", 100]], ["put", ["new2", 200]]],
+        "multi-op-generation-fallback": [
+            ["ren", "a", "z"], ["del", "b"]],
+    }
+    out = {}
+    for title, operations in paths.items():
+        if title == "multi-op-generation-fallback":
+            deltas = [{"ops": operations, "blobs": []}]
+        else:
+            deltas = [{"ops": [op], "blobs": []} for op in operations]
+        limit = 4 if title == "file-limit-exact-failure" else None
+        route = compare(initial, deltas, limit)
+        if title.endswith("-fallback"):
+            assert route.startswith("fallback:"), (title, route)
+        elif title.endswith("-exact-failure"):
+            assert route == "matched-exception", (title, route)
+        else:
+            assert route == "factored", (title, route)
+        out[title] = route
+    assert len(out) == 14
+    return out
+
+
 def large_case():
     n, depth = 2048, 63
     rows = [[f"p{i:04d}", i, ["immutable-physical-record", i]] for i in range(n)]
@@ -320,6 +384,7 @@ def measure(base, deltas, variant):
 def main():
     source = source_attestation()
     outcomes = differential()
+    edges = targeted_semantic_edges()
     base, deltas = large_case()
     expected = reference(base, deltas)
     observations = []
@@ -347,7 +412,7 @@ def main():
     report = {
         "schema": "cmpct-j24g64-mixed-fsmeta-research-v1",
         "decision": decision, "source": source, "platform": platform.platform(),
-        "python": platform.python_version(), "differential": outcomes,
+        "python": platform.python_version(), "differential": outcomes, "targeted_semantic_edges": edges,
         "members": len(base["files"]), "generations": len(deltas),
         "sparse_xattr_records": len(base["fsmeta"]["xattrs"]),
         "sparse_owner_records": len(base["fsmeta"]["owner_overrides"]),
