@@ -61,9 +61,13 @@ The same original source comparison shows **4 of the 7 official red cells** also
 
 ## Method validation and adversarial checks
 
-The reusable referee has 15 independent synthetic fixture tests covering positive admission, strict digest/source/corpus/schema validation, mismatched archive sizes, non-finite/nonpositive/string time, duplicate ZIP names, omitted sweeps and directional non-equivalence of magnitude flags and release red. All 15 passed locally. The original full artifact calculation passed and output all 384 effects plus 96 official effects. A new hosted [J24I69 workflow](../../.github/workflows/j24i69-intraarm-placebo.yml) must run on the exact HEAD to earn provider replay credit. Until hosted execution finishes, only local detached calculations and inherited provider truth are claimed.
+The reusable referee has 17 independent synthetic fixture tests covering positive admission, strict digest/source/corpus/schema validation, mismatched archive sizes, non-finite/nonpositive/string time, duplicate ZIP names, omitted sweeps and directional non-equivalence of magnitude flags and release red. All 17 passed locally. The original full artifact calculation passed and output all 384 effects plus 96 official effects. A new hosted [J24I69 workflow](../../.github/workflows/j24i69-intraarm-placebo.yml) must run on the exact HEAD to earn provider replay credit. Until hosted execution finishes, only local detached calculations and inherited provider truth are claimed.
 
 No new CMPCT benchmark execution, no product bytes, no codec invocation, no new functional claims, no threshold changes, no shipping acceptance.
+
+### New independent hostile-input negative and repair
+
+After the initial positive original-provider replay, an adversarial audit discovered **two real acceptance defects in the new *research evidence parser*** (not CMPCT's product parser). The original code accepted (1) duplicate JSON object members with conflicting values by silently keeping the final key, and (2) Boolean values `true` for reported `bytes` and `logical_bytes`, because Python `bool` subclasses `int`. Both targeted hostile tests were committed **before** the fix as `dbad1193c704f68f3743481e6792b196c4233998` and failed locally, 15 PASS / 2 FAIL. The correction in `d2eb422101f2112f8a980db143329cae87f30497` refuses duplicate JSON members, non-finite JSON literals and Boolean archive lengths; 17/17 now pass locally, while the original 384/96 provider-derived result is byte-identical. This is evidence-enablement only: no frozen official evaluation or security policy changed. Hosted exact-HEAD validation of the repaired referee must be checked separately, and the original defects are preserved rather than hidden.
 
 ## Concurrency and decision
 
