@@ -64,7 +64,7 @@ jobs:
           old="$RUNNER_TEMP/j24i45-old-src"
           mkdir -p "$old/native/cmpct-core/src/bin" native/cmpct-core/src/bin
           cp research/j24i44/native_small_wav_probe.rs "$old/native/cmpct-core/src/bin/j24i45_probe.rs"
-          cp research/j24i45/native_small_wav_probe.rs native/cmpct-core/src/bin/j24i45_probe.rs
+          cp research/j24i44/native_small_wav_probe.rs native/cmpct-core/src/bin/j24i45_probe.rs
           CARGO_TARGET_DIR="$RUNNER_TEMP/j24i45-old-target" cargo build --release --locked --manifest-path "$old/native/cmpct-core/Cargo.toml" --bin j24i45_probe
           CARGO_TARGET_DIR="$RUNNER_TEMP/j24i45-new-target" cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml --bin j24i45_probe
       - name: Generate unchanged Builder admission and audit physically
@@ -109,7 +109,7 @@ jobs:
               echo "REJECTED_MUTANT $basename $arm" | tee -a j24i45-hostile.txt
             done
           done
-                    python research/j24i44/summarize_small_ab.py --raw j24i45-raw.txt --manifest j24i45-cases/manifest.json --out j24i45-borrowed-summary.json | tee j24i45-summary.txt
+          python research/j24i44/summarize_small_ab.py --raw j24i45-raw.txt --manifest j24i45-cases/manifest.json --out j24i45-borrowed-summary.json | tee j24i45-summary.txt
           python - <<'PY'
           import json,pathlib
           x=json.loads(pathlib.Path('j24i45-borrowed-summary.json').read_text())
