@@ -148,7 +148,7 @@ pub struct Archive {
     // identity to another current header after a same-inode rewrite.
     opened_primary_header: [u8; HEADER_SIZE],
     file: Mutex<File>,
-
+}
 
 impl Archive {
     /// Open only enough of the archive to authenticate and decode the primary index.
