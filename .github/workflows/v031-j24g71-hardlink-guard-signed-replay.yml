@@ -42,11 +42,13 @@ jobs:
           git merge-base --is-ancestor 1935c14c76f1bb39fd218d73cdbee93d3c2b76a1 HEAD
           git merge-base --is-ancestor 81325831cc241e40dd77933659c6a9562e16aa02 HEAD
           git rev-parse HEAD > evidence/head.txt
-          for p in src/cmpct/transactions.py src/cmpct/reader.py src/cmpct/validation.py src/cmpct/journal_replay.py tests/test_v031_hardlink_owner_mutation_guard.py; do
+          for p in src/cmpct/transactions.py src/cmpct/reader.py src/cmpct/validation.py src/cmpct/journal_replay.py tests/test_v031_hardlink_owner_mutation_guard.py tests/test_v031_win32_builder_hardlink_o47.py src/cmpct/builder.py; do
             printf '%s ' "$p" >> evidence/source-blobs.txt
             git rev-parse "HEAD:$p" >> evidence/source-blobs.txt
           done
           test "$(git rev-parse HEAD:tests/test_v031_hardlink_owner_mutation_guard.py)" = "016b1a338582dfe6517c7b54174dd036d3158178"
+          test "$(git rev-parse HEAD:tests/test_v031_win32_builder_hardlink_o47.py)" = "6c00ae49eea075957453d6d7238d988add6eedee"
+          git merge-base --is-ancestor 8a9b3f26e7a0c0f2283e8d4cffe8958528e32540 HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -58,11 +60,12 @@ jobs:
           python -m pip freeze > evidence/pip-freeze.txt
           python - <<'PY'
           from pathlib import Path
+          import cmpct.builder as bu
           import cmpct.transactions as tx
           import cmpct.reader as rd
           import cmpct.validation as va
           import cmpct.journal_replay as jr
-          for p,mod in [('src/cmpct/transactions.py',tx),('src/cmpct/reader.py',rd),('src/cmpct/validation.py',va),('src/cmpct/journal_replay.py',jr)]:
+          for p,mod in [('src/cmpct/builder.py',bu),('src/cmpct/transactions.py',tx),('src/cmpct/reader.py',rd),('src/cmpct/validation.py',va),('src/cmpct/journal_replay.py',jr)]:
               assert Path(p).read_bytes().replace(b'\r\n',b'\n') == Path(mod.__file__).read_bytes().replace(b'\r\n',b'\n'), p
           assert rd._apply_journal_ops is jr._apply_journal_ops
           assert va._apply_journal_ops is jr._apply_journal_ops
@@ -74,6 +77,7 @@ jobs:
           set -o pipefail
           python -m pytest --noconftest -q -s --junitxml=evidence/j24g71-pytest.xml \
             tests/test_v031_hardlink_owner_mutation_guard.py \
+            tests/test_v031_win32_builder_hardlink_o47.py \
             tests/test_v031_j24g71_hardlink_guard_checkpoint64.py \
             2>&1 | tee evidence/j24g71-pytest.log
       - name: Inherited signed-journal fail-closed and recovery controls
