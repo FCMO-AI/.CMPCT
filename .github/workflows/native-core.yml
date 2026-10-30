@@ -58,7 +58,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          # Independent Python WAV/FLAC reference needs the optional audio backend; this is test-only.\n          python -m pip install -e '.[test,audio]'
       - name: Rust format
         working-directory: native/cmpct-core
         run: cargo fmt --check
