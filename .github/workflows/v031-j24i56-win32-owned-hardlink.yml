@@ -1,0 +1,100 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24I56 Win32 owned hardlink composition
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24i56-win32-owned-hardlink-compose-20261030
+    paths:
+      - 'research/j24i56_*'
+      - 'src/cmpct/builder.py'
+      - 'tests/test_v031_win32_builder_hardlink_o47.py'
+      - 'docs/v031-research/*j24i56*'
+      - '.github/workflows/v031-j24i56-win32-owned-hardlink.yml'
+  pull_request:
+    branches:
+      - agent/phased2-v031-j24g79-owned-hardlink-xattr-court-20261030
+    paths:
+      - 'research/j24i56_*'
+      - 'src/cmpct/builder.py'
+      - 'tests/test_v031_win32_builder_hardlink_o47.py'
+      - 'docs/v031-research/*j24i56*'
+      - '.github/workflows/v031-j24i56-win32-owned-hardlink.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24i56-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-hardlink:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24I56_EVIDENCE_DIR: evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Source custody before execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor d75763393cf2f6b638447bf8dff02868a5207b6a HEAD
+          git merge-base --is-ancestor 8fea7f266e07b381bdc338d480054505bc84ca1e HEAD
+          test "$(git rev-parse HEAD:src/cmpct/builder.py)" = 5541cf5d818f36bcdab3b89834c97b6ed12d11f4
+          test "$(git rev-parse HEAD:tests/test_v031_win32_builder_hardlink_o47.py)" = 6c00ae49eea075957453d6d7238d988add6eedee
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
+          test "$(git rev-parse HEAD:research/j24g74_owned_decoder_court.py)" = 9af74e26e7585f6d88b1d59ead86514f41b0e373
+          git rev-parse HEAD > evidence/head.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install unchanged package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22' 'psutil>=5.9' 'pytest>=7'
+          python -m py_compile research/j24i56_win32_owned_compose.py research/j24i56_detached_wire.py
+          python -m pip freeze > evidence/pip-freeze.txt
+      - name: Original O47 real source hardlink and independent equal-byte negative
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p evidence/isolated-tests
+          cp tests/test_v031_win32_builder_hardlink_o47.py evidence/isolated-tests/
+          python -m pytest -q --confcutdir=evidence/isolated-tests evidence/isolated-tests/test_v031_win32_builder_hardlink_o47.py 2>&1 | tee evidence/o47-original-focused.log
+      - name: Exact Reader baseline versus hardlink xattr physical corpus
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24i56_win32_owned_compose.py 2>&1 | tee evidence/j24i56-raw.log
+          test -s evidence/j24i56-result.json
+      - name: Independent no-CMPCT signed-wire and adversarial receipt audit
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24i56_detached_wire.py evidence/j24i56-result.json evidence 2>&1 | tee evidence/j24i56-detached-raw.log
+          test -s evidence/j24i56-detached-wire.json
+      - name: Retain physical and raw evidence on failure or success
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i56-win32-owned-hardlink-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
