@@ -67,9 +67,13 @@ def source_rows(raw, name):
                         (side,block): d[side+"-"+block+".json"]["corpora"][corpus_name][mode]
                         for side in ("base","candidate") for block in ("a","b")
                     }
-                    cmpct_bytes = {int(s["cmpct"]["bytes"]) for s in snapshots.values()}
-                    if len(cmpct_bytes)!=1:
-                        raise ValueError("deterministic CMPCT byte parity failed")
+                    # Both measured engines must have produced deterministic archives
+                    # on the same immutable corpus; ZIP is not an interchangeable proxy
+                    # if its own output shape changed across the A/B court.
+                    for engine in ("cmpct", "zip"):
+                        bytes_per_run = {int(snapshot[engine]["bytes"]) for snapshot in snapshots.values()}
+                        if len(bytes_per_run) != 1:
+                            raise ValueError("deterministic "+engine.upper()+" byte parity failed")
                     row = {"corpus":corpus_name,"mode":mode,"field":field}
                     for engine in ("cmpct","zip"):
                         val = lambda side,block: 1000*float(snapshots[(side,block)][engine][field])
