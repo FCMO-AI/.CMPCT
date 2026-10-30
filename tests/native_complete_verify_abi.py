@@ -322,8 +322,8 @@ def main() -> None:
         alt_bytes[-32:] = alt_digest
         assert len(alt_bytes) == len(raw_bytes)
         assert hashlib.sha256(alt_bytes).digest() != hashlib.sha256(raw_bytes).digest()
-        assert zd(alt_bytes[HDR.size:HDR.size + primary_csize], primary_usize) == changed_index
-        assert zd(alt_bytes[tail_pos:tail_pos + primary_csize], primary_usize) == changed_index
+        assert zd(bytes(alt_bytes[HDR.size:HDR.size + primary_csize]), primary_usize) == changed_index
+        assert zd(bytes(alt_bytes[tail_pos:tail_pos + primary_csize]), primary_usize) == changed_index
 
         inplace = root / "same-inode-reindexed-valid.cmpct"
         inplace.write_bytes(raw_bytes)
