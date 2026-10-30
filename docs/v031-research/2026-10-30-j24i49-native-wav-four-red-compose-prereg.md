@@ -1,0 +1,19 @@
+# J24I49 — Prospective source-custody and inherited four-red convergence (2026-10-30)
+
+**Status:** preregistered integration evidence, not release. Exact parent candidate: #802 `6ede90b20c2bd5d2f1514e9010cf98d3c4e75ddf` (native WAV #788 plus #352 package provenance). Original owner of regression repair: #266 `c5ea5b97a86bf9d0bffe9dad54c5fd2a6f0b6fb1` (independent source on `agent/v031-development`), validated in [hosted tests 39975603659](https://github.com/FCMO-AI/.CMPCT/actions/runs/39975603659). The byte-identical baseline blobs for all four historically red test modules and `.github/workflows/tests.yml` were verified before preregistration; the prospective fingerprint script and manifest already present in #802 are **blob-identical** to #266 and must not be duplicated or modified.
+
+## Baseline / primary question
+
+The exact parent #802 has a valid three-OS package aggregate (run 40999353628, 3/3 OS installed wheel and 15/15 CPython compatibility), but inherited generic `CMPCT tests` fails four 0.29/v0.30 release-era assertions unchanged from released main; #259 demonstrated same four expected reds on pinned main and v0.31 development. #266 already authored and hosted-tested a distinct **prospective-v0.31** replacement that pins no obsolete surface literal, keeps the published `docs/V030_RELEASE_LOCK.json` immutable and prospectively fingerprints source/benchmark/governance/Android/native references.
+
+**Falsifiable question:** Can the existing #266 fast-CI and four tests be transplanted without semantic modification to this native WAV / exact package source, yielding a genuinely green **full General Tests** suite, prospective exact-head SHA receipt, while leaving historical v0.30 release evidence and product untouched? Outcome is independent of the previous #802 package receipt; final combined head will require its own exact-head package gate before any promotion.
+
+## Strong controls / alternatives / decision bounds
+
+Choose #266 exact source rather than changing historical v0.30 manifest, disabling old tests, mocking a result, or retaining green package only. Copy only #266's `.github/workflows/tests.yml`, four replaced tests, and new `tests/test_v031_candidate_fingerprint.py`. Confirm all original test+workflow source blobs equal #266's pre-repair baseline `4545d7d5b2a0b712b4b00f5a9c291d4a3a9e169b`. Keep #802's existing unchanged fingerprint script+manifest (identical SHA to #266), and installed package workflow. No change to native engine, archive bytes, compression tests, comparison criteria, frozen datasets, release metadata or safety. The original `v030-authoritative-v2-pr.yml` outer-event + classifier defect remains independent (#253) and is not claimed repaired by prospective fast identity.
+
+**Prediction:** full `CMPCT tests` SUCCESS with `v031-candidate-identity.json` tied to candidate exact source and no skipped/disabled tests; package revalidation produces 3+15+aggregate PASS on same final HEAD when triggered. **Kill/narrow:** any unexpected native regression, symlink/source test error, new inherited failure, missing candidate required path, wrong SHA, invalid historical v0.30 blob, incomplete test artifact, content mismatch with proven #266 patch, or package CI failure invalidates claimed composed closure. A fast source receipt is not release authority.
+
+## Scope/economics and handoff
+
+Bounded D0 test/evidence enablement, not a compressor gain. Performance on direct-WAV full verification belongs to #788 original A/B, no new size, CPU, I/O, throughput, RSS or released benchmark claim. CI tests are expensive but decision-relevant: one known 4-red full-suite after 785 PASS; reuse native-package exact-head artifacts rather than rerunning new science. This child PR composes an **owned existing repair**; #266 and #802 retain their independent scopes, and maintainers must re-read live heads for integration. Discovery STATE.json stale and already owned by #574; no global policy change.

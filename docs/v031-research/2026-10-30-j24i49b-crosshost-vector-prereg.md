@@ -1,0 +1,11 @@
+# J24I49b — exact cross-host installed dictionary vector consistency (2026-10-30)
+
+**Prospective prerequisite:** J24I49 already transferred #266's strongly tested prospective generic CI source, while #802 before it independently produced **3 OS + 15 CPython + aggregate PASS** on exact parent SHA `6ede90b20c2bd5d2f1514e9010cf98d3c4e75ddf` (run 40999353628). All three platform smoke records gave exactly the same dictionary vector SHA-256 `0c265b0a03ec404b40749d13212420813cb546a6eecf5dcd0397f20ce15e23a6`. This is a fixed codec vector invariant stronger than three independent `dict_vector_bytes==104` checks.
+
+**Question/prediction:** Can a final `desktop-package-evidence` aggregation require all three platform vector SHA-256 values to agree (and be canonical lower-case 64-digit SHA-256) **without** requiring physical archive SHA equality across different filesystems? Linux and macOS observed physical `archive_sha256` identical, Windows physically different, consistent with platform-dependent original FS metadata; requiring archive bytes identical would sacrifice faithful filesystem semantics.
+
+**Alternative simpler control:** current per-host smoke checks separately assert vector logical bytes and capture digest but never compare cross-host digest equality. Add only a set-equality + SHA-shape assertion *after* each artifact was authenticated by exact full SHA and extracted smoke JSON; do not change any wheel, reader, writer, codec, checksum, benchmark, release or per-host assertion. Add a lightweight local regression for the presence of the new aggregator equality assertion.
+
+**Kill:** if any host reports differing vector SHA, malformed hex, different source/head or missing artifact, **final package aggregator must FAIL**, even if 18 feeder jobs pass. This is a meaningful cross-host conformance defect, not permission to update expected hash or normalize away differences. Never require archive physical SHA cross-platform equality, because original input file metadata can differ.
+
+**Cost/evidence:** O(3) hash set and a short test; negligible runtime versus 18 hosted jobs. Full authentic exact-head package workflow (not a static string test) is decisive. The trigger is a real package workflow modification; current #803 remains research/composition-only until all gates show success.
