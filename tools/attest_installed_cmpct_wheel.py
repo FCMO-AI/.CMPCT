@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Attest installed CMPCT package bytes against the final built wheel.
+
+No CMPCT import, native load, or pip metadata trust. This is a *post-install*
+publication/CI guard, not a signature, hostile-OS proof, or all-dist-info check.
+The strict CMPCT no-.data profile must run before pip for this path mapping.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import stat
+import sys
+import zipfile
+
+MAX_WHEEL_BYTES = 256 * 1024 * 1024
+MAX_MEMBERS = 8192
+MAX_PACKAGE_BYTES = 512 * 1024 * 1024
+CHUNK_BYTES = 1024 * 1024
+
+
+def _sha_fd(stream) -> str:
+    digest = hashlib.sha256()
+    for part in iter(lambda: stream.read(CHUNK_BYTES), b''):
+        digest.update(part)
+    return digest.hexdigest()
+
+
+def _stable_regular_file_sha(path: Path) -> tuple[str, int]:
+    """Hash exactly the opened file and reject links/object substitution if visible."""
+    flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+    fd = os.open(path, flags)
+    try:
+        with os.fdopen(fd, 'rb', closefd=False) as reader:
+            before = os.fstat(fd)
+            if not stat.S_ISREG(before.st_mode):
+                raise ValueError(f'installed object is not regular: {path}')
+            digest = _sha_fd(reader)
+            after = os.fstat(fd)
+            same = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) == (
+                after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+            if not same:
+                raise ValueError(f'installed file changed during attestation: {path}')
+            return digest, before.st_size
+    finally:
+        os.close(fd)
+
+
+def _member_path(name: str) -> str | None:
+    if not name.startswith('cmpct/'):
+        return None
+    subpath = name[len('cmpct/'):]
+    if not subpath or name.endswith('/'):
+        return None
+    parts = subpath.split('/')
+    if any(p in ('', '.', '..') for p in parts) or '\\' in subpath or '\x00' in subpath:
+        raise ValueError(f'noncanonical CMPCT package wheel member: {name!r}')
+    return subpath
+
+
+def find_installed_package() -> Path:
+    """Locate via installed interpreter without importing CMPCT's Python modules."""
+    spec = importlib.util.find_spec('cmpct')
+    if not spec or not spec.submodule_search_locations or len(spec.submodule_search_locations) != 1:
+        raise ValueError('CMPCT is not one installed importable package')
+    package = Path(next(iter(spec.submodule_search_locations))).absolute()
+    prefix = Path(sys.prefix).absolute()
+    if os.path.commonpath((os.path.normcase(str(package)), os.path.normcase(str(prefix)))) != os.path.normcase(str(prefix)):
+        raise ValueError('CMPCT package is not installed in this interpreter environment')
+    return package
+
+
+def inspect(wheel: Path, package: Path, source_sha: str = '') -> dict:
+    wheel = Path(wheel)
+    package = Path(package)
+    if not wheel.is_file() or wheel.stat().st_size > MAX_WHEEL_BYTES:
+        raise ValueError('missing or oversized final wheel')
+    if not package.is_dir() or package.is_symlink():
+        raise ValueError('installed CMPCT package is not a direct directory')
+    expected: dict[str, tuple[str, int]] = {}
+    with wheel.open('rb') as stream:
+        with zipfile.ZipFile(stream) as archive:
+            infos = archive.infolist()
+            if len(infos) > MAX_MEMBERS:
+                raise ValueError('wheel entry count exceeds bounded attestation')
+            for info in infos:
+                rel = _member_path(info.orig_filename)
+                if rel is None:
+                    continue
+                if rel in expected:
+                    raise ValueError(f'duplicate CMPCT member: {rel}')
+                if info.file_size > MAX_PACKAGE_BYTES:
+                    raise ValueError(f'package member exceeds budget: {rel}')
+                with archive.open(info) as member:
+                    digest = _sha_fd(member)
+                expected[rel] = digest, info.file_size
+            if not expected or sum(size for _, size in expected.values()) > MAX_PACKAGE_BYTES:
+                raise ValueError('missing or oversized CMPCT package payload')
+        # The wheel digest must belong to the same descriptor used by ZipFile.
+        stream.seek(0)
+        wheel_sha = _sha_fd(stream)
+    seen: dict[str, tuple[str, int]] = {}
+    for root, directories, filenames in os.walk(package, followlinks=False):
+        root_path = Path(root)
+        for directory in directories:
+            if (root_path / directory).is_symlink():
+                raise ValueError(f'installed package contains directory symlink: {directory}')
+        for filename in filenames:
+            entry = root_path / filename
+            rel = entry.relative_to(package).as_posix()
+            # Python/pip may legitimately create cached bytecode after installation.
+            if '__pycache__' in Path(rel).parts and rel.endswith('.pyc'):
+                continue
+            if entry.is_symlink():
+                raise ValueError(f'installed package contains symlink: {rel}')
+            observed = _stable_regular_file_sha(entry)
+            if rel in seen:
+                raise ValueError(f'duplicate installed package file: {rel}')
+            seen[rel] = observed
+    missing = sorted(set(expected) - set(seen))
+    extras = sorted(set(seen) - set(expected))
+    if missing or extras:
+        raise ValueError(f'installed package set mismatch: missing={missing[:8]!r}; extra={extras[:8]!r}')
+    mismatches = [p for p in sorted(expected) if seen[p] != expected[p]]
+    if mismatches:
+        raise ValueError(f'installed package byte mismatch: {mismatches[:8]!r}')
+    files = [{'path': rel, 'sha256': expected[rel][0], 'bytes': expected[rel][1]}
+             for rel in sorted(expected)]
+    return {'schema': 'cmpct-installed-wheel-package-bytes-v1', 'result': 'PASS',
+            'source_sha': source_sha, 'wheel': wheel.name, 'wheel_sha256': wheel_sha,
+            'file_count': len(files), 'package_bytes': sum(v[1] for v in expected.values()),
+            'files': files, 'scope': 'complete cmpct/ package file set only, excluding pip-generated bytecode; not distribution metadata or signatures'}
+
+
+def main() -> int:
+    cli = argparse.ArgumentParser(description=__doc__)
+    cli.add_argument('wheel', type=Path)
+    cli.add_argument('--source-sha', default='')
+    cli.add_argument('--output', type=Path)
+    args = cli.parse_args()
+    try:
+        report = inspect(args.wheel, find_installed_package(), args.source_sha)
+    except (ValueError, OSError, zipfile.BadZipFile, RuntimeError) as exc:
+        report = {'schema': 'cmpct-installed-wheel-package-bytes-v1', 'result': 'REJECT', 'reason': str(exc)}
+    serialized = json.dumps(report, indent=2, sort_keys=True) + '\n'
+    print(serialized, end='')
+    if args.output:
+        args.output.write_text(serialized)
+    return 0 if report['result'] == 'PASS' else 2
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
