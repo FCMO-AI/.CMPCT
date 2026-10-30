@@ -117,9 +117,46 @@ def main() -> None:
         assert "SHA mismatch" in str(exc), str(exc)
     else:
         raise AssertionError("corrupted signed footer accepted")
+    invalid_header = []
+    for field, expected_flags, expected_reserved in (
+        ("flags", 1, 0), ("reserved", 0, 1)
+    ):
+        label = "footer_nonzero_" + field
+        data = (root / (label + ".cmpct")).read_bytes()
+        receipt = json.loads((root / (label + ".json")).read_text())
+        assert sha(data).hex() == receipt["sha256"]
+        read_base(data)
+        pos = len(data) - FTR.size
+        magic, kind, codec, flags, reserved, cs, us, prev, digest = FTR.unpack_from(data, pos)
+        assert magic == FMAGIC
+        assert (kind, flags, reserved) == (1, expected_flags, expected_reserved)
+        assert cs > 0 and us > 0 and cs <= pos and prev < pos
+        raw = decode(data[pos - cs : pos], us, codec)
+        assert len(raw) == us and sha(raw) == digest
+        signed_delta = msgpack.unpackb(raw, raw=False)
+        assert signed_delta["ops"] == [["del", "a.bin"]]
+        assert receipt["reader"]["selected_footer"] == pos
+        assert receipt["preflight"] == "recovers_prior_valid_footer"
+        # Format admission is independent of the payload digest. The strict
+        # independent footer referee must reject a reserved header bit.
+        try:
+            read_last(data)
+        except ValueError as exc:
+            assert "bad latest footer" in str(exc), str(exc)
+        else:
+            raise AssertionError(f"{label}: invalid footer admitted")
+        invalid_header.append({
+            "label": label,
+            "footer_offset": pos,
+            "previous_footer": prev,
+            "content_sha256": digest.hex(),
+            "flags": flags,
+            "reserved": reserved,
+            "sha256": receipt["sha256"],
+        })
     out = {"question": "J24G56 authenticated unsupported-op replay mismatch",
-           "archive_count": len(results) + 1, "authenticated_op_samples": results,
-           "tamper_controls_rejected": 2 * len(results) + 1,
+           "archive_count": len(results) + 3, "authenticated_op_samples": results,\n           "invalid_footer_header_samples": invalid_header,
+           "tamper_controls_rejected": 2 * len(results) + 3,
            "claim": "wire-only; Reader/preflight outcome comes from installed tests"}
     (root / "independent_wire_referee.json").write_text(json.dumps(out, indent=2, sort_keys=True))
     print(json.dumps(out, indent=2, sort_keys=True))
