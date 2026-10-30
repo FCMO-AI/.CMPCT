@@ -1,0 +1,95 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G94 authentic source Writer ancestor digest failure vs recovered Writer continuation.
+name: J24G94 Actual Writer Corrupted Ancestor Court
+
+on:
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g93-valid-orphan-recovery-parent-control-20261030
+    paths:
+      - 'research/j24g94_*'
+      - 'docs/v031-research/*j24g94*'
+      - '.github/workflows/j24g94-authentic-ancestor-bitrot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g94-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actual-writer:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G94_EVIDENCE: evidence/j24g94
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout immutable scientific source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert immutable prereg, exact inherited Reader/Writer and HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 5f765553a62a57ecd1ca4ac2b15bf713b8496867 HEAD
+          git merge-base --is-ancestor afbc896291a0061ee0a6dfdaa6147fcdee719799 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 964f4dcf8c25cdd5885b6c43bbf3d92d16dd252c
+          mkdir -p "$J24G94_EVIDENCE"
+          git rev-parse HEAD > "$J24G94_EVIDENCE/source-head.txt"
+          git rev-parse HEAD:research/j24g94_authentic_ancestor_bitrot_court.py > "$J24G94_EVIDENCE/instrument-git-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine unchanged public source and binary codecs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m pip freeze > "$J24G94_EVIDENCE/pip-freeze.txt"
+          python -m py_compile research/j24g94_authentic_ancestor_bitrot_court.py research/j24g94_detached_bitrot_referee.py
+      - name: Run actual public Writer after one-byte genuine F2 SHA damage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g94_authentic_ancestor_bitrot_court.py 2>&1 | tee "$J24G94_EVIDENCE/run.log"
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          r=json.loads(Path('evidence/j24g94/receipt.json').read_text())
+          assert r['status']=='PASS',r.get('fatal')
+          assert r['decision']=='ACTUAL_WRITER_SKIPS_SHA_VALID_F3_AFTER_F2_DIGEST_DAMAGE'
+          assert set(r['cases'])=={'16','128'}
+          for c in r['cases'].values():
+              assert c['new_writer_parent']==c['authentic_f1']!=c['authentic_f3']
+              assert c['after_digest_damage_members']==c['before_damage_members']+2
+              assert c['after_real_writer_members']==c['after_digest_damage_members']-1
+          print('J24G94_ACTUAL_WRITER_VERDICT',r['decision'])
+          PY
+      - name: Detached no-CMPCT binary auditor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g94_detached_bitrot_referee.py "$J24G94_EVIDENCE" 2>&1 | tee "$J24G94_EVIDENCE/referee.log"
+          test -s "$J24G94_EVIDENCE/detached-referee.json"
+      - name: Retain physical archives, source fingerprints and negative controls
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-j24g94-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/j24g94/
+          if-no-files-found: warn
+          retention-days: 30
