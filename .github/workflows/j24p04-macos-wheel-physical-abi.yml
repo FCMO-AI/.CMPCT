@@ -1,0 +1,111 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT J24P04 physical macOS wheel ABI
+on:
+  pull_request:
+    paths:
+      - "tools/validate_macos_wheel_abi.py"
+      - "tests/test_macos_wheel_physical_contract.py"
+      - "docs/v031-research/*j24p04*"
+      - ".github/workflows/j24p04-macos-wheel-physical-abi.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24p04-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_court: ${{ steps.scope.outputs.run_court }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ] || git diff-tree --no-commit-id --name-only -r HEAD | grep -Eq '^(tools/validate_macos_wheel_abi\.py|tests/test_macos_wheel_physical_contract\.py|\.github/workflows/j24p04-macos-wheel-physical-abi\.yml|docs/v031-research/.*j24p04.*)$'; then
+            echo 'run_court=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_court=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  offline-hostile:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_court == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Physical ABI guard adversarial suite
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m unittest discover -s tests -p test_macos_wheel_physical_contract.py -v
+
+  actual-sdist-macos-wheel:
+    needs: [latest-head-impact, offline-hostile]
+    if: needs.latest-head-impact.outputs.run_court == 'true'
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Official-style sdist-first universal2 build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          python -m pip install --upgrade pip build wheel
+          python -m build --sdist
+          mkdir -p "$RUNNER_TEMP/j24p04/wheels"
+          export ARCHFLAGS="-arch arm64 -arch x86_64"
+          python -m pip wheel --no-deps dist/*.tar.gz -w "$RUNNER_TEMP/j24p04/wheels"
+          test "$(find "$RUNNER_TEMP/j24p04/wheels" -name 'cmpct-*.whl' | wc -l)" -eq 1
+      - name: Attest wheel ZIP/RECORD and per-slice physical minimum OS
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHEEL="$(find "$RUNNER_TEMP/j24p04/wheels" -name 'cmpct-*.whl' -type f -print -quit)"
+          test -n "$WHEEL"
+          python tools/validate_macos_wheel_abi.py "$WHEEL" --output wheel-physical-abi.json | tee wheel-physical-abi.log
+          python - <<'PY'
+          import json
+          r=json.load(open("wheel-physical-abi.json"))
+          assert r["pass"] and r["required"]==["arm64","x86_64"]
+          assert r["physical"]["arm64"]["min_os"] <= [11,0,0]
+          assert r["physical"]["x86_64"]["min_os"] <= [10,12,0]
+          PY
+          shasum -a 256 "$WHEEL" | tee wheel-physical-sha256.txt
+      - name: Preserve real wheel for detached audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p04-physical-wheel-${{ env.EVIDENCE_HEAD }}
+          path: |
+            ${{ runner.temp }}/j24p04/wheels/cmpct-*.whl
+            wheel-physical-abi.json
+            wheel-physical-abi.log
+            wheel-physical-sha256.txt
+          if-no-files-found: warn
+          retention-days: 30
