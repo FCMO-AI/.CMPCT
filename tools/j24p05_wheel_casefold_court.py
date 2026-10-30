@@ -86,6 +86,12 @@ def install(path: Path, root: Path, label: str) -> dict:
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     actual = target / NATIVE
     raw = actual.read_bytes() if actual.is_file() else None
+    if raw is not None:
+        # Preserve the *physical installed file* for detached comparison with
+        # independently parsed wheel members, not only the self-reported SHA.
+        custody = root / "installed-native"
+        custody.mkdir(exist_ok=True)
+        (custody / (label + ".bin")).write_bytes(raw)
     return {
         "returncode": p.returncode,
         "stdout_tail": p.stdout[-1000:],
