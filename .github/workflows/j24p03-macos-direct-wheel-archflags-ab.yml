@@ -1,0 +1,272 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT J24P03 macOS direct-wheel ARCHFLAGS A-B
+on:
+  pull_request:
+    paths: [".github/workflows/j24p03-macos-direct-wheel-archflags-ab.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24p03-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_court: ${{ steps.scope.outputs.run_court }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Restrict to exact latest-head workflow change
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ] || git diff-tree --no-commit-id --name-only -r HEAD | grep -Eq '^\.github/workflows/j24p03-macos-direct-wheel-archflags-ab\.yml$'; then
+            echo 'run_court=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_court=false' >> "$GITHUB_OUTPUT"
+          fi
+  physical-wheel-ab:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_court == 'true'
+    runs-on: macos-15
+    timeout-minutes: 34
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Two Apple targets and two isolated, source-identical worktrees
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          mkdir -p "$RUNNER_TEMP/j24p03/plain-wheels" "$RUNNER_TEMP/j24p03/dual-wheels"
+          git worktree add --detach "$RUNNER_TEMP/j24p03/plain" "$EVIDENCE_HEAD"
+          git worktree add --detach "$RUNNER_TEMP/j24p03/dual" "$EVIDENCE_HEAD"
+          test "$(git -C "$RUNNER_TEMP/j24p03/plain" rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test "$(git -C "$RUNNER_TEMP/j24p03/dual" rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pip --version | tee "$RUNNER_TEMP/j24p03/pip-version.txt"
+          rustc --version | tee "$RUNNER_TEMP/j24p03/rust-version.txt"
+          xcodebuild -version | tee "$RUNNER_TEMP/j24p03/xcode-version.txt"
+          (env | sort | grep -E '^(MACOSX_DEPLOYMENT_TARGET|SDKROOT|CARGO_BUILD_TARGET|RUSTFLAGS|ARCHFLAGS)=' || true) | tee "$RUNNER_TEMP/j24p03/build-ambient.txt"
+      - name: Direct wheel, no ARCHFLAGS
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd "$RUNNER_TEMP/j24p03/plain"
+            unset ARCHFLAGS
+            export CARGO_TARGET_DIR="$RUNNER_TEMP/j24p03/plain-cargo"
+            python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/j24p03/plain-wheels" .
+          ) 2>&1 | tee "$RUNNER_TEMP/j24p03/plain-build.log"
+      - name: Direct wheel, only ARCHFLAGS differs
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd "$RUNNER_TEMP/j24p03/dual"
+            export ARCHFLAGS="-arch arm64 -arch x86_64"
+            export CARGO_TARGET_DIR="$RUNNER_TEMP/j24p03/dual-cargo"
+            python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/j24p03/dual-wheels" .
+          ) 2>&1 | tee "$RUNNER_TEMP/j24p03/dual-build.log"
+      - name: Independently audit actual wheel ZIP, RECORD and Mach-O
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,csv,hashlib,io,json,os,pathlib,subprocess,zipfile
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])/"j24p03"
+          out={"schema":"cmpct-j24p03-wheel-arch-ab-v1","source_head":os.environ["EVIDENCE_HEAD"],
+               "build_method":"direct pip wheel, two clean worktrees, both Rust Apple targets preinstalled",
+               "platform":"macos-15","arms":{}}
+          for name,setting in [("plain","UNSET"),("dual","-arch arm64 -arch x86_64")]:
+              wheels=list((root/(name+"-wheels")).glob("cmpct-*.whl"))
+              assert len(wheels)==1,(name,wheels)
+              wheel=wheels[0]
+              with zipfile.ZipFile(wheel) as z:
+                  members=z.namelist()
+                  native=[s for s in members if s.startswith("cmpct/cmpct_core") and s.endswith(".so")]
+                  meta=[s for s in members if s.endswith(".dist-info/WHEEL")]
+                  rec=[s for s in members if s.endswith(".dist-info/RECORD")]
+                  assert len(native)==len(meta)==len(rec)==1,(native,meta,rec)
+                  data=z.read(native[0])
+                  tags=[s[5:] for s in z.read(meta[0]).decode().splitlines() if s.startswith("Tag: ")]
+                  rows=list(csv.reader(io.StringIO(z.read(rec[0]).decode())))
+                  for path,sha,size in rows:
+                      if path==rec[0]: continue
+                      actual=z.read(path)
+                      assert len(actual)==int(size),(name,path)
+                      if sha:
+                          algorithm,value=sha.split("=",1)
+                          assert algorithm=="sha256"
+                          observed=base64.urlsafe_b64encode(hashlib.sha256(actual).digest()).decode().rstrip("=")
+                          assert observed==value,(name,path)
+                  library=root/(name+"-native.so")
+                  library.write_bytes(data)
+              archs=sorted(subprocess.check_output(["lipo","-archs",str(library)],text=True).split())
+              out["arms"][name]={"archflags":setting,"wheel":wheel.name,
+                                "wheel_bytes":wheel.stat().st_size,
+                                "wheel_sha256":hashlib.sha256(wheel.read_bytes()).hexdigest(),
+                                "wheel_tags":tags,"native_sha256":hashlib.sha256(data).hexdigest(),
+                                "native_bytes":len(data),"arches":archs,
+                                "record_entries_checked":len(rows)-1,
+                                "universal2":("universal2" in wheel.name and any("universal2" in t for t in tags))}
+          a,b=out["arms"]["plain"],out["arms"]["dual"]
+          out["baseline_reproduced"]=bool(a["universal2"] and a["arches"]==["arm64"])
+          out["dual_valid"]=bool(b["universal2"] and set(b["arches"])=={"arm64","x86_64"})
+          out["decision"]="H1_SURVIVES_ONE_HOST" if out["baseline_reproduced"] and out["dual_valid"] else "H1_NOT_CONFIRMED"
+          (root/"receipt.json").write_text(json.dumps(out,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(out,indent=2,sort_keys=True))
+          PY
+      - name: Preserve both original wheels and raw negative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p03-macos-wheel-ab-${{ env.EVIDENCE_HEAD }}
+          path: |
+            ${{ runner.temp }}/j24p03/*-wheels/cmpct-*.whl
+            ${{ runner.temp }}/j24p03/receipt.json
+            ${{ runner.temp }}/j24p03/*-build.log
+            ${{ runner.temp }}/j24p03/*-version.txt
+            ${{ runner.temp }}/j24p03/build-ambient.txt
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Apply frozen A-B falsifier, without retagging
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,os,pathlib
+          o=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"j24p03/receipt.json").read_text())
+          assert o["source_head"]==os.environ["EVIDENCE_HEAD"]
+          assert o["baseline_reproduced"], "baseline mismatch was not reproduced"
+          assert o["dual_valid"], "ARCHFLAGS failed to create physical universal2"
+          print("H1_SURVIVES_ONE_HOST, research only, no product/release credit")
+          PY
+
+  intel-installed-e2e:
+    needs: [latest-head-impact, physical-wheel-ab]
+    if: needs.latest-head-impact.outputs.run_court == 'true'
+    runs-on: macos-15-intel
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: j24p03-macos-wheel-ab-${{ env.EVIDENCE_HEAD }}
+          path: wheel-evidence
+      - name: Real x86_64 process; two distinct identical-byte wheel installs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import json,pathlib,platform,hashlib
+          assert platform.machine().lower()=='x86_64',platform.machine()
+          root=pathlib.Path("wheel-evidence")
+          receipt=json.loads((root/"receipt.json").read_text())
+          assert receipt["source_head"]==__import__("os").environ["EVIDENCE_HEAD"]
+          for arm in ("plain","dual"):
+              wheels=list((root/(arm+"-wheels")).glob("cmpct-*.whl"))
+              assert len(wheels)==1,(arm,wheels)
+              assert hashlib.sha256(wheels[0].read_bytes()).hexdigest()==receipt["arms"][arm]["wheel_sha256"]
+          print("INTEL_SOURCE_AND_BOTH_WHEEL_SHA_IDENTITIES_PASS",platform.machine())
+          PY
+          python -m venv .j24p03-intel-plain
+          python -m venv .j24p03-intel-dual
+          .j24p03-intel-plain/bin/python -m pip install wheel-evidence/plain-wheels/cmpct-*.whl
+          .j24p03-intel-dual/bin/python -m pip install wheel-evidence/dual-wheels/cmpct-*.whl
+      - name: Isolated Intel native loader negative, exact source and SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          .j24p03-intel-plain/bin/python - <<'PY'
+          import ctypes,hashlib,importlib.util,json,os,pathlib,platform
+          assert platform.machine().lower()=="x86_64"
+          root=pathlib.Path("wheel-evidence")
+          claim=json.loads((root/"receipt.json").read_text())["arms"]["plain"]
+          spec=importlib.util.find_spec("cmpct")
+          assert spec and spec.submodule_search_locations
+          pkg=pathlib.Path(next(iter(spec.submodule_search_locations)))
+          paths=list(pkg.glob("cmpct_core*.so"))
+          assert len(paths)==1,paths
+          lib=paths[0]
+          assert hashlib.sha256(lib.read_bytes()).hexdigest()==claim["native_sha256"]
+          verdict={"source_head":os.environ["EVIDENCE_HEAD"],"runner_machine":platform.machine(),
+                    "case":"plain_arm64_only_mislabel_on_intel","install_admitted":True,
+                    "installed_sha_matches_producer":True,"loader_rejected_architecture":False}
+          try:
+              ctypes.CDLL(str(lib))
+          except OSError as exc:
+              verdict["error"]=str(exc)
+              verdict["loader_rejected_architecture"]=("incompatible architecture" in str(exc).lower() or
+                                                        "wrong architecture" in str(exc).lower())
+          pathlib.Path("intel-plain-result.json").write_text(json.dumps(verdict,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(verdict,sort_keys=True))
+          assert verdict["loader_rejected_architecture"],"Architecture-specific negative control not observed"
+          PY
+      - name: Genuine dual wheel loads and extracts on Intel
+        shell: bash
+        run: |
+          set -euo pipefail
+          .j24p03-intel-dual/bin/python - <<'PY'
+          import ctypes,hashlib,importlib.util,json,os,pathlib,platform
+          assert platform.machine().lower()=="x86_64"
+          root=pathlib.Path("wheel-evidence")
+          claim=json.loads((root/"receipt.json").read_text())["arms"]["dual"]
+          spec=importlib.util.find_spec("cmpct")
+          assert spec and spec.submodule_search_locations
+          pkg=pathlib.Path(next(iter(spec.submodule_search_locations)))
+          paths=list(pkg.glob("cmpct_core*.so"))
+          assert len(paths)==1,paths
+          lib=paths[0]
+          assert hashlib.sha256(lib.read_bytes()).hexdigest()==claim["native_sha256"]
+          ctypes.CDLL(str(lib))
+          print("INTEL_DUAL_NATIVE_SHA_AND_CDLL_PASS")
+          PY
+          (
+            cd "$RUNNER_TEMP"
+            "$GITHUB_WORKSPACE/.j24p03-intel-dual/bin/python" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py"
+          ) | tee intel-dual-smoke.json
+          python - <<'PY'
+          import json,os,pathlib
+          s=json.loads(pathlib.Path("intel-dual-smoke.json").read_text())
+          assert s["roundtrip"] is True and s["representative_archive_create_read_extract"] is True
+          assert s["shipping_python_no_ambient_zstd"] is True and s["python_zstandard_absent"] is True
+          r={"schema":"cmpct-j24p03-intel-dual-smoke-v1","source_head":os.environ["EVIDENCE_HEAD"],
+             "runner_machine":"x86_64","native_roundtrip":True,"representative_archive_create_read_extract":True,
+             "archive_sha256":s["representative_archive_sha256"],"dict_vector_sha256":s["dict_vector_sha256"]}
+          pathlib.Path("intel-dual-result.json").write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+          print(json.dumps(r,sort_keys=True))
+          PY
+      - name: Preserve real Intel results including negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p03-intel-native-${{ env.EVIDENCE_HEAD }}
+          path: |
+            intel-plain-result.json
+            intel-dual-result.json
+            intel-dual-smoke.json
+          if-no-files-found: warn
+          retention-days: 30
