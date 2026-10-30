@@ -117,3 +117,36 @@ def test_corrupt_latest_footer_recovers_old_generation(tmp_path: Path):
     got = preflight_archive(archive)
     assert got["latest_footer"] == original_footer
     _receipt(archive, "corrupt_footer", state, "recovers_prior_footer")
+
+
+
+@pytest.mark.parametrize(("field", "byte_index"), [("flags", 10), ("reserved", 11)])
+def test_one_byte_invalid_footer_header_reader_preflight_generation_parity(
+    tmp_path: Path, field: str, byte_index: int
+):
+    """J24G56b: SHA-coherent payload is not sufficient for an admissible r24 footer."""
+    archive, original_footer, payloads = _original(tmp_path)
+    latest, _ = _append_generation(
+        archive, {"blobs": [], "ops": [["del", "a.bin"]]}, original_footer
+    )
+    valid = bytearray(archive.read_bytes())
+    assert valid[latest + byte_index] == 0
+    valid[latest + byte_index] = 1  # sole physical mutation, outside the digest payload
+    archive.write_bytes(valid)
+    with CMPCT(archive) as reader:
+        assert reader.latest_footer_pos == latest, "Reader rejected invalid footer; divergence absent"
+        assert set(reader.by) == {"z.bin"}
+        assert reader.verify() == 1
+        assert reader.read("z.bin") == payloads["z.bin"]
+        state = {
+            "selected_footer": latest,
+            "delta_depth": reader.delta_depth,
+            "paths": ["z.bin"],
+            "verify_members": 1,
+        }
+    # The bounded structural parser validates zeroed revision-24 flag and
+    # reserved fields, so it recovers the older valid generation.
+    got = preflight_archive(archive)
+    assert got["latest_footer"] == original_footer
+    assert got["files"] == 2
+    _receipt(archive, f"footer_nonzero_{field}", state, "recovers_prior_valid_footer")
