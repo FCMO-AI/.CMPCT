@@ -1,0 +1,99 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G71 is a source-exact composition court, not permission to merge/release.
+name: CMPCT J24G71 hardlink-owner guard x signed replay court
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24g71-hardlink-owner-guard-x-signed-replay-20261030
+  pull_request:
+    branches:
+      - agent/phased2-v031-j24g57-failclosed-journal-footer-20261030
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24g71-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  hardlink-guard-signed-checkpoint:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G71_PHYSICAL: evidence/signed-checkpoint64.cmpct
+      J24G71_RECEIPT: evidence/signed-checkpoint64.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Attest donor, parent, and exact installed sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 1935c14c76f1bb39fd218d73cdbee93d3c2b76a1 HEAD
+          git merge-base --is-ancestor 81325831cc241e40dd77933659c6a9562e16aa02 HEAD
+          git rev-parse HEAD > evidence/head.txt
+          for p in src/cmpct/transactions.py src/cmpct/reader.py src/cmpct/validation.py src/cmpct/journal_replay.py tests/test_v031_hardlink_owner_mutation_guard.py tests/test_v031_win32_builder_hardlink_o47.py src/cmpct/builder.py; do
+            printf '%s ' "$p" >> evidence/source-blobs.txt
+            git rev-parse "HEAD:$p" >> evidence/source-blobs.txt
+          done
+          test "$(git rev-parse HEAD:tests/test_v031_hardlink_owner_mutation_guard.py)" = "016b1a338582dfe6517c7b54174dd036d3158178"
+          test "$(git rev-parse HEAD:tests/test_v031_win32_builder_hardlink_o47.py)" = "6c00ae49eea075957453d6d7238d988add6eedee"
+          git merge-base --is-ancestor 8a9b3f26e7a0c0f2283e8d4cffe8958528e32540 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'pytest>=8' 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m pip freeze > evidence/pip-freeze.txt
+          python - <<'PY'
+          from pathlib import Path
+          import cmpct.builder as bu
+          import cmpct.transactions as tx
+          import cmpct.reader as rd
+          import cmpct.validation as va
+          import cmpct.journal_replay as jr
+          for p,mod in [('src/cmpct/builder.py',bu),('src/cmpct/transactions.py',tx),('src/cmpct/reader.py',rd),('src/cmpct/validation.py',va),('src/cmpct/journal_replay.py',jr)]:
+              assert Path(p).read_bytes().replace(b'\r\n',b'\n') == Path(mod.__file__).read_bytes().replace(b'\r\n',b'\n'), p
+          assert rd._apply_journal_ops is jr._apply_journal_ops
+          assert va._apply_journal_ops is jr._apply_journal_ops
+          print('EXACT_INSTALLED_SOURCE_PASS')
+          PY
+      - name: Donor physical regressions and new checkpoint64 composition
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest --noconftest -q -s --junitxml=evidence/j24g71-pytest.xml \
+            tests/test_v031_hardlink_owner_mutation_guard.py \
+            tests/test_v031_win32_builder_hardlink_o47.py \
+            tests/test_v031_j24g71_hardlink_guard_checkpoint64.py \
+            2>&1 | tee evidence/j24g71-pytest.log
+      - name: Inherited signed-journal fail-closed and recovery controls
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest --noconftest -q --junitxml=evidence/j24g57-inherited.xml \
+            tests/test_v031_j24g57_signed_journal_admission.py \
+            tests/test_v031_j24g55_shared_journal_replay.py \
+            tests/test_v031_j24g55_committed_footer_recovery.py \
+            2>&1 | tee evidence/j24g57-inherited.log
+      - name: Preserve receipts and physical sample on every outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g71-composition-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
