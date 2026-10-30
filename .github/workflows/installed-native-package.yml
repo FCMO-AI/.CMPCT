@@ -126,7 +126,7 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
           WHEEL=$(find "$RUNNER_TEMP/wheels" -maxdepth 1 -name 'cmpct-*.whl' -type f -print -quit)
           test -n "$WHEEL"
-          "$PY" -m pip install "$WHEEL"
+          "$PY" -m pip install --no-compile "$WHEEL"
           (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tools/attest_installed_cmpct_wheel.py" "$WHEEL" --source-sha "$EVIDENCE_HEAD" --output "$GITHUB_WORKSPACE/installed-package-identity.json")
       - name: Smoke exact attested installed cdylib
         shell: bash
@@ -188,7 +188,7 @@ jobs:
           WHEEL=$(find installed-artifact -name 'cmpct-*.whl' -type f -print -quit)
           test -n "$WHEEL"
           python -m pip install --upgrade pip
-          python -m pip install "$WHEEL"
+          python -m pip install --no-compile "$WHEEL"
           (cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/tools/attest_installed_cmpct_wheel.py" "$GITHUB_WORKSPACE/$WHEEL" --source-sha "$EVIDENCE_HEAD" --output "$GITHUB_WORKSPACE/python-compat-identity.json")
           (cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee python-compat-smoke.json
           python - <<'PY'

@@ -90,17 +90,18 @@ class InstalledWheelCustody(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'byte mismatch'):
             self.attest()
 
-    def test_generated_bytecode_exempt(self):
+    def test_generated_bytecode_rejected_before_import(self):
         cache = self.package / '__pycache__'
         cache.mkdir()
         (cache / '__init__.cpython-311.pyc').write_bytes(b'GENERATED')
-        self.assertEqual(self.attest()['result'], 'PASS')
+        with self.assertRaisesRegex(ValueError, 'untrusted installed Python bytecode'):
+            self.attest()
 
     def test_cache_native_not_exempt(self):
         cache = self.package / '__pycache__'
         cache.mkdir()
         (cache / 'cmpct_core_old.so').write_bytes(b'OLD')
-        with self.assertRaisesRegex(ValueError, 'extra='):
+        with self.assertRaisesRegex(ValueError, 'untrusted installed Python bytecode'):
             self.attest()
 
     def test_directory_added_with_regular_file(self):
@@ -120,6 +121,29 @@ class InstalledWheelCustody(unittest.TestCase):
     def test_missing_all_package_members(self):
         self.make_wheel({'other/__init__.py': b''})
         with self.assertRaisesRegex(ValueError, 'missing or oversized CMPCT'):
+            self.attest()
+
+    def test_wheel_bytecode_payload_refused(self):
+        changed = dict(self.files)
+        changed['cmpct/__pycache__/__init__.cpython-311.pyc'] = b'cached code'
+        self.make_wheel(changed)
+        with self.assertRaisesRegex(ValueError, 'shipping wheel contains cached Python'):
+            self.attest()
+
+    def test_python_cache_different_executable_code_rejected(self):
+        # Unexpected falsifier of initial J24P09: a source-identical .py
+        # can execute a substituted timestamp-valid .pyc code object.
+        import py_compile
+        import marshal
+        source_path = self.package / '__init__.py'
+        py_compile.compile(str(source_path), doraise=True,
+            invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP)
+        cached = list((self.package / '__pycache__').glob('__init__*.pyc'))
+        self.assertEqual(len(cached), 1)
+        contents = cached[0].read_bytes()
+        cached[0].write_bytes(contents[:16] + marshal.dumps(
+            compile('UNTRUSTED = 99\n', str(source_path), 'exec')))
+        with self.assertRaisesRegex(ValueError, 'untrusted installed Python bytecode'):
             self.attest()
 
     @unittest.skipUnless(hasattr(os, 'symlink'), 'symlink unsupported')
