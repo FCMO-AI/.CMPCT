@@ -35,7 +35,10 @@ def execute(tmp_path, monkeypatch, entries):
             destination = tmp_path / "outside.dat"
             if kind == "symlink":
                 destination.write_bytes(b"synthetic dummy")
-            path.symlink_to(destination)
+            try:
+                path.symlink_to(destination)
+            except (OSError, NotImplementedError) as exc:
+                pytest.skip(f"filesystem disallows symlink creation: {exc}")
         else:
             raise AssertionError(kind)
     calls = []
