@@ -112,6 +112,32 @@ def main() -> None:
             good_retained_cli = run_cli(retained)
             assert good_retained_cli.returncode == 0, good_retained_cli.stderr
             assert json.loads(good_retained_cli.stdout) == {"revision": 24, "verified": 1}
+            # J24I50f: a *valid but different* archive is a sharper control
+            # than a corrupted replacement. Both native verifications can succeed
+            # while claiming different source objects when opened by pathname.
+            fixed_direct = json.loads(
+                (ROOT / "tests/conformance/v24-direct-codecs.json").read_text()
+            )
+            foreign = next(v for v in fixed_direct["vectors"] if v["codec"] == 0)
+            assert foreign["name"] != vector["name"]
+            foreign_bytes = base64.b64decode(foreign["archive_base64"])
+            assert hashlib.sha256(foreign_bytes).hexdigest() == foreign["archive_sha256"]
+            assert foreign["archive_sha256"] != vector["archive_sha256"]
+            original.write_bytes(foreign_bytes)
+            assert hashlib.sha256(retained.read_bytes()).hexdigest() == vector["archive_sha256"]
+            assert py_owned.verify() == 1
+            assert vector["name"] in py_owned.by and foreign["name"] not in py_owned.by
+            again = ctypes.c_size_t(999)
+            assert lib.cmpct_verify_complete(owned, ctypes.byref(again)) == 0
+            assert again.value == 1
+            assert verify_abi(original) == (0, 1)
+            with CMPCT(original) as new_python:
+                assert new_python.verify() == 1
+                assert foreign["name"] in new_python.by
+                assert vector["name"] not in new_python.by
+            good_foreign_cli = run_cli(original)
+            assert good_foreign_cli.returncode == 0, good_foreign_cli.stderr
+            assert json.loads(good_foreign_cli.stdout) == {"revision": 24, "verified": 1}
         finally:
             lib.cmpct_close(owned)
             py_owned.close()
@@ -222,6 +248,7 @@ def main() -> None:
             "normal_cli": "success-1",
             "opened_handle_rebind": "original-inode-pass-fresh-replacement-rejected",
             "python_native_path_reopen": "held-python-original-pass-fresh-native-rejected",
+            "valid_foreign_path_reopen": "both-pass-different-source-and-member",
             "corrupt_sha_abi": "fail-closed-count-0",
             "corrupt_sha_cli": "fail-closed-empty-stdout",
             "python_reference_corruption": "rejected",
