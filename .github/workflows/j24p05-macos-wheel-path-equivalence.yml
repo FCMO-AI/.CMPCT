@@ -70,6 +70,7 @@ jobs:
           name: j24p05-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
           path: |
             j24p05-results/court.json
+            j24p05-results/installed-native/*.bin
             j24p05-results/original/*.whl
             j24p05-results/unrelated/*.whl
             j24p05-results/collision_before/*.whl
