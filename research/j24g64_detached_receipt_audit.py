@@ -32,6 +32,19 @@ def review(document: dict, expected_head: str) -> dict:
     assert document.get("sparse_owner_records") >= 25
     assert document.get("archive_bytes_added") == 0
     assert re.fullmatch(r"[a-f0-9]{64}", document.get("final_index_msgpack_sha256", ""))
+    edges = document.get("targeted_semantic_edges")
+    assert isinstance(edges, dict) and len(edges) == 14
+    for key in ("delete-and-recreate-same-name",
+                "rename-then-reuse-old-name", "rename-return-cycle",
+                "rename-transfer-metadata", "retain-metadata-on-replace",
+                "delete-put-rename-recreate", "self-rename-no-rekey",
+                "replace-only-retains-original-order"):
+        assert edges.get(key) == "factored"
+    for key in ("collision-fallback", "missing-source-fallback",
+                "missing-delete-fallback", "multi-op-generation-fallback"):
+        assert edges.get(key, "").startswith("fallback:")
+    assert edges.get("future-op-exact-failure") == "matched-exception"
+    assert edges.get("file-limit-exact-failure") == "matched-exception"
     counts = document.get("differential")
     assert isinstance(counts, dict)
     assert all(type(v) is int and v >= 0 for v in counts.values())
@@ -100,7 +113,7 @@ def _hostile_controls(original: dict, expected_head: str) -> dict:
     attack("sample-omission", lambda p: p["raw_samples"].pop())
     attack("phase-order-perturbation", lambda p: p["raw_samples"][0].update(phase=3))
     attack("timing-branch-tampering", lambda p: [v.update(wall_ns=v["wall_ns"] * 3) for v in p["raw_samples"] if v["variant"] == "reference"])
-    attack("metadata-records-erased", lambda p: p.update(sparse_xattr_records=0))
+    attack("metadata-records-erased", lambda p: p.update(sparse_xattr_records=0))\n    attack("identity-lineage-control-falsified", lambda p: p["targeted_semantic_edges"].update({"delete-and-recreate-same-name": "fallback:inconclusive"}))
     attack("differential-count-manipulation", lambda p: p["differential"].update(factored=p["differential"]["factored"] + 1))
     attack("false-product-decision", lambda p: p.update(decision="MIXED_FSMETA_REPLAY_SEED" if p["decision"] != "MIXED_FSMETA_REPLAY_SEED" else "NO_BOUNDED_MIXED_FSMETA_WIN"))
     return attacks
@@ -116,7 +129,7 @@ def main():
     result = review(data, head)
     result["original_receipt_sha256"] = hashlib.sha256(raw).hexdigest()
     result["adversarial"] = _hostile_controls(data, head)
-    assert len(result["adversarial"]) == 8
+    assert len(result["adversarial"]) == 9
     output = Path(sys.argv[3])
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
