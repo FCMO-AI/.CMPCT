@@ -140,7 +140,15 @@ def _read_raw_provider(content, filename, expected_sha):
         ca = statistics.median([data["candidate-a.json"][k]["time_ms"], data["candidate-b.json"][k]["time_ms"]])
         e = _effect(ba, ca)
         # Historical release gate: positive slowdown only. Negative is a speedup, not a release red.
-        official.append({"corpus": k[0], "mode": k[1], "operation": k[3], **e, "historical_release_red": e["delta_ms"] > 3 and e["delta_pct"] > 5})
+        block_effects = {
+            block: _effect(data["base-" + block + ".json"][k]["time_ms"], data["candidate-" + block + ".json"][k]["time_ms"])
+            for block in ("a", "b")
+        }
+        official.append({"corpus": k[0], "mode": k[1], "operation": k[3], **e,
+                         "historical_release_red": e["delta_ms"] > 3 and e["delta_pct"] > 5,
+                         "block_effects": block_effects,
+                         # This double block-sign control is *also* not a causal source test.
+                         "both_blocks_positive_crossing": all(x["delta_ms"] > 3 and x["delta_pct"] > 5 for x in block_effects.values())})
     lookup = {(e["arm"], e["corpus"], e["mode"], e["operation"]): e for e in effects if e["engine"] == "cmpct"}
     for e in official:
         e["both_within_arm_neutral"] = all(not lookup[(a, e["corpus"], e["mode"], e["operation"])]["magnitude_crossing"] for a in ("base", "candidate"))
@@ -161,7 +169,7 @@ def analyze_provider_bundle(bundle_content):
         official = d["official_cmpct"]
         c = {engine: sum(e["magnitude_crossing"] for e in effects if e["engine"] == engine) for engine in ENGINES}
         byarm = {arm: {eng: sum(e["magnitude_crossing"] for e in effects if e["arm"] == arm and e["engine"] == eng) for eng in ENGINES} for arm in ("base", "candidate")}
-        totals[d["provider_filename"]] = {"within_arm_magnitude_crossings": c, "by_arm": byarm, "official_cmpct_positive_reds": sum(e["historical_release_red"] for e in official), "official_reds_on_neutral_withinarms": sum(e["historical_release_red"] and e["both_within_arm_neutral"] for e in official), "official_reds_on_non_neutral_withinarms": sum(e["historical_release_red"] and not e["both_within_arm_neutral"] for e in official), "cmpct_magnitude_cases": [e for e in effects if e["engine"] == "cmpct" and e["magnitude_crossing"]], "cmpct_official_red_cases": [e for e in official if e["historical_release_red"]]}
+        totals[d["provider_filename"]] = {"within_arm_magnitude_crossings": c, "by_arm": byarm, "official_cmpct_positive_reds": sum(e["historical_release_red"] for e in official), "official_reds_on_neutral_withinarms": sum(e["historical_release_red"] and e["both_within_arm_neutral"] for e in official), "official_reds_on_non_neutral_withinarms": sum(e["historical_release_red"] and not e["both_within_arm_neutral"] for e in official), "official_reds_persisting_in_both_blocks": sum(e["historical_release_red"] and e["both_blocks_positive_crossing"] for e in official), "cmpct_magnitude_cases": [e for e in effects if e["engine"] == "cmpct" and e["magnitude_crossing"]], "cmpct_official_red_cases": [e for e in official if e["historical_release_red"]]}
     return {"schema": SCHEMA, "classification": "POSTHOC_RESEARCH_ONLY; NO_PRODUCT_OR_GATE_CREDIT", "source": "three original source-identical J24I65 GitHub Actions ABBA ZIP archives", "sample_boundary": "sweep medians of seven repetitions, NOT the individual seven raw measurements", "trials": results, "summaries": totals}
 
 
