@@ -77,6 +77,8 @@ jobs:
           assert len([r for r in records if r['court']=='CONTEXT'])==8
           assert len([r for r in records if r['court']=='SHAM'])==8
           assert len({r['native_sha256'] for r in records})==1
+          native=Path('evidence')/x['physical_native']['file']
+          assert hashlib.sha256(native.read_bytes()).hexdigest()==x['native_sha256']
           assert all(len(r['samples'])==3 for r in records)
           assert all(len(r['prefix'])==(3 if r['context']=='PREFIX' else 0) for r in records)
           assert all(statistics.median(z['wall_ms'] for z in r['samples'])==r['median_wall_ms'] for r in records)
@@ -90,8 +92,15 @@ jobs:
                     'AMBIGUOUS_SHAM_DRIFT','AMBIGUOUS_SIGN_OR_CPU')
           print('INDEPENDENT_STRUCTURE_PASS',x['decision'])
           PY
+          python research/j24i53_independent_receipt_referee.py \
+            --result evidence/j24i53-context-result.json \
+            --archive evidence/j24i53-binary-final.cmpct \
+            --native evidence/j24i53-native.so \
+            --out evidence/j24i53-independent-audit.json
           sha256sum evidence/j24i53-context-result.json evidence/j24i53-binary-final.cmpct \
-            research/j24i53_binary_context_court.py > evidence/SHA256SUMS.txt
+            evidence/j24i53-native.so evidence/j24i53-independent-audit.json \
+            research/j24i53_binary_context_court.py research/j24i53_independent_receipt_referee.py \
+            > evidence/SHA256SUMS.txt
       - uses: actions/upload-artifact@v6
         if: always()
         with:
