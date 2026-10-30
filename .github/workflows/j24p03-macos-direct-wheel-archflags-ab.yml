@@ -158,3 +158,115 @@ jobs:
           assert o["dual_valid"], "ARCHFLAGS failed to create physical universal2"
           print("H1_SURVIVES_ONE_HOST, research only, no product/release credit")
           PY
+
+  intel-installed-e2e:
+    needs: [latest-head-impact, physical-wheel-ab]
+    if: needs.latest-head-impact.outputs.run_court == 'true'
+    runs-on: macos-15-intel
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: j24p03-macos-wheel-ab-${{ env.EVIDENCE_HEAD }}
+          path: wheel-evidence
+      - name: Real x86_64 process; two distinct identical-byte wheel installs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import json,pathlib,platform,hashlib
+          assert platform.machine().lower()=='x86_64',platform.machine()
+          root=pathlib.Path("wheel-evidence")
+          receipt=json.loads((root/"receipt.json").read_text())
+          assert receipt["source_head"]==__import__("os").environ["EVIDENCE_HEAD"]
+          for arm in ("plain","dual"):
+              wheels=list((root/(arm+"-wheels")).glob("cmpct-*.whl"))
+              assert len(wheels)==1,(arm,wheels)
+              assert hashlib.sha256(wheels[0].read_bytes()).hexdigest()==receipt["arms"][arm]["wheel_sha256"]
+          print("INTEL_SOURCE_AND_BOTH_WHEEL_SHA_IDENTITIES_PASS",platform.machine())
+          PY
+          python -m venv .j24p03-intel-plain
+          python -m venv .j24p03-intel-dual
+          .j24p03-intel-plain/bin/python -m pip install wheel-evidence/plain-wheels/cmpct-*.whl
+          .j24p03-intel-dual/bin/python -m pip install wheel-evidence/dual-wheels/cmpct-*.whl
+      - name: Isolated Intel native loader negative, exact source and SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          .j24p03-intel-plain/bin/python - <<'PY'
+          import ctypes,hashlib,importlib.util,json,os,pathlib,platform
+          assert platform.machine().lower()=="x86_64"
+          root=pathlib.Path("wheel-evidence")
+          claim=json.loads((root/"receipt.json").read_text())["arms"]["plain"]
+          spec=importlib.util.find_spec("cmpct")
+          assert spec and spec.submodule_search_locations
+          pkg=pathlib.Path(next(iter(spec.submodule_search_locations)))
+          paths=list(pkg.glob("cmpct_core*.so"))
+          assert len(paths)==1,paths
+          lib=paths[0]
+          assert hashlib.sha256(lib.read_bytes()).hexdigest()==claim["native_sha256"]
+          verdict={"source_head":os.environ["EVIDENCE_HEAD"],"runner_machine":platform.machine(),
+                    "case":"plain_arm64_only_mislabel_on_intel","install_admitted":True,
+                    "installed_sha_matches_producer":True,"loader_rejected_architecture":False}
+          try:
+              ctypes.CDLL(str(lib))
+          except OSError as exc:
+              verdict["error"]=str(exc)
+              verdict["loader_rejected_architecture"]=("incompatible architecture" in str(exc).lower() or
+                                                        "wrong architecture" in str(exc).lower())
+          pathlib.Path("intel-plain-result.json").write_text(json.dumps(verdict,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(verdict,sort_keys=True))
+          assert verdict["loader_rejected_architecture"],"Architecture-specific negative control not observed"
+          PY
+      - name: Genuine dual wheel loads and extracts on Intel
+        shell: bash
+        run: |
+          set -euo pipefail
+          .j24p03-intel-dual/bin/python - <<'PY'
+          import ctypes,hashlib,importlib.util,json,os,pathlib,platform
+          assert platform.machine().lower()=="x86_64"
+          root=pathlib.Path("wheel-evidence")
+          claim=json.loads((root/"receipt.json").read_text())["arms"]["dual"]
+          spec=importlib.util.find_spec("cmpct")
+          assert spec and spec.submodule_search_locations
+          pkg=pathlib.Path(next(iter(spec.submodule_search_locations)))
+          paths=list(pkg.glob("cmpct_core*.so"))
+          assert len(paths)==1,paths
+          lib=paths[0]
+          assert hashlib.sha256(lib.read_bytes()).hexdigest()==claim["native_sha256"]
+          ctypes.CDLL(str(lib))
+          print("INTEL_DUAL_NATIVE_SHA_AND_CDLL_PASS")
+          PY
+          (
+            cd "$RUNNER_TEMP"
+            "$GITHUB_WORKSPACE/.j24p03-intel-dual/bin/python" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py"
+          ) | tee intel-dual-smoke.json
+          python - <<'PY'
+          import json,os,pathlib
+          s=json.loads(pathlib.Path("intel-dual-smoke.json").read_text())
+          assert s["roundtrip"] is True and s["representative_archive_create_read_extract"] is True
+          assert s["shipping_python_no_ambient_zstd"] is True and s["python_zstandard_absent"] is True
+          r={"schema":"cmpct-j24p03-intel-dual-smoke-v1","source_head":os.environ["EVIDENCE_HEAD"],
+             "runner_machine":"x86_64","native_roundtrip":True,"representative_archive_create_read_extract":True,
+             "archive_sha256":s["representative_archive_sha256"],"dict_vector_sha256":s["dict_vector_sha256"]}
+          pathlib.Path("intel-dual-result.json").write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+          print(json.dumps(r,sort_keys=True))
+          PY
+      - name: Preserve real Intel results including negatives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p03-intel-native-${{ env.EVIDENCE_HEAD }}
+          path: |
+            intel-plain-result.json
+            intel-dual-result.json
+            intel-dual-smoke.json
+          if-no-files-found: warn
+          retention-days: 30
