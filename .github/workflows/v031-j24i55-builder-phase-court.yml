@@ -1,0 +1,102 @@
+# ci-lane: deep
+# J24I55 bounded phase ownership and Linux page-fault attribution; research only.
+name: J24I55 Builder Phase Ownership
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24i55-builder-phase-ownership-20261030
+    paths:
+      - research/j24i55_phase_child.py
+      - research/j24i55_builder_phase_court.py
+      - .github/workflows/v031-j24i55-builder-phase-court.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i55-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  phase-ownership:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Check source / preregistration ancestry and syntax
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 9db7839bcad97748deb1110ca3944280e95ff1f8 HEAD
+          git merge-base --is-ancestor 444401e36fcd27558c13702ad01c01cfa206cf7f HEAD
+          python -m py_compile research/j24i55_phase_child.py research/j24i55_builder_phase_court.py
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install authentic Builder and native codecs
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd libsndfile1
+          python -m pip install -e '.[audio,test]'
+      - name: Run preregistered real-Builder phase instrument
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python research/j24i55_builder_phase_court.py --out evidence/j24i55-result.json --reps 3 | tee evidence/j24i55-stdout.txt
+      - name: Independent receipt referee (no CMPCT import)
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, os, statistics
+          x=json.loads(Path("evidence/j24i55-result.json").read_text())
+          assert x["schema"]=="cmpct-j24i55-builder-phase-v1"
+          assert x["evidence_head"]==os.environ["EVIDENCE_HEAD"]
+          assert x["prereg_commit"]=="9db7839bcad97748deb1110ca3944280e95ff1f8"
+          rows=x["observations"]
+          assert len(rows)==12 and sum(r["court"]=="SHAM" for r in rows)==4
+          assert sum(r["court"]=="EXPERIMENT" for r in rows)==8
+          for k in ("physical_archive","physical_native"):
+              blob=(Path("evidence")/x[k]["file"]).read_bytes()
+              assert hashlib.sha256(blob).hexdigest()==x[k]["sha256"], k
+          h={s["archive_sha256"] for r in rows for s in r["samples"]}
+          assert h=={x["physical_archive"]["sha256"]}
+          for r in rows:
+              assert len(r["samples"])==3
+              for s in r["samples"]:
+                  assert set(s["phases"])=={"scan","_build_micro_packs","_prepare_deflate_reuse","_train_dictionary","ordered_encode"}
+                  for name in ("cpu_ms","wall_ms"):
+                      recovered=sum(v[name] for v in s["phases"].values())+s["residual"][name]
+                      assert abs(recovered-s["total"][name])<1e-6
+                  assert s["minor_faults"]>=0 and s["major_faults"]>=0
+          exp=[r for r in rows if r["court"]=="EXPERIMENT"]
+          for g in (0,1):
+              group=[r for r in exp if r["group"]==g]
+              assert {m:sum(r["mode"]==m for r in group) for m in ("FRESH","BUILD")}=={"FRESH":2,"BUILD":2}
+          for metric in ("wall_ms","cpu_ms"):
+              a=statistics.median(s["total"][metric] for r in exp if r["mode"]=="FRESH" for s in r["samples"])
+              b=statistics.median(s["total"][metric] for r in exp if r["mode"]=="BUILD" for s in r["samples"])
+              got=x["aggregate"][metric]
+              assert got["base"]==a and got["treatment"]==b and got["delta"]==b-a
+          assert x["decision"] in ("NOT_STABLE_OR_SHAM_AMBIGUOUS","ENCODE_STAGE_OWNER_SUPPORTED",
+                                   "NON_ENCODE_STAGE_BURDEN_SUPPORTED","DISTRIBUTED_OR_AMBIGUOUS")
+          print("INDEPENDENT_REFEREE_PASS",x["decision"],x["evidence_head"])
+          PY
+      - name: Upload original raw observations and physical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i55-phase-ownership-evidence
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
