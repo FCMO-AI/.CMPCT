@@ -73,7 +73,7 @@ if len({s["archive_sha256"] for s in samples})!=1 or len({s["archive_bytes"] for
     raise AssertionError("non-deterministic archive in child")
 print(json.dumps({"context":context,"module":str(loaded),"native_path":str(native),
     "native_sha256":native_sha,"reps":reps,"samples":samples,"prefix":prefix,
-    "rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_max,
+    "rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
     "median_wall_ms":statistics.median(s["wall_ms"] for s in samples),
     "median_cpu_ms":statistics.median(s["cpu_ms"] for s in samples)},sort_keys=True))
 """
@@ -187,6 +187,10 @@ def main() -> None:
         modules={e["module"] for e in observations}
         if len(archives)!=1 or len(sizes)!=1 or len(nsha)!=1 or len(modules)!=1:
             raise AssertionError(("source/archive identity divergence",archives,sizes,nsha,modules))
+        physical_native=args.out.parent/'j24i53-native.so'
+        shutil.copy2(Path(observations[0]['native_path']),physical_native)
+        if sha_file(physical_native)!=next(iter(nsha)):
+            raise AssertionError('retained native payload mismatch')
         if sha_file(physical_archive)!=next(iter(archives)):
             raise AssertionError("retained physical archive mismatch")
         if tree_fingerprint(corp)!=manifest:
@@ -229,6 +233,7 @@ def main() -> None:
           "source_code_sha256":code_shas,"python":sys.version,"platform":platform.platform(),
           "tree_fingerprint_before_after":manifest,"binary_inputs":binaries,
           "native_sha256":next(iter(nsha)),
+          "physical_native":{"file":physical_native.name,"sha256":sha_file(physical_native)},
           "physical_archive":{"file":physical_archive.name,"sha256":next(iter(archives)),
                               "size":next(iter(sizes))},
           "contexts":["FRESH","PREFIX"],"repetitions_per_invocation":args.reps,
