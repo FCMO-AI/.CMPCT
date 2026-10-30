@@ -1,0 +1,128 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT J24P05 inert macOS path-equivalence court
+on:
+  pull_request:
+    paths:
+      - "tools/j24p05_wheel_casefold_court.py"
+      - "tools/j24p05_wheel_installed_path_oracle.py"
+      - "tools/j24p05_detached_artifact_referee.py"
+      - "tools/j24p05d_wheel_spread_court.py"
+      - "tools/j24p05d_detached_referee.py"
+      - "docs/v031-research/*j24p05*"
+      - ".github/workflows/j24p05-macos-wheel-path-equivalence.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-j24p05-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_court: ${{ steps.scope.outputs.run_court }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind court to latest exact source
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ] || git diff-tree --no-commit-id --name-only -r HEAD | grep -Eq '^(tools/j24p05_wheel_casefold_court\.py|tools/j24p05_wheel_installed_path_oracle\.py|tools/j24p05_detached_artifact_referee\.py|tools/j24p05d_wheel_spread_court\.py|tools/j24p05d_detached_referee\.py|docs/v031-research/.*j24p05.*|\.github/workflows/j24p05-macos-wheel-path-equivalence\.yml)$'; then
+            echo 'run_court=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_court=false' >> "$GITHUB_OUTPUT"
+          fi
+  inert-path-court:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_court == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Generate inert wheels, verify exact admission and measure installed identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python tools/j24p05_wheel_casefold_court.py --output-dir j24p05-results
+      - name: Independently validate all original wheel RECORD hashes and actual pip-installed file bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root=Path('j24p05-results')
+          with zipfile.ZipFile('j24p05-local-artifact.zip','w',compression=zipfile.ZIP_DEFLATED) as z:
+              for file in sorted(root.rglob('*')):
+                  if file.is_file():
+                      z.write(file,file.relative_to(root).as_posix())
+          PY
+          python tools/j24p05_detached_artifact_referee.py j24p05-local-artifact.zip --output j24p05-detached-referee.json
+      - name: Independently falsify canonical PEP 427 purelib spread collisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/j24p05d_wheel_spread_court.py --output-dir j24p05d-results
+      - name: Detached proof of PEP427 wheel RECORD integrity and spread-installed bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root=Path('j24p05d-results')
+          with zipfile.ZipFile('j24p05d-local-artifact.zip','w',compression=zipfile.ZIP_DEFLATED) as z:
+              for file in sorted(root.rglob('*')):
+                  if file.is_file():
+                      z.write(file,file.relative_to(root).as_posix())
+          PY
+          python tools/j24p05d_detached_referee.py j24p05d-local-artifact.zip --output j24p05d-detached-referee.json
+      - name: Persist physical receipts and original inert wheels
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24p05-${{ matrix.os }}-${{ env.EVIDENCE_HEAD }}
+          path: |
+            j24p05-results/court.json
+            j24p05-detached-referee.json
+            j24p05-results/installed-native/*.bin
+            j24p05-results/installed-native/*.RECORD.csv
+            j24p05-results/original/*.whl
+            j24p05-results/unrelated/*.whl
+            j24p05-results/collision_before/*.whl
+            j24p05-results/collision_after/*.whl
+            j24p05-results/alias_parent/*.whl
+            j24p05-results/alias_dot/*.whl
+            j24p05-results/alias_repeated_separator/*.whl
+            j24p05-results/alias_internal_dot/*.whl
+            j24p05d-results/court.json
+            j24p05d-detached-referee.json
+            j24p05d-results/installed-native/*.bin
+            j24p05d-results/original/*.whl
+            j24p05d-results/disjoint/*.whl
+            j24p05d-results/spread_before/*.whl
+            j24p05d-results/spread_after/*.whl
+          if-no-files-found: warn
+          retention-days: 30
