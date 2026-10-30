@@ -127,7 +127,9 @@ def verify(root: Path):
         # Tamper each physical specimen's current commit digest to ensure the
         # external referee independently detects corruption without CMPCT code.
         mutated = bytearray(data)
-        mutated[latest + FTR.size - 1] ^= 1
+        # Use a different digest byte from the already-mutated bad_sha
+        # specimen: toggling the same byte again would repair its checksum.
+        mutated[latest + FTR.size - 2] ^= 1
         require(not generation(bytes(mutated), latest)["payload_sha_consistent"],
                 f"{name}: tampered SHA not rejected")
         tamper_rejections += 1
