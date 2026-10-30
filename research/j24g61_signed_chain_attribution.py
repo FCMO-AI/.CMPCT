@@ -203,8 +203,7 @@ def run() -> None:
                             depth if variant == "chain" else 0)
                         assert obs["footer_calls"] == (
                             depth + 1 if variant == "chain" else 1)
-                        records.append({"n": n, "depth": depth, "variant": variant,
-                                        "block": block, "position": position, **obs})
+                        records.append({**obs, "n": n, "depth": depth, "observed_depth": obs["depth"], "variant": variant, "block": block, "position": position})
                 if n == 2048 and depth == 63:
                     # Separate, alternating uninstrumented reference stratum.
                     for block in range(2):
@@ -213,8 +212,7 @@ def run() -> None:
                         for position, variant in enumerate(seq):
                             obs = child(Path(__file__).resolve(), paths[variant], False, env)
                             assert obs["rows"] == n
-                            records.append({"n": n, "depth": depth, "variant": variant,
-                                            "block": block, "position": position, **obs})
+                            records.append({**obs, "n": n, "depth": depth, "observed_depth": obs["depth"], "variant": variant, "block": block, "position": position})
                     report["profile"]["chain"] = profile_one(paths["chain"])
                     report["profile"]["checkpoint"] = profile_one(paths["checkpoint"])
         summaries = {}
