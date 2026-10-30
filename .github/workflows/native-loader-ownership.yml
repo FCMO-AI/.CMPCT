@@ -113,6 +113,41 @@ jobs:
           Path("native-loader-wheel-package.json").write_text(json.dumps(record,indent=2,sort_keys=True))
           print("wheel ZIP member and two installed native SHA identities: PASS", member_sha)
           PY
+      # Wheel tag is an interoperability contract, distinct from a successful
+      # ARM-only local import. Preserve the observed Mach-O slices even on FAIL.
+      - name: Verify macOS wheel advertised architecture matches native Mach-O
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          import sys
+          d=json.loads(Path("native-loader-wheel-package.json").read_text())
+          exe=".j24p01b-wheel-venv/bin/python"
+          path=subprocess.check_output([exe,"-c","from pathlib import Path; import cmpct,cmpct.native_codec as n;print(Path(n.__file__).parent/n._library_path().name)"],text=True).strip()
+          native=Path(path)
+          assert native.is_file(), native
+          archs=subprocess.check_output(["/usr/bin/lipo","-archs",str(native)],text=True).strip().split()
+          inspect=subprocess.check_output(["/usr/bin/file",str(native)],text=True).strip()
+          label=d["wheel_filename"]
+          record={"source_head":d["source_head"],"wheel_filename":label,"native_member":d["native_member"],
+                  "installed_native_path":str(native),"mach_o_architectures":sorted(archs),
+                  "file_description":inspect,
+                  "tag_universal2":bool("universal2" in label)}
+          Path("native-loader-macos-arch.json").write_text(json.dumps(record,sort_keys=True,indent=2))
+          print(json.dumps(record,sort_keys=True))
+          if "universal2" in label:
+              assert {"arm64","x86_64"}.issubset(set(archs)), ("universal2 tag missing native slice",label,archs)
+          elif "_arm64.whl" in label:
+              assert "arm64" in archs, ("arm64 wheel missing native slice",label,archs)
+          elif "_x86_64.whl" in label:
+              assert "x86_64" in archs, ("x86_64 wheel missing native slice",label,archs)
+          else:
+              raise AssertionError(("unrecognized macOS wheel architecture platform tag",label))
+          print("macOS wheel platform tag matches native architecture: PASS")
+          PY
       - name: Preserve source-head bound package receipt
         if: always()
         uses: actions/upload-artifact@v4
@@ -123,6 +158,7 @@ jobs:
             native-loader-wheel-first.json
             native-loader-wheel-reinstall.json
             native-loader-wheel-package.json
+            native-loader-macos-arch.json
           if-no-files-found: ignore
           retention-days: 30
 
