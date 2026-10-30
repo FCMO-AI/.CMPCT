@@ -60,3 +60,17 @@ The simple specialization does **not** currently pay for a separate product fast
 Next valuable gate: installed Reader A/B against the same genuine physical archive, with full correctness, xattrs, hardlinks, hostile footer recovery, checkpoint64, CPU/wall, RSS and complete stored bytes. The simple path can be reconsidered if that gate reveals stable significant *product-level* gains. No change to shared Discovery STATE, owned by #574; no evidence-backed policy rewrite earned. A transferable prospective method is to require same-input, same-layer head-to-head competition before choosing between two measured seeds from disjoint benchmarks.
 
 **Product evidence: no change. Research evidence: 648 raw observations, 3/3 hosted success, 3 original provider ZIPs independently audited; decision changed. CI/evidence enablement: source exactness and hostile receipt checks. Unmeasured: physical and product integration/release. Promotion credit: zero.**
+
+## Post-result paired-block noise sensitivity (2026-10-30 UTC)
+
+A **separate local audit of the downloaded original ZIP receipts** inspected the eight ABBA pairs for the preregistered N=2,048 middle-delete case. This is exploratory sensitivity of the existing measurements, **not a new preregistered test nor a replacement for the frozen median rule**. Per-block ratio uses each block's median factored wall divided by its median simple wall, rather than dividing whole-host pooled medians.
+
+| Host | All eight per-block factored/simple ratios | Empirical block bootstrap interval (2.5–97.5%) |
+|---|---|---|
+| Ubuntu | 1.068, 1.060, 1.055, 1.020, 1.077, 1.073, 1.064, 1.071 | 1.055–1.076 |
+| macOS | 1.155, **0.576**, 1.025, **1.599**, **0.725**, 1.376, 1.417, 1.432 | **0.725–1.503** |
+| Windows | 1.080, 1.102, 1.089, 1.094, 1.083, **0.951**, 1.050, 1.079 | 1.056–1.096 |
+
+Bootstrap procedure: on the **unchanged original block samples**, draw eight blocks with replacement 10,000 times via Python `random.seed(27)` independently per host, divide each resample's median of the eight factored block medians by its median of the eight simple block medians; report empirical 2.5/97.5 percentiles. This is a **block-resampled sensitivity interval**, not a formal confidence interval about all machines or runs. It treats blocks as exchangeable even though ABBA order, temporal drift and filesystem caches may be dependent; only eight blocks exist. On this observed batch the fraction of resamples with ratio <=1.15 was Ubuntu 1.000, macOS 0.3909, Windows 1.000. Do not overinterpret those proportions as calibrated probabilities of future host behavior.
+
+**Causal refinement:** Ubuntu and Windows show a narrow and fairly stable 5–10% specialized edge, whereas macOS' 34% pooled-median advantage is not robust to plausible resampling of the same eight blocks. Thus the preregistered 2/3 architectural economy decision is not a claim that the simple approach never wins. A later fully installed same-file Reader court can overturn it. The previous J24G67 15× standalone speedup against original remains valid, but does not justify an additional separate production path against the stronger general control by itself.
