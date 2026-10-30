@@ -90,19 +90,24 @@ def install(path: Path, root: Path, label: str) -> dict:
     record_native = None
     if record_path.is_file():
         rows = list(csv.reader(io.StringIO(record_path.read_text("utf-8"))))
-        entries = [row for row in rows if len(row) == 3 and row[0] == NATIVE]
-        if len(entries) == 1:
-            _, advertised_hash, advertised_size = entries[0]
-            actual_b64 = (base64.urlsafe_b64encode(hashlib.sha256(raw).digest())
-                          .decode().rstrip("=")) if raw is not None else None
-            record_native = {
-                "advertised_hash": advertised_hash,
-                "advertised_size": advertised_size,
-                "actual_hash": "sha256=" + actual_b64 if actual_b64 is not None else None,
-                "actual_size": str(len(raw)) if raw is not None else None,
-                "matches_physical_file": bool(raw is not None and
-                     advertised_hash == "sha256=" + actual_b64 and advertised_size == str(len(raw))),
-            }
+        exact_rows = [{"path": row[0], "sha256_record": row[1], "size_record": row[2]}
+                      for row in rows if len(row) == 3 and row[0] == NATIVE]
+        portable_rows = [{"path": row[0], "sha256_record": row[1], "size_record": row[2]}
+                         for row in rows if len(row) == 3 and row[0].casefold() == NATIVE.casefold()]
+        physical_hash = ("sha256=" + base64.urlsafe_b64encode(hashlib.sha256(raw).digest())
+                         .decode().rstrip("=")) if raw is not None else None
+        record_native = {
+            "exact_rows": exact_rows,
+            "portable_casefold_rows": portable_rows,
+            "physical_sha256_record_form": physical_hash,
+            "physical_size": str(len(raw)) if raw is not None else None,
+            "exact_record_path_ambiguous": len(exact_rows) != 1,
+            "portable_record_path_ambiguous": len(portable_rows) != 1,
+            "any_exact_row_matches_physical": (any(
+                row["sha256_record"] == physical_hash and
+                row["size_record"] == str(len(raw))
+                for row in exact_rows) if raw is not None else None),
+        }
         custody = root / "installed-native"
         custody.mkdir(exist_ok=True)
         (custody / (label + ".RECORD.csv")).write_bytes(record_path.read_bytes())
