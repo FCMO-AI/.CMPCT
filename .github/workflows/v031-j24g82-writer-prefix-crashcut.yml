@@ -1,0 +1,82 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24G82 every-prefix torn-footer Writer-session recovery court
+
+on:
+  push:
+    branches:
+      - agent/phased2-v031-j24g82-writer-prefix-crashcut-court-20261030
+    paths:
+      - 'research/j24g82_*'
+      - 'docs/v031-research/*j24g82*'
+      - '.github/workflows/v031-j24g82-writer-prefix-crashcut.yml'
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g80-owned-writer-session-oracle-20261030
+    paths:
+      - 'research/j24g82_*'
+      - 'docs/v031-research/*j24g82*'
+      - '.github/workflows/v031-j24g82-writer-prefix-crashcut.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g82-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prefix-crashcut:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G80_EVIDENCE_DIR: evidence
+      J24G82_EVIDENCE_DIR: evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact HEAD, source owner, and prospective prereg ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor d29c8b6b64017ab912cfd219d598501e00b62a72 HEAD
+          git merge-base --is-ancestor 767c8ba713b5826de1028fa71f0f644c3148b88c HEAD
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 71bbc8a989d1da79d0f0dbe44f7f5c39f3304854
+          test "$(git rev-parse HEAD:research/j24g80_owned_writer_session.py)" = 4b29db0e5818faedc77ea9ff2c32b63c8b6ad2da
+          git rev-parse HEAD > evidence/head.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install source-exact CMPCT and syntax check experimental referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m py_compile research/j24g82_writer_prefix_crashcut.py
+          python -m pip freeze > evidence/pip-freeze.txt
+      - name: Reconstruct each 64-generation prefix and every simulated crash-cut
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g82_writer_prefix_crashcut.py 2>&1 | tee evidence/j24g82-run.log
+          test -s evidence/j24g82-result.json
+      - name: Preserve full original raw evidence also when failing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g82-prefix-crashcut-${{ matrix.os }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
