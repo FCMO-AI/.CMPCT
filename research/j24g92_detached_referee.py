@@ -1,22 +1,15 @@
 #!/usr/bin/env python3
-"""Independent r24 J24G92 wire referee: stdlib, msgpack, libzstd, no CMPCT import."""
-import ctypes
+"""Independent r24 J24G92 wire referee: stdlib, msgpack, zstandard, no CMPCT import."""
 import hashlib
 import json
 import pathlib
 import struct
 import sys
 import msgpack
+import zstandard as zstd
 
 F = struct.Struct('<8sBBBBQQQ32s')
 assert F.size == 68
-lib = ctypes.CDLL('libzstd.so.1')
-lib.ZSTD_decompress.argtypes = [
-    ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t]
-lib.ZSTD_decompress.restype = ctypes.c_size_t
-lib.ZSTD_isError.argtypes = [ctypes.c_size_t]
-lib.ZSTD_isError.restype = ctypes.c_uint
-
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
@@ -32,11 +25,7 @@ def footer(raw, pos):
     if codec == 0:
         payload = comp
     else:
-        src = ctypes.create_string_buffer(comp)
-        dst = ctypes.create_string_buffer(us)
-        size = lib.ZSTD_decompress(dst, us, src, len(comp))
-        assert not lib.ZSTD_isError(size) and size == us
-        payload = dst.raw
+        payload = zstd.ZstdDecompressor().decompress(comp, max_output_size=us)
     assert len(payload) == us and hashlib.sha256(payload).digest() == ph
     return {'pos': pos, 'prev': prev, 'kind': kind, 'payload_sha': ph.hex(),
             'index': msgpack.unpackb(payload, raw=False)}
