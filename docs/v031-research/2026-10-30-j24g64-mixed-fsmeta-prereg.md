@@ -1,0 +1,23 @@
+# J24G64 — prospective mixed-operation, sparse-fsmeta cross-generation replay oracle
+
+Date: 2026-10-30 UTC. **RESEARCH ONLY. PREDICTION BEFORE INSTRUMENT OR OUTCOME.**
+
+## Starting authority, question and distinct ownership
+Parent: J24G62 #804 exact `9dc765a902c0f5c424639caf9cdfd571cca2d6e6`, whose strict 63x rename-only helper wins 5.36–5.81× replay-only across three platforms but explicitly excludes *all* puts, deletes and sparse authenticated metadata. Its unchanged shared r24 replay helper has Git blob `03743ca2a06c022c2ec64243a90fe373cf91e899`. #795 owns the product helper; #805 independently measures public put/delete cold-open, not mixed+fsmeta candidate semantics. This is a **separate research-only, falsifiable representation/state-reuse oracle**. Do not edit those owners, `src/`, `docs/discovery/STATE.json`, release data, benchmarks or frozen gates.
+
+**Question:** can one path-indexed, per-live-member metadata-lineage state transform *mixed* one-op signed generations (rename + delete + replacement/insertion put), with sparse xattr and owner-override metadata, using only one final sort/rekey, while matching the full original helper's output and refusal behavior? This is a different supported domain than #804's rename-only lane.
+
+## Prediction, controls and cost
+Prediction: for **strictly admitted** sorted unique-path initial indexes, well-formed positional metadata, no transient collisions/missing sources, exactly one valid op per delta and public Writer-compatible put/ren/del semantics, the final state and MessagePack encoding are byte-identical to successive calls to the **exact inherited** `_apply_journal_ops`. A map keyed by current name with metadata attached to live identity should reduce O(N × depth) repeated scans/sorts to O(N + depth + N log N + sparse entries), with zero archive-byte additions. A 2048-member, 63-step mixed case should show >=2× replay-only median speedup in >=7 paired ABBA blocks on the available host without more than +2MiB traced Python peak. These are *research triage* thresholds, not product/release gates.
+
+Strong simpler control: retain original per-generation helper, with a single independently deep-copied base and source-decoded per-delta operations passed directly whenever safe. Second control: #804 rename-only oracle; favorable rename-only alone is insufficient to credit this experiment.
+
+Alternatives to test: maybe put-in-place already cheap and the net win comes exclusively from deletes; maybe fsmeta rekey or initial copies dominate; maybe final metadata ordering differs even when logical content matches; maybe invalid ordinals are allowed until a later relevant rekey. Preserve these contradictions. Upfront grammar validation must never convert accepted original input into an error; unsupported/ambiguous inputs **fall back to exact inherited helper**, rather than rewriting semantics.
+
+## Predeclared disproof, adversaries and scope
+Run deterministic randomized source-exact differential classes including put replacement/new put, delete, rename, same-path/no-op rename, metadata fields with valid sparse xattrs/owner records, and hardlink-shaped file rows (treated opaquely). Explicitly test duplicate paths, name collisions, missing source, malformed op, malformed/duplicate/out-of-range signed metadata ordinal, unsorted/noncanonical metadata and file-cap breach: **fallback**, equality of result OR exact exception type+message, no input mutation. Reject as a claim if any admitted discrepancy, unexpected input mutation or parent source mismatch; record the smallest counterexample, never weaken the oracle. Test a mixed 2048/63 workload and independent seeded 5000-case randomized families. The 5000 paths are not asserted independent physical archives.
+
+No product release credit without real Builder/public Writer + Reader/preflight, 64th checkpoint, selective reads/extract, inode/hardlink recovery, peak process RSS, memory/CPU, cross-OS and full official release gates. Pure helper differential + microtiming is science/oracle only. Any CI run must keep raw samples and self-critique. A single host cannot prove cross-host correctness. Public Writer emits one op per generation, so multi-op deltas are deliberately fallback even if valid for the low-level helper.
+
+## Decision
+If exact parity and >=2× bounded research speed survive, preserve a **MIXED_FSMETA_REPLAY_SEED**, hand to #795 and pursue physically authenticated mixed operations and Reader cold-open. If parity fails, keep failure and retire/narrow fast-path admission; if speed fails, preserve parity and simplify/retire the machinery. Baseline is allowed to win. No rule or discovery-policy change is authorized by a single favorable oracle.
