@@ -65,7 +65,7 @@ def main():
         # be refused at the original provider ZIP digest boundary.
         forged=rewrite_member(original,"base-a.json",lambda x:x["corpora"]["binary"]["library"]["cmpct"].__setitem__("create_s_median",1.0))
         refuse(forged,n)
-    print("J24I68 PASS: 3 source-identical provider ZIPs, 96 CMPCT/ZIP paired cells, 2/5/0 inherited reds; 9 hostile refusal paths")
+    print("J24I68 PASS: 3 source-identical provider ZIPs, 96 CMPCT/ZIP paired cells, 2/5/0 inherited reds; 8 hostile refusal paths")
 
 if __name__=="__main__":
     main()
