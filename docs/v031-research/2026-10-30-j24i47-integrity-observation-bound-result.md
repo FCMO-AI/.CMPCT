@@ -30,6 +30,23 @@ The script constructs two distinct 32MiB synthetic members (periodic and fixed-s
 
 The script returns a structured JSON with complete source hashes, queried interval, late-mutation position, coverage, controls and cost rows. Original local output SHA-256: `ccd9d1f164805935f0b355b7a81bdce8d96753979005ee98e0c6e99933326ab5`. Verify the **GitHub-hosted exact-HEAD result independently** before promoting this SHA as cross-host evidence; successful local results alone are not hosted CI success.
 
+## Independent current-code assurance matrix (source audit, not a new product test)
+
+**Exact source controls:** native candidate #788 `2a6dbd5407731c5660faf71d04a4ef5de2d431bd`, [native `lib.rs` 464–540](https://github.com/FCMO-AI/.CMPCT/blob/2a6dbd5407731c5660faf71d04a4ef5de2d431bd/native/cmpct-core/src/lib.rs#L464-L540) and [638–706](https://github.com/FCMO-AI/.CMPCT/blob/2a6dbd5407731c5660faf71d04a4ef5de2d431bd/native/cmpct-core/src/lib.rs#L638-L706); released Python [`reader.py` 128–175](https://github.com/FCMO-AI/.CMPCT/blob/80c358f8824ec1b20d349c92ed94c898090969b0/src/cmpct/reader.py#L128-L175), [222–274](https://github.com/FCMO-AI/.CMPCT/blob/80c358f8824ec1b20d349c92ed94c898090969b0/src/cmpct/reader.py#L222-L274), and [483–489](https://github.com/FCMO-AI/.CMPCT/blob/80c358f8824ec1b20d349c92ed94c898090969b0/src/cmpct/reader.py#L483-L489).
+
+| Current path | Bytes checked by partial read (source inspection) | Detect arbitrary corruption outside addressed range? |
+|---|---|---|
+| Native direct RAW | Requested RAW bytes, with authenticated-index/blob-header cross-check | **No**; unread RAW payload is not hashed by that read |
+| Native direct WAV/FLAC codec 2 | Complete decoded WAV + stored SHA-256 before slicing | **Yes within the decoded member when complete strong check succeeds** |
+| Native direct Zstd/Deflate | Complete decoded physical blob with expected SHA before slicing | **Yes for the decoded physical blob** |
+| Native fixed/CDC/sparse | Only intersecting physical blobs, with per-blob checks; full-member logical hash when requesting the entire logical extent | **No** across unintersected chunks/extents |
+| Python direct RAW | Direct `mmap` slice after reading physical header; no per-request CRC/SHA of that slice in `read_range` | **No**, even selected-byte digest is not asserted on this shortcut |
+| Python direct compressed | Full `_blob` decode, decoded size + CRC32; `verify()` performs whole-file SHA separately | CRC32 of the addressed physical blob, **not strong SHA by that read alone** |
+| Python fixed/CDC/sparse | Only overlapping `_blob` decodes, CRC32 per touched blob | **No** across unseen blobs |
+| Python `verify()` / native `verify_complete()` | Complete logical member reconstruction and SHA-256 check | Distinct explicitly complete-verification operation |
+
+This is a **source-inspection-only** matrix for named snapshots, not verified runtime coverage for every codec/form or every corruption class. In particular, the exact assertion "all `read_range` modes provide full SHA member integrity" is **false**. The meaningful engineering question is not how to circumvent an invented uniform guarantee; it is whether to retain direct codec-2's existing stronger incidental assurance, or deliberately expose a separately named and precisely specified local range contract. That distinction should be reviewed with the Reader owner before any architecture change. No source behavior was changed.
+
 ## Explicitly charged optimistic index-size floor
 
 Using the J24I46 measured compressed sizes (stereo 12,164,541 B, mono 15,113,811 B, both 33,554,432 B PCM), charge per logical chunk **32-byte SHA-256 + 8-byte offset + 8-byte length**, plus a 32-byte root. No gifted free hash/index. This is a lower-bound *bookkeeping exercise*; a real decoder may need much more.
