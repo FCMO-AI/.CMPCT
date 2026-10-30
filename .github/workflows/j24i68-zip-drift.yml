@@ -3,7 +3,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/j24i68-zip-drift.yml"
-      - "research/j24i68_zip_proxy_referee.py"
+      - "research/j24i68_*"
       - "tests/test_j24i68_zip_proxy_referee.py"
       - "docs/v031-research/2026-10-30-j24i68-zip-drift*"
   workflow_dispatch:
@@ -60,6 +60,7 @@ jobs:
           set -euo pipefail
           export J24I68_BUNDLE=j24i68-input/J24I65_original_provider_bundle.zip
           python tests/test_j24i68_zip_proxy_referee.py
+          python research/j24i68_derived_effect_replay.py > j24i68-input/J24I68_derived_effect_replay.json
           python research/j24i68_zip_proxy_referee.py "${J24I68_BUNDLE}" \
             --selftest --output j24i68-input/J24I68_source_identical_proxy_result.json
           python - <<'PY'
