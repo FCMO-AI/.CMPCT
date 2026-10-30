@@ -1,0 +1,91 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24G80 private owned Writer state physical session oracle
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24g80-owned-writer-session-oracle-20261030
+    paths:
+      - 'research/j24g80_*'
+      - 'docs/v031-research/*j24g80*'
+      - '.github/workflows/v031-j24g80-owned-writer-session.yml'
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g78-writer-copy-elision-court-20261030
+    paths:
+      - 'research/j24g80_*'
+      - 'docs/v031-research/*j24g80*'
+      - '.github/workflows/v031-j24g80-owned-writer-session.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g80-private-writer-session
+  cancel-in-progress: true
+
+jobs:
+  private-session:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G80_EVIDENCE_DIR: evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert candidate HEAD, prereg and unmodified Writer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 42d60372fb71e574e1271f14402b5ca325ed1147 HEAD
+          git merge-base --is-ancestor 85210966da6046b69ecfa4685c71af3ae693087b HEAD
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 71bbc8a989d1da79d0f0dbe44f7f5c39f3304854
+          git rev-parse HEAD > evidence/head.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact candidate and syntax-check instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m py_compile research/j24g80_owned_writer_session.py
+          python -m pip freeze > evidence/pip-freeze.txt
+      - name: Complete physical Builder/Writer A/B/B/A, checkpoint and crash-tail court
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g80_owned_writer_session.py 2>&1 | tee evidence/j24g80-run.log
+          test -s evidence/j24g80-result.json
+      - name: Independent no-CMPCT wire, blob, each intermediate footer and corrupt-tail audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24g80_wire_referee.py
+          python research/j24g80_wire_referee.py evidence/j24g80-result.json 8192-middle \
+            evidence/j24g80-8192-middle-public-valid.cmpct \
+            evidence/j24g80-8192-middle-owned-valid.cmpct \
+            evidence/j24g80-8192-middle-owned-corrupt-tail.cmpct \
+            | tee evidence/j24g80-8192-independent-wire.json
+          python research/j24g80_wire_referee.py evidence/j24g80-result.json 32768-tail \
+            evidence/j24g80-32768-tail-public-valid.cmpct \
+            evidence/j24g80-32768-tail-owned-valid.cmpct \
+            evidence/j24g80-32768-tail-owned-corrupt-tail.cmpct \
+            | tee evidence/j24g80-32768-independent-wire.json
+      - name: Preserve raw receipts even on failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g80-private-writer-session-receipts
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
