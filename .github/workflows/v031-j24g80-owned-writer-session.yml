@@ -66,6 +66,21 @@ jobs:
           set -o pipefail
           python research/j24g80_owned_writer_session.py 2>&1 | tee evidence/j24g80-run.log
           test -s evidence/j24g80-result.json
+      - name: Independent no-CMPCT wire, blob, each intermediate footer and corrupt-tail audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile research/j24g80_wire_referee.py
+          python research/j24g80_wire_referee.py evidence/j24g80-result.json 8192-middle \
+            evidence/j24g80-8192-middle-public-valid.cmpct \
+            evidence/j24g80-8192-middle-owned-valid.cmpct \
+            evidence/j24g80-8192-middle-owned-corrupt-tail.cmpct \
+            | tee evidence/j24g80-8192-independent-wire.json
+          python research/j24g80_wire_referee.py evidence/j24g80-result.json 32768-tail \
+            evidence/j24g80-32768-tail-public-valid.cmpct \
+            evidence/j24g80-32768-tail-owned-valid.cmpct \
+            evidence/j24g80-32768-tail-owned-corrupt-tail.cmpct \
+            | tee evidence/j24g80-32768-independent-wire.json
       - name: Preserve raw receipts even on failures
         if: always()
         uses: actions/upload-artifact@v4
