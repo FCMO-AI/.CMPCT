@@ -1,0 +1,81 @@
+name: J24I68 source-identical ZIP drift falsifier
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/j24i68-zip-drift.yml"
+      - "research/j24i68_zip_proxy_referee.py"
+      - "tests/test_j24i68_zip_proxy_referee.py"
+      - "docs/v031-research/2026-10-30-j24i68-zip-drift*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: j24i68-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detached-provider-referee:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download exact frozen GitHub Actions provider artifact ZIPs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24i68-input
+          for pair in \
+            12981944713:cmpct_p835_firstfailure_12981944713.zip \
+            12986955317:cmpct_source_identical_835_12986955317.zip \
+            12988780098:cmpct_source_identical_837_12988780098.zip; do
+            id="${pair%%:*}"
+            filename="${pair#*:}"
+            curl --fail --show-error --silent --location --retry 2 \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GH_REPO}/actions/artifacts/${id}/zip" \
+              --output "j24i68-input/${filename}"
+          done
+          python - <<'PY'
+          import pathlib, zipfile
+          p=pathlib.Path('j24i68-input')
+          with zipfile.ZipFile(p/'J24I65_original_provider_bundle.zip','w',compression=zipfile.ZIP_STORED) as z:
+              for f in sorted(p.glob('cmpct_*.zip')):
+                  z.write(f,arcname=f.name)
+          PY
+      - name: Run positive controls and hostile-refusal court (never modify promotion thresholds)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export J24I68_BUNDLE=j24i68-input/J24I65_original_provider_bundle.zip
+          python tests/test_j24i68_zip_proxy_referee.py
+          python research/j24i68_zip_proxy_referee.py "${J24I68_BUNDLE}" \
+            --selftest --output j24i68-input/J24I68_source_identical_proxy_result.json
+          python - <<'PY'
+          import json
+          r=json.load(open('j24i68-input/J24I68_source_identical_proxy_result.json'))
+          assert not r['all_three_h1_survive'], 'Preregistered H1 unexpectedly changed; investigate scientifically'
+          for name,datum in r['results'].items():
+              v=datum['verdict']
+              print(name,'pairs',v['both_above_1ms'],
+                    'agreement',v['same_direction_fraction'],
+                    'rho',v['spearman_ms'],
+                    'h1',v['preregistered_h1_survives'])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: j24i68-original-provider-codrift
+          path: j24i68-input/
+          retention-days: 30
