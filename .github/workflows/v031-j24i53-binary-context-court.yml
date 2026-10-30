@@ -1,0 +1,110 @@
+# ci-lane: deep
+# J24I53: source-identical lower-rung Builder-context court, not a release gate.
+name: J24I53 Binary Builder Process-Context A/A
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24i53-binary-context-aa-20261030
+    paths:
+      - research/j24i53_binary_context_court.py
+      - .github/workflows/v031-j24i53-binary-context-court.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i53-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  source-identical-context-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Assert exact scientific source and preregistered ordering
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 95134f0470baac94df700c8088c04caabd05c883 HEAD
+          git merge-base --is-ancestor 0b80ecb9b1742a6c20756f4c9e8e097103881cb4 HEAD
+          git merge-base --is-ancestor 1c073d024111be00a1246e67b1138a3d4232b3b9 HEAD
+          python -m py_compile research/j24i53_binary_context_court.py
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install original Builder and native codec dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd libsndfile1
+          python -m pip install -e '.[audio,test]'
+          python - <<'PY'
+          from cmpct.native_codec import _library_path
+          from pathlib import Path
+          import cmpct
+          print("source",cmpct.__file__)
+          print("physical-native",str(Path(_library_path()).resolve()))
+          PY
+      - name: Run precommitted source-identical FRESH/PREFIX and FRESH/FRESH controls
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python research/j24i53_binary_context_court.py \
+            --out evidence/j24i53-context-result.json --reps 3 \
+            | tee evidence/j24i53-stdout.txt
+      - name: Independently validate raw observation shape and physical retained bytes
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,os,statistics
+          from pathlib import Path
+          x=json.loads(Path('evidence/j24i53-context-result.json').read_text())
+          assert x['schema']=='cmpct-j24i53-context-court-v1'
+          assert x['evidence_head']==os.environ['EVIDENCE_HEAD']
+          assert x['preregistered_at_commit']=='95134f0470baac94df700c8088c04caabd05c883'
+          records=x['observations']
+          assert len(records)==16
+          assert len([r for r in records if r['court']=='CONTEXT'])==8
+          assert len([r for r in records if r['court']=='SHAM'])==8
+          assert len({r['native_sha256'] for r in records})==1
+          native=Path('evidence')/x['physical_native']['file']
+          assert hashlib.sha256(native.read_bytes()).hexdigest()==x['native_sha256']
+          assert all(len(r['samples'])==3 for r in records)
+          assert all(len(r['prefix'])==(3 if r['context']=='PREFIX' else 0) for r in records)
+          assert all(statistics.median(z['wall_ms'] for z in r['samples'])==r['median_wall_ms'] for r in records)
+          assert all(statistics.median(z['cpu_ms'] for z in r['samples'])==r['median_cpu_ms'] for r in records)
+          physical=Path('evidence')/x['physical_archive']['file']
+          assert physical.stat().st_size==x['physical_archive']['size']
+          assert hashlib.sha256(physical.read_bytes()).hexdigest()==x['physical_archive']['sha256']
+          assert {z['archive_sha256'] for r in records for z in r['samples']}=={x['physical_archive']['sha256']}
+          assert {z['archive_bytes'] for r in records for z in r['samples']}=={x['physical_archive']['size']}
+          assert x['decision'] in ('CONTEXT_COST_SUPPORTED','CONTEXT_COST_NOT_REPRODUCED',
+                    'AMBIGUOUS_SHAM_DRIFT','AMBIGUOUS_SIGN_OR_CPU')
+          print('INDEPENDENT_STRUCTURE_PASS',x['decision'])
+          PY
+          python research/j24i53_independent_receipt_referee.py \
+            --result evidence/j24i53-context-result.json \
+            --archive evidence/j24i53-binary-final.cmpct \
+            --native evidence/j24i53-native.so \
+            --out evidence/j24i53-independent-audit.json
+          sha256sum evidence/j24i53-context-result.json evidence/j24i53-binary-final.cmpct \
+            evidence/j24i53-native.so evidence/j24i53-independent-audit.json \
+            research/j24i53_binary_context_court.py research/j24i53_independent_receipt_referee.py \
+            > evidence/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: cmpct-j24i53-context-${{ env.EVIDENCE_HEAD }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
