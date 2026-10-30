@@ -9,6 +9,7 @@ on:
       - agent/phased1-v031-j24g62-crossgen-rename-replay-oracle-20261030
     paths:
       - 'research/j24g62_crossgen_rename_oracle.py'
+      - 'research/j24g62_independent_receipt_audit.py'
       - 'research/j24g62b_noopcopy_control.py'
       - 'docs/v031-research/*j24g62*'
       - '.github/workflows/v031-j24g62-crossgen-rename-oracle.yml'
@@ -17,6 +18,7 @@ on:
       - agent/phased1-v031-j24g60-public-chain-coldopen-20261030
     paths:
       - 'research/j24g62_crossgen_rename_oracle.py'
+      - 'research/j24g62_independent_receipt_audit.py'
       - 'research/j24g62b_noopcopy_control.py'
       - 'docs/v031-research/*j24g62*'
       - '.github/workflows/v031-j24g62-crossgen-rename-oracle.yml'
