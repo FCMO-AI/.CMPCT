@@ -142,10 +142,10 @@ def verify_pair(path, expected, tags, strict_xattrs):
         if strict_xattrs:
             projection = xattr_projection(candidate.index)
             for name, values in tags.items():
-                assert projection.get(name, {}).get(KEY.encode()) == values[KEY], name
+                assert projection.get(name, {}).get(KEY) == values[KEY], name
             for name in expected:
                 if name not in tags:
-                    assert KEY.encode() not in projection.get(name, {}), name
+                    assert KEY not in projection.get(name, {}), name
             with tempfile.TemporaryDirectory(prefix="j24g73-extract-") as td:
                 output = Path(td)
                 candidate.extractall(output, require_xattrs=True)
@@ -193,7 +193,7 @@ def make_archive(root, family, strict_xattrs):
         with CMPCT(archive) as reader:
             projection = xattr_projection(reader.index)
             for name, record in tags.items():
-                assert projection.get(name, {}).get(KEY.encode()) == record[KEY]
+                assert projection.get(name, {}).get(KEY) == record[KEY]
     if family == "delete":
         for i in range(DEPTH):
             name = f"f{i:04d}.dat"
