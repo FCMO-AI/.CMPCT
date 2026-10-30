@@ -1,0 +1,113 @@
+# ci-lane: fast
+name: CMPCT J24G03 Git-head worktree candidate source custody
+on:
+  pull_request:
+    paths:
+      - 'tools/check_v031_candidate_fingerprint.py'
+      - 'docs/V031_CANDIDATE_FINGERPRINT.json'
+      - 'tests/test_v031_head_worktree_custody.py'
+      - '.github/workflows/v031-j24g03-git-head-custody.yml'
+      - 'docs/v031-research/2026-10-28-j24g03*'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-custody:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install isolated test prerequisites
+        run: python -m pip install pytest
+      - name: Prove source-to-HEAD attribution on real Git and synthetic adversaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24g03-artifacts
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m pytest -q --noconftest tests/test_v031_head_worktree_custody.py \
+            2>&1 | tee j24g03-artifacts/worktree-custody-pytest.txt
+          python tools/check_v031_candidate_fingerprint.py \
+            --output j24g03-artifacts/v031-candidate-source.json \
+            2>&1 | tee j24g03-artifacts/source-cli.log
+          python - <<'PY'
+          import json, pathlib, os
+          f=pathlib.Path("j24g03-artifacts/v031-candidate-source.json")
+          j=json.loads(f.read_text())
+          assert j["source_sha"] == os.environ["EVIDENCE_HEAD"]
+          assert j["files"] == len(j["paths"])
+          assert len(set(j["paths"])) == len(j["paths"])
+          assert all("/target/" not in p for p in j["paths"] if p.startswith("native/"))
+          print("J24G03_CANDIDATE_SOURCE_HEAD_BOUND=PASS",j["files"],j["fingerprint"])
+          PY
+      - name: Diagnose cross-platform Git blob versus checked-out source bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,pathlib,subprocess
+          names = [
+              "README.md",
+              "pyproject.toml",
+              "docs/V031_CANDIDATE_FINGERPRINT.json",
+              "tools/check_v031_candidate_fingerprint.py",
+              "tests/test_v031_head_worktree_custody.py",
+              ".github/workflows/v031-j24g03-git-head-custody.yml",
+          ]
+          rows = []
+          for name in names:
+              git_bytes = subprocess.check_output(["git", "show", "HEAD:" + name])
+              checkout = pathlib.Path(name).read_bytes()
+              rows.append({
+                  "path": name,
+                  "git_sha256": hashlib.sha256(git_bytes).hexdigest(),
+                  "worktree_sha256": hashlib.sha256(checkout).hexdigest(),
+                  "equal": git_bytes == checkout,
+                  "crlf_only": git_bytes != checkout and (
+                      git_bytes.replace(b"\r\n", b"\n") ==
+                      checkout.replace(b"\r\n", b"\n")
+                  ),
+                  "git_size": len(git_bytes),
+                  "worktree_size": len(checkout),
+              })
+          autocrlf = subprocess.run(
+              ["git", "config", "--get", "core.autocrlf"],
+              capture_output=True, text=True,
+          )
+          output = {
+              "source_head": subprocess.check_output(
+                  ["git", "rev-parse", "HEAD"], text=True,
+              ).strip(),
+              "git_core_autocrlf": autocrlf.stdout.strip() or None,
+              "samples": rows,
+          }
+          pathlib.Path("j24g03-artifacts/git-vs-worktree-samples.json").write_text(
+              json.dumps(output, indent=2) + "\n"
+          )
+          print("J24G03D_GIT_VS_WORKTREE=", json.dumps(output, sort_keys=True))
+          PY
+      - name: Preserve source-custody receipts on failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g03-custody-${{ matrix.os }}-${{ github.sha }}
+          path: j24g03-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
