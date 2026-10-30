@@ -1,0 +1,86 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: J24I47 Global Integrity Observation Bound
+on:
+  pull_request:
+    paths:
+      - 'research/j24i47/**'
+      - 'docs/v031-research/*j24i47*'
+      - '.github/workflows/v031-j24i47-integrity-bound.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i47-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  independent-integrity-bound:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pin exact research source and inherited physical generation metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p j24i47-evidence
+          git rev-parse HEAD | tee j24i47-evidence/source-head.txt
+          sha256sum research/j24i47/* | tee j24i47-evidence/source-files-sha256.txt
+          echo '72af642c6193587ca226e2be40e9fc05d7e042fbe125069cad1261b6972d9111  research/j24i47/source_j24i46_generation.json' | sha256sum --check
+      - name: Execute exact local-vs-global integrity witness and charged metadata floor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24i47/j24i47_integrity_bound.py \
+            --manifest research/j24i47/source_j24i46_generation.json \
+            --out j24i47-evidence/result.json
+          test -s j24i47-evidence/result.json
+      - name: Independently recalculate and reject false global-equivalence credit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, math
+          from pathlib import Path
+          s = json.loads(Path('research/j24i47/source_j24i46_generation.json').read_text())
+          x = json.loads(Path('j24i47-evidence/result.json').read_text())
+          assert x['product_evidence'] is False
+          assert len(x['local_integrity_not_global_integrity']) == 6
+          assert len(x['cost_lower_bounds']) == 6
+          for w in x['local_integrity_not_global_integrity']:
+              assert w['clean'] == {'local_digest': True, 'whole_member_sha256': True}
+              assert w['late_mutant'] == {'local_digest': True, 'whole_member_sha256': False, 'requested_bytes_unchanged': True}
+              assert w['selected_mutant'] == {'local_digest': False, 'whole_member_sha256': False}
+              assert not (w['observed_region'][0] <= w['mutant_unobserved_byte_offset'] < w['observed_region'][1])
+              assert w['member_bytes_not_observed_by_local_check'] > 0
+          for c in x['cost_lower_bounds']:
+              expected_n = math.ceil(s['pcm_bytes_each'] / c['region_bytes'])
+              cost = 32 + 48 * expected_n
+              assert c['region_count'] == expected_n
+              assert c['optimistic_total_stored_overhead_bytes'] == cost
+              assert abs(c['optimistic_overhead_percent_of_existing_flac'] -
+                  100 * cost / s['cases'][c['flac_case']]['flac_bytes']) < 1e-6
+          print('INDEPENDENT AUDIT: 6/6 witness, 6/6 cost rows, semantics separated')
+          PY
+          sha256sum j24i47-evidence/result.json | tee j24i47-evidence/result.sha256
+          tar -czf j24i47-evidence/source-exact-receipt.tar.gz \
+            research/j24i47 j24i47-evidence/result.json \
+            j24i47-evidence/source-head.txt j24i47-evidence/source-files-sha256.txt
+          sha256sum j24i47-evidence/source-exact-receipt.tar.gz | tee j24i47-evidence/receipt.sha256
+      - name: Preserve source and numeric research receipt or fail closed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i47-integrity-bound-${{ github.run_id }}
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+          path: j24i47-evidence/
