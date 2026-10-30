@@ -2,7 +2,10 @@
 """Read-only, conservative CMPCT *publishing* wheel pathname preflight.
 
 This deliberately rejects *all* PEP 427 .data scheme relocation because
-CMPCT's current official-style wheels do not need it. This is not a validator
+CMPCT's current official-style wheels do not need it. The official wheel
+also permits only CMPCT package files + its one dist-info root; an arbitrary
+root .pth could execute during interpreter startup before installed SHA audit.
+This is not a validator
 for arbitrary standards-compliant wheels, publisher signatures, payload RECORD
 hashes, actual installation outputs, or OS-level race freedom. Compose it with
 validate_macos_wheel_abi.py and real installed/native smoke before publishing.
@@ -49,6 +52,7 @@ def validate(path: str | Path) -> dict[str, object]:
         if len(infos) > MAX_ENTRIES:
             raise ValueError('wheel exceeds entry count bound')
         exact_wheels = 0
+        metadata_roots = set()
         seen = {}
         file_keys = set()
         for info in infos:
@@ -58,7 +62,18 @@ def validate(path: str | Path) -> dict[str, object]:
             # The current CMPCT shipping package has no .data scheme payloads.
             if unicodedata.normalize('NFKC', parts[0]).casefold().endswith('.data'):
                 raise ValueError(f'CMPCT official wheel may not use .data relocation: {info.filename!r}')
-            if len(parts) == 2 and parts[0].endswith('.dist-info') and parts[1] == 'WHEEL':
+            # J24P09b: a standards-compliant root .pth can execute before
+            # post-install attestation, even if every cmpct/ file still matches.
+            # This narrow CMPCT-only allowlist avoids that extra execution root.
+            root = parts[0]
+            expected_metadata_root = f"cmpct-{path.name.split('-')[1]}.dist-info" if len(path.name.split('-')) >= 3 else ""
+            if root == 'cmpct':
+                pass
+            elif root == expected_metadata_root:
+                metadata_roots.add(root)
+            else:
+                raise ValueError(f'wheel entry outside CMPCT publication roots: {info.filename!r}')
+            if len(parts) == 2 and root == expected_metadata_root and parts[1] == 'WHEEL':
                 exact_wheels += 1
             key = tuple(unicodedata.normalize('NFD', p).casefold() for p in parts)
             if key in seen:
@@ -66,15 +81,15 @@ def validate(path: str | Path) -> dict[str, object]:
             seen[key] = info.filename
             if not info.is_dir():
                 file_keys.add(key)
-        if exact_wheels != 1:
-            raise ValueError(f'expected one root .dist-info/WHEEL: {exact_wheels}')
+        if exact_wheels != 1 or len(metadata_roots) != 1:
+            raise ValueError(f'expected exactly one matching CMPCT .dist-info/WHEEL root: {exact_wheels}')
         for key, path_name in seen.items():
             for n in range(1, len(key)):
                 ancestor = key[:n]
                 if ancestor in file_keys:
                     raise ValueError(f'regular member shadows destination directory: {seen[ancestor]!r} vs {path_name!r}')
         return {'result': 'PASS', 'wheel': path.name, 'members': len(infos),
-                'policy': 'CMPCT-specific portable no-.data publication profile; no installed-state attestation'}
+                'policy': 'CMPCT-specific two-root no-.data publication profile; no installed-state attestation'}
 
 
 def main() -> int:

@@ -11,6 +11,7 @@ on:
       - "native/cmpct-core/**"
       - "tests/installed_native_package_smoke.py"
       - "tests/test_installed_cmpct_wheel.py"
+      - "tests/test_cmpct_wheel_profile.py"
       - "tools/attest_installed_cmpct_wheel.py"
       - "tools/validate_cmpct_wheel_profile.py"
       - "tools/validate_macos_wheel_abi.py"
@@ -54,7 +55,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > "$RUNNER_TEMP/latest-head-files.txt"
           cat "$RUNNER_TEMP/latest-head-files.txt"
-          if grep -Eq '^(pyproject\.toml|MANIFEST\.in|native/cmpct-core/|tests/installed_native_package_smoke\.py|tests/test_installed_cmpct_wheel\.py|tools/(attest_installed_cmpct_wheel|validate_cmpct_wheel_profile|validate_macos_wheel_abi)\.py|\.github/workflows/installed-native-package\.yml)' "$RUNNER_TEMP/latest-head-files.txt"; then
+          if grep -Eq '^(pyproject\.toml|MANIFEST\.in|native/cmpct-core/|tests/installed_native_package_smoke\.py|tests/test_installed_cmpct_wheel\.py|tests/test_cmpct_wheel_profile\.py|tools/(attest_installed_cmpct_wheel|validate_cmpct_wheel_profile|validate_macos_wheel_abi)\.py|\.github/workflows/installed-native-package\.yml)' "$RUNNER_TEMP/latest-head-files.txt"; then
             echo 'run_package=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_package=false' >> "$GITHUB_OUTPUT"
@@ -81,6 +82,7 @@ jobs:
       - name: Verify detached installed-package attestor controls
         shell: bash
         run: |
+          python -m unittest discover -s tests -p test_cmpct_wheel_profile.py -v
           python -m unittest discover -s tests -p test_installed_cmpct_wheel.py -v
       - name: Build source distribution only
         shell: bash

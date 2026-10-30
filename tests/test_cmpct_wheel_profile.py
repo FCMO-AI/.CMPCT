@@ -59,7 +59,7 @@ class StrictProfile(unittest.TestCase):
             with self.assertRaises(ValueError):validate(self.wheel)
 
     def test_01_original(self):self.check()
-    def test_02_disjoint(self):self.check([('other/data.bin',b'ok')])
+    def test_02_disjoint_root_now_rejected(self):self.check([('other/data.bin',b'ok')],False)
     def test_03_ordinary_package_asset(self):self.check([('cmpct/assets/metadata.data',b'ok')])
     def test_04_reject_purelib(self):self.check([(STEM+'.data/purelib/'+NATIVE,b'inert')],False)
     def test_05_reject_platlib(self):self.check([(STEM+'.data/platlib/'+LOADER,b'inert')],False)
@@ -70,7 +70,7 @@ class StrictProfile(unittest.TestCase):
     def test_10_reject_data_case(self):self.check([(STEM+'.DATA/purelib/other/unused',b'inert')],False)
     def test_11_reject_data_before(self):self.check([(STEM+'.data/purelib/'+NATIVE,b'inert')],False,True)
     def test_12_reject_casefold(self):self.check([(LOADER.upper(),b'inert')],False)
-    def test_13_reject_unicode_nfd(self):self.check([('pkg/caf\u00e9.py',b'a'),('pkg/cafe\u0301.py',b'b')],False)
+    def test_13_reject_unicode_nfd(self):self.check([('cmpct/caf\u00e9.py',b'a'),('cmpct/cafe\u0301.py',b'b')],False)
     def test_14_reject_parent(self):self.check([('cmpct/../'+LOADER,b'inert')],False)
     def test_15_reject_dot(self):self.check([('cmpct/./x',b'inert')],False)
     def test_16_reject_empty_segment(self):self.check([('cmpct//x',b'inert')],False)
@@ -78,12 +78,29 @@ class StrictProfile(unittest.TestCase):
     def test_18_reject_trailing_dot(self):self.check([('cmpct/x.',b'inert')],False)
     def test_19_reject_win_device(self):self.check([('cmpct/COM1.ext',b'inert')],False)
     def test_20_reject_win_device_unicode(self):self.check([('cmpct/COM\u00b9.ext',b'inert')],False)
-    def test_21_reject_file_ancestor(self):self.check([('file',b'inert'),('file/child',b'inert')],False)
+    def test_21_reject_file_ancestor(self):self.check([('cmpct/file',b'inert'),('cmpct/file/child',b'inert')],False)
     def test_22_reject_duplicate_wheel(self):self.check([('other-1.0.dist-info/WHEEL',b'Wheel-Version: 1.0\n')],False)
-    def test_23_accept_unicode_nonalias(self):self.check([('pkg/caf\u00e9.py',b'a'),('pkg/cafe.py',b'b')])
+    def test_23_accept_unicode_nonalias(self):self.check([('cmpct/caf\u00e9.py',b'a'),('cmpct/cafe.py',b'b')])
     def test_26_win32_dos_device_space_before_extension(self):self.check([('cmpct/CON .txt',b'inert')],False)
     def test_27_win32_com_port_space_before_extension(self):self.check([('cmpct/COM1 .txt',b'inert')],False)
     def test_28_win32_auxiliary_device_multiple_spaces(self):self.check([('cmpct/AUX  .txt',b'inert')],False)
+    def test_29_reject_root_pth_startup_execution(self):
+        # Real pip host falsifier J24P09b observed this executed pre-import
+        # while the earlier post-install cmpct/-only attestor returned PASS.
+        self.check([('cmpct_inert_hook.pth',b'import builtins; builtins.TEST=1\n')],False)
+
+    def test_30_reject_root_sitecustomize(self):
+        self.check([('sitecustomize.py',b'INERT=1\n')],False)
+
+    def test_31_reject_root_zip_pth_casefold(self):
+        self.check([('CMPCT_INERT.PTH',b'import builtins; builtins.TEST=1\n')],False)
+
+    def test_32_reject_other_distribution_metadata(self):
+        self.check([('other-1.0.dist-info/METADATA',b'anything')],False)
+
+    def test_33_accept_package_nonalias_assets(self):
+        self.check([('cmpct/assets/plain.bin',b'asset'),('cmpct/assets/caf\u00e9.txt',b'caf')])
+
     def test_24_cli_rejects(self):
         fixture(self.wheel,[(STEM+'.data/data/other/unused',b'no')]);r=subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/'tools/validate_cmpct_wheel_profile.py'),str(self.wheel)],capture_output=True,text=True)
         self.assertEqual(r.returncode,1)
