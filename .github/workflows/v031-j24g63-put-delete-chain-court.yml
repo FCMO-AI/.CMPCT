@@ -26,7 +26,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-j24g63-${{ github.event.pull_request.number || github.ref }}
+  # Push and PR for the same head share one compute lane, avoiding duplicate 3-host runs.
+  group: cmpct-j24g63-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
