@@ -1,0 +1,95 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: J24I46 FLAC Seek Semantics Oracle
+on:
+  pull_request:
+    paths:
+      - 'research/j24i46/**'
+      - 'docs/v031-research/*j24i46*'
+      - '.github/workflows/v031-j24i46-seek-oracle.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: j24i46-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  flac-seek-falsifier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm latest HEAD is J24I46-scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff-tree --no-commit-id --name-only -r HEAD > j24i46-scope.txt
+          if grep -Eq '^(research/j24i46/|docs/v031-research/.*j24i46|[.]github/workflows/v031-j24i46-seek-oracle[.]yml)' j24i46-scope.txt; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+      - name: Install frozen oracle dependencies
+        if: steps.scope.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y flac libsndfile1
+          python -m pip install 'numpy==2.3.5' 'soundfile==0.13.1'
+          git rev-parse HEAD | tee j24i46-head.txt
+          sha256sum research/j24i46/*.py | tee j24i46-instrument-sha256.txt
+      - name: Generate 32MiB PCM16/FLAC sources with independent reconstruction
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          python research/j24i46/j24i46_seek.py generate --out j24i46-evidence
+          test -s j24i46-evidence/generation.json
+      - name: Run exact-source, startup-separated, repeated A/B oracle
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          python research/j24i46/j24i46_seek.py run --out j24i46-evidence --cycles 12
+          python research/j24i46/summarize.py --out j24i46-evidence --cycles 12
+          test -s j24i46-evidence/result.json
+          test "$(wc -l < j24i46-evidence/raw-observations.jsonl)" -eq 288
+      - name: Disprove seek-only equivalence to full logical SHA
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          python research/j24i46/j24i46_integrity_falsifier.py --out j24i46-evidence
+          test -s j24i46-evidence/integrity_falsifier.json
+      - name: Persist exact physical, source and raw numeric receipts
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          find j24i46-evidence -type f ! -name '*.wav' -print0 | sort -z | xargs -0 sha256sum > j24i46-manifest.sha256
+          tar -czf j24i46-receipt.tar.gz research/j24i46 j24i46-evidence/generation.json j24i46-evidence/raw.json j24i46-evidence/raw-observations.jsonl j24i46-evidence/result.json j24i46-evidence/integrity_falsifier.json j24i46-evidence/stereo.flac j24i46-evidence/stereo-mutant.flac j24i46-evidence/mono.flac j24i46-head.txt j24i46-scope.txt j24i46-instrument-sha256.txt j24i46-manifest.sha256
+          test -s j24i46-receipt.tar.gz
+          sha256sum j24i46-receipt.tar.gz | tee j24i46-receipt-sha256.txt
+      - name: Preserve independent research evidence or fail closed
+        if: ${{ always() && steps.scope.outputs.run == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i46-source-exact-${{ github.run_id }}
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+          path: |
+            j24i46-*.txt
+            j24i46-*.sha256
+            j24i46-receipt.tar.gz
+            j24i46-evidence/result.json
+            j24i46-evidence/generation.json
+            j24i46-evidence/integrity_falsifier.json
+            j24i46-evidence/raw.json
