@@ -27,7 +27,16 @@ def make_wheel(path, extras=(), order='after'):
     rows = []
     with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as out:
         for name, data in items:
-            out.writestr(name, data)
+            # Preserve actual raw ZIP backslash spelling on Windows; ZipInfo
+            # constructor otherwise silently turns it into a slash.
+            if '\\' in name:
+                entry=zipfile.ZipInfo(name)
+                entry.filename=name
+                entry.orig_filename=name
+                entry.compress_type=zipfile.ZIP_DEFLATED
+                out.writestr(entry, data)
+            else:
+                out.writestr(name, data)
             sha = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b'=').decode('ascii')
             rows.append((name, 'sha256=' + sha, str(len(data))))
         record_name = DIST + '.dist-info/RECORD'
