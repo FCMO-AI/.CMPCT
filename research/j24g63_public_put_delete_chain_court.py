@@ -31,13 +31,22 @@ KINDS = ("put", "delete")
 BLOCKS = 4
 EXPECTED_PARENT = "fb5d96cdb8855fe3e01868792e65b79d3d61661d"
 PREREG = "aa550b7a928dc9a34d363665713379004e331270"
+AMENDMENT = "0c3511f8d2f0b8dc02e4d37992919849c069bdf3"
 
 
 def content(tag: str, i: int) -> bytes:
     return hashlib.sha256(f"cmpct-j24g63-{tag}-{i}".encode()).digest() * 2
 
 
-def signed_ledger(path: Path, expected_kind: str, depth: int) -> list[dict]:
+def target_names(kind: str, n: int) -> list[str]:
+    """Prospectively spread owner paths over the full initial sorted namespace."""
+    total = n if kind == "put" else n + 63
+    result = [f"f{((2*i + 1)*total)//126:04d}.dat" for i in range(63)]
+    assert len(set(result)) == 63 and all(int(x[1:5]) < total for x in result)
+    return result
+
+
+def signed_ledger(path: Path, expected_kind: str, depth: int, names: list[str]) -> list[dict]:
     """Separate MessagePack/Zstd footer decoding, do not import Reader's parser."""
     with CMPCT(path) as ar:
         pos = int(ar.latest_footer_pos)
@@ -80,7 +89,7 @@ def signed_ledger(path: Path, expected_kind: str, depth: int) -> list[dict]:
                         "payload_sha256": digest.hex(), "stored_payload_bytes": comp_len})
             pos = prev
     assert len(out) == depth, (len(out), depth)
-    expected_names = [f"f{i:04d}.dat" for i in reversed(range(depth))]
+    expected_names = list(reversed(names[:depth]))
     assert [x["name"] for x in out] == expected_names
     return out
 
@@ -116,15 +125,17 @@ def build_kind(kind: str, n: int, stage: Path, evidence: Path) -> dict:
     Builder(source, workers=1, reproducible=True).build(archive)
     update_dir = stage / f"updates-{kind}-{n}"
     update_dir.mkdir()
+    names = target_names(kind, n)
     snaps = {}
     for i in range(63):
+        target = names[i]
         if kind == "put":
             updated = update_dir / f"updated-{i:04d}.dat"
             updated.write_bytes(content("updated", i))
-            result = tx.append_update(archive, f"f{i:04d}.dat", updated)
-            assert result["member"] == f"f{i:04d}.dat"
+            result = tx.append_update(archive, target, updated)
+            assert result["member"] == target
         else:
-            tx.append_delete(archive, f"f{i:04d}.dat")
+            tx.append_delete(archive, target)
         depth = i + 1
         if depth not in DEPTHS:
             continue
@@ -139,12 +150,12 @@ def build_kind(kind: str, n: int, stage: Path, evidence: Path) -> dict:
                               checkpoint_index=index)
         expected = n if kind == "put" else n + 63 - depth
         semantics = verify_pair(chain, checkpoint, expected, depth)
-        ledger = signed_ledger(chain, kind, depth)
+        ledger = signed_ledger(chain, kind, depth, names)
         assert len(parent.footer_chain(chain)) == depth + 1
         assert len(parent.footer_chain(checkpoint)) == 1
         snapshots = {
             "kind": kind, "n": n, "depth": depth, "expected_rows": expected,
-            "semantics": semantics, "wire": ledger,
+            "selected_paths": names[:depth], "semantics": semantics, "wire": ledger,
             "paths": {"chain": str(chain), "checkpoint": str(checkpoint)},
             "archive_bytes": {"chain": chain.stat().st_size,
                               "checkpoint": checkpoint.stat().st_size},
@@ -173,6 +184,8 @@ def main() -> None:
     assert subprocess.run(["git", "merge-base", "--is-ancestor", EXPECTED_PARENT, "HEAD"],
                           cwd=root).returncode == 0
     assert subprocess.run(["git", "merge-base", "--is-ancestor", PREREG, "HEAD"],
+                          cwd=root).returncode == 0
+    assert subprocess.run(["git", "merge-base", "--is-ancestor", AMENDMENT, "HEAD"],
                           cwd=root).returncode == 0
     identity = parent.verify_source()
     output = Path(os.environ.get("J24G63_RESULT", "evidence/j24g63-result.json"))
