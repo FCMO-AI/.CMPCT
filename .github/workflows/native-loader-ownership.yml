@@ -110,7 +110,7 @@ jobs:
                   "first_and_reinstall_installed_sha_equal_to_wheel_member":True,
                   "source_head":receipts[0]["source_head"],
                   "claim_scope":"source-exact wheel bytes and installed library on this host"}
-          Path("native-loader-wheel-package.json").write_text(json.dumps(record,indent=2,sort_keys=True)+"\\n")
+          Path("native-loader-wheel-package.json").write_text(json.dumps(record,indent=2,sort_keys=True))
           print("wheel ZIP member and two installed native SHA identities: PASS", member_sha)
           PY
       - name: Preserve source-head bound package receipt
