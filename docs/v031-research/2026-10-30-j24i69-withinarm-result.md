@@ -45,6 +45,10 @@ The within-arm flag is not a reliable automatic explanation for official reds:
 
 Conversely, #835 second contained 7 non-red CMPCT cells with a same-arm crossing. Neither a positive nor negative within-arm placebo is sufficient to classify official pairwise effects as engine regressions or host noise. **All seven historical official failures remain FAILURES under their original evaluator**. A passing #837 does not retroactively erase either #835 failing run.
 
+### Stronger negative: even two independently red A/B blocks do not identify a source regression
+
+The same original source comparison shows **4 of the 7 official red cells** also breach the numerical positive threshold *independently in both matching A and B blocks* (1/2 first #835, 3/5 second #835). The clearest counterexample is the same `nested/cli/create` case: the A-block pair differs by **+7.939105ms / +11.172%** and the B-block pair by **+7.328555ms / +10.077%**, despite zero product/benchmark source changes. Thus merely requiring an official red to reproduce in both A/B blocks cannot prove a causal source regression either. This **does not erase the release veto**; it narrows what block-to-block repeatability can justify. Worktree path, binary execution identity and environment/candidate label remain possible unisolated causes. No prospective causal randomization was performed.
+
 ## What this establishes and does not establish
 
 **Measured/recomputed:** at least 19 of 192 same-source CMPCT within-arm effects in the three fixed original trials exceeded the *magnitude* of the official numerical timing envelope, without any source modification between the two sweeps of the same arm. This narrows the claim that one within-run observed temporal effect can be read as a purely source-causal effect. It provides a useful cheapest diagnostic before costly new candidate implementation.
@@ -53,7 +57,7 @@ Conversely, #835 second contained 7 non-red CMPCT cells with a same-arm crossing
 
 ## Method validation and adversarial checks
 
-The reusable referee has 14 independent synthetic fixture tests covering positive admission, strict digest/source/corpus/schema validation, mismatched archive sizes, non-finite/nonpositive/string time, duplicate ZIP names, omitted sweeps and directional non-equivalence of magnitude flags and release red. All 14 passed locally. The original full artifact calculation passed and output all 384 effects plus 96 official effects. A new hosted [J24I69 workflow](../../.github/workflows/j24i69-intraarm-placebo.yml) must run on the exact HEAD to earn provider replay credit. Until hosted execution finishes, only local detached calculations and inherited provider truth are claimed.
+The reusable referee has 15 independent synthetic fixture tests covering positive admission, strict digest/source/corpus/schema validation, mismatched archive sizes, non-finite/nonpositive/string time, duplicate ZIP names, omitted sweeps and directional non-equivalence of magnitude flags and release red. All 15 passed locally. The original full artifact calculation passed and output all 384 effects plus 96 official effects. A new hosted [J24I69 workflow](../../.github/workflows/j24i69-intraarm-placebo.yml) must run on the exact HEAD to earn provider replay credit. Until hosted execution finishes, only local detached calculations and inherited provider truth are claimed.
 
 No new CMPCT benchmark execution, no product bytes, no codec invocation, no new functional claims, no threshold changes, no shipping acceptance.
 
