@@ -165,3 +165,60 @@ def test_same_name_different_inode_after_ctypes_load_rejected(repos):
     ch = _commit(candidate)
     with pytest.raises(RuntimeError, match='native binary not mapped'):
         court.attest(candidate, base, ch, bh, receipt)
+
+
+def test_post_maps_rebind_cannot_publish_a_different_native_sha(repos, monkeypatch):
+    """Deterministic false-attestation witness: source A stays mapped, pathname becomes B.
+
+    The test-only injection executes after /proc/self/maps matched the original
+    dev/inode and immediately before the SHA field is constructed.  It neither
+    depends on racing a clock nor changes normal product or benchmark operation.
+    On the inherited pathname-reopen tool this test FAILS: the candidate reports
+    the base surrogate digest as its own mapped binary digest.
+    """
+    base, candidate, bh, ch, bd, cd, receipt = repos
+    assert bd != cd, "the two actual compiled ELF files must differ"
+    package_dir = candidate / "src" / "cmpct"
+    shutil.copyfile(base / "src" / "cmpct" / "cmpct_core.so", package_dir / "surrogate.so")
+    original_probe = court.PROBE
+    marker = "print(json.dumps({"
+    assert original_probe.count(marker) == 1
+    injection = (
+        'import shutil\n'
+        'if root.name == "candidate":\n'
+        '    old_mapped = package_dir / "cmpct_core.so"\n'
+        '    old_mapped.rename(package_dir / "previously_mapped.so")\n'
+        '    shutil.copyfile(package_dir / "surrogate.so", old_mapped)\n'
+    )
+    monkeypatch.setattr(court, "PROBE", original_probe.replace(marker, injection + marker, 1))
+    # The mapped ELF is still the original candidate. It is never correct to
+    # publish the different surrogate SHA under its mapped dev/inode identity.
+    with pytest.raises(RuntimeError, match="mapped inode|native path rebound|native provenance probe failed"):
+        court.attest(candidate, base, ch, bh, receipt)
+
+
+
+def test_post_digest_native_path_rebind_rejected(repos, monkeypatch):
+    """The final pathname check is independent of the descriptor-bound hash.
+
+    Swap a valid ELF B into the original name *after* A's same-FD digest and
+    post-fstat, but before the final path identity comparison. This is a
+    second controlled schedule, not a timing race or a real product change.
+    """
+    base, candidate, bh, ch, bd, cd, receipt = repos
+    assert bd != cd
+    package_dir = candidate / "src" / "cmpct"
+    shutil.copyfile(base / "src" / "cmpct" / "cmpct_core.so", package_dir / "surrogate.so")
+    original_probe = court.PROBE
+    marker = "        current = os.stat(path, follow_symlinks=False)"
+    assert original_probe.count(marker) == 1
+    injection = (
+        '        if root.name == "candidate":\n'
+        '            import shutil\n'
+        '            old_mapped = package_dir / "cmpct_core.so"\n'
+        '            old_mapped.rename(package_dir / "previously_mapped.so")\n'
+        '            shutil.copyfile(package_dir / "surrogate.so", old_mapped)\n'
+    )
+    monkeypatch.setattr(court, "PROBE", original_probe.replace(marker, injection + marker, 1))
+    with pytest.raises(RuntimeError, match="native path rebound"):
+        court.attest(candidate, base, ch, bh, receipt)
