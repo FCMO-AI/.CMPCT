@@ -73,12 +73,13 @@ def layout(data):
 def onepass(source,us,digest,chain):
  w=time.perf_counter_ns;p=time.process_time_ns
  ts=[w()];ps=[p()]
- root=deco(source,us,1)
- assert sha(root)==digest
+ first=chain[0]
+ root=deco(first[6],first[4],first[3])
+ assert sha(root)==first[5]
  base=msgpack.unpackb(root,raw=False)
  ts.append(w());ps.append(p())
  names=[]
- for off,kind,prev,codec,n,signed,compressed,expected in chain[:64]:
+ for off,kind,prev,codec,n,signed,compressed,expected in chain[1:64]:
   raw=deco(compressed,n,codec)
   assert sha(raw)==signed
   rec=msgpack.unpackb(raw,raw=False)
@@ -112,7 +113,7 @@ def main(folder,out,n=151):
   samples=[]
   for _ in range(12):onepass(source,us,digest,chain)
   for _ in range(n):samples.append(onepass(source,us,digest,chain))
-  phase=['base_decode','64_footer_auth_decode','63_delete_onepass','by_lookup']
+  phase=['checkpoint0_decode','63_delta_auth_decode','63_delete_onepass','by_lookup']
   med={clk:{phase[i]:statistics.median(row[clk][i] for row in samples)
             for i in range(4)} for clk in ('wall_ns','cpu_ns')}
   shares=[r['wall_ns'][2]/sum(r['wall_ns']) for r in samples]
