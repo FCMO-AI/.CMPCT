@@ -1,0 +1,80 @@
+# ci-lane: deep
+name: J24I51 same-inode signed-generation authority court
+
+on:
+  push:
+    branches:
+      - agent/phased3-v031-j24i51-native-journal-generation-20261030
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j24i51-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  generation-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Bind exact source and prospective preregistration
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 28f20a881c9e930f413dae32a4519091de4f82de HEAD
+          git ls-files --error-unmatch research/j24i51_same_inode_generation_court.py
+          git ls-files --error-unmatch native/cmpct-core/Cargo.lock
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install public Writer and native dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd libsndfile1
+          python -m pip install -e '.[test,audio]'
+      - name: Build locked native CLI
+        working-directory: native/cmpct-core
+        run: cargo build --release --locked
+      - name: Run physical signed-generation falsifier
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          J24I51_EVIDENCE=evidence/j24i51 python research/j24i51_same_inode_generation_court.py | tee evidence/j24i51-stdout.txt
+      - name: Independently check physical receipts and original prefix
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p=Path('evidence/j24i51')
+          r=json.loads((p/'result.json').read_text())
+          a=(p/'original-wav.cmpct').read_bytes()
+          b=(p/'same-inode-signed-journal.cmpct').read_bytes()
+          assert r['schema']=='cmpct-j24i51-native-journal-generation-v1'
+          assert r['source_sha']==os.environ['EVIDENCE_HEAD']
+          assert hashlib.sha256(a).hexdigest()==r['original_physical_sha256']
+          assert hashlib.sha256(b).hexdigest()==r['final_physical_sha256']
+          assert len(b)>len(a) and b.startswith(a)
+          assert r['native_verify']['member']!=r['python_verify']['member']
+          assert r['authenticated_delta_depth']==2
+          PY
+          sha256sum evidence/j24i51/original-wav.cmpct evidence/j24i51/same-inode-signed-journal.cmpct evidence/j24i51/result.json research/j24i51_same_inode_generation_court.py > evidence/j24i51/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v6
+        if: success()
+        with:
+          name: cmpct-j24i51-signed-generation-${{ env.EVIDENCE_HEAD }}
+          path: |
+            evidence/j24i51/
+            evidence/j24i51-stdout.txt
+          if-no-files-found: error
+          retention-days: 90
