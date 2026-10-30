@@ -39,31 +39,34 @@ def test_migrated_release_authorities_satisfy_split_receipt_policy() -> None:
         assert C.validate(path) == [], relative
 
 
-def test_authoritative_v2_classifier_is_release_fingerprint_driven() -> None:
-    """A fingerprint mutation must never inherit stale compression/runtime authority.
+def test_v031_candidate_identity_is_admitted_by_unfiltered_fast_ci() -> None:
+    """No mutable v0.30 lock rewrite: exact v0.31 identity is admitted by every PR's fast CI.
 
-    This caught real custody holes: public-surface/disclosure changes could alter the release candidate while the
-    old hand-written classifier skipped authority, and canonical legal metadata from current main could alter the
-    eventual merge tree without invalidating receipt identity. Keep one source of truth: V030_RELEASE_LOCK.json.
+    The historical authoritative-v2 workflow retains a known outer-event and fnmatch
+    scope defect. This test does NOT declare that workflow repaired or release-ready.
     """
-    workflow = (ROOT / ".github/workflows/v030-authoritative-v2-pr.yml").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/tests.yml").read_text(encoding="utf-8")
     doctrine = (ROOT / "docs/CI_SPLIT_RECEIPT_CUSTODY.md").read_text(encoding="utf-8")
-    manifest = json.loads((ROOT / "docs/V030_RELEASE_LOCK.json").read_text(encoding="utf-8"))
-    globs = manifest["fingerprint_globs"]
-
-    assert "docs/V030_RELEASE_LOCK.json" in workflow
-    assert "manifest['fingerprint_globs']" in workflow
-    assert "fnmatch.fnmatchcase" in workflow
-    assert "grep -Eq" not in workflow
-    # Concrete regression witnesses from incidents that exposed drift.
-    assert "docs/PUBLIC_SURFACE.md" in globs
-    assert "tools/check_public_surface.py" in globs
-    assert ".github/workflows/v030-*.yml" in globs
-    assert "COPYRIGHT.md" in globs
-    assert "LICENSING.md" in globs
-    assert "LICENSE-APACHE-2.0-PROPOSED.txt" in globs
-    # The durable zero-history law must keep the cancellation-before-admission failure mode explicit and name the
-    # already-normative regression ratchet rather than requiring this supplemental test to cite itself.
+    historical = (ROOT / ".github/workflows/v030-authoritative-v2-pr.yml").read_text(encoding="utf-8")
+    historical_manifest = json.loads((ROOT / "docs/V030_RELEASE_LOCK.json").read_text(encoding="utf-8"))
+    from tools import check_v031_candidate_fingerprint as candidate
+    manifest = candidate.load_manifest()
+    _identity, covered = candidate.fingerprint(manifest)
+    assert "pull_request:\n" in workflow
+    event_scope = workflow.split("on:", 1)[1].split("permissions:", 1)[0]
+    assert "paths:" not in event_scope and "paths-ignore:" not in event_scope
+    assert "python tools/check_v031_candidate_fingerprint.py" in workflow
+    assert "ref: ${{ env.EVIDENCE_HEAD }}" in workflow
+    assert "test \"$(git rev-parse HEAD)\" = \"$EVIDENCE_HEAD\"" in workflow
+    # Prospective coverage must actually contain the witnesses (not merely advertise globs).
+    required = {
+        "docs/PUBLIC_SURFACE.md", "tools/check_public_surface.py",
+        ".github/workflows/v030-authoritative-v2-pr.yml",
+        "COPYRIGHT.md", "LICENSING.md", "LICENSE-APACHE-2.0-PROPOSED.txt",
+    }
+    assert required.issubset(set(covered))
+    assert "fnmatch.fnmatchcase" in historical
+    assert "docs/PUBLIC_SURFACE.md" not in historical_manifest["fingerprint_globs"]
     assert "Cancellation **before admission is safe only" in doctrine
     assert "tests/test_ci_topology_split_receipts.py" in doctrine
     assert "classifier supersession cannot erase an unmet exact-fingerprint evidence obligation" in doctrine
