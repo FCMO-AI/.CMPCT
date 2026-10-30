@@ -1,3 +1,4 @@
+# ci-lane: fast
 name: J24I68 source-identical ZIP drift falsifier
 on:
   pull_request:
