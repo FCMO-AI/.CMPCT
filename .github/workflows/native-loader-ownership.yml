@@ -90,6 +90,29 @@ jobs:
               assert x["native_roundtrip"]=="pass" and x["injected_match_preload_refused"] is True
           print("same-wheel physical native identity and pre-CDLL refusal: PASS")
           PY
+          "$VENV_PY" - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import zipfile
+          wheels=list(Path("wheelhouse").glob("cmpct-*.whl"))
+          assert len(wheels)==1, wheels
+          wheel=wheels[0]
+          with zipfile.ZipFile(wheel) as f:
+              names=[n for n in f.namelist() if n.startswith("cmpct/cmpct_core") and n.endswith((".so",".pyd",".dll",".dylib"))]
+              assert len(names)==1, names
+              member=names[0]
+              member_sha=hashlib.sha256(f.read(member)).hexdigest()
+          receipts=[json.loads(Path(p).read_text()) for p in ("native-loader-wheel-first.json","native-loader-wheel-reinstall.json")]
+          assert all(r["native_sha256"]==member_sha for r in receipts), (member, member_sha, receipts)
+          record={"wheel_filename":wheel.name,"wheel_sha256":hashlib.sha256(wheel.read_bytes()).hexdigest(),
+                  "native_member":member,"native_member_sha256":member_sha,
+                  "first_and_reinstall_installed_sha_equal_to_wheel_member":True,
+                  "source_head":receipts[0]["source_head"],
+                  "claim_scope":"source-exact wheel bytes and installed library on this host"}
+          Path("native-loader-wheel-package.json").write_text(json.dumps(record,indent=2,sort_keys=True)+"\\n")
+          print("wheel ZIP member and two installed native SHA identities: PASS", member_sha)
+          PY
       - name: Preserve source-head bound package receipt
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,6 +122,7 @@ jobs:
             native-loader-install-receipt.json
             native-loader-wheel-first.json
             native-loader-wheel-reinstall.json
+            native-loader-wheel-package.json
           if-no-files-found: ignore
           retention-days: 30
 
