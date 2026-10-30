@@ -74,6 +74,11 @@ jobs:
           set -o pipefail
           python research/j24g61_signed_chain_attribution.py 2>&1 | tee evidence/j24g61-court.log
           test -s evidence/j24g61-result.json
+      - name: Independent standard-library receipt audit and hostile mutation rejection
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g61_independent_receipt_audit.py evidence/j24g61-result.json 2>&1 | tee evidence/j24g61-independent-audit.log
       - name: Archive evidence on success or failure
         if: always()
         uses: actions/upload-artifact@v4
