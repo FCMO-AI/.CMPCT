@@ -9,6 +9,7 @@ on:
       - "tools/j24p05_wheel_installed_path_oracle.py"
       - "tools/j24p05_detached_artifact_referee.py"
       - "tools/j24p05d_wheel_spread_court.py"
+      - "tools/j24p05d_detached_referee.py"
       - "docs/v031-research/*j24p05*"
       - ".github/workflows/j24p05-macos-wheel-path-equivalence.yml"
   workflow_dispatch:
@@ -38,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          if [ "$EVENT_NAME" = workflow_dispatch ] || git diff-tree --no-commit-id --name-only -r HEAD | grep -Eq '^(tools/j24p05_wheel_casefold_court\.py|tools/j24p05_wheel_installed_path_oracle\.py|tools/j24p05_detached_artifact_referee\.py|tools/j24p05d_wheel_spread_court\.py|docs/v031-research/.*j24p05.*|\.github/workflows/j24p05-macos-wheel-path-equivalence\.yml)$'; then
+          if [ "$EVENT_NAME" = workflow_dispatch ] || git diff-tree --no-commit-id --name-only -r HEAD | grep -Eq '^(tools/j24p05_wheel_casefold_court\.py|tools/j24p05_wheel_installed_path_oracle\.py|tools/j24p05_detached_artifact_referee\.py|tools/j24p05d_wheel_spread_court\.py|tools/j24p05d_detached_referee\.py|docs/v031-research/.*j24p05.*|\.github/workflows/j24p05-macos-wheel-path-equivalence\.yml)$'; then
             echo 'run_court=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_court=false' >> "$GITHUB_OUTPUT"
@@ -84,6 +85,20 @@ jobs:
         run: |
           set -euo pipefail
           python tools/j24p05d_wheel_spread_court.py --output-dir j24p05d-results
+      - name: Detached proof of PEP427 wheel RECORD integrity and spread-installed bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root=Path('j24p05d-results')
+          with zipfile.ZipFile('j24p05d-local-artifact.zip','w',compression=zipfile.ZIP_DEFLATED) as z:
+              for file in sorted(root.rglob('*')):
+                  if file.is_file():
+                      z.write(file,file.relative_to(root).as_posix())
+          PY
+          python tools/j24p05d_detached_referee.py j24p05d-local-artifact.zip --output j24p05d-detached-referee.json
       - name: Persist physical receipts and original inert wheels
         if: always()
         uses: actions/upload-artifact@v4
@@ -103,6 +118,7 @@ jobs:
             j24p05-results/alias_repeated_separator/*.whl
             j24p05-results/alias_internal_dot/*.whl
             j24p05d-results/court.json
+            j24p05d-detached-referee.json
             j24p05d-results/installed-native/*.bin
             j24p05d-results/original/*.whl
             j24p05d-results/disjoint/*.whl
