@@ -213,9 +213,12 @@ def hostile_differentials() -> dict:
     assert result["valid-delete"]["stats"]["optimized"] == 1
     assert result["delete-all"]["stats"]["optimized"] == 16
     for name in ("missing-delete", "duplicate-names", "unsorted",
-                 "xattrs", "owners", "malformed", "unknown", "multi",
-                 "delete-then-put", "rename"):
+                 "xattrs", "owners", "multi", "delete-then-put", "rename"):
         assert result[name]["stats"]["fallback"] > 0, name
+    # Exception cases are compared by exact type/message, but the reporting
+    # helper deliberately does not return counters from a raised invocation.
+    for name in ("malformed", "unknown"):
+        assert result[name]["error"] is not None, name
     # Deterministic scattered deletions across a sorted namespace, including
     # first/middle/last and repeated absent names; no borrowed fixture identity.
     for seed in range(500):
