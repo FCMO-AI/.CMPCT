@@ -127,6 +127,26 @@ def test_invalid_footer_header_recovers_previous_generation(tmp_path, field, byt
     _record(archive, f"invalid_{field}", prior, latest, "recover_previous")
 
 
+@pytest.mark.parametrize("field", ["kind", "prev_self"])
+def test_other_inadmissible_footer_fields_recover_previous(tmp_path, field):
+    archive, prior, payloads = _original(tmp_path)
+    latest, _ = _append_generation(archive, {"blobs": [], "ops": [["del", "a.bin"]]}, prior)
+    _latest_footer(archive, latest, prior)
+    physical = bytearray(archive.read_bytes())
+    if field == "kind":
+        assert physical[latest + 8] == 1
+        physical[latest + 8] = 2  # unsupported kind; signed data unchanged
+    else:
+        struct.pack_into("<Q", physical, latest + 28, latest)  # footer self-cycle
+    archive.write_bytes(physical)
+    with CMPCT(archive) as ar:
+        assert ar.latest_footer_pos == prior
+        assert set(ar.by) == set(payloads) and ar.verify() == 2
+    pf = preflight_archive(archive)
+    assert pf["latest_footer"] == prior and pf["files"] == 2
+    _record(archive, f"invalid_{field}", prior, latest, "recover_previous")
+
+
 def test_sha_corrupt_footer_remains_recoverable(tmp_path):
     archive, prior, payloads = _original(tmp_path)
     latest, _ = _append_generation(archive, {"blobs": [], "ops": [["del", "a.bin"]]}, prior)
