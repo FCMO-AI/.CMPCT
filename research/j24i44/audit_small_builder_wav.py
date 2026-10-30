@@ -33,7 +33,7 @@ def audit(root: Path):
         assert sha(original).hex() == case["logical_sha256"]
         assert sha(encoded).hex() == case["archive_sha256"]
         magic, revision, flags, cs, us, span, ihash = HEADER.unpack_from(encoded)
-        assert (magic, revision, flags) == (b"CMPCT24\\0", 24, 0)
+        assert (magic, revision, flags) == (b"CMPCT24\0", 24, 0)
         index_raw = zstandard.ZstdDecompressor().decompress(
             encoded[HEADER.size:HEADER.size+cs], max_output_size=us
         )
@@ -47,7 +47,7 @@ def audit(root: Path):
         assert encoded[tail:tail+cs] == encoded[HEADER.size:HEADER.size+cs]
         assert len(encoded) == tail + cs + FOOT.size
         assert FOOT.unpack_from(encoded, tail+cs) == (
-            b"CMPTF24\\0", 0, 1, 0, 0, cs, us, 0, ihash
+            b"CMPTF24\0", 0, 1, 0, 0, cs, us, 0, ihash
         )
         if not case["selected_flac"]:
             checks[str(kib)] = {
