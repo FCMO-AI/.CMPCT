@@ -9,7 +9,7 @@ const MAX_CLI_READ_BYTES: u64 = 64 * 1024 * 1024;
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  cmpct-native info ARCHIVE.cmpct\n  cmpct-native list ARCHIVE.cmpct\n  cmpct-native stat ARCHIVE.cmpct MEMBER\n  cmpct-native read ARCHIVE.cmpct MEMBER\n  cmpct-native range ARCHIVE.cmpct MEMBER OFFSET LENGTH"
+        "usage:\n  cmpct-native info ARCHIVE.cmpct\n  cmpct-native list ARCHIVE.cmpct\n  cmpct-native stat ARCHIVE.cmpct MEMBER\n  cmpct-native read ARCHIVE.cmpct MEMBER\n  cmpct-native range ARCHIVE.cmpct MEMBER OFFSET LENGTH\n  cmpct-native verify ARCHIVE.cmpct"
     );
     std::process::exit(2);
 }
@@ -69,6 +69,25 @@ fn main() {
     let archive_path = args.next().unwrap_or_else(|| usage());
 
     match command.as_str() {
+        "verify" => {
+            if args.next().is_some() {
+                usage();
+            }
+            let archive = open(&archive_path);
+            let verified = archive.verify_complete().unwrap_or_else(|e| {
+                eprintln!("{e}");
+                std::process::exit(4);
+            });
+            // Keep stdout empty on failure, so scripts never mistake a partial pass for success.
+            println!(
+                "{}",
+                serde_json::to_string(&json!({
+                    "revision": archive.revision(),
+                    "verified": verified,
+                }))
+                .expect("serializing fixed native verification result cannot fail")
+            );
+        }
         "info" => {
             if args.next().is_some() {
                 usage();
