@@ -9,10 +9,9 @@ from collections import defaultdict
 from pathlib import Path
 
 LINE = re.compile(
-    r"^(?P<arm>[AB]) J24I44 iter=(?P<iter>\\d+) kib=(?P<kib>\\d+)"
-    r" ns=(?P<ns>\\d+) rchar=(?P<rchar>\\d+) vmhwm_kib=(?P<rss>\\d+)$"
+    r"^(?P<arm>[AB]) J24I44 iter=(?P<iter>\d+) kib=(?P<kib>\d+)"
+    r" ns=(?P<ns>\d+) rchar=(?P<rchar>\d+) vmhwm_kib=(?P<rss>\d+)$"
 )
-ORDER = "AB B A BA AB".replace(" ", "")  # overridden by expected list below
 EXPECTED_ARMS = ["A", "B", "B", "A", "B", "A", "A", "B"]
 WARMUP = 4
 ITERATIONS = 12
