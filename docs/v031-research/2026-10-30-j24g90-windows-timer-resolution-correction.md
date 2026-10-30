@@ -1,0 +1,10 @@
+# J24G90 — append-only measurement correction after Windows first red
+
+**2026-10-30 UTC; evidence from Actions #41105048548 on exact `d4b030ce7f6f50a2ea7ac34f1808712f5e5c3569`.** Do not edit the original J24G90 preregistration `638327...`; its H1 >=2x wall and CPU nonworse and H2 exact recovery remain unchanged.
+
+Ubuntu J24G90 completed SUCCESS with detached referee PASS at 4,096 and 8,192. Windows Builder + source-exact physical A/B/C state creation and material parity progressed to timing, but `time.process_time_ns()` produced a **zero median B CPU observation**, making the scientific script divide by zero (`measure` line 198). This is **measurement-resolution failure**, not known Reader corruption, and the first Windows run remains FAILURE in history. macOS job canceled before executing, not evidence.
+
+## Prospective methodological change, before correction
+For Windows only, amortize each timing sample across **64 fresh CMPCT Reader opens** in a tight loop on the exact same immutable file. Record elapsed wall and process CPU for the whole batch, then divide by 64 to preserve **per-open measured units**, with all 12 balanced samples per variant and the unchanged H1 threshold. Preserve `batch_repetitions=64` in raw samples, **do not treat zero CPU as zero cost or let division by zero pass silently**. Retain 1 open per observation on POSIX where CPU resolution was measured adequate. If 64 Windows opens still yield zero median B CPU, make H1 explicitly ambiguous on Windows; do not weaken any threshold. All authenticity, corruption, same-index, recovery, archive bytes, and detached proof invariants remain unchanged.
+
+This is not a new product improvement, representation, release or waiver. The prior Ubuntu result remains evidence at its own source SHA; new source-head CI must prove its own full correctness. Additional batch overhead (CPU warmer/cache) limits cross-platform timing comparison: only A/B/C within each host and same batch size are comparable. Report the original Windows failure and the correction separately.
