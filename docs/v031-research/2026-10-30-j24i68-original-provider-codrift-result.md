@@ -25,6 +25,18 @@ On the same 32 cells, the sign of candidate-minus-base changed across A versus B
 
 An attractive pooled correlation would mask these incompatible per-run decisions and host CPU/chronology differences. The independently tested full-product gate retains **all** historical red outcomes; source-identical code is evidence of *attribution ambiguity*, not permission to override the official evaluator.
 
+## Post-result exploratory mechanism split (not part of preregistered H1)
+
+A separate **post-hoc** stress check on the same original cells splits CREATE and EXTRACT, retaining the same 16 corpus/mode pairs per operation (no newly collected observations). Spearman of raw millisecond effects and meaningful-pair sign agreement are:
+
+| Hosted attempt | CREATE rho; direction among both >1ms | EXTRACT rho; direction among both >1ms |
+|---|---|---|
+| #835 original first | **−0.165**; 2/4 | **+0.744**; 6/6 |
+| #835 original second | **+0.524**; 7/11 | **+0.803**; 11/11 |
+| #837 original pass | **+0.350**; 3/4 | **−0.053**; 1/2 |
+
+These counts show the mixed **create/extract mechanism and chronology** likely matters to any future timing surrogate. In particular #835 first reverses direction between operations, so even a ZIP correction calibrated on extraction would not reliably explain creation. Extraction has too few meaningful pairs in #837 and only three correlated hosted attempts overall; **do not promote a new extraction-only proxy** from this post-hoc slice. The prospective cross-operation H1 remains falsified as originally defined; no retrospective goalpost adjustment. Arithmetic checked with a separate unrounded rank implementation on the original parsed J24I68 rows. This is exploratory secondary research evidence only.
+
 ## Provenance and adversarial controls
 
 Original provider ZIP digests, as previously authenticated in J24I65 and checked again before parsing:
