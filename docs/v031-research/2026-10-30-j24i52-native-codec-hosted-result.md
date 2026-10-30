@@ -46,3 +46,17 @@ The unchanged official red remains a **release/promotion blocker**. With the cur
 - Other current agent PRs #814 journal replay and #574 Discovery STATE reconciliation own different lanes; no conflicting shared file edit.
 - No change to `src/`, `native/`, format, ABI, r24/ZIP official gate, comparison thresholds, frozen corpora, history, project version or benchmark policy. No merge/release.
 - Counterfactual: a direct native FFI codec comparison before a new Builder rewrite would have eliminated one possible causal explanation at low cost. This single result does **not** justify updating Discovery Engine policy or its staleable `STATE.json`; detailed evidence stays here and in GitHub artifacts.
+
+
+## Newly recovered operational boundary — library versus CLI, same frozen corpus
+
+A detached cross-check of **all four raw original ABBA records per hosted run** found that the candidate-only binary-create red is confined to the **in-process library** layer. The CLI creates the same binary archive via a new Python process, but does not reproduce the large source-pair timing difference:
+
+| Source-exact court | Library create base→candidate | Fresh-process CLI create base→candidate |
+|---|---:|---:|
+| Original `41010383696` | 171.668→199.447 ms, **+27.778 ms / +16.18%** | 329.957→330.659 ms, **+0.703 ms / +0.21%** |
+| Independent repeat, same source | 141.103→161.638 ms, **+20.535 ms / +14.55%** | 261.323→264.070 ms, **+2.747 ms / +1.05%** |
+
+This is a **stronger causal discriminator** than the native-only microbenchmark: the official harness processes the same corpus for both operation layers, yet only one layer shows a large candidate-labeled difference on both runs. It favors investigating long-lived **in-process state, warm-cache/corpus chronology, native codec reuse, Python object lifetime or runner scheduling**, *not* attributing a fixed native Zstd primitive slowdown. It still does not prove any particular owner: CLI process startup and cache state differ legitimately from library mode, and a source-identical full-matrix A/A can report a gate-scale apparent red (#715).
+
+**Next cheapest decisive action:** preserve the original benchmark and actual binary corpus, and measure the isolated binary library path **both** with a fresh process and after replaying the unchanged tiny/source/media prefix, with A/A same-source labels, deterministic archive hashes, measured native call count/CPU, and independent exact result. Only advance to full-builder phase profiling if that cheaper prefix/fresh-process discriminator changes the causal decision. The official release failures and numerical thresholds remain untouched.
