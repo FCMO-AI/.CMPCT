@@ -81,13 +81,18 @@ def audit(report: dict, expected_head: str):
     wall_b = statistics.median(row["wall_ns"] for row in b)
     cpu_a = statistics.median(row["cpu_ns"] for row in a)
     cpu_b = statistics.median(row["cpu_ns"] for row in b)
-    require(wall_a > 0 and wall_b > 0 and cpu_b > 0, "measurement denominator")
+    require(wall_a > 0 and wall_b > 0 and cpu_a >= 0 and cpu_b >= 0, "measurement domain")
     for name, v in (("baseline", wall_a), ("factored", wall_b)):
         close(report["wall_median_ns"][name], v, "wall " + name)
     for name, v in (("baseline", cpu_a), ("factored", cpu_b)):
         close(report["cpu_median_ns"][name], v, "cpu " + name)
     close(report["wall_speedup"], wall_a/wall_b, "speedup")
-    close(report["cpu_speedup"], cpu_a/cpu_b, "CPU speedup")
+    # Windows process CPU counters can quantize a short replay to 0ns median.
+    # Keep the raw zero and refuse an invented infinite or finite CPU ratio.
+    if cpu_b:
+        close(report["cpu_speedup"], cpu_a/cpu_b, "CPU speedup")
+    else:
+        require(report["cpu_speedup"] is None, "zero-CPU denominator must be null")
     mem = report["tracemalloc"]
     require(set(mem) == {"baseline", "factored"}, "allocation strata")
     for key in mem:
