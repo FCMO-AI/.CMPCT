@@ -86,6 +86,7 @@ try:
         mutated=bytearray(arc.read_bytes())
         assert mutated[blob_pos:blob_pos+4]==b'CMA4'
         mutated[blob_pos+32]^=1
+        assert hashlib.sha256(mutated).hexdigest()!=archive_sha
         corrupt_archive=root/'invalid-physical-sha.cmpct'
         corrupt_archive.write_bytes(mutated)
         bad_handle=ctypes.c_void_p()
