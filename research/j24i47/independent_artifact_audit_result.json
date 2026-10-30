@@ -1,0 +1,14 @@
+{
+  "exact_source_reexecution": "byte-identical",
+  "head": "4e13ff911bb17efc0f81c2938ab14d43a94cffdf",
+  "independent_cost_rows": 6,
+  "j24i46_manifest_sha256": "72af642c6193587ca226e2be40e9fc05d7e042fbe125069cad1261b6972d9111",
+  "limit": "toy byte-array/derivation; no installed CMPCT runtime or FLAC product test",
+  "nested_tar_sha256": "25729b1d1c453509e3a4e1b77913362cd1bba773a532bd2e0e5e41c27717f001",
+  "producer_source_sha256": "6f24876732a420e8f6cef0af9c77a820b1ef074acbc8937b10e3e72c1ef9f845",
+  "result_sha256": "ccd9d1f164805935f0b355b7a81bdce8d96753979005ee98e0c6e99933326ab5",
+  "schema": "cmpct-j24i47-independent-artifact-audit-v1",
+  "status": "PASS",
+  "witnesses": 6,
+  "zip_sha256": "e699b6002407e9ae5d1fb2bc6edb28945a5a9ad74c1af99d644dad32b1946a6b"
+}
