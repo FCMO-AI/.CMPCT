@@ -64,7 +64,7 @@ jobs:
           set -euo pipefail
           python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
           python -m pip freeze > "$J24G90_EVIDENCE/pip-freeze.txt"
-          python -m py_compile research/j24g90_terminal_checkpoint.py
+          python -m py_compile research/j24g90_terminal_checkpoint.py research/j24g90_detached_referee.py
       - name: Generate two physical trees and run three-variant reader court
         shell: bash
         run: |
@@ -80,7 +80,7 @@ jobs:
           assert len(d['cases']) == 2
           print('H1 materiality (research only):',d['H1_survives'])
           PY
-      - name: Preserve exact physical input and raw evidence
+      - name: Reconstruct signed generations and raw medians independently\n        shell: bash\n        run: |\n          set -euo pipefail\n          python research/j24g90_detached_referee.py "$J24G90_EVIDENCE" 2>&1 | tee "$J24G90_EVIDENCE/audit.log"\n          test -s "$J24G90_EVIDENCE/detached-audit.json"\n      - name: Preserve exact physical input and raw evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
