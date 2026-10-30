@@ -1,0 +1,128 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT J24G83 fresh-owned Reader Writer-cost falsifier
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24g83-fresh-reader-per-append-control-20261030
+    paths:
+      - 'research/j24g83_*'
+      - 'docs/v031-research/*j24g83*'
+      - '.github/workflows/v031-j24g83-fresh-reader-writer.yml'
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g80-owned-writer-session-oracle-20261030
+    paths:
+      - 'research/j24g83_*'
+      - 'docs/v031-research/*j24g83*'
+      - '.github/workflows/v031-j24g83-fresh-reader-writer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g83-fresh-reader-writer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-full-writer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G83_EVIDENCE_DIR: evidence
+      J24G80_EVIDENCE_DIR: evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert exact HEAD and frozen prereg
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor b8013e7e3ff7168949d7b1526452c3e5b31cfaf9 HEAD
+          git merge-base --is-ancestor d29c8b6b64017ab912cfd219d598501e00b62a72 HEAD
+          test "$(git rev-parse HEAD:src/cmpct/transactions.py)" = 71bbc8a989d1da79d0f0dbe44f7f5c39f3304854
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
+          git rev-parse HEAD > evidence/head.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install same candidate and compile research-only instruments
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m py_compile research/j24g83_fresh_writer_control.py research/j24g80_wire_referee.py
+          python -m pip freeze > evidence/pip-freeze.txt
+      - name: Run same-input complete public vs fresh-Reader vs private-owned Writer, all commits
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g83_fresh_writer_control.py 2>&1 | tee evidence/j24g83-run.log
+          test -s evidence/j24g83-result.json
+      - name: Independent no-CMPCT physical wire referee for all three variants and hostile mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee evidence/j24g83-independent-wire.json
+          import copy, hashlib, json, sys
+          from pathlib import Path
+          sys.path.insert(0, 'research')
+          from j24g80_wire_referee import audit_one, parse
+          data=json.loads(Path('evidence/j24g83-result.json').read_text())
+          assert data['status']=='COMPLETE'
+          results=[]
+          for case in ('8192-middle','32768-tail'):
+              c=data['cases'][case]
+              n=int(case.split('-')[0]); where=case.split('-')[1]
+              files={label: Path('evidence')/f'j24g80-{case}-{label}-valid.cmpct'
+                     for label in ('public','owned')}
+              files['fresh']=Path('evidence')/f'j24g83-{case}-fresh-valid.cmpct'
+              raw={label: path.read_bytes() for label,path in files.items()}
+              assert raw['public']==raw['fresh']==raw['owned'],case
+              verified={}
+              for label in ('public','fresh','owned'):
+                  verified[label]=audit_one(raw[label],c,n,where,label)
+                  assert verified[label]['signed_footers']==65
+                  assert verified[label]['intermediate_prefix_matches']==64
+              corrupt=Path('evidence')/f'j24g83-{case}-fresh-corrupt-tail.cmpct'
+              tampered=corrupt.read_bytes()
+              assert tampered[:-1]==raw['fresh'][:-1] and tampered[-1]!=raw['fresh'][-1]
+              _,prior,was_bad,_,_=parse(tampered,True)
+              assert was_bad and len(prior)==64
+              # Independent negative controls: evidence SHA, physical footer and blob content.
+              rejected=0
+              fraud=copy.deepcopy(c)
+              row=next(x for x in fraud['rows'] if x['variant']=='fresh')
+              row['physical'][0]['sha256']='0'*64
+              try: audit_one(raw['fresh'],fraud,n,where,'fresh')
+              except (AssertionError,ValueError,IndexError): rejected+=1
+              else: raise AssertionError('forged prefix receipt accepted')
+              for offset in (-1,100):
+                  bad=bytearray(raw['fresh']);bad[offset]^=0x5A
+                  try: audit_one(bytes(bad),c,n,where,'fresh')
+                  except (AssertionError,ValueError,IndexError,KeyError): rejected+=1
+                  else: raise AssertionError('forged original wire accepted')
+              assert rejected==3
+              results.append(dict(case=case,decision='THREE_VARIANT_EXACT_PHYSICAL_PASS',
+                                  physical_bytes=len(raw['fresh']),wire_sha256=hashlib.sha256(raw['fresh']).hexdigest(),
+                                  all_variants=verified,prior_valid_footers=len(prior),
+                                  adversarial_rejections=rejected))
+          print(json.dumps(dict(schema='j24g83-detached-wire-v1',results=results),indent=2))
+          PY
+      - name: Retain all raw and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g83-fresh-reader-writer-full-physical-evidence
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
