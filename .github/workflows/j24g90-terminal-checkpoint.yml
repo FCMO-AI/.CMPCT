@@ -4,13 +4,6 @@
 name: J24G90 Terminal Checkpoint and Recovery Same-Index Court
 
 on:
-  push:
-    branches:
-      - agent/phased1-v031-j24g90-terminal-checkpoint-recovery-20261030
-    paths:
-      - 'research/j24g90_terminal_checkpoint.py'
-      - 'docs/v031-research/*j24g90*'
-      - '.github/workflows/j24g90-terminal-checkpoint.yml'
   pull_request:
     branches:
       - agent/phased1-v031-j24g89-owned-replay-headroom-o0-20261030
