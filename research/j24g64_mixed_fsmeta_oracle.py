@@ -250,7 +250,10 @@ def make_case(seed: int, i: int):
         if mode == 8 and step == 1:
             op = ["ren", "missing-source", "destination"]
         elif mode == 9 and step == 1:
-            op = ["ren", live[0], live[-1]]
+            # The preceding stochastic deletes can exhaust a two-entry tree.
+            # Preserve a real collision whenever a live path remains; otherwise
+            # feed a missing-source case to the inherited fallback instead.
+            op = ["ren", live[0], live[-1]] if live else ["ren", "missing-source", "destination"]
         elif mode == 12 and step == 1:
             op = ["del", "missing-delete"]
         elif mode == 14 and step == 1:
