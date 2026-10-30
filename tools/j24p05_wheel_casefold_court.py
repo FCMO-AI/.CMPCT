@@ -86,6 +86,26 @@ def install(path: Path, root: Path, label: str) -> dict:
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     actual = target / NATIVE
     raw = actual.read_bytes() if actual.is_file() else None
+    record_path = target / "cmpct-0.30.0.dist-info" / "RECORD"
+    record_native = None
+    if record_path.is_file():
+        rows = list(csv.reader(io.StringIO(record_path.read_text("utf-8"))))
+        entries = [row for row in rows if len(row) == 3 and row[0] == NATIVE]
+        if len(entries) == 1:
+            _, advertised_hash, advertised_size = entries[0]
+            actual_b64 = (base64.urlsafe_b64encode(hashlib.sha256(raw).digest())
+                          .decode().rstrip("=")) if raw is not None else None
+            record_native = {
+                "advertised_hash": advertised_hash,
+                "advertised_size": advertised_size,
+                "actual_hash": "sha256=" + actual_b64 if actual_b64 is not None else None,
+                "actual_size": str(len(raw)) if raw is not None else None,
+                "matches_physical_file": bool(raw is not None and
+                     advertised_hash == "sha256=" + actual_b64 and advertised_size == str(len(raw))),
+            }
+        custody = root / "installed-native"
+        custody.mkdir(exist_ok=True)
+        (custody / (label + ".RECORD.csv")).write_bytes(record_path.read_bytes())
     if raw is not None:
         # Preserve the *physical installed file* for detached comparison with
         # independently parsed wheel members, not only the self-reported SHA.
@@ -101,6 +121,7 @@ def install(path: Path, root: Path, label: str) -> dict:
         "installed_native_nbytes": len(raw) if raw is not None else None,
         "primary_native_retained": raw == good_fat() if raw is not None else None,
         "inert_collision_won": raw == INERT if raw is not None else None,
+        "installed_record_native": record_native,
     }
 
 def run(root: Path) -> dict:
