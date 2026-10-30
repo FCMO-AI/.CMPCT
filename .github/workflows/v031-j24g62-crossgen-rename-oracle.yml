@@ -67,13 +67,18 @@ jobs:
           set -euo pipefail
           python -m pip install . 'zstandard>=0.22' 'msgpack>=1.0'
           python -m pip freeze > evidence/pip-freeze.txt
-          python -m py_compile research/j24g60_single_delta_chain_court.py research/j24g62_crossgen_rename_oracle.py
+          python -m py_compile research/j24g60_single_delta_chain_court.py research/j24g62_crossgen_rename_oracle.py research/j24g62_independent_receipt_audit.py
       - name: Physical public Writer rename factoring vs exact inherited replay
         shell: bash
         run: |
           set -o pipefail
           python research/j24g62_crossgen_rename_oracle.py 2>&1 | tee evidence/j24g62-court.log
           test -s evidence/j24g62-result.json
+      - name: Recompute ABBA and reject forged receipts independently
+        shell: bash
+        run: |
+          set -o pipefail
+          python research/j24g62_independent_receipt_audit.py evidence/j24g62-result.json "$EXPECTED_HEAD" evidence/j24g62-detached-audit.json 2>&1 | tee evidence/j24g62-detached-audit.log
       - name: Archive original evidence even on failure
         if: always()
         uses: actions/upload-artifact@v4
