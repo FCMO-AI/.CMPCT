@@ -61,6 +61,10 @@ def audit(data: dict, path: Path, expected_head: str, physical: bool = True) -> 
     assert data["source"]["head"] == expected_head
     assert set(data["corpus"]) == set(KINDS)
     observed = data["samples"]
+    # Not an origin signature: a source-neutral digest simply detects single-field drift.
+    expected_raw_sha = hashlib.sha256(json.dumps(
+        observed, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    assert data["raw_samples_sha256"] == expected_raw_sha
     assert len(observed) == 256, len(observed)
     seen_keys = set()
     for kind in KINDS:
