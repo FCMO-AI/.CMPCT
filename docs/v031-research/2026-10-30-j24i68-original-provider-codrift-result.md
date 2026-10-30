@@ -54,6 +54,15 @@ python research/j24i68_zip_proxy_referee.py /path/to/J24I65_original_provider_bu
 ```
 The new workflow retrieves immutable original GitHub Actions artifact IDs using read-only `actions: read`, verifies exact SHA before parsing, and uploads its research result. If provider retention has expired, this is an **infrastructure blocker**, not a scientific disproof. Historic original J24I65 bundle remains an independent rerun route; no CI re-generation of the benchmark is authorized.
 
+## Direct GitHub source-identity reconciliation (independent of historical J24I65 summary)
+
+Using the **current GitHub Compare API** on the two exact source-head pairs recorded in the three frozen provider artifacts, rather than inferring source equality from PR titles:
+
+- `fe7669f7f1a07720187219200e24a972fa650f6b...09e38915b79a83964cc816d5130251b3e748121e` (two #835 commits, seven changed paths): only `.github/workflows/v031-zip-scope-court.yml`, `.github/workflows/zip-parity.yml`, one preregistration note, `tests/test_performance_base_native_wiring.py`, `tests/test_v031_zip_parity_scope.py`, `tools/check_ci_topology.py`, and `tools/classify_zip_parity_scope.py`. **No `src/`, `native/`, or `benchmarks/zip_parity_bench.py` diff.**
+- `09e38915b79a83964cc816d5130251b3e748121e...1ea579c5837d3b783614f423c423a121878dc0ca` (four #837 commits, four changed paths): `.github/workflows/zip-parity.yml`, one preregistration note, `tests/test_j24g53e_native_runtime_custody.py`, and `tools/j24g53e_native_runtime_custody.py`. Again **zero product / benchmark implementation diffs.**
+
+Both compares returned `ahead` with `behind=0` and `too_large=false`. This independent current-host evidence resolves the prior **genealogy and product-source-change uncertainty** for exactly these pairs. It does not prove compiled-image identity during each timed invocation, shared process state, or all hidden runner/environment variables. Source-identical red results remain genuine gate observations even though no corresponding Builder/Reader/native code change can explain them directly. ZIP archive **sizes** matched across all 16 corpus/mode slots in each original A/B/B/A run; ZIP physical archive SHA per invocation was not frozen, so do not upgrade size parity into byte-identity claims.
+
 ## Decision, self-critique and handoff
 
 The best current next discriminator for unresolved create reds is **CMPCT-specific** source-identical sham and process/lifetime diagnosis, not per-cell ZIP timing subtraction. Existing owner #819 has separate positive evidence of Python process-prefix cost (+7–9%); that mechanism is not proven responsible for any specific #835 or #807 red. #835/#837 own official r24/ZIP workflows, and #574 owns the discovery cache; do not duplicate their implementation. This independent diagnostic cannot decide physical RSS, page cache, native image identity during timed sections, or original official release gate acceptability.
