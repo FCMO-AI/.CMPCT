@@ -24,24 +24,24 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-j24g65-\${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-j24g65-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   authentic-delete-attribution:
-    runs-on: \${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-14, windows-2022]
     env:
-      EXPECTED_HEAD: \${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       J24G65_RESULT: evidence/j24g65-result.json
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: \${{ env.EXPECTED_HEAD }}
+          ref: ${{ env.EXPECTED_HEAD }}
           fetch-depth: 0
           persist-credentials: false
       - name: Attest prospective decision and unchanged inherited Writer/Reader source
@@ -86,7 +86,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: j24g65-delete-phase-\${{ matrix.os }}-\${{ github.run_id }}-\${{ github.run_attempt }}
+          name: j24g65-delete-phase-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: evidence/
           if-no-files-found: warn
           retention-days: 30
