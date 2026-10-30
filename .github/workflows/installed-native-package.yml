@@ -234,11 +234,11 @@ jobs:
               assert s['representative_archive_create_read_extract'] is True
               assert s['shipping_python_no_ambient_zstd'] is True
               assert s['python_zstandard_absent'] is True
-          # This must be demonstrated by the actual clean-installed wheel on
-          # each OS/Python job, not inferred from Rust-only source or symbol names.
-          assert s['native_complete_verify_available'] is True
-          assert s['native_complete_verified_count'] == 2
-          assert s['native_complete_corrupt_physical_sha_rejected'] is True
+              # Require the complete strong-verification function from the
+              # actual wheel and physical corruption rejection on every host.
+              assert s['native_complete_verify_available'] is True
+              assert s['native_complete_verified_count'] == 2
+              assert s['native_complete_corrupt_physical_sha_rejected'] is True
               assert s['dict_vector_bytes']==104
               assert dep_files[0].read_text().strip()
               wheel=wheels[0]
