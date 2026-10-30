@@ -518,7 +518,8 @@ def main():
         "archive_bytes_added": 0,
         "limitations": [
             "Research-only Python helper oracle; not installed into Reader/Writer",
-            "Synthetic performance workload is not a physically signed public archive",\n            "Separate physical Writer mixed check lacks deliberately signed sparse xattrs",
+            "Synthetic performance workload is not a physically signed public archive",
+            "Separate physical Writer mixed check lacks deliberately signed sparse xattrs",
             "No end-to-end Reader open, read, extract, recovery or 64th checkpoint evidence",
             "No actual archive bytes changed; physical storage savings not measured",
             "Tracemalloc is not RSS; no external codec/ZIP/Zstd benchmark",
