@@ -48,7 +48,18 @@ def _names(z):
 
 
 def _json(z, name):
-    val = json.loads(z.read(name))
+    def no_duplicate_members(pairs):
+        obj = {}
+        for key, value in pairs:
+            if key in obj:
+                raise ValueError("duplicate JSON key in " + name + ": " + key)
+            obj[key] = value
+        return obj
+
+    def no_nonfinite_literals(value):
+        raise ValueError("non-finite JSON literal in " + name + ": " + value)
+
+    val = json.loads(z.read(name), object_pairs_hook=no_duplicate_members, parse_constant=no_nonfinite_literals)
     if not isinstance(val, dict):
         raise ValueError("malformed JSON object " + name)
     return val
@@ -72,7 +83,7 @@ def _extract_sweep_cells(data, label):
     for corpus in CORPORA:
         c = corpora[corpus]
         logical = c.get("logical_bytes")
-        if not isinstance(logical, int) or logical < 0:
+        if type(logical) is not int or logical < 0:
             raise ValueError("invalid logical bytes " + corpus)
         if set(c) != {"logical_bytes", *MODES}:
             raise ValueError("unexpected mode/field set " + corpus)
@@ -85,7 +96,7 @@ def _extract_sweep_cells(data, label):
                 if set(metrics) != {"bytes", "create_s_median", "extract_s_median"}:
                     raise ValueError("unexpected metrics " + corpus)
                 nbytes = metrics["bytes"]
-                if not isinstance(nbytes, int) or nbytes < 0:
+                if type(nbytes) is not int or nbytes < 0:
                     raise ValueError("invalid archive bytes")
                 for op in OPERATIONS:
                     key = (corpus, mode, engine, op)
