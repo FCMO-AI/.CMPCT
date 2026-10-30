@@ -130,7 +130,7 @@ impl Archive {
     fn require_primary_generation_for_complete_verify(&self) -> Result<(), CmpctError> {
         use crate::{HEADER_SIZE, MAGIC};
         const FOOTER_SIZE: u64 = 68;
-        const FOOTER_MAGIC: &[u8; 8] = b"CMPTF24\\0";
+        const FOOTER_MAGIC: &[u8; 8] = b"CMPTF24\0";
 
         let mut file = self.file.lock().map_err(|_| CmpctError::Unsupported)?;
         let file_len = file.metadata()?.len();
