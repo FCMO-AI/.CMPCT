@@ -193,20 +193,22 @@ def trial(root, evidence, progress, base, n, where, names, variant, replicate):
     local, physical, children = [], [], []
     for gen, name in enumerate(names, 1):
         proc = done = None
+        start, cpu = time.perf_counter_ns(), time.process_time_ns()
         with lease(path) as fd:
-            start, cpu = time.perf_counter_ns(), time.process_time_ns()
             if variant == "public":
                 tx.append_delete(path, name)
             else:
                 cached_append(path, fd, name, owner)
             wall, cpu_elapsed = time.perf_counter_ns()-start, time.process_time_ns()-cpu
             local.append(dict(generation=gen, wall_ns=wall, cpu_ns=cpu_elapsed))
+            # Receipt before the lock is released: otherwise the independent
+            # subprocess could commit before this delete-prefix SHA is captured.
+            # Both arms pay identical receipt work outside the timed mutation.
+            physical.append(dict(operation="del", generation=gen,
+                                 sha256=sha_file(path), bytes=path.stat().st_size))
             if gen in EXTERNAL:
                 proc, _, done = inject_independent_writer(
                     path, root, case, variant, replicate, gen)
-        # All physical custody receipts occur outside locally timed mutation.
-        physical.append(dict(operation="del", generation=gen, sha256=sha_file(path),
-                             bytes=path.stat().st_size))
         if proc is not None:
             child = finalize_independent_writer(proc, done)
             children.append(dict(after_generation=gen, **child))
