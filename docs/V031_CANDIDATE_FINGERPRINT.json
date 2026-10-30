@@ -6,6 +6,7 @@
   "statement": "Independent prospective source identity. Does not mutate, reinterpret, or authorize v0.30 publication or its prior receipts.",
   "fingerprint_globs": [
     "pyproject.toml",
+    "setup.py",
     "SURFACE_REVISION",
     "README.md",
     "src/**/*.py",
@@ -16,6 +17,8 @@
     "native/**/*.c",
     "native/**/*.h",
     "experiments/**/*.py",
+    "research/**/*.py",
+    "research/**/*.jsonl",
     "tools/**/*.py",
     "tests/**/*.py",
     "tests/conformance/**/*",
