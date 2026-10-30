@@ -58,7 +58,7 @@ jobs:
           set -euo pipefail
           python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
           python -m pip freeze > "$J24G92_EVIDENCE/pip-freeze.txt"
-          python -m py_compile research/j24g92_footer_link_court.py
+          python -m py_compile research/j24g92_footer_link_court.py research/j24g92_detached_referee.py
       - name: Execute real Reader and strict preflight against physical mutations
         shell: bash
         run: |
@@ -76,6 +76,12 @@ jobs:
               assert 1<=len(c['changed_byte_positions'])<=8
               print('CASE',n,c['installed_reader_silent_rewire'],c['installed_preflight_silent_rewire'])
           PY
+      - name: Detached independent physical-footer and receipt referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g92_detached_referee.py "$J24G92_EVIDENCE" 2>&1 | tee "$J24G92_EVIDENCE/referee.log"
+          test -s "$J24G92_EVIDENCE/detached-referee.json"
       - name: Preserve physical archives, exact source, raw installed results
         if: always()
         uses: actions/upload-artifact@v4
