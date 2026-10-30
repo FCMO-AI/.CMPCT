@@ -90,9 +90,13 @@ def public_inputs(root: Path):
     return {"random16m_sha256": sha(random16m), "pattern32m_sha256": sha(pattern32m)}, samples
 
 
-def run_batch(lib: Codec, samples) -> str:
-    # Return output identity; hashing is performed after the timed native calls.
-    outputs = [(name, lib.compress(data, level)) for name, data, level in samples]
+def run_batch(lib: Codec, samples):
+    # Return physical compressed outputs; do not charge integrity receipt hashing
+    # inside the codec timing window. Both candidates still pay identical FFI/copy.
+    return [(name, lib.compress(data, level)) for name, data, level in samples]
+
+
+def digest_outputs(outputs) -> str:
     digest = hashlib.sha256()
     for name, raw in outputs:
         digest.update(name.encode())
@@ -114,11 +118,13 @@ def court(base: Codec, candidate: Codec, samples, label: str):
             for _ in range(7):
                 w0, c0 = time.perf_counter_ns(), time.process_time_ns()
                 # Hold returned hash outside the timing region as a postcondition.
-                result = run_batch(lib, samples)
+                outputs = run_batch(lib, samples)
                 c1, w1 = time.process_time_ns(), time.perf_counter_ns()
                 wall.append((w1 - w0) / 1e6)
                 cpu.append((c1 - c0) / 1e6)
-                output_hashes.append(result)
+                # Exact equality/attestation remains mandatory, but outside
+                # the measured compression interval to preserve causal isolation.
+                output_hashes.append(digest_outputs(outputs))
             if len(set(output_hashes)) != 1:
                 raise AssertionError("non-deterministic output hash within invocation")
             records.append({
