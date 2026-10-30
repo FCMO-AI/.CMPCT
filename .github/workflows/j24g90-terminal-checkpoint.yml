@@ -1,0 +1,90 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Scientific J24G90: source-exact real Reader terminal-checkpoint vs replay-prefix court.
+name: J24G90 Terminal Checkpoint and Recovery Same-Index Court
+
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24g90-terminal-checkpoint-recovery-20261030
+    paths:
+      - 'research/j24g90_terminal_checkpoint.py'
+      - 'docs/v031-research/*j24g90*'
+      - '.github/workflows/j24g90-terminal-checkpoint.yml'
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g89-owned-replay-headroom-o0-20261030
+    paths:
+      - 'research/j24g90_terminal_checkpoint.py'
+      - 'docs/v031-research/*j24g90*'
+      - '.github/workflows/j24g90-terminal-checkpoint.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24g90-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  physical-reader:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24G90_EVIDENCE: evidence/j24g90
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert current source and immutable prereg
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 6383278886d678336197edf87683ecd98f119e7a HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          mkdir -p "$J24G90_EVIDENCE"
+          git rev-parse HEAD > "$J24G90_EVIDENCE/checkout-head.txt"
+          git rev-parse HEAD:research/j24g90_terminal_checkpoint.py > "$J24G90_EVIDENCE/instrument-git-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install real CMPCT source and independent footer codec
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22'
+          python -m pip freeze > "$J24G90_EVIDENCE/pip-freeze.txt"
+          python -m py_compile research/j24g90_terminal_checkpoint.py
+      - name: Generate two physical trees and run three-variant reader court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g90_terminal_checkpoint.py 2>&1 | tee "$J24G90_EVIDENCE/run.log"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('evidence/j24g90/receipt.json')
+          d=json.loads(p.read_text())
+          assert d['status']=='PASS'
+          assert d['H2_survives']
+          assert len(d['cases']) == 2
+          print('H1 materiality (research only):',d['H1_survives'])
+          PY
+      - name: Preserve exact physical input and raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-j24g90-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/j24g90/
+          if-no-files-found: warn
+          retention-days: 30
