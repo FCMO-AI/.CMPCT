@@ -1,0 +1,30 @@
+{
+  "cases": {
+    "mono": {
+      "channels": 1,
+      "flac_bytes": 15113811,
+      "flac_over_pcm_ratio": 0.4504266679286957,
+      "flac_sha256": "0cbf93e168a03316917abc067e05ca5dd0d859ac4f19b1ab890c8cde3283b305",
+      "frames": 16777216,
+      "pcm_sha256": "f5ac3780495b06c2773ada84092d75fb9e38794426c665c87daa357427baa3b9",
+      "rate": 44100,
+      "wav_bytes": 33554476,
+      "wav_sha256": "c582b1723eb31be1c5f789ecb70c4f10c3b89e150e5fc3b6da8f730e86f19417"
+    },
+    "stereo": {
+      "channels": 2,
+      "flac_bytes": 12164541,
+      "flac_over_pcm_ratio": 0.3625315725803375,
+      "flac_sha256": "983dc069c4189ac92450f221e8e18b01bcd022388ed5e274efa3acd1ff2071e1",
+      "frames": 8388608,
+      "pcm_sha256": "e810f39b1f88dff446abfe8bc8ec339cbdffd9bbf135706412c27b1a892e85f6",
+      "rate": 48000,
+      "wav_bytes": 33554476,
+      "wav_sha256": "d81ab6d14de89d2789a6ea7f6ff47011eb8f40dabee2f6ccb1d586280f509c7d"
+    }
+  },
+  "libsndfile": "1.2.2",
+  "numpy": "2.3.5",
+  "pcm_bytes_each": 33554432,
+  "soundfile": "0.13.1"
+}
