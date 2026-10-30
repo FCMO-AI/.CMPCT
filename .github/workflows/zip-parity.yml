@@ -318,6 +318,28 @@ jobs:
             --max-time-regression 0.05 \
             --max-size-regression 0.01
 
+      - name: J24G53e post-ABBA native source/runtime provenance (diagnostic only)
+        # Runs after the unchanged timed A/B/B/A and original comparator, including when that
+        # comparator fails. This never changes performance thresholds or a timed phase.
+        if: always()
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          mkdir -p benchmark-artifacts
+          if [ ! -f benchmark-artifacts/base-native.json ] || [ ! -f benchmark-artifacts/base-b.json ] || \
+             [ ! -f benchmark-artifacts/candidate-b.json ]; then
+            printf '%s\n' '{"schema":"cmpct-j24g53e-post-abba-native-runtime-v1","status":"UNMEASURED_INCOMPLETE_ABBA"}' \
+              > benchmark-artifacts/native-runtime-post-abba.json
+            exit 0
+          fi
+          python tools/j24g53e_native_runtime_custody.py \
+            --candidate "$GITHUB_WORKSPACE" \
+            --base /tmp/cmpct-performance-base \
+            --candidate-sha "$EVIDENCE_HEAD" \
+            --base-sha "$BASE_SHA" \
+            --base-receipt benchmark-artifacts/base-native.json \
+            --output benchmark-artifacts/native-runtime-post-abba.json
+
       - name: Publish performance summary
         if: always()
         run: |
