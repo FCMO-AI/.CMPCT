@@ -1,0 +1,74 @@
+{
+  "schema": "j24g86-charged-index-checkpoint-result-v1",
+  "source": {
+    "release": "v0.30.0",
+    "format_rev": 24,
+    "original_detached_zip_sha256": "6d0542f0938740a0d82acb0e3f1a57a46fffc9ecafcc6c4bea79187cc607e016",
+    "nested_hosted_zip_sha256": "f8e21fdb7d7f52eb230ef2abdb0c06b24ae56ee165b3763c651128cf1460bc5a",
+    "original_pr": 833
+  },
+  "method": "independent no-CMPCT r24 physical parser, SHA-256 linked footers, full CMA4 CRC/SHA, MessagePack full index reencode, charged Zstd levels 1/3/19, alternate CLI 1/3/19/22 checkpoint32",
+  "case_results": {
+    "8192-middle": {
+      "sha256": "5e10557902c3bfe33f1136e4b99819eec0f6e9e98df3db1270c2d05cea37e26a",
+      "archive_bytes": 1017260,
+      "blobs_verified": 8192,
+      "footers": 65,
+      "cadence": {
+        "8": {
+          "extra_bytes": 524590,
+          "overhead_pct": 51.569,
+          "worst_delta_steps": 7
+        },
+        "16": {
+          "extra_bytes": 224854,
+          "overhead_pct": 22.104,
+          "worst_delta_steps": 15
+        },
+        "32": {
+          "extra_bytes": 74954,
+          "overhead_pct": 7.368,
+          "worst_delta_steps": 31
+        }
+      },
+      "cli_k32_strongest_compressed_index_bytes": 74348
+    },
+    "32768-tail": {
+      "sha256": "8402712cb12b53faf7868f60c27fb6c79b97272c76e5808d54c4b8aa623f8f81",
+      "archive_bytes": 4084062,
+      "blobs_verified": 32768,
+      "footers": 65,
+      "cadence": {
+        "8": {
+          "extra_bytes": 1983983,
+          "overhead_pct": 48.579,
+          "worst_delta_steps": 7
+        },
+        "16": {
+          "extra_bytes": 851774,
+          "overhead_pct": 20.856,
+          "worst_delta_steps": 15
+        },
+        "32": {
+          "extra_bytes": 281058,
+          "overhead_pct": 6.882,
+          "worst_delta_steps": 31
+        }
+      },
+      "cli_k32_strongest_compressed_index_bytes": 281091
+    }
+  },
+  "research_gate": {
+    "max_byte_overhead_pct": 5,
+    "min_worst_case_delta_work_improvement": 2,
+    "all_cases_required": true
+  },
+  "verdict": "DENSE_FULL_CHECKPOINTS_TRIAGE_FAIL",
+  "limitations": [
+    "O0 only, no real alternate archive created",
+    "No Reader latency/RSS/I/O benchmark",
+    "Two deletion-only physical histories on local Linux",
+    "No product CI proof or release authority"
+  ],
+  "next": "Preregister factorized member-plane checkpoint with authenticated unchanged blob/recipe/fsmeta root; charge source custody and decoder complexity"
+}
