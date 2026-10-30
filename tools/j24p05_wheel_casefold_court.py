@@ -76,6 +76,12 @@ def install(path: Path, root: Path, label: str) -> dict:
     target = root / ("installed-" + label)
     cmd = [sys.executable, "-m", "pip", "install", "--no-index", "--no-deps",
            "--no-compile", "--ignore-installed", "--target", str(target), str(path)]
+    if platform.system() == "Linux":
+        # A real macOS wheel is incompatible with this Linux host by default.
+        # pip's explicit cross-platform target validates its actual install path
+        # mapping while leaving the inert foreign Mach-O unexecuted.
+        cmd[4:4] = ["--platform", "macosx_10_12_universal2", "--python-version", "3.11",
+                    "--implementation", "cp", "--abi", "cp311", "--only-binary=:all:"]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     actual = target / NATIVE
     raw = actual.read_bytes() if actual.is_file() else None
@@ -99,6 +105,13 @@ def run(root: Path) -> dict:
         "unrelated": build(root, "unrelated", "cmpct/UNRELATED.txt", False),
         "collision_before": build(root, "collision_before", equivalent_name, True),
         "collision_after": build(root, "collision_after", equivalent_name, False),
+        # Post-hoc local discovery, prospectively replicated by J24P05b host court.
+        "alias_parent": build(root, "alias_parent", "cmpct/../" + NATIVE, False),
+        "alias_dot": build(root, "alias_dot", "./" + NATIVE, False),
+        "alias_repeated_separator": build(root, "alias_repeated_separator",
+                                          "cmpct//" + NATIVE.split("/", 1)[1], False),
+        "alias_internal_dot": build(root, "alias_internal_dot",
+                                    "cmpct/./" + NATIVE.split("/", 1)[1], False),
     }
     result = {
         "schema": "cmpct-j24p05-path-equivalence-court-v1",
@@ -122,13 +135,13 @@ def run(root: Path) -> dict:
         result["cases"][label] = {
             "wheel": path.name, "wheel_sha256": sha(path.read_bytes()),
             "size": path.stat().st_size, "gate": verdict,
-            "pip": install(path, root, label) if platform.system() == "Darwin" else
-                   {"not_executed": "incompatible wheel tag on non-macOS host"}
+            "pip": install(path, root, label) if platform.system() in ("Darwin", "Linux") else
+                   {"not_executed": "unsupported host for the bounded court"}
         }
     # Positive-control failures mean that this court did not establish its baseline.
     assert result["cases"]["original"]["gate"]["pass"], "positive gate control failed"
     assert result["cases"]["unrelated"]["gate"]["pass"], "distinct-name control failed"
-    if platform.system() == "Darwin":
+    if platform.system() in ("Darwin", "Linux"):
         assert result["cases"]["original"]["pip"]["returncode"] == 0, "positive pip control failed"
         assert result["cases"]["original"]["pip"]["primary_native_retained"], "positive pip native changed"
     return result
