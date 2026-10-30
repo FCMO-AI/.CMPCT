@@ -21,7 +21,7 @@ _REF_FILE = Path(__file__).resolve().parents[1] / "research" / "j24g58_frozen_pa
 
 def _original():
     raw = _REF_FILE.read_bytes()
-    git_blob = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\\x00" + raw).hexdigest()
+    git_blob = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\x00" + raw).hexdigest()
     assert git_blob == _PARENT_BLOB, "Frozen J24G57 semantic oracle was modified"
     return runpy.run_path(str(_REF_FILE))["_apply_journal_ops"]
 
