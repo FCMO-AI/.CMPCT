@@ -136,6 +136,30 @@ class RefereeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate ZIP member names"):
             self.call(b)
 
+    def test_duplicate_json_object_key_rejected(self):
+        self.fixture()
+        # The baseline json.loads last-key-wins behavior admits a conflicting metric.
+        original = self.provider()
+        with zipfile.ZipFile(io.BytesIO(original)) as z:
+            entries = {k: z.read(k) for k in z.namelist()}
+        span = b'"create_s_median": 0.1'
+        assert span in entries["base-a.json"]
+        entries["base-a.json"] = entries["base-a.json"].replace(span, b'"create_s_median": 0.2, "create_s_median": 0.1', 1)
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            for k, v in entries.items():z.writestr(k,v)
+        with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
+            self.call(buf.getvalue())
+
+    def test_boolean_archive_lengths_rejected(self):
+        self.fixture()
+        # Python bool is a subclass of int; permit it and byte-accounting becomes ambiguous.
+        for n in court.SWEEPS:
+            self.sweeps[n]["corpora"]["tiny"]["library"]["cmpct"]["bytes"] = True
+            self.sweeps[n]["corpora"]["tiny"]["logical_bytes"] = True
+        with self.assertRaisesRegex(ValueError, "invalid (logical|archive) bytes"):
+            self.call()
+
     def test_missing_sweep(self):
         self.fixture()
         b = io.BytesIO()
