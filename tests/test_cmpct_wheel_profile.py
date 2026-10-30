@@ -81,6 +81,9 @@ class StrictProfile(unittest.TestCase):
     def test_21_reject_file_ancestor(self):self.check([('file',b'inert'),('file/child',b'inert')],False)
     def test_22_reject_duplicate_wheel(self):self.check([('other-1.0.dist-info/WHEEL',b'Wheel-Version: 1.0\n')],False)
     def test_23_accept_unicode_nonalias(self):self.check([('pkg/caf\u00e9.py',b'a'),('pkg/cafe.py',b'b')])
+    def test_26_win32_dos_device_space_before_extension(self):self.check([('cmpct/CON .txt',b'inert')],False)
+    def test_27_win32_com_port_space_before_extension(self):self.check([('cmpct/COM1 .txt',b'inert')],False)
+    def test_28_win32_auxiliary_device_multiple_spaces(self):self.check([('cmpct/AUX  .txt',b'inert')],False)
     def test_24_cli_rejects(self):
         fixture(self.wheel,[(STEM+'.data/data/other/unused',b'no')]);r=subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/'tools/validate_cmpct_wheel_profile.py'),str(self.wheel)],capture_output=True,text=True)
         self.assertEqual(r.returncode,1)
