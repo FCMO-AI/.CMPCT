@@ -70,3 +70,16 @@ The initial historical O7/O9 paragraph above is **overbroad if read as a solved 
 What *can* transfer from O7: bounded indexed position/duplicate semantics, independent source/evaluator discipline and possible data-structure architecture, **after** changing ownership across generations while preserving #795's path-based fsmeta metadata lineage and fail-closed grammar. What *cannot* transfer: the measured multiplier, the current `len(ops)>=8` trigger, a whole-file transplant or blanket claim the current ordinary public Writer debt is already solved.
 
 The decision from J24G60 remains **unchanged**: 3/3 actual public Writer single-op chain cold-open excess is physically real on the measured current #795 source. The strengthened next discriminator is a carefully bounded, *truly cross-generation* replayer (or checkpoint ownership experiment), with the historical O7 **multi-op** behavior used only as an engineering prior, and original per-generation `_apply_journal_ops` as strict control. This source-bound correction is appended rather than deleting the original counterfactual, preserving the chain of scientific reasoning. No Discovery-wide policy conclusion is earned.
+
+
+## Raw-sample sensitivity and simple causal cost envelope
+
+The detached independent receipt auditor additionally checked **all 384 process samples** rather than accepting reported aggregates. At **N=2048,d=63**, the eight **individual** wall samples per variant had **no overlap** on any host (millisecond intervals):
+
+| Host | chain minimum–maximum | extra-checkpoint minimum–maximum | four paired ABBA block differences |
+|---|---:|---:|---:|
+| Ubuntu | 27.087–28.422 | 2.627–2.832 | +24.781, +24.549, +24.964, +25.573 ms |
+| macOS | 34.766–39.530 | 2.300–3.468 | +33.189, +35.253, +33.119, +33.812 ms |
+| Windows | 57.075–60.451 | 3.886–4.896 | +53.923, +53.364, +55.041, +55.537 ms |
+
+Unadjusted four-depth linear fits of observed **chain** time vs depth yield per-generation slopes, for 512 and 2,048 entries respectively, of **0.0979/0.3924 ms (Ubuntu)**, **0.1595/0.5199 ms (macOS)**, and **0.2160/0.8539 ms (Windows)**. This is consistent with repeated N-dependent replay as depth increases; a four-point slope cannot prove the precise complexity class or allocate cost among sorting, metadata lineage, footer decode and validation. The check reinforces the **real measured opportunity** while not relaxing any product-economics, storage or security requirements.
