@@ -24,7 +24,7 @@ PARENT_BLOB = "03743ca2a06c022c2ec64243a90fe373cf91e899"
 
 def source_blob(path):
     raw = path.read_bytes()
-    return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\\x00" + raw).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\x00" + raw).hexdigest()
 
 
 def case(n):
