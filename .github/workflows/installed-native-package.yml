@@ -184,7 +184,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint > "$RUNNER_TEMP/desktop-package-fingerprint.json"
+          # Rolling v0.30 already released with required_receipts=[]: the strict pre-release
+          # front door deliberately rejects this state. Reuse the same CORE.fingerprint
+          # algorithm through its post-release-aware reader; do not alter release gates.
+          python -m tools.check_v030_release_lock --print-fingerprint > "$RUNNER_TEMP/desktop-package-fingerprint.json"
           FP="$(python - <<'PYFP'
           import json, os, pathlib
           data=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'desktop-package-fingerprint.json').read_text())
