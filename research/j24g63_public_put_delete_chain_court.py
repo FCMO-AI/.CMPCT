@@ -249,6 +249,9 @@ def main() -> None:
                 "decision": ("MATERIAL" if primary["delta_wall_ns"] >= 3_000_000
                              and primary["delta_fraction_of_chain"] >= 0.10
                              else "NOT_MATERIAL"), "threshold": threshold}
+    # Self-consistency digest binds *all* raw observations, not just median ranks.
+    report["raw_samples_sha256"] = hashlib.sha256(json.dumps(
+        report["samples"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     output.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     print("J24G63_HEAD", identity["head"])
     for kind in KINDS:
