@@ -54,6 +54,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git merge-base --is-ancestor fb5d96cdb8855fe3e01868792e65b79d3d61661d HEAD
           git merge-base --is-ancestor aa550b7a928dc9a34d363665713379004e331270 HEAD
+          git merge-base --is-ancestor 0c3511f8d2f0b8dc02e4d37992919849c069bdf3 HEAD
           git diff --exit-code fb5d96cdb8855fe3e01868792e65b79d3d61661d HEAD -- src/cmpct/ tests/conformance/ benchmarks/history/
           test "$(git rev-parse HEAD:src/cmpct/builder.py)" = a2160a2f6b1ca3ef8cd94897cb68bb2fcb74ebc2
           test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
