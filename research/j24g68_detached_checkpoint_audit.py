@@ -103,7 +103,7 @@ def audit(before: Path, after: Path, receipt_path: Path) -> dict:
     expected_prev = footers[0]["position"]
     assert expected_prev == r["last_prior_footer_offset"]
     prior_index, prior_meta = replay_without_cmpct(primary, deltas)
-    assert len(prior_index["files"]) == 117
+    assert len(prior_index["files"]) == 118
     assert prior_meta["final_signed_xattr_paths"] == 5
     independently_expected = independent_rename(prior_index)
     physical = checkpoint(post_raw, expected_prev)
@@ -112,7 +112,7 @@ def audit(before: Path, after: Path, receipt_path: Path) -> dict:
     assert msgpack.packb(actual, use_bin_type=True) == msgpack.packb(
         independently_expected, use_bin_type=True), "checkpoint indexed wire bytes differ"
     assert digest(msgpack.packb(actual, use_bin_type=True)) == r["final_index_msgpack_sha256"]
-    assert len(actual["files"]) == r["final_members"] == 117
+    assert len(actual["files"]) == r["final_members"] == 118
     # A corrupted physical footer cannot be misclassified as valid checkpoint.
     mutated = bytearray(post_raw)
     mutated[-1] ^= 0x01
