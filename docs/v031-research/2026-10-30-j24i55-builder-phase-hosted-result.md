@@ -53,3 +53,33 @@ A separate Python script using independent libzstd, MessagePack, SHA-256 and CRC
 ## CI and late state boundary
 
 After the first successful scientific HEAD, a portable independent physical r24 referee was added in a further candidate commit with a new workflow step. The current exact-head CI and evidence dossier must be reconciled separately. A later documentation commit **does not retroactively change** the first source/head result, run ID, artifact bytes or its negative decision. No merge, release, canonical file mutation or format change.
+
+
+## Independently hosted second attempt: contradictory higher-rung result
+
+The **independent second hosted execution** of the *same preregistered science instrument*, augmented only with a detached physical authenticity check, produced a different prospective disposition. [GitHub Actions #41043653341](https://github.com/FCMO-AI/.CMPCT/actions/runs/41043653341) on exact code HEAD `402f85d5e7c6eef07c4cbb6272e27d91232741bc` completed **SUCCESS**, including the no-CMPCT-import numeric referee **and** the physically independent r24 referee; original [artifact #12971441653](https://github.com/FCMO-AI/.CMPCT/actions/runs/41043653341/artifacts/12971441653) is 17,573,203 bytes, ZIP SHA-256 `8c8328d726a7a47f6e2c0a67cbcc844a46872b2134878a0cab147fc66a0a337b`.
+
+| Instrument | FRESH median | BUILD median | BUILD−FRESH |
+|---|---:|---:|---:|
+| Full Builder wall | 130.058 ms | 137.301 ms | +7.243 ms / **+5.569%** |
+| Full Builder process CPU | 158.855 ms | 166.097 ms | +7.242 ms / **+4.559%** |
+| Scan process CPU | 55.302 ms | 60.085 ms | +4.783 ms |
+| Ordered encode CPU | 43.539 ms | 45.009 ms | +1.470 ms |
+| Minor process faults | 16,879.5 | 20,686 | +3,806.5 |
+| Major process faults | 0 | 0 | unchanged |
+
+The FRESH/FRESH label sham was +0.639 ms (+0.497%) wall and +0.804 ms (+0.512%) CPU, within both preregistered bounds. Both reversed-order experiment groups retained positive >3 ms CPU and wall differences. As a result, this *individual execution* returned **`NON_ENCODE_STAGE_BURDEN_SUPPORTED`**. Encoded work accounted for **20.30%** of the aggregate median process-CPU delta rather than >=60%.
+
+Its physical independent verifier checked the full 16,793,243-byte archived CMPCT file, index/footer exact framing and hashes, and every one of **123 contiguous CMA4 physical records** (64 RAW, 59 Zstd), requiring full decoded lengths, CRC32 and SHA-256. It reported archive SHA-256 `f00e7b90cc165da40ae88a1cf24d539a6f075952a14f130679ee770087fca5bb`, index SHA-256 `be6074e2efed19c91387adeccae0c48dcda593491b1755c329f3945a70f365b7`, total decoded 32,243,712 bytes, identical native library source SHA to the first attempt. No product source edits occurred between attempts; external auditing also separately reproduced these facts.
+
+### Combined two-attempt decision, deliberately narrower than the second success
+
+- **H1 encode-dominant CPU theory** was not supported in either attempt (25.52%, 20.30% of aggregate median delta); it is **falsified within this experimental frame**.
+- **H2 non-encode/scanning** is a *plausible owner family*: scan CPU increased +6.501 ms in attempt 1 and +4.783 ms in attempt 2; minor faults rose by roughly 3.8k in both. However the first run **failed the preregistered FRESH/FRESH sham absolute veto**, so the strict H2 decision **does not replicate**. The scientifically valid cross-attempt claim is **directional evidence, owner not decisively established**.
+- The first and second provider environments differed substantially: FRESH median wall 194.373 versus 130.058 ms; instrumented absolute numbers and raw file metadata cannot be treated as identical across providers. Differences are not evidence of improved product throughput.
+- Do **not** retune the sham rule, ignore contradictory evidence or declare that scan or page-fault changes caused the two historical #807 candidate/base release-gate reds. Those failures remain binding.
+- At this point the same research family has yielded useful negative knowledge but diminishing decision leverage. **Retire short prefix-treatment variants;** investigate a materially different full-harness chronology/provenance gate frame or an independently owned correctness productization boundary. Do not spend another hosted run solely to make a favored phase decision green.
+
+**Counterfactual discriminator:** The FRESH/FRESH sham absolute cutoff immediately distinguishes the first run from the second; the independent second attempt prevents overclaiming a unique non-encode cause. No new global Discovery Engine policy change is earned. The present final documentation HEAD is a later *documentation-only* change: it has not changed either result-bearing science SHA or their physical evidence.
+
+**CI caveat:** The two J24I55 specialized execution heads were SUCCESS, and the second additionally executed full independent CMA4 physical verification. Separate generic Engineering Evidence / General Tests on the latest documentation HEAD require their own exact-head check and must not be inferred from these earlier results.
