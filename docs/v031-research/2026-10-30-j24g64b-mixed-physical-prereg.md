@@ -1,0 +1,19 @@
+# J24G64b — preregister authentic mixed public-Writer archive falsifier
+
+Date: 2026-10-30 UTC. **FOLLOW-UP physical test registered before its implementation/results.** Builds on independent J24G64 prospective logical/sparse metadata contract `624eec80b90ec25bf22501f66b92b7a32e6b928b`, preserving its originally planned 5,000 differential cases, 14 targeted identity attacks, 2,048×63 mixed replay-only court and thresholds unchanged. Product source branch is #804 at `9dc765a902c0f5c424639caf9cdfd571cca2d6e6`, inherited r24 journal helper blob `03743ca2a06c022c2ec64243a90fe373cf91e899`.
+
+## Question and distinctive new evidence
+Does mixed cross-generation factoring reconstruct the *exact effective index* of a **physically emitted, authentically committed 63-generation** archive produced by original Builder and public Writer methods, rather than only standalone Python delta lists? This tests physical blob table, history order, footer SHA and MessagePack byte identity. It is not a second benchmark score.
+
+## Frozen prospective design
+- Build a generated 128-member archive from ordinary 64-byte files, then execute 21 cycles of **one rename, one delete, one update** (63 real signed generations), with update alternating replacement of a surviving member and insertion of a fresh member. Never manually write a malformed footer.
+- Use exact inherited `j24g60_single_delta_chain_court.footer_chain` to check 64 footer objects, 63 one-op deltas, strict footer type/codec/SHA/lineage, and original archive SHA unchanged after the research comparator.
+- Use `j24g62_crossgen_rename_oracle.read_wire` to independently unpack the actual chronological base/deltas. Assert that parent original replay, proposed mixed factor and installed Reader index are identical as Python objects and MessagePack bytes; verify all accessible members through Reader and preflight. Assert representative renamed, deleted, replaced and inserted file contents.
+- Confirm exact installed Builder/Reader/Writer/replay/validator Git blob pins through inherited `verify_source()`. Preserve complete physical file bytes, SHA256, stored member count and final replay admission route in a separate JSON receipt. Retain only a controlled **generated** archive sample if an artifact is useful; no private data.
+- Do not alter original benchmark/corpus/threshold or product implementation. Stop and retain any failure with exact error. A positive physical sample requires cross-platform independent CI receipts; Python package reconstruction is still not an in-Reader acceleration or a release criterion.
+
+## Risks and negative controls
+The generated tree has no deliberately captured valid sparse filesystem xattrs, and Windows xattr ABI remains distinct. Therefore positive J24G64b physical evidence does **not** validate sparse fsmeta physically: the separate logical exact-source differential cases remain that lower evidence rung. Builder may introduce implicit directory rows; verify the actual row count rather than assume exactly 128. Updates may choose the original codec's raw/Zstd path; no claim of storage-size acceleration. Runtime of 63 Writer appends is not the replay-only A/B benchmark. Keep original physical archives unchanged and never change source/historical artifact identity in a misleading way.
+
+## Disproof and decision
+Any parent source drift, incomplete/invalid signed wire, incorrect 63 one-op geometry, changed physical archive, mismatched final index or MessagePack bytes, Reader/preflight disagreement, incorrect member bytes, or not-actually-factored route **kills/narrows physical transfer** regardless of favorable synthetic 2× speed. If all pass, record physical correctness of a *non-shipping detached oracle*, not a promotion. Continue with sparse physically signed metadata, 64th checkpoint/recovery and complete reader cold-open only under the rightful #795 owner.
