@@ -43,6 +43,18 @@ def test_desktop_evidence_routes_to_prospective_source_not_historical_release_lo
         assert assertion in text
 
 
+def test_cross_host_fixed_codec_vector_is_an_explicit_aggregate_gate() -> None:
+    # This detects a future accidental deletion of a genuine package-level
+    # cross-platform invariant; hosted aggregation remains the result authority.
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert "vector_digests={row['dict_vector_sha256'] for row in platform.values()}" in workflow
+    assert "assert len(vector_digests)==1" in workflow
+    assert "'cross_host_dict_vector_sha256':next(iter(vector_digests))" in workflow
+    # Do not conflate physical archive SHA with this fixed codec vector; Windows
+    # may retain legitimate host-specific filesystem metadata.
+    assert "'archive_sha256':s['representative_archive_sha256']" in workflow
+
+
 def test_prospective_receipt_from_authentic_source_and_exact_head(tmp_path: Path) -> None:
     head = _head()
     output = tmp_path / "candidate-source.json"
