@@ -61,6 +61,18 @@ class RefereeTests(unittest.TestCase):
         o = next(e for e in r["official_cmpct"] if e["corpus"] == "tiny" and e["mode"] == "library" and e["operation"] == "create")
         self.assertFalse(o["historical_release_red"])
 
+    def test_both_blocks_positive_does_not_prove_source_change(self):
+        self.fixture()
+        # A and B both show a gate-sized label effect, although the script receives no
+        # mutation or source distinction within either synthetic arm.
+        for block in ("a", "b"):
+            self.sweeps["candidate-"+block+".json"]["corpora"]["nested"]["cli"]["cmpct"]["create_s_median"] = 0.108
+        r = self.call()
+        o = next(e for e in r["official_cmpct"] if (e["corpus"],e["mode"],e["operation"]) == ("nested","cli","create"))
+        self.assertTrue(o["historical_release_red"])
+        self.assertTrue(o["both_blocks_positive_crossing"])
+        self.assertTrue(o["both_within_arm_neutral"])
+
     def test_provider_digest_mismatch(self):
         self.fixture()
         b = self.provider()
