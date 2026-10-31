@@ -135,5 +135,17 @@ class FinalWheelCliContract(unittest.TestCase):
     def test_30_whitespace_only_value_rejected(self):
         self.assert_reject(b'[console_scripts]\ncmpct =    \n', pattern='differs')
 
+    def test_31_source_checkout_line_endings_preserve_semantic_identity(self):
+        # On real hosted Windows builds pyproject may be CRLF while Linux/macOS
+        # checkouts are LF. Raw source SHA differs; entrypoint meaning does not.
+        make_wheel(self.wheel)
+        source_bytes = self.manifest.read_bytes()
+        baseline = inspect(self.wheel, self.manifest)
+        self.manifest.write_bytes(source_bytes.replace(b'\\n', b'\\r\\n'))
+        translated = inspect(self.wheel, self.manifest)
+        self.assertNotEqual(baseline['source_manifest_sha256'], translated['source_manifest_sha256'])
+        self.assertEqual(baseline['source_semantic_sha256'], translated['source_semantic_sha256'])
+        self.assertEqual(baseline['wheel_sha256'], translated['wheel_sha256'])
+
 
 if __name__ == '__main__': unittest.main()
