@@ -113,6 +113,17 @@ def check_sample(raw: bytes, name: str):
     future_prefix = struct.pack('<8sBBBBQQQ', MAGIC, 1, 0, 0, 0, 1, 1, latest['pos'])
     extension = sha(DOMAIN + pinned + struct.pack('<Q',seq_pos) + future_prefix + fictitious_payload_sha)
     require(extension != pinned, 'authorized append did not rotate anchor')
+    # Negative physical-coverage control. CMA4's fixed 64-byte header (r24)
+    # precedes member payload; ancestry commits only to footer metadata.
+    blob = raw.index(b'CMA4')
+    bm, bc, bf, br, usize, csize, meta_len, crc, blob_sha = struct.unpack_from('<4sBBHQQII32s',raw,blob)
+    physical_payload = blob + 64 + meta_len
+    require(bm == b'CMA4' and csize and physical_payload + csize <= len(raw), 'CMA4 bounds')
+    changed_blob = bytearray(raw)
+    changed_blob[physical_payload] ^= 1
+    require(head(parse_chain(bytes(changed_blob)))[0] == pinned,
+            'physical mutation unexpectedly changes metadata-only head')
+    require(sha(bytes(changed_blob)) != sha(raw),'whole file SHA must detect mutated blob')
     extra_archive = len(original) * 32
     extra_external_latest = 32
     extra_external_all_epochs = len(original) * 32
@@ -126,6 +137,8 @@ def check_sample(raw: bytes, name: str):
             'double_rewire_rejected_by_pinned_head':True,
             'local_rehash_with_replaced_untrusted_head_admitted':spoofed_external_head_admits,
             'payload_corruption_refused':True,
+            'physical_blob_payload_mutation_invisible_to_ancestry_head':True,
+            'whole_file_sha_detects_blob_mutation':True,
             'authorized_model_append_requires_new_head':extension != pinned,
             'authorized_model_append_head_SHA256':extension.hex(),
             'candidate_archive_extra_bytes_lower_bound':extra_archive,
