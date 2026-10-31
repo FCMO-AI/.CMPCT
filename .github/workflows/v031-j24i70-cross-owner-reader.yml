@@ -37,7 +37,6 @@ jobs:
         os: [ubuntu-24.04, windows-2022]
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      PYTHONPATH: ${{ github.workspace }}/src
       J24I70_EVIDENCE: evidence/j24i70
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
