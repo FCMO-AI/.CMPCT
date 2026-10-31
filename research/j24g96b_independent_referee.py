@@ -60,6 +60,7 @@ def verify(args,receipt):
                     ('decoded_footer_bytes_hashed',calculated['decoded'])]:
                     check(target[field]==want,key+'/'+filename+'/'+field)
                 for field in ('current_r24_semantics_incompatible','single_rewire_fail_closed',
+                    'double_rewire_fail_closed',
                     'malicious_rehash_requires_changed_trusted_root',
                     'footer_payload_mutation_rejected','physical_blob_mutation_invisible_to_footer_head'):
                     check(target[field] is True,'negative flag '+field)
