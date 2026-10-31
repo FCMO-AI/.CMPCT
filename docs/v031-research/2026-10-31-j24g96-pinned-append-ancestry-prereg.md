@@ -1,0 +1,30 @@
+# J24G96 — Prospectively frozen O0: externally pinned append ancestry vs whole-file snapshot
+
+**Freeze:** 2026-10-31 UTC. **Research only.** Base `main@80c358f8824ec1b20d349c92ed94c898090969b0` (v0.30.0 / r24); this document is committed **before** the new experiment/instrument/results. No product, format, version, ABI, benchmark, evaluator, release or shared-discovery-state modifications.
+
+## Authority, claim and concurrency
+Current `AGENTS.md`, `AGENT_HUB.md`, Discovery Engine, release law, issue #857 and independent owners #856/#859/#860/#861/#866/#376/#379/#384 reviewed. No owned PR was found for this **exact narrower question**: an externally trusted, cumulatively linked *append-head* commitment costed on authentic r24 footer histories. #866 owns **whole-file SHA snapshots** and its future-codec tests; #859 owns nearest-rooted attack, #860/#861 own recovery. This branch changes only its own research files. Do not edit their code, PRs, or `docs/discovery/STATE.json` (#574 owner). This is a separate theoretical model; neither a replacement nor a shipping integration.
+
+## Primary scientific question / mechanism
+Can a hypothetical future append log carry a 32-byte domain-separated cumulative footer commitment, with an **independently trusted 32-byte latest head**, such that legitimate r24 footer chains agree and one- and two-link predecessor rewires cannot be accepted under the original pinned head, while charging only O(number of appended footers) internal bytes rather than a whole-archive SHA read per append?
+
+Counterfactual mechanism: for each genuine footer at physical offset `pos`, compute
+`H(domain || previous_cumulative_hash || little-endian(pos, prev, kind, codec, compressed_len, uncompressed_len) || stored_payload_sha)`.
+For baseline model trust the initial 32-byte zero accumulator. Require `prev` to identify the prior record of the observed ordered chain. Hypothetical future writer stores each 32-byte cumulative hash in *additional* bytes, never overwriting the r24 payload digest. The external trusted head must be updated durably after every authorized committed append. Verify with fixed trusted head, not with the attacker's recomputed local digest. Require full physical r24 payload validation in test preparation to avoid accepting a fake stored SHA. This model covers **footer ancestry only**, not archive origin/authorship, physical blob payload integrity, concurrent update safety, crash-atomic external-head publication or filesystem snapshots.
+
+## Strongest controls, alternative explanation and cost
+A trusted full-file SHA-256 snapshot (#866) is strictly **stronger** (covers all archive bytes) and is the mandatory control for post-append modification, but requires reading O(complete archive bytes) for each new anchor. The per-append anchored lineage model has weaker integrity scope, requires externally authenticated head custody, an extra 32 bytes per footer in any realizable new format and 32 bytes of trusted external state per latest version (more if all versions retained). This cost comparison is not same-semantics product benchmarking. A self-contained r24 footer digest with no external anchor is a **known negative**: attackers can recompute it (#861 J24G95 future digest oracle). If the external trust origin can be changed by the attacker, the modeled security fails by definition.
+
+## Exact input and tests
+Use the four authentic `{ubuntu,windows}-{16,128}-normal.cmpct` physical r24 archives from GitHub Actions #41128984486, plus four authentic `{ubuntu,windows}-{4096,8192}-A.cmpct` depth-63 archives from J24G91 #853. Current conversation also contains their complete independently SHA-attested ZIP evidence, but only actual repository-hosted source SHA is eligible for GitHub CI. Standalone stdlib+libzstd parser, no CMPCT imports; verify true payload SHA, chain offsets and independent oracle before assertions. Positive: original history + trusted pinned head. Negatives: newest-to-grandparent pointer swap, deep-chain one-link skip, two-link orphan camouflage for 4-footer case, payload mutation, recomputed *local* cumulative hash with unchanged external trusted head, and untrusted replacement head to demonstrate the threat boundary. Include one valid new appended transition and prove it necessarily changes the trusted head.
+
+## Preregistered decision criteria
+- All eight original chains independently decode and verify exact r24 payload SHA and produce a deterministic trusted head.
+- Every structurally valid ancestor-skip variation must either be rejected by the *pinned* trusted-head comparison or independently rejected by the structural verifier; none may pass as the original committed state.
+- All future 32-byte node commitments plus 32-byte latest externally trusted head must be charged, with honest ratios by input; candidate *archive* overhead <=1% in the six inputs with at least 128 members and <=5% for the two 16-member inputs. No runtime/CPU product speed claim from counts; report exact complete-file bytes hashed in historical full-anchor recomputation as **work proxy only**.
+- An attacker able to replace the trusted root must be shown to defeat the model; never hide that negative.
+- Fail or narrow if a correct r24 original fails, SHA/source evidence mismatches, a one-/two-link rewire passes against a fixed trusted root, footer work is underestimated, or extra metadata exceeds the budget.
+- O0 result does not certify future on-disk grammar, native Reader, recovery, cross-platform performance, concurrency, key management or release.
+
+## Decision unlocked
+If the O0 bound passes, retain a *scoped future authenticated-head representation seed*, not a product plan: next genuine fork is external-head durable atomicity + exact trusted-byte custody, with recovery and selective proof work fully priced. If it fails, retire incremental-head as a cheap ancestry remedy and preserve trusted whole-file SHA (#866) as simpler stronger control. No discovery-policy self-modification or revision-24 retroactive fix.
