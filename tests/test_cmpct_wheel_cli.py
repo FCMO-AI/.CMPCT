@@ -141,7 +141,7 @@ class FinalWheelCliContract(unittest.TestCase):
         make_wheel(self.wheel)
         source_bytes = self.manifest.read_bytes()
         baseline = inspect(self.wheel, self.manifest)
-        self.manifest.write_bytes(source_bytes.replace(b'\\n', b'\\r\\n'))
+        self.manifest.write_bytes(source_bytes.replace(b'\n', b'\r\n'))
         translated = inspect(self.wheel, self.manifest)
         self.assertNotEqual(baseline['source_manifest_sha256'], translated['source_manifest_sha256'])
         self.assertEqual(baseline['source_semantic_sha256'], translated['source_semantic_sha256'])
