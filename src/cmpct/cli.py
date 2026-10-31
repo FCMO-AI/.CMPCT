@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 
+# J24P16 disposable source-only PR admission probe; no runtime semantics changed.
 def main():
     # Footnote: imports are intentionally command-local. A user opening or extracting an archive
     # should not pay startup/import cost for the encoder, transaction mutator and hostile-preflight
