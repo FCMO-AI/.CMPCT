@@ -50,8 +50,8 @@ def high_water_kib():
 
 
 def child(args):
-    import hashlib
-    import msgpack
+    # Do not pre-import Reader dependencies before t0: selected-class import
+    # must pay its own actual import cone, not inherit a warmed msgpack/hashlib.
     sys.path.insert(0, str(REFERENCE / "research"))
     sys.path.insert(0, str(ROOT / "research"))
     label, mode = args[0], args[1]
@@ -72,6 +72,8 @@ def child(args):
         t2, c2 = time.perf_counter_ns(), time.process_time_ns()
         with klass(path) as reader:
             t3, c3 = time.perf_counter_ns(), time.process_time_ns()
+            import hashlib
+            import msgpack
             assert len(reader.by) == count, "different logical membership"
             assert reader.delta_depth == depth, "wrong signed generation depth"
             assert hashlib.sha256(msgpack.packb(reader.index, use_bin_type=True)).hexdigest() == index_sha
