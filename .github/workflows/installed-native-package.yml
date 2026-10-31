@@ -12,8 +12,10 @@ on:
       - "tests/installed_native_package_smoke.py"
       - "tests/test_installed_cmpct_wheel.py"
       - "tests/test_cmpct_wheel_profile.py"
+      - "tests/test_cmpct_wheel_cli.py"
       - "tools/attest_installed_cmpct_wheel.py"
       - "tools/validate_cmpct_wheel_profile.py"
+      - "tools/validate_cmpct_wheel_cli.py"
       - "tools/validate_macos_wheel_abi.py"
       - ".github/workflows/installed-native-package.yml"
   workflow_dispatch:
@@ -55,7 +57,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > "$RUNNER_TEMP/latest-head-files.txt"
           cat "$RUNNER_TEMP/latest-head-files.txt"
-          if grep -Eq '^(pyproject\.toml|MANIFEST\.in|native/cmpct-core/|tests/installed_native_package_smoke\.py|tests/test_installed_cmpct_wheel\.py|tests/test_cmpct_wheel_profile\.py|tools/(attest_installed_cmpct_wheel|validate_cmpct_wheel_profile|validate_macos_wheel_abi)\.py|\.github/workflows/installed-native-package\.yml)' "$RUNNER_TEMP/latest-head-files.txt"; then
+          if grep -Eq '^(pyproject\.toml|MANIFEST\.in|native/cmpct-core/|tests/installed_native_package_smoke\.py|tests/test_installed_cmpct_wheel\.py|tests/test_cmpct_wheel_profile\.py|tests/test_cmpct_wheel_cli\.py|tools/(attest_installed_cmpct_wheel|validate_cmpct_wheel_profile|validate_cmpct_wheel_cli|validate_macos_wheel_abi)\.py|\.github/workflows/installed-native-package\.yml)' "$RUNNER_TEMP/latest-head-files.txt"; then
             echo 'run_package=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_package=false' >> "$GITHUB_OUTPUT"
@@ -83,6 +85,7 @@ jobs:
         shell: bash
         run: |
           python -m unittest discover -s tests -p test_cmpct_wheel_profile.py -v
+          python -m unittest discover -s tests -p test_cmpct_wheel_cli.py -v
           python -m unittest discover -s tests -p test_installed_cmpct_wheel.py -v
       - name: Build source distribution only
         shell: bash
@@ -118,6 +121,7 @@ jobs:
           test -n "$WHEEL"
           test "$(find "$RUNNER_TEMP/wheels" -maxdepth 1 -name 'cmpct-*.whl' -type f | wc -l)" -eq 1
           python "$GITHUB_WORKSPACE/tools/validate_cmpct_wheel_profile.py" "$WHEEL" | tee preinstall-wheel-profile.json
+          python "$GITHUB_WORKSPACE/tools/validate_cmpct_wheel_cli.py" "$WHEEL" --source-manifest "$GITHUB_WORKSPACE/pyproject.toml" --output preinstall-cli-entrypoint.json
           if [ "$RUNNER_OS" = "macOS" ]; then
             python "$GITHUB_WORKSPACE/tools/validate_macos_wheel_abi.py" "$WHEEL" --output preinstall-macos-abi.json
           fi
@@ -130,6 +134,17 @@ jobs:
           test -n "$WHEEL"
           "$PY" -m pip install --no-compile "$WHEEL"
           (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tools/attest_installed_cmpct_wheel.py" "$WHEEL" --source-sha "$EVIDENCE_HEAD" --output "$GITHUB_WORKSPACE/installed-package-identity.json")
+      # A package-byte attestation does not bind the installed console wrapper
+      # generated from wheel entry_points.txt. Execute only the verified genuine
+      # launcher after full installed package custody has passed.
+      - name: Smoke exact installed cmpct console executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Windows" ]; then CLI="$RUNNER_TEMP/cmpct-installed/Scripts/cmpct.exe"; else CLI="$RUNNER_TEMP/cmpct-installed/bin/cmpct"; fi
+          test -f "$CLI"
+          (cd "$RUNNER_TEMP" && "$CLI" --help) | tee installed-cli-help.txt
+          grep -qi 'usage:' installed-cli-help.txt
       - name: Smoke exact attested installed cdylib
         shell: bash
         run: |
@@ -157,6 +172,8 @@ jobs:
             installed-native-smoke.json
             installed-native-deps.txt
             preinstall-wheel-profile.json
+            preinstall-cli-entrypoint.json
+            installed-cli-help.txt
             preinstall-macos-abi.json
             installed-package-identity.json
             ${{ runner.temp }}/wheels/cmpct-*.whl
@@ -192,6 +209,17 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --no-compile "$WHEEL"
           (cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/tools/attest_installed_cmpct_wheel.py" "$GITHUB_WORKSPACE/$WHEEL" --source-sha "$EVIDENCE_HEAD" --output "$GITHUB_WORKSPACE/python-compat-identity.json")
+          # Python 3.10–3.14 compatibility is also a generated-console-script
+          # contract, not only a Python -m cmpct import contract.
+          CLI="$(python - <<'PYCLI'
+import os, sysconfig
+from pathlib import Path
+print(Path(sysconfig.get_path('scripts')) / ('cmpct.exe' if os.name == 'nt' else 'cmpct'))
+PYCLI
+)"
+          test -f "$CLI"
+          (cd "$RUNNER_TEMP" && "$CLI" --help) > python-compat-cli-help.txt
+          grep -qi 'usage:' python-compat-cli-help.txt
           (cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee python-compat-smoke.json
           python - <<'PY'
           import json
@@ -260,6 +288,9 @@ jobs:
               wheel=wheels[0]
               assert '-cp310.cp311.cp312.cp313.cp314-none-' in wheel.name,wheel.name
               profiles=list(p.rglob('preinstall-wheel-profile.json'))
+              cli_reports=list(p.rglob('preinstall-cli-entrypoint.json'))
+              cli_helps=list(p.rglob('installed-cli-help.txt'))
+              assert len(cli_reports)==len(cli_helps)==1,(os_name,cli_reports,cli_helps)
               installs=list(p.rglob('installed-package-identity.json'))
               assert len(profiles)==len(installs)==1,(os_name,profiles,installs)
               profile=json.loads(profiles[0].read_text())
@@ -270,6 +301,11 @@ jobs:
               assert installed.get('source_sha')==source,(os_name,'source custody mismatch')
               wheel_sha=hashlib.sha256(wheel.read_bytes()).hexdigest()
               assert installed.get('wheel_sha256')==wheel_sha,(os_name,'wheel identity mismatch')
+              cli=json.loads(cli_reports[0].read_text())
+              assert cli.get('result')=='PASS' and cli.get('wheel_sha256')==wheel_sha,(os_name,'CLI wheel mismatch')
+              assert cli.get('source_manifest_sha256')==hashlib.sha256(Path('pyproject.toml').read_bytes()).hexdigest(),(os_name,'CLI source manifest drift')
+              assert cli.get('console_script')=={'name':'cmpct','target':'cmpct.cli:main'},(os_name,'CLI target mismatch')
+              assert 'usage:' in cli_helps[0].read_text().lower(),(os_name,'installed launcher did not show help')
               paths=[row['path'] for row in installed['files']]
               assert len(paths)==installed['file_count']==len(set(paths)) and len(paths)>=2
               assert 'native_codec.py' in paths
