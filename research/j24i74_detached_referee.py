@@ -7,6 +7,7 @@ a stronger control and validates the public Writer's physical chain anew.
 from __future__ import annotations
 
 import ast
+import binascii
 import copy
 from collections import Counter
 import hashlib
@@ -18,12 +19,13 @@ import struct
 import subprocess
 import sys
 import tempfile
+import zlib
 
 import msgpack
 import zstandard
 
 from j24i70_detached_referee import (
-    HEADER, FOOTER, ancestors, footer, scan_physical_blob_records,
+    HEADER, FOOTER, BLOB, ancestors, footer, scan_physical_blob_records,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,8 +107,13 @@ def physical_history(data: bytes):
             history[-1]["kind"] == 0, "63-signed-generation-depth")
     root = footer(data, history[-1]["position"])["value"]
     require(root == primary, "root-not-primary")
-    operations = [footer(data, frame["position"])["value"]["ops"][0]
-                  for frame in reversed(history[:-1])]
+    delta_payloads = [footer(data, frame["position"])["value"]
+                      for frame in reversed(history[:-1])]
+    operations = [delta["ops"][0] for delta in delta_payloads]
+    blob_index = list(primary["blobs"])
+    for delta in delta_payloads:
+        require(isinstance(delta.get("blobs"), list), "invalid-new-blob-index")
+        blob_index.extend(delta["blobs"])
     require(len(operations) == 63, "wrong-op-count")
     counts = dict(Counter(op[0] for op in operations))
     require(counts == {"ren": 21, "del": 21, "put": 21}, "not-mixed-21x3")
@@ -144,7 +151,57 @@ def physical_history(data: bytes):
     root_records = scan_physical_blob_records(
         data, primary, HEADER.size + compressed_len)
     require(root_records["decoded_sha_crc_verified"] > 0, "no-physical-blobs-authenticated")
+
+    # FULL independent output-byte test for this direct-RAW/Zstd/Deflate fixture:
+    # Do not use CMPCT Reader, inherited research replay or the reported
+    # member SHA values. Verify the actual physical CMA4 body under each
+    # winning row (including newly appended PUT blob records) and reconstruct
+    # the 118 logical member SHA identities from the genuine original bytes.
+    # More complex recipe/codec shapes must cause an explicit refusal, never a
+    # fictitious general-purpose verification success.
+    physical_base = HEADER.size + compressed_len
+    actual_member_sha = {}
+    for name, row in sorted(files.items()):
+        require(isinstance(row, list) and len(row) >= 7 and
+                isinstance(row[6], list) and len(row[6]) == 2,
+                "unrecognized-file-recipe")
+        recipe_kind, blob_ref = row[6]
+        require(type(recipe_kind) is int and recipe_kind == 0 and
+                type(blob_ref) is int and 0 <= blob_ref < len(blob_index),
+                "non-direct-recipe-unverified")
+        blob = blob_index[blob_ref]
+        require(isinstance(blob, list) and len(blob) == 5 and
+                all(type(v) is int and v >= 0 for v in blob),
+                "invalid-physical-blob-reference")
+        off, usize, csize, codec, meta = blob
+        position = physical_base + off
+        require(position >= physical_base and
+                position + BLOB.size + meta + csize <= len(data),
+                "unbounded-physical-blob")
+        magic, physical_codec, flags, reserved, ps, pc, pm, crc, digest = (
+            BLOB.unpack_from(data, position))
+        require(magic == b"CMA4" and flags == reserved == 0 and
+                (physical_codec, ps, pc, pm) == (codec, usize, csize, meta),
+                "physical-CMA4-header-mismatch")
+        body = data[position + BLOB.size + meta:position + BLOB.size + meta + csize]
+        if codec == 0:
+            decoded = body
+        elif codec == 1:
+            decoded = zstandard.ZstdDecompressor().decompress(
+                body, max_output_size=usize)
+        elif codec == 4:
+            decoded = zlib.decompress(body, wbits=-15)
+        else:
+            raise AssertionError("unsupported-codec-no-independent-credit")
+        require(len(decoded) == usize and len(decoded) == row[4] and
+                hashlib.sha256(decoded).digest() == digest and
+                (binascii.crc32(decoded) & 0xffffffff) == crc,
+                "physical-member-content-SHA-CRC")
+        actual_member_sha[name] = sha(decoded)
+    require(len(actual_member_sha) == 118, "incomplete-physical-member-reconstruction")
     return {
+        "physical_reconstructed_member_sha256": actual_member_sha,
+        "physical_blob_reference_count": len(blob_index),
         "member_names": sorted(files),
         "xattr_names": sorted(xattrs),
         "operations": counts,
@@ -202,8 +259,9 @@ def validate(root: Path):
 
     parity = r["parity"]
     require(parity["names"] == tree_truth["member_names"], "real-replayed-names")
-    require(set(parity["member_sha256"]) == set(tree_truth["member_names"]),
-            "manifest-members")
+    require(set(parity["member_sha256"]) == set(tree_truth["member_names"]) and
+            parity["member_sha256"] == tree_truth["physical_reconstructed_member_sha256"],
+            "independent-physical-member-SHA-mismatch")
     require(parity["manifest_sha256"] == sha(msgpack.packb(
         parity["member_sha256"], use_bin_type=True)), "manifest-hash")
     require(parity["preflight_files"] == 118 and parity["archive_preserved"] is True and
@@ -263,14 +321,15 @@ def validate(root: Path):
     require(len(opens["raw"]) == 18 and set(opens["medians"]) == set(LABELS),
             "missing-raw-timings")
     require(set(opens["tracemalloc_peak_bytes"]) == set(LABELS), "missing-memory-accounting")
+    for block, order in enumerate(ORDERS):
+        require([row["label"] for row in opens["raw"][block * 3:block * 3 + 3]]
+                == [CHAR[c] for c in order], "invalid-balanced-sample-order")
     for label in LABELS:
         samples = [sample for sample in opens["raw"] if sample["label"] == label]
         require(len(samples) == 6, "missing-balanced-timings:" + label)
         require({s["block"] for s in samples} == set(range(6)), "unbalanced")
         for block, order in enumerate(ORDERS):
             row = next(s for s in samples if s["block"] == block)
-            require(CHAR[order[[CHAR[c] for c in order].index(label)]] == label,
-                    "bad-label")
             require(n(row["wall_ns"]) > 0 and n(row["cpu_ns"]) >= 0, "bad-raw-timing")
         for metric in ("wall_ns", "cpu_ns"):
             result = statistics.median(item[metric] for item in samples)
@@ -299,6 +358,11 @@ def adversarial_tests(root: Path):
             "physical_xattrs_required", not r["physical"]["physical_xattrs_required"])),
         ("forged-reader-route", lambda r: r["parity"]["per_reader"]["minimal"].__setitem__(
             "route", "checkpoint")),
+        ("forged-member-hashes-with-consistent-manifest", lambda r: (
+            r["parity"]["member_sha256"].__setitem__(
+                next(iter(r["parity"]["member_sha256"])), "0" * 64),
+            r["parity"].__setitem__("manifest_sha256", sha(msgpack.packb(
+                r["parity"]["member_sha256"], use_bin_type=True))))),
     ]
     rejected = []
     with tempfile.TemporaryDirectory(prefix="j24i74-referee-") as td:
@@ -342,7 +406,7 @@ def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else "evidence/j24i74").resolve()
     result = validate(root)
     result["forged_cases_rejected"] = adversarial_tests(root)
-    require(len(result["forged_cases_rejected"]) == 9, "short-forgery-court")
+    require(len(result["forged_cases_rejected"]) == 10, "short-forgery-court")
     (root / "detached-verdict.json").write_text(json.dumps(result, indent=2, sort_keys=True))
     print(json.dumps({"verdict": result["verdict"],
                       "footers": result["physical"]["chain"],
