@@ -193,6 +193,32 @@ def validate(receipt: dict, root: Path) -> dict:
         check(tax == case["checkpoint_extra_bytes"] and tax > 0, "byte-tax")
         check(math.isclose(tax / len(raw["A"]), case["checkpoint_overhead_ratio"],
                            rel_tol=1e-12), "byte-tax-ratio")
+        # Charge the *actual* original J24G90 checkpoint write, not only its bytes.
+        # Five copied-A preparations are deliberately excluded from the timed update.
+        write = case["checkpoint_write"]
+        check(write["original_A_sha256"] == case["copied"]["A"]["sha256"] and
+              write["reference_B_sha256"] == case["copied"]["B"]["sha256"], "checkpoint-write-input-sha")
+        check(write["additional_stored_bytes"] == tax, "checkpoint-write-byte-tax")
+        check(write["writer_api"] == "same J24G90 _append_generation; fsync two-phase", "checkpoint-api")
+        samples = write["samples"]
+        check(isinstance(samples, list) and len(samples) == 5, "checkpoint-write-five-samples")
+        for sample in samples:
+            check(sample["byte_identical_to_B"] is True and sample["extra_bytes"] == tax,
+                  "checkpoint-byte-equivalence")
+            for metric in ("open_wall_ns", "open_cpu_ns", "append_wall_ns",
+                           "append_cpu_ns", "total_wall_ns", "total_cpu_ns"):
+                check(type(sample[metric]) is int and sample[metric] >= 0, "checkpoint-timing-type")
+            check(sample["total_wall_ns"] == sample["open_wall_ns"] + sample["append_wall_ns"],
+                  "checkpoint-wall-conservation")
+            check(sample["total_cpu_ns"] == sample["open_cpu_ns"] + sample["append_cpu_ns"],
+                  "checkpoint-cpu-conservation")
+            check(sample["total_wall_ns"] > 0 and sample["append_wall_ns"] > 0,
+                  "checkpoint-no-real-write")
+        for metric in ("open_wall_ns", "open_cpu_ns", "append_wall_ns",
+                       "append_cpu_ns", "total_wall_ns", "total_cpu_ns"):
+            check(math.isclose(statistics.median(sample[metric] for sample in samples),
+                               write["medians_ns"][metric], rel_tol=1e-12),
+                  "checkpoint-write-median-forgery")
         timings = case["timings"]
         check(set(timings["files"]) == NAMES, "timed-files")
         for key in NAMES:
@@ -268,6 +294,9 @@ def self_test(receipt: dict, root: Path) -> dict:
         ("raw-sample", lambda x: x["cases"]["4096"]["timings"]["files"]["A"]["raw"].pop()),
         ("prediction", lambda x: x["cases"]["8192"]["predictions"].update(owned_speedup_at_least_2="PASS")),
         ("hypothesis", lambda x: x["hypothesis"].update(owned_narrow_checkpoint_economics="PASS")),
+        ("checkpoint-repeat", lambda x: x["cases"]["8192"]["checkpoint_write"]["samples"].pop()),
+        ("checkpoint-identity", lambda x: x["cases"]["4096"]["checkpoint_write"].update(reference_B_sha256="0"*64)),
+        ("checkpoint-median", lambda x: x["cases"]["4096"]["checkpoint_write"]["medians_ns"].update(total_wall_ns=0)),
     )
     refused = {}
     for title, mutate in tactics:
