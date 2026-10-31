@@ -94,6 +94,36 @@ jobs:
           assert len(referee['adversarial_refusals'])==5
           print('J24I72_PROSPECTIVE_HYPOTHESES', receipt['prospective_two_size_evidence'])
           PY
+      - name: Descriptive import graph and constructor readout (J24I72b)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import statistics
+          from pathlib import Path
+          receipt=json.loads((Path('evidence/j24i72')/'receipt.json').read_text())
+          referee=json.loads((Path('evidence/j24i72')/'detached-referee.json').read_text())
+          assert receipt['status']==referee['status']=='PASS'
+          for size in ('4096','8192'):
+              c=receipt['cases'][size]
+              for archive in ('A','B'):
+                  for label in ('public','factored','owned','delete_only'):
+                      m=c['medians'][archive][label]
+                      print('J24I72B_PHASES',size,archive,label,
+                            'gross_ms=',round(m['whole_process_wall_ns']/1e6,3),
+                            'class_import_ms=',round(m['import_wall_ns']/1e6,3),
+                            'reader_constructor_ms=',round(m['constructor_wall_ns']/1e6,3),
+                            'open_proof_ms=',round(m['open_plus_proof_wall_ns']/1e6,3))
+              for label in ('public','factored','owned','delete_only'):
+                  raw=c['import_only_raw'][label]
+                  assert len(raw)==4
+                  print('J24I72B_IMPORT_ONLY',size,label,
+                        'gross_ms=',round(statistics.median(
+                            r['whole_process_wall_ns'] for r in raw)/1e6,3),
+                        'class_import_ms=',round(statistics.median(
+                            r['import_wall_ns'] for r in raw)/1e6,3))
+          PY
       - name: Preserve original observations, physical archives and failures
         if: always()
         uses: actions/upload-artifact@v4
