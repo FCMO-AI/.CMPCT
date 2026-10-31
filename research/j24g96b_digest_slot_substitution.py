@@ -72,6 +72,17 @@ def case(raw,label):
     variant[last['pos']+36:last['pos']+68]=fake_current
     require(root_of_future(bytes(variant))==fake_current and fake_current!=pinned,
             'recomputed local root passed original external pin')
+    # Two-link orphan camouflage, independently preregistered as a negative.
+    double=bytearray(future)
+    struct.pack_into('<Q',double,last['pos']+28,grandparent['pos'])
+    struct.pack_into('<Q',double,nodes[-2]['pos']+28,0)
+    try:root_of_future(bytes(double),validate=True)
+    except ValueError:pass
+    else:raise AssertionError('two-field parent camouflage accepted')
+    local_double_root=root_of_future(bytes(double),validate=False)
+    double[last['pos']+36:last['pos']+68]=local_double_root
+    require(root_of_future(bytes(double))==local_double_root and local_double_root!=pinned,
+            'double-rewire local rehash evades pinned head')
     broken=bytearray(future);broken[last['pos']-1]^=1
     try:root_of_future(bytes(broken),validate=True)
     except ValueError:pass
@@ -88,7 +99,7 @@ def case(raw,label):
             'hypothetical_archive_bytes':len(future),'additional_archive_bytes':0,
             'external_trusted_latest_head_bytes':32,'original_footer_count':len(nodes),
             'future_verified_root':pinned.hex(),
-            'current_r24_semantics_incompatible':True,'single_rewire_fail_closed':True,
+            'current_r24_semantics_incompatible':True,'single_rewire_fail_closed':True,'double_rewire_fail_closed':True,
             'malicious_rehash_requires_changed_trusted_root':True,
             'footer_payload_mutation_rejected':True,
             'physical_blob_mutation_invisible_to_footer_head':True,
