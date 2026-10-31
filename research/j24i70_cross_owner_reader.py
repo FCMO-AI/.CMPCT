@@ -120,7 +120,10 @@ def check_all_readers(case, n: int) -> dict:
 
 def one_open(path: Path, label: str) -> dict:
     klass = CLASSES[label]
-    batch = 4 if sys.platform == "win32" else 1
+    # Windows process CPU clocks have coarse scheduling quanta: batch enough genuine
+    # full Reader opens to avoid a zero CPU median for the checkpoint control.
+    # This changes neither archive semantics nor any official performance gate.
+    batch = 16 if sys.platform == "win32" else 1
     t0 = time.perf_counter_ns()
     c0 = time.process_time_ns()
     routes = set()
