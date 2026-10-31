@@ -1,27 +1,39 @@
 # ci-lane: deep
+# ci-cancel-policy: cancel-obsolete
 name: J24G96 pinned ancestry O0 (science only)
 on:
-  push:
+  pull_request:
     branches:
-      - agent/phased1-v031-j24g96-trusted-head-chain-o0-20261030
+      - main
+    paths:
+      - 'research/j24g96_*'
+      - 'docs/v031-research/*j24g96*'
+      - '.github/workflows/j24g96-trusted-head-ancestry.yml'
   workflow_dispatch:
 permissions:
   contents: read
   actions: read
 concurrency:
-  group: j24g96-${{ github.ref }}
+  group: j24g96-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   detached-ancestry:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
       - name: Attest exact source and original artifact identity
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 79dff02215278f65f3b90306c8311858141a8f3e HEAD
+          git diff --quiet 80c358f8824ec1b20d349c92ed94c898090969b0 HEAD -- src native
           git hash-object research/j24g96_trusted_head_oracle.py research/j24g96_independent_referee.py
           mkdir -p evidence/source
       - name: Download exact original provider ZIPs (not repacked proxies)
