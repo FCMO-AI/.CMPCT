@@ -1,0 +1,103 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G102: original hosted r24 physical A/B -> fully charged, detached COW root O0
+name: CMPCT J24G102 exact-physical COW-root scientific court
+
+on:
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g101-root-rebase-20261031
+    paths:
+      - "research/j24g102_*"
+      - "docs/v031-research/*j24g102*"
+      - ".github/workflows/v031-j24g102-cow-root-o0.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cmpct-j24g102-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-original-referee:
+    name: Source-pinned archived A/B + COW refutation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preregistration and unmodified released Reader custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/j24g102
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 292ee434d8578ab39e6550708029eb364d33e910 HEAD
+          git merge-base --is-ancestor a516199d8776115f56a3dad82c1071973a0514ec HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          git rev-parse HEAD > evidence/j24g102/head.txt
+          git rev-parse HEAD:research/j24g102_cow_root_oracle.py > evidence/j24g102/oracle_git_blob.txt
+          git rev-parse HEAD:research/j24g102_referee.py > evidence/j24g102/referee_git_blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install detached parser dependencies, not CMPCT product
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install "msgpack>=1.0,<2"
+          python -m pip freeze > evidence/j24g102/pip-freeze.txt
+          python -m py_compile research/j24g102_cow_root_oracle.py research/j24g102_referee.py
+      - name: Download provider originals and match original hosted ZIP identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/j24g102/source
+          for attempt in 1 2 3; do
+            curl --fail --location --silent --show-error --retry 2 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/FCMO-AI/.CMPCT/actions/artifacts/13007508236/zip" \
+              --output evidence/j24g102/source/original_ubuntu.zip && break
+            test "$attempt" -lt 3 || exit 1
+          done
+          for attempt in 1 2 3; do
+            curl --fail --location --silent --show-error --retry 2 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/FCMO-AI/.CMPCT/actions/artifacts/13007244298/zip" \
+              --output evidence/j24g102/source/original_windows.zip && break
+            test "$attempt" -lt 3 || exit 1
+          done
+          echo "19e600a5c1f1798eb2ffeafffc3dd4fbaa81f09fc83090c4610d3d1f2ed42e0b  evidence/j24g102/source/original_ubuntu.zip" | sha256sum -c
+          echo "c697febe772527c0bb488d406325470837774b6df6c30aea191e4e383c61fcab  evidence/j24g102/source/original_windows.zip" | sha256sum -c
+      - name: Run preregistered O0 and detached different-root evidence referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g102_cow_root_oracle.py \
+            --ubuntu evidence/j24g102/source/original_ubuntu.zip \
+            --windows evidence/j24g102/source/original_windows.zip \
+            --out evidence/j24g102/receipt.json | tee evidence/j24g102/court.log
+          python research/j24g102_referee.py \
+            --ubuntu evidence/j24g102/source/original_ubuntu.zip \
+            --windows evidence/j24g102/source/original_windows.zip \
+            --receipt evidence/j24g102/receipt.json | tee evidence/j24g102/detached.log
+          sha256sum evidence/j24g102/receipt.json > evidence/j24g102/receipt.sha256
+      - name: Preserve all physical evidence, including red outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g102-cow-root-original-${{ github.run_id }}
+          path: evidence/j24g102/
+          if-no-files-found: warn
+          retention-days: 30
