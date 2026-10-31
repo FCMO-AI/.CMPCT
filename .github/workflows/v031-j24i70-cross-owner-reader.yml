@@ -90,7 +90,7 @@ jobs:
           referee=json.loads((root/'detached-referee.json').read_text())
           assert report['status'] == referee['status'] == 'PASS'
           assert referee['product_credit'] == 0
-          assert len(referee['adversarial_refusals']) == 10
+          assert len(referee['adversarial_refusals']) == 13
           print('J24I70_OWNED_READER_RESULT', report['hypothesis'])
           print('J24I70_FORENSIC_RESULT', referee['physical'])
           PY
