@@ -1,0 +1,17 @@
+# J24G103c — prospective native-boundary causal attribution (micro only)
+
+**Freeze UTC 2026-10-31, before any J24G103c compiled implementation or measurement.** This is a follow-on to J24G103's frozen O0 **storage** PASS and measured **Python constructor** 110–133× slower than the same-input fixed-block control. Existing #879 owns the physical COW science; no product or release authority. This micro asks only whether that cost is intrinsic to Gear boundary mathematics or dominated by Python per-byte dispatch. No user-facing CMPCT code, Reader/Writer semantics or format changes.
+
+## Inputs and stronger controls
+Use exactly the same original immutable provider SHA ZIPs (Ubuntu `19e600a5...`, Windows `c697febe...`, source `129edec9...`) and four physical old/new pairs from J24G102/J24G103. Two existing fixed target sizes 4096/16384 bytes. Keep immutable SHA-derived 256-entry table and cut min=target/4, mask=target-1, max=target×4. Run 7 paired warm, same-process samples per candidate and control; report raw wall and CPU and generator/compiler exact identity. Full product RSS, cold process and physical allocation unmeasured.
+
+## Predictions
+1. An independent bounds-checked C cutpoint scanner using the exact frozen rule will produce byte-identical boundaries to unmodified J24G103 Python scanner on **all four authentic old/new pairs** and **all J24G103 preregistered geometric variants**, both targets. Verify identical **fully charged CDC total bytes**, manifest and complete reconstructed bytes, not just chunk count.
+2. When wrapped in Python using only the returned offsets and **identical hashlib SHA-256 + dictionary charge** for each physical chunk, 7-pair median complete in-process C-scanned construction will be **>=5× faster** than J24G103's pure-Python method on all four originals at 4096; and <=**4×** the same J24G102 fixed-block model on at least three of four. This is a hypothesis, **not** a product performance gate or reason to change an existing reported loss.
+3. If boundary parity fails, source SHA changes, CPU/RSS becomes unbounded, or <=4× fixed fails on two or more, classify as **component CPU debt unresolved**; do not retune masks or change the product. Even a pass only refutes the interpretation that 100× overhead is intrinsic; fixed CDC shift losses and all ownership/GC/CAS/Reader costs remain.
+
+## Context / alternatives
+The simplest product control is still direct r24 replay/Owned Reader #823 and append-only tail J24G99 where comparable. External mature control FastCDC, Xia et al. (USENIX ATC 2016), proves optimized Gear-family CDC is a real implementation class; **J24G103 is not normalized FastCDC**. C-cut component cannot get native CMPCT promotion credit without a new exact product/portability court.
+
+## Scope / ownership
+This is an independently visible **cheap causal O0/micro** under #879; no other owner's files, release rules, validators, historical evidence, `docs/discovery/STATE.json` or thresholds may be changed. Preserve result and negatives separately from this preregistration. If the micro demonstrates a low carrying cost, still put the family on hold unless a different real product use case earns it against the stronger controls.
