@@ -1,0 +1,93 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# J24G103 exact-source CDC shift O0, not product or released-reader proof.
+name: CMPCT J24G103 source-pinned CDC shift falsifier
+on:
+  pull_request:
+    branches:
+      - agent/phased1-v031-j24g101-root-rebase-20261031
+    paths:
+      - "research/j24g103_*"
+      - "docs/v031-research/*j24g103*"
+      - ".github/workflows/v031-j24g103-cdc-shift-o0.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cmpct-j24g103-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  signed-original-cdc-referee:
+    name: Preregistered physical CDC vs fixed-root, detached referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check immutable prereg, historical source, exact checkout and unchanged product Reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/j24g103/source
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 7a0ecce92cae0b65080f092eda3a2e21b93aa396 HEAD
+          git merge-base --is-ancestor 292ee434d8578ab39e6550708029eb364d33e910 HEAD
+          test "$(git rev-parse HEAD:research/j24g102_cow_root_oracle.py)" = cdb78adadb2ec5eee04cee99c96c1e1445002d17
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          git rev-parse HEAD > evidence/j24g103/head.txt
+          git rev-parse HEAD:research/j24g103_cdc_shift.py > evidence/j24g103/oracle_blob.txt
+          git rev-parse HEAD:research/j24g103_referee.py > evidence/j24g103/referee_blob.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install detached physical parser, run static checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install "msgpack>=1.0,<2"
+          python -m pip freeze > evidence/j24g103/pip-freeze.txt
+          python -m py_compile research/j24g103_cdc_shift.py research/j24g103_referee.py
+      - name: Reacquire original GitHub provider artifacts with strong identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          for entry in "ubuntu 13007508236" "windows 13007244298"; do
+            set -- $entry
+            for attempt in 1 2 3; do
+              curl --fail --location --silent --show-error --retry 2 \
+                -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/FCMO-AI/.CMPCT/actions/artifacts/$2/zip" \
+                --output "evidence/j24g103/source/original_$1.zip" && break
+              test "$attempt" -lt 3 || exit 1
+            done
+          done
+          echo "19e600a5c1f1798eb2ffeafffc3dd4fbaa81f09fc83090c4610d3d1f2ed42e0b  evidence/j24g103/source/original_ubuntu.zip" | sha256sum -c
+          echo "c697febe772527c0bb488d406325470837774b6df6c30aea191e4e383c61fcab  evidence/j24g103/source/original_windows.zip" | sha256sum -c
+      - name: Execute source-exact oracle and detached evidence referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g103_cdc_shift.py \
+            --ubuntu evidence/j24g103/source/original_ubuntu.zip \
+            --windows evidence/j24g103/source/original_windows.zip \
+            --out evidence/j24g103/receipt.json | tee evidence/j24g103/oracle.log
+          python research/j24g103_referee.py \
+            --ubuntu evidence/j24g103/source/original_ubuntu.zip \
+            --windows evidence/j24g103/source/original_windows.zip \
+            --receipt evidence/j24g103/receipt.json | tee evidence/j24g103/referee.log
+          sha256sum evidence/j24g103/receipt.json > evidence/j24g103/receipt.sha256
+      - name: Retain positive and negative physical records without product claims
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g103-cdc-original-${{ github.run_id }}
+          path: evidence/j24g103/
+          if-no-files-found: warn
+          retention-days: 30
