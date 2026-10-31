@@ -83,6 +83,15 @@ jobs:
             --windows evidence/j24g103/source/original_windows.zip \
             --receipt evidence/j24g103/receipt.json | tee evidence/j24g103/referee.log
           sha256sum evidence/j24g103/receipt.json > evidence/j24g103/receipt.sha256
+      - name: Nonfrozen post-result adversarial offset sensitivity (no promotion gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g103_posthoc_shift.py \
+            --ubuntu evidence/j24g103/source/original_ubuntu.zip \
+            --windows evidence/j24g103/source/original_windows.zip \
+            --out evidence/j24g103/posthoc-sensitivity.json | tee evidence/j24g103/posthoc.log
+          sha256sum evidence/j24g103/posthoc-sensitivity.json > evidence/j24g103/posthoc.sha256
       - name: Retain positive and negative physical records without product claims
         if: always()
         uses: actions/upload-artifact@v4
