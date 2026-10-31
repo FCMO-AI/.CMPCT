@@ -1,0 +1,79 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Physical mixed public Writer r24 journal court; all results strictly research-only.
+name: CMPCT J24I74 mixed signed xattr Reader court
+
+on:
+  pull_request:
+    branches:
+      - agent/phased3-v031-j24i73-import-cone-ablation-20261031
+    paths:
+      - 'research/j24i74_*'
+      - 'docs/v031-research/*j24i74*'
+      - '.github/workflows/v031-j24i74-mixed-import-cone.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24i74-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mixed-physical-reader-court:
+    name: Mixed real Writer and Owned Reader ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    env:
+      J24I74_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24I74_EVIDENCE: evidence/j24i74
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prospectively pinned source and full-history custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$J24I74_EVIDENCE"
+          test "$(git rev-parse HEAD)" = "$J24I74_EXPECTED_HEAD"
+          git merge-base --is-ancestor a6695ba86d6a5b20eaced4eb8b54768f00724c9b HEAD
+          git merge-base --is-ancestor 42c396eafc26ab5cc6f59b195bf27213037f646b HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
+          test "$(git rev-parse HEAD:research/j24i73_owned_import_cone.py)" = 8956a17c8f8103e0e620934da8daa4eb9406877b
+          test "$(git rev-parse HEAD:research/j24g73_reader_open.py)" = 9b2fa7c2d625cce84597212673c35fba29dcafd5
+          test "$(git rev-parse HEAD:research/j24i70_detached_referee.py)" = 235dddde0d7bb52710b69de3dafe7653a5f6d312
+          git rev-parse HEAD > "$J24I74_EVIDENCE/head.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual CMPCT and compile both courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22' 'psutil>=5.9'
+          python -m pip freeze > "$J24I74_EVIDENCE/pip-freeze.txt"
+          python -m py_compile research/j24i74_mixed_import_cone.py research/j24i74_detached_referee.py
+      - name: Actual mixed Writer physical file, public-vs-owned parity and extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24i74_mixed_import_cone.py
+          python research/j24i74_detached_referee.py "$J24I74_EVIDENCE"
+          test -s "$J24I74_EVIDENCE/detached-verdict.json"
+      - name: Preserve source, physical archive, raw observations and all negative outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i74-mixed-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/j24i74/
+          retention-days: 30
+          if-no-files-found: warn
