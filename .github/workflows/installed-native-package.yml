@@ -211,12 +211,7 @@ jobs:
           (cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/tools/attest_installed_cmpct_wheel.py" "$GITHUB_WORKSPACE/$WHEEL" --source-sha "$EVIDENCE_HEAD" --output "$GITHUB_WORKSPACE/python-compat-identity.json")
           # Python 3.10–3.14 compatibility is also a generated-console-script
           # contract, not only a Python -m cmpct import contract.
-          CLI="$(python - <<'PYCLI'
-import os, sysconfig
-from pathlib import Path
-print(Path(sysconfig.get_path('scripts')) / ('cmpct.exe' if os.name == 'nt' else 'cmpct'))
-PYCLI
-)"
+          CLI="$(python -c 'import os,sysconfig;from pathlib import Path;print(Path(sysconfig.get_path("scripts")) / ("cmpct.exe" if os.name == "nt" else "cmpct"))')"
           test -f "$CLI"
           (cd "$RUNNER_TEMP" && "$CLI" --help) > python-compat-cli-help.txt
           grep -qi 'usage:' python-compat-cli-help.txt
