@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: J24G96 pinned ancestry O0 (science only)
 on:
   push:
