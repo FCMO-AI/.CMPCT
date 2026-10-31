@@ -152,4 +152,20 @@ class FinalWheelCliContract(unittest.TestCase):
         self.assertEqual(baseline['wheel_sha256'], translated['wheel_sha256'])
 
 
+    def test_32_double_carriage_return_before_lf_is_not_valid_toml(self):
+        # The previous first-pass Windows fixture accidentally made CRCRLF.
+        # Prove the malformed transcript is rejected rather than misread.
+        make_wheel(self.wheel)
+        canonical = self.manifest.read_bytes().replace(b'\r\n', b'\n')
+        self.manifest.write_bytes(canonical.replace(b'\n', b'\r\r\n'))
+        with self.assertRaises(ValueError):
+            inspect(self.wheel, self.manifest)
+
+    def test_33_source_manifest_size_budget_is_enforced(self):
+        make_wheel(self.wheel)
+        self.manifest.write_bytes(b' ' * (256 * 1024 + 1))
+        with self.assertRaisesRegex(ValueError, 'size bound'):
+            inspect(self.wheel, self.manifest)
+
+
 if __name__ == '__main__': unittest.main()
