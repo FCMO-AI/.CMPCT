@@ -100,8 +100,6 @@ jobs:
             --deep-windows evidence/source/deep-windows.zip \
             --result evidence/j24g96b_result.json | tee evidence/j24g96b-referee.log
           sha256sum evidence/source/*.zip evidence/j24g96_result.json evidence/j24g96_incremental_control.json evidence/j24g96b_result.json \
-
-
             research/j24g96_trusted_head_oracle.py \
             research/j24g96_independent_referee.py \
             research/j24g96_posthoc_incremental_full_sha_control.py \
