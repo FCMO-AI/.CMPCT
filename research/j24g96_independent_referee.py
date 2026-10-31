@@ -52,6 +52,15 @@ def analyse(data):
     altered=raw_chain(rewired)
     need(len(altered)==len(chain)-1,'skipped exactly one')
     need(rewired[last[0]+36:last[0]+68]==data[last[0]+36:last[0]+68],'payload digest preserved')
+    # Independent byte-level negative: mutate physical CMA4 payload, leaving
+    # every footer untouched. The ancestry root must fail to notice this.
+    blob=data.index(b'CMA4')
+    bm,bc,bf,br,us,cs,ml,crc,bs=struct.unpack_from('<4sBBHQQII32s',data,blob)
+    start=blob+64+ml
+    need(bm==b'CMA4' and cs>0 and start+cs<=len(data),'independent CMA4 bounds')
+    changed=bytearray(data);changed[start]^=1
+    physical_mutation_undetected=(cumulative(bytes(changed),raw_chain(bytes(changed)))==cumulative(data,chain))
+    need(physical_mutation_undetected and digest(bytes(changed))!=digest(data),'physical coverage negative')
     return {'count':len(chain), 'source_root':cumulative(data,chain), 'altered_root':cumulative(rewired,altered),
             'sha':digest(data),'fullhash_work':sum(x[0]+68 for x in chain),
             'metadata_work':len(chain)*(len(DOMAIN)+32+8+36+32),
@@ -80,6 +89,8 @@ def verify(inputs,result):
                     ('hashed_payload_compressed_bytes_for_offline_r24_authentication',check['compressed_footer_bytes'])]:
                     need(obj[lhs]==rhs, f'{key}/{filename} mismatch {lhs}')
                 need(check['source_root']!=check['altered_root'],'head collision')
+                need(obj['physical_blob_payload_mutation_invisible_to_ancestry_head'] is True,'hidden physical blind spot')
+                need(obj['whole_file_sha_detects_blob_mutation'] is True,'missing full-file SHA control')
                 need(abs(obj['candidate_archive_extra_percent_lower_bound']-100*32*check['count']/len(raw))<1e-10,'percent')
                 need(obj['local_rehash_with_replaced_untrusted_head_admitted'] is True,'untrusted-root negative')
     return {'result':'PASS','validated_cases':len(data['cases']),'original_provider_ZIPs':len(inputs)}
@@ -89,7 +100,9 @@ def hostile_tests(inputs,report):
     a=next(iter(cases)); orig=cases[a]
     wrong=[('trusted_head_SHA256','0'*64),('physical_archive_bytes',orig['physical_archive_bytes']+1),
            ('parent_rewire_new_head',orig['trusted_head_SHA256']),('candidate_archive_extra_bytes_lower_bound',0),
-           ('footers',99),('full_SHA_historical_cumulative_input_byte_proxy',0)]
+           ('footers',99),('full_SHA_historical_cumulative_input_byte_proxy',0),
+           ('physical_blob_payload_mutation_invisible_to_ancestry_head',False),
+           ('whole_file_sha_detects_blob_mutation',False)]
     import tempfile
     with tempfile.TemporaryDirectory() as td:
         p=pathlib.Path(td)/'mutant.json'
