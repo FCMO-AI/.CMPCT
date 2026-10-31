@@ -66,9 +66,19 @@ jobs:
             --deep-ubuntu evidence/source/deep-ubuntu.zip \
             --deep-windows evidence/source/deep-windows.zip \
             --result evidence/j24g96_result.json | tee evidence/referee.log
-          sha256sum evidence/source/*.zip evidence/j24g96_result.json \
+          # Posthoc stronger control: immutable-prefix full-file SHA midstate.
+          # It is not preregistered, crash-durable, or a product metric.
+          python research/j24g96_posthoc_incremental_full_sha_control.py \
+            --small-ubuntu evidence/source/small-ubuntu.zip \
+            --small-windows evidence/source/small-windows.zip \
+            --deep-ubuntu evidence/source/deep-ubuntu.zip \
+            --deep-windows evidence/source/deep-windows.zip \
+            --output evidence/j24g96_incremental_control.json | tee evidence/stronger-control.log
+          sha256sum evidence/source/*.zip evidence/j24g96_result.json evidence/j24g96_incremental_control.json \
+
             research/j24g96_trusted_head_oracle.py \
-            research/j24g96_independent_referee.py > evidence/SHA256SUMS
+            research/j24g96_independent_referee.py \
+            research/j24g96_posthoc_incremental_full_sha_control.py > evidence/SHA256SUMS
       - name: Retain source-exact science with failed attempts
         if: always()
         uses: actions/upload-artifact@v4
