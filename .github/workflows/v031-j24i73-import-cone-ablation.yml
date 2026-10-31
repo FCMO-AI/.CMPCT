@@ -1,0 +1,85 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Source-preserving ablation: original ownership algorithm, reduced research helper imports.
+name: CMPCT J24I73 exact-source import-cone ablation
+
+on:
+  pull_request:
+    branches:
+      - agent/phased3-v031-j24i72-cold-owned-reader-20261031
+    paths:
+      - 'research/j24i73_*'
+      - 'docs/v031-research/*j24i73*'
+      - '.github/workflows/v031-j24i73-import-cone-ablation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24i73-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-exact-import-court:
+    name: Source-exact import ablation ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24I73_EVIDENCE: evidence/j24i73
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 129edec976efe8bb604584517de39553487fec34
+          path: _reference_j24g91
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preregistered source graph, physical reference and CI custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$J24I73_EVIDENCE"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor f8ef04c149a09f62fc3d5cb9dfdb006b439b5efc HEAD
+          git merge-base --is-ancestor 6403d44390a4305099c98516d2ed8a7bbdb7458a HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
+          test "$(git -C _reference_j24g91 rev-parse HEAD)" = 129edec976efe8bb604584517de39553487fec34
+          git rev-parse HEAD > "$J24I73_EVIDENCE/head.txt"
+          git rev-parse HEAD:research/j24i73_owned_import_cone.py > "$J24I73_EVIDENCE/instrument-blob.txt"
+          git rev-parse HEAD:research/j24i73_detached_referee.py > "$J24I73_EVIDENCE/referee-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install source-exact current package and syntax-check both courts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22' 'psutil>=5.9'
+          python -m pip freeze > "$J24I73_EVIDENCE/pip-freeze.txt"
+          python -m py_compile research/j24i73_owned_import_cone.py research/j24i73_detached_referee.py
+      - name: Genuine Writer A/B and exact-AST import-cone ablation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24i73_owned_import_cone.py
+          python research/j24i73_detached_referee.py "$J24I73_EVIDENCE" | tee "$J24I73_EVIDENCE/detached-verdict.txt"
+      - name: Keep original physical bytes, observations and all failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i73-source-exact-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/j24i73/
+          retention-days: 30
+          if-no-files-found: warn
