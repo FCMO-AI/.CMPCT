@@ -93,6 +93,16 @@ jobs:
             --windows evidence/j24g102/source/original_windows.zip \
             --receipt evidence/j24g102/receipt.json | tee evidence/j24g102/detached.log
           sha256sum evidence/j24g102/receipt.json > evidence/j24g102/receipt.sha256
+      - name: Installed public Reader exact old/A/B/repacked-new verification (J24G102b)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install .
+          python research/j24g102b_installed_reader.py \
+            --ubuntu evidence/j24g102/source/original_ubuntu.zip \
+            --windows evidence/j24g102/source/original_windows.zip \
+            --out evidence/j24g102/installed-reader.json | tee evidence/j24g102/installed-reader.log
+          sha256sum evidence/j24g102/installed-reader.json > evidence/j24g102/installed-reader.sha256
       - name: Preserve all physical evidence, including red outcomes
         if: always()
         uses: actions/upload-artifact@v4
