@@ -6,7 +6,7 @@ name: CMPCT J24I73 exact-source import-cone ablation
 on:
   pull_request:
     branches:
-      - agent/phased3-v031-j24i72-cold-owned-reader-20261031
+      - agent/phased3-j24i72-cold-reader-evidence-20261031
     paths:
       - 'research/j24i73_*'
       - 'docs/v031-research/*j24i73*'
