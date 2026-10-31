@@ -110,7 +110,13 @@ def inspect(wheel: Path | str, manifest: Path | str) -> dict[str, object]:
     return {
         'schema': 'cmpct-final-wheel-cli-contract-v1',
         'result': 'PASS', 'wheel': wheel.name, 'wheel_sha256': wheel_sha,
-        'source_manifest_sha256': source_sha,
+        'source_manifest_sha256': source_sha,  # diagnostic raw checkout bytes; may be CRLF on Windows
+        # Windows Git checkouts can normalize source line endings differently.
+        # Preserve exact local bytes above, but compare portable *contract*
+        # semantics across hosts rather than treating CRLF as implementation drift.
+        'source_semantic_sha256': hashlib.sha256(json.dumps(
+            {'name': 'cmpct', 'version': version, 'cmpct': target},
+            sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest(),
         'entry_points_sha256': entry_sha,
         'console_script': {'name': 'cmpct', 'target': target},
         'scope': 'source-bound final-wheel console metadata; not generated launcher identity, pip trust, or publisher signature',
