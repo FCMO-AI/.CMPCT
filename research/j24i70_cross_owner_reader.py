@@ -62,7 +62,18 @@ def source_identity() -> dict:
     assert git(REFERENCE, "rev-parse", "HEAD:src/cmpct/reader.py") == REFERENCE_READER_BLOB
     assert git(ROOT, "merge-base", PARENT, "HEAD") == PARENT
     assert git(ROOT, "merge-base", PREREG, "HEAD") == PREREG
-    assert Path(sys.modules["cmpct.reader"].__file__).resolve().is_relative_to(ROOT / "src")
+    # Run the *installed* wheel so its package-owned native codec is truly loadable.
+    # Source parity is byte-for-byte, not an assumption about pip's installed copy.
+    from cmpct import native_codec
+    installed_reader = Path(sys.modules["cmpct.reader"].__file__).resolve()
+    source_reader = ROOT / "src" / "cmpct" / "reader.py"
+    assert installed_reader.read_bytes() == source_reader.read_bytes(), "installed/source Reader drift"
+    installed_codec = Path(native_codec.__file__).resolve()
+    source_codec = ROOT / "src" / "cmpct" / "native_codec.py"
+    assert installed_codec.read_bytes() == source_codec.read_bytes(), "installed/source native loader drift"
+    native_path = Path(native_codec._library_path()).resolve()
+    assert native_path.is_file() and native_path.samefile(Path(native_codec._core._name))
+    assert native_path.parent == installed_codec.parent, "native library not package-owned"
     assert Path(sys.modules["j24g90_terminal_checkpoint"].__file__).resolve().is_relative_to(
         REFERENCE / "research")
     return {
@@ -70,6 +81,15 @@ def source_identity() -> dict:
         "reference_head": REFERENCE_HEAD, "published_main": PRODUCT_MAIN,
         "reader_git_blob": PRIMARY_READER_BLOB,
         "reference_reader_git_blob": REFERENCE_READER_BLOB,
+        "installed_runtime": {
+            "reader_path": str(installed_reader),
+            "reader_sha256": hashlib.sha256(installed_reader.read_bytes()).hexdigest(),
+            "native_loader_path": str(installed_codec),
+            "native_loader_sha256": hashlib.sha256(installed_codec.read_bytes()).hexdigest(),
+            "native_library_path": str(native_path),
+            "native_library_sha256": digest(native_path),
+            "native_library_bytes": native_path.stat().st_size,
+        },
         "instrument_blob": git(ROOT, "rev-parse", "HEAD:research/j24i70_cross_owner_reader.py"),
         "control_blob": git(REFERENCE, "rev-parse", "HEAD:research/j24g90_terminal_checkpoint.py"),
         "delete_control_blob": git(REFERENCE, "rev-parse", "HEAD:research/j24g91_delete_reader_checkpoint.py"),
