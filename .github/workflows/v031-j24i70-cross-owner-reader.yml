@@ -4,13 +4,6 @@
 name: CMPCT J24I70 cross-owner Reader checkpoint court
 
 on:
-  push:
-    branches:
-      - agent/phased3-v031-j24i70-cross-owner-delete-checkpoint-20261031
-    paths:
-      - 'research/j24i70_*'
-      - 'docs/v031-research/*j24i70*'
-      - '.github/workflows/v031-j24i70-cross-owner-reader.yml'
   pull_request:
     branches:
       - agent/phased2-v031-j24g76-owned-replay-large-n-court-20261030
@@ -24,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-j24i70-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-j24i70-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
