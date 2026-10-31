@@ -1,0 +1,79 @@
+# ci-lane: deep
+# ci-cancel-policy: cancel-obsolete
+name: J24G100 POSIX cooperative reader epoch GC (research only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "research/j24g100_*"
+      - "docs/v031-research/*j24g100*"
+      - ".github/workflows/j24g100-reader-epoch-gc.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: j24g100-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  cooperative-epoch-court:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+      - name: Source identity and preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor 47647d469b954af75b44768685323c224ed947e6 HEAD
+          git diff --quiet 80c358f8824ec1b20d349c92ed94c898090969b0 HEAD -- src native
+          mkdir -p evidence/source
+      - name: Recover pinned original physical Writer inputs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for item in deep-ubuntu:13007508236 deep-windows:13007244298; do
+            key="$(printf '%s' "$item" | cut -d: -f1)"
+            id="$(printf '%s' "$item" | cut -d: -f2)"
+            curl --fail --location --retry 3 --retry-delay 3 \
+              --connect-timeout 20 --max-time 120 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/FCMO-AI/.CMPCT/actions/artifacts/$id/zip" \
+              --output "evidence/source/$key.zip"
+          done
+          printf '%s\n' \
+            '19e600a5c1f1798eb2ffeafffc3dd4fbaa81f09fc83090c4610d3d1f2ed42e0b  evidence/source/deep-ubuntu.zip' \
+            'c697febe772527c0bb488d406325470837774b6df6c30aea191e4e383c61fcab  evidence/source/deep-windows.zip' \
+            | sha256sum -c -
+      - name: Physical multi-process lease and GC court
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g100_reader_epoch_gc.py \
+            --deep-ubuntu evidence/source/deep-ubuntu.zip \
+            --deep-windows evidence/source/deep-windows.zip \
+            --output evidence/j24g100_hosted.json | tee evidence/producer.log
+          python research/j24g100_detached_referee.py \
+            --deep-ubuntu evidence/source/deep-ubuntu.zip \
+            --deep-windows evidence/source/deep-windows.zip \
+            --result evidence/j24g100_hosted.json | tee evidence/referee.log
+          sha256sum evidence/source/*.zip evidence/j24g100_hosted.json \
+            research/j24g100_reader_epoch_gc.py research/j24g100_detached_referee.py \
+            > evidence/SHA256SUMS
+      - name: Preserve experimental receipts and original input provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g100-posix-reader-epoch-${{ github.run_id }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: warn
