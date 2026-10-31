@@ -92,6 +92,20 @@ jobs:
             --windows evidence/j24g103/source/original_windows.zip \
             --out evidence/j24g103/posthoc-sensitivity.json | tee evidence/j24g103/posthoc.log
           sha256sum evidence/j24g103/posthoc-sensitivity.json > evidence/j24g103/posthoc.sha256
+      - name: C-cutpoint causal micro (post-result, no product credit)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -O3 -shared -fPIC -std=c11 -Wall -Wextra -Werror \
+            -o evidence/j24g103/libj24g103c.so research/j24g103c_native_cuts.c
+          python -m py_compile research/j24g103c_native_micro.py
+          python research/j24g103c_native_micro.py \
+            --ubuntu evidence/j24g103/source/original_ubuntu.zip \
+            --windows evidence/j24g103/source/original_windows.zip \
+            --lib evidence/j24g103/libj24g103c.so \
+            --out evidence/j24g103/native-causal-micro.json | tee evidence/j24g103/native-causal-micro.log
+          sha256sum evidence/j24g103/native-causal-micro.json > evidence/j24g103/native-causal-micro.sha256
+          sha256sum research/j24g103c_native_cuts.c > evidence/j24g103/native-cuts-source.sha256
       - name: Retain positive and negative physical records without product claims
         if: always()
         uses: actions/upload-artifact@v4
