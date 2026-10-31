@@ -57,7 +57,7 @@ def checked_number(x):
 def verify(out: Path):
     r = json.loads((out / "receipt.json").read_text(), object_pairs_hook=strict_object)
     assert r["schema"] == "cmpct-j24i73-import-cone-v1"
-    assert r["status"] == "PASS_COURT_NOT_PROMOTION" and r["product_credit"] == 0
+    assert r["status"] == "PASS_COURT_NOT_PROMOTION" and type(r["product_credit"]) is int and r["product_credit"] == 0
     assert r["source"]["main"] == "80c358f8824ec1b20d349c92ed94c898090969b0"
     assert r["source"]["inherited"] == "f8ef04c149a09f62fc3d5cb9dfdb006b439b5efc"
     assert r["source"]["prereg"] == "6403d44390a4305099c98516d2ed8a7bbdb7458a"
@@ -96,7 +96,8 @@ def verify(out: Path):
                 assert row["label"] == name and row["archive"] == mode
                 assert row["mode"] == "open"
                 assert row["count"] == 8129 and row["depth"] == (63 if mode == "A" else 0)
-                assert row["index_sha256"] == r["semantic_control"]["inherited_source_semantics"]["A"]["index_sha256"] if False else True
+                assert row["index_sha256"] == r["semantic_control"]["inherited_source_semantics"][mode]["public"]["index_sha256"]
+                assert row["member"] == "f00063.dat"
                 for measure in MEASURES:
                     checked_number(row[measure])
             medians[mode][name] = {
