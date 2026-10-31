@@ -1,0 +1,20 @@
+# J24G100 — POSIX cooperative reader-epoch retention and GC: prospective O0 falsifier
+
+**Date:** 2026-10-31 UTC. **Status:** FROZEN BEFORE IMPLEMENTATION OR MEASUREMENT. **Research only; product/format/release credit zero.**
+
+## Source, ownership and question
+Parent PR #869 `e2be6440450563ca6cbb6d8ef44eb1710d6b4410`, J24G99 result on 8 original r24 physical archives. Published `main@80c358f8824ec1b20d349c92ed94c898090969b0` v0.30.0 / r24. No CMPCT code change. #574 owns discovery STATE; #290/#295/#304 own Writer leases; #749 owns publication identity. This research tests a *distinct narrow missing ownership obligation*: can a cooperative POSIX reader retain an old tail across manifest publication and active GC without access failure or stale-byte substitution? It does not implement product multiwriter CAS, signed sources, crash safety or portable Reader.
+
+## Preregistered baseline and prediction
+J99 had favorable current-only 1.004–1.019x allocated bytes on deep histories but **1.361–1.778x** if every old tail is retained. Direct Writer in-place append is the stronger simpler control and does not require GC. The proposed independent protocol uses a per-archive advisory **gate lock** across reader manifest discovery + tail open and across GC unlink decision, plus a per-tail reader shared flock held for entire consumption, while GC acquires a tail exclusive **nonblocking** lock before unlink. Writers publish exact SHA manifests with atomic replace; filenames are monotonically unique. The gate's purpose is to close the manifest-read-to-open gap, not to serialize Writer transactions.
+
+**H1:** on the four original 64-footer physical r24 archives (two Ubuntu and two Windows-origin, executed on a POSIX Linux host), an old reader owning a SH tail FD reads exactly its original verified prefix while a new generation is published. GC never unlinks that held old tail; after the reader exits, a new GC pass reclaims it. Reader/GC gate interleaving with reader paused after manifest read never yields ENOENT or wrong-content bytes.
+**H2:** independent process abnormal exit releases its advisory tail lease and a subsequent GC pass reclaims its old tail without damaging the latest archive. Each selected tail + base + source SHA manifest must reconstruct the original authentic signed prefix bytes, rather than only matching a synthetic payload.
+**H3/negative:** a naive GC without the archive gate can unlink a stale tail between reader's manifest read and opening that tail (forced schedule). Demonstrate a real ENOENT, not merely assert it.
+
+## Controls, costs, kill/narrow
+Strongest control: ordinary contiguous r24 archive and direct append; no claim of throughput win. Retain-every-tail is the no-race but expensive alternative. Require source physical ZIP SHA pinned to #853's original Ubuntu/Windows provider artifacts, valid parsed footer chains, all exact SHA checks, explicit process coordination (not lucky scheduling), and independent clean replay of output. Measure sampled lock/GC wall, metadata and blocks, open FD counts, tail retention and cleanup latency; report complete protocol steps, syscalls and crash/portability limitations.
+
+Any wrong prefix/hash, unpinned source, active/held-tail deletion, reader ENOENT with gate, failed cleanup after death, omitted no-gate negative, or lack of real separate-process synchronization **falsifies the scoped scientific hypothesis**. Linux advisory locks and a single cooperative writer are assumptions. An adversarial same-UID process, power loss, in-place physical source mutation, multiwriter CAS, Windows/macOS portability, fsync durability and installed CMPCT Reader integration remain separately unproved even on PASS.
+
+Do not change evaluator or thresholds after seeing results; record actual losses. If passed, the next decision still requires comparing the extra FD/locks/GC and existing 32x tail rewrite / 98.5x allocation debt against simpler release-convergent product work. If failed, retire this GC approach rather than threshold garden.
