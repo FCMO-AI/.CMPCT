@@ -60,3 +60,20 @@ All four original physical ZIP SHA identities were independently rechecked again
 - The detached post-download **stdlib-only cross-court re-audit** independently verified original ZIP provider SHA256, the identical eight physical archive sources and SHA in both original hosted ZIPs, r24 footer chain boundaries, original final archival bytes, full physical allocated-byte charge, and all raw 15-round warm-read medians. Its local SHA256 receipt: `3833abf71533e3b0a6cd11ab2701bf6456f2b47bd5ddf9a634c18b98781608c6`. The exact two ZIPs are additionally retained in the activation evidence dossier outside GitHub. This is verification of hosted O0 science, not a product test.
 
 **Crucial distinction:** latest exact-head Engineering Evidence, Version Discipline, CI Topology, R36 Attribution, and general tests belong to their own actions; the two specialised SUCCESS runs above do *not* make all release gates green. No merge or release has occurred.
+
+
+### Causal closed-form cost discriminator (posthoc derivation, not a measured product speedup)
+
+For this exact authentic 64-footer history there are `N=63` confirmed direct append ranges of `d=97` bytes each. A rolling *cumulative* tail must re-materialize all earlier tail bytes in every new generation. The complete logical-copy obligation follows directly:
+
+`sum(i*d, i=1..N) = d*N*(N+1)/2 = 195,552 B`, versus `N*d = 6,111 B` for direct append. **Copy amplification = 32×** before checksumming, file creation, fsync, metadata or garbage collection.
+
+On the observed Linux 4,096-byte file-allocation granule, the emitted physical allocations are analytically predicted exactly from the genuine footer boundaries:
+
+- New immutable tail files: `4096 * sum(ceil(97*i/4096), i=1..63) = 344,064 B`.
+- One new manifest file per confirmed generation: `63 * 4096 = 258,048 B`.
+- Total `602,112 / 6,111 = 98.5292×` *newly allocated filesystem blocks* per direct journal byte. The hosted measurement agrees. This is allocated-block churn, **not measured physical device bytes written**, and excludes directory/inode/journal metadata overhead. For a layout forcing two fresh allocated 4KiB files per 97B commit, the narrower layout-class lower bound is already `8192/97 = 84.45×` block allocations, even if all prior journal data could be reused. Filesystem compression, reflinks, extent-sharing, append-only shared files or different block granularity change the premises; this is not a universal I/O impossibility proof.
+
+For arbitrary append sizes `d_i` (with `i` starting at one), the logical rewritten-tail obligation is `sum((N-i+1)*d_i, i=1..N)`, and the direct-write denominator is `sum(d_i)`. This exposes a generic prospective admission input: **how much long-lived prior tail is rewritten at each transaction**, not file name or benchmark identity. A one-shot late large append can have low weighted rewrite cost, while sustained tiny independent appends cannot. Before any O1/product adoption, a bounded policy must charge *this* history-weighted rewrite, actual fsync/page traffic, old-reader lifetime and full physical metadata, and compare against the exact public append-Writer baseline.
+
+This analytic cost lower-rung would have provided the **same J24G98/J24G99 write-economics warning sooner**. The result earns a transferable selection lesson but not a Discovery Engine policy edit, because the existing exported-cost and cheap-oracle filters already prescribe it. No raw experiment, preregistration, metric, release gate, threshold or semantic obligation was changed.
