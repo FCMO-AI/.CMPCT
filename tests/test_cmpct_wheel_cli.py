@@ -140,8 +140,12 @@ class FinalWheelCliContract(unittest.TestCase):
         # checkouts are LF. Raw source SHA differs; entrypoint meaning does not.
         make_wheel(self.wheel)
         source_bytes = self.manifest.read_bytes()
+        # Windows text-mode write_text() already creates CRLF on checkout
+        # fixtures. Normalize first to avoid accidentally making CRCRLF.
+        canonical = source_bytes.replace(b'\r\n', b'\n')
+        self.manifest.write_bytes(canonical)
         baseline = inspect(self.wheel, self.manifest)
-        self.manifest.write_bytes(source_bytes.replace(b'\n', b'\r\n'))
+        self.manifest.write_bytes(canonical.replace(b'\n', b'\r\n'))
         translated = inspect(self.wheel, self.manifest)
         self.assertNotEqual(baseline['source_manifest_sha256'], translated['source_manifest_sha256'])
         self.assertEqual(baseline['source_semantic_sha256'], translated['source_semantic_sha256'])
