@@ -116,6 +116,16 @@ jobs:
             --source-head "$EVIDENCE_HEAD" \
             --out benchmark-artifacts/court/independent-referee.json
 
+      - name: Retain physical source trees, every original 7z archive and extraction for detached audit
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          if test -d "$RUNNER_TEMP/j24p15-physical-court"; then
+            cp -a "$RUNNER_TEMP/j24p15-physical-court" benchmark-artifacts/physical-court
+          fi
+
       - name: Preserve original upstream assets, SHA, raw results and referee
         if: always()
         uses: actions/upload-artifact@v6
