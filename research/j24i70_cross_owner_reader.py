@@ -19,6 +19,8 @@ import tempfile
 import time
 import tracemalloc
 
+import msgpack
+
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "_reference_j24g91"
 sys.path.insert(0, str(REFERENCE / "research"))
@@ -28,7 +30,7 @@ from cmpct.reader import CMPCT
 from cmpct.validation import preflight_archive
 from j24g73_reader_open import FactoredCMPCT
 from j24g74_owned_decoder_court import OwnedCMPCT
-from j24g90_terminal_checkpoint import make_court, check_semantics, index_fingerprint
+from j24g90_terminal_checkpoint import make_court, check_semantics, index_fingerprint, _append_generation
 from j24g91_delete_reader_checkpoint import OwnedDeleteCMPCT
 
 PRODUCT_MAIN = "80c358f8824ec1b20d349c92ed94c898090969b0"
@@ -225,6 +227,57 @@ def traced_peak(path: Path) -> dict:
     return values
 
 
+def measure_checkpoint_append(case: dict) -> dict:
+    """Original public-Writer checkpoint append, charged for exact B materialization.
+
+    Existing A is copied before timing solely to isolate repeatability. The timed
+    operation opens the actual file, recovers its authenticated index, then appends
+    the unchanged #853 J24G90 checkpoint with the original _append_generation.
+    Every repeat MUST produce byte-identical original B, not just equal members.
+    """
+    original = case["paths"]["A"]
+    reference = case["paths"]["B"]
+    before_sha = digest(original)
+    required_sha = digest(reference)
+    expected_tax = reference.stat().st_size - original.stat().st_size
+    samples = []
+    with tempfile.TemporaryDirectory(prefix="j24i70-checkpoint-write-") as td:
+        root = Path(td)
+        for i in range(5):
+            candidate = root / f"checkpoint-{i}.cmpct"
+            shutil.copyfile(original, candidate)  # outside charge: existing A on disk
+            t0, cpu0 = time.perf_counter_ns(), time.process_time_ns()
+            with CMPCT(candidate) as ar:
+                index = msgpack.unpackb(msgpack.packb(ar.index, use_bin_type=True), raw=False)
+                previous = ar.latest_footer_pos
+                assert ar.delta_depth == 63 and previous > 0
+            opened, opened_cpu = time.perf_counter_ns(), time.process_time_ns()
+            _append_generation(candidate, {"blobs": [], "ops": []}, previous,
+                               checkpoint_index=index)
+            end, end_cpu = time.perf_counter_ns(), time.process_time_ns()
+            # Check candidate physical identity OUTSIDE all measured durations.
+            assert candidate.stat().st_size - original.stat().st_size == expected_tax
+            assert digest(candidate) == required_sha, "checkpoint-byte-for-byte-mismatch"
+            assert digest(original) == before_sha, "checkpoint-benchmark-mutated-A"
+            samples.append({
+                "open_wall_ns": opened - t0, "open_cpu_ns": opened_cpu - cpu0,
+                "append_wall_ns": end - opened, "append_cpu_ns": end_cpu - opened_cpu,
+                "total_wall_ns": end - t0, "total_cpu_ns": end_cpu - cpu0,
+                "byte_identical_to_B": True, "extra_bytes": expected_tax,
+            })
+    median = {
+        field: statistics.median(item[field] for item in samples)
+        for field in ("open_wall_ns", "open_cpu_ns", "append_wall_ns",
+                      "append_cpu_ns", "total_wall_ns", "total_cpu_ns")
+    }
+    return {
+        "samples": samples, "medians_ns": median, "original_A_sha256": before_sha,
+        "reference_B_sha256": required_sha, "additional_stored_bytes": expected_tax,
+        "writer_api": "same J24G90 _append_generation; fsync two-phase",
+        "excluded": "A file copying, initial 63 DELETE history, post-call file SHA validation",
+    }
+
+
 def extract_exact(path: Path, expected: dict[str, str], cls: type[CMPCT]) -> dict:
     with tempfile.TemporaryDirectory(prefix="j24i70-extract-") as dest:
         start = time.perf_counter_ns()
@@ -254,6 +307,7 @@ def main() -> None:
             for n in CASES:
                 case = make_court(Path(scratch), n)
                 semantics = check_all_readers(case, n)
+                checkpoint_write = measure_checkpoint_append(case)
                 timings = time_variants(case)
                 traced = traced_peak(case["paths"]["A"])
                 extraction = {
@@ -282,6 +336,7 @@ def main() -> None:
                     "checkpoint_extra_bytes": case["checkpoint_extra_bytes"],
                     "checkpoint_overhead_ratio": case["checkpoint_overhead_ratio"],
                     "generation_seconds": case["generation_seconds"],
+                    "checkpoint_write": checkpoint_write,
                     "semantics": semantics, "timings": timings,
                     "traced_peak_A": traced, "extraction": extraction,
                     "predictions": tests,
