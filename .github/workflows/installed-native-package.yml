@@ -8,6 +8,8 @@ on:
     paths:
       - "pyproject.toml"
       - "MANIFEST.in"
+      # Shipping loader, CLI and Reader mutations must run installed-wheel evidence.
+      - "src/cmpct/**"
       - "native/cmpct-core/**"
       - "tests/installed_native_package_smoke.py"
       - "tests/test_installed_cmpct_wheel.py"
@@ -57,7 +59,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > "$RUNNER_TEMP/latest-head-files.txt"
           cat "$RUNNER_TEMP/latest-head-files.txt"
-          if grep -Eq '^(pyproject\.toml|MANIFEST\.in|native/cmpct-core/|tests/installed_native_package_smoke\.py|tests/test_installed_cmpct_wheel\.py|tests/test_cmpct_wheel_profile\.py|tests/test_cmpct_wheel_cli\.py|tools/(attest_installed_cmpct_wheel|validate_cmpct_wheel_profile|validate_cmpct_wheel_cli|validate_macos_wheel_abi)\.py|\.github/workflows/installed-native-package\.yml)' "$RUNNER_TEMP/latest-head-files.txt"; then
+          if grep -Eq '^(pyproject\.toml|MANIFEST\.in|src/cmpct/|native/cmpct-core/|tests/installed_native_package_smoke\.py|tests/test_installed_cmpct_wheel\.py|tests/test_cmpct_wheel_profile\.py|tests/test_cmpct_wheel_cli\.py|tools/(attest_installed_cmpct_wheel|validate_cmpct_wheel_profile|validate_cmpct_wheel_cli|validate_macos_wheel_abi)\.py|\.github/workflows/installed-native-package\.yml)' "$RUNNER_TEMP/latest-head-files.txt"; then
             echo 'run_package=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_package=false' >> "$GITHUB_OUTPUT"
