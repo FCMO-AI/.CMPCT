@@ -1,0 +1,134 @@
+# ci-lane: fast
+# ci-cancel-policy: cancel-obsolete
+# Research-only source-exact fresh-interpreter 63-DELETE economics.
+name: CMPCT J24I72 fresh-process owned Reader economics
+
+on:
+  pull_request:
+    branches:
+      - agent/phased3-v031-j24i70-cross-owner-delete-checkpoint-20261031
+    paths:
+      - 'research/j24i72_*'
+      - 'docs/v031-research/*j24i72*'
+      - '.github/workflows/v031-j24i72-cold-owned-reader.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-j24i72-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-fresh-process:
+    name: Fresh process ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      J24I72_EVIDENCE: evidence/j24i72
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: FCMO-AI/.CMPCT
+          ref: 129edec976efe8bb604584517de39553487fec34
+          path: _reference_j24g91
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Source / frozen control / preregistration custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$J24I72_EVIDENCE"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor df2edd9d61a782616d7de1f3c054841e9ebb9eb2 HEAD
+          git merge-base --is-ancestor b130e333cb94b1c43f1dc38789397fa1ebf5af7f HEAD
+          test "$(git rev-parse HEAD:src/cmpct/reader.py)" = 29a8be64f3acfb027750351c6a567fd82cf7dc97
+          test "$(git -C _reference_j24g91 rev-parse HEAD)" = 129edec976efe8bb604584517de39553487fec34
+          test "$(git -C _reference_j24g91 rev-parse HEAD:src/cmpct/reader.py)" = e716233403dabd0966863c45635e18fa5ac6afb8
+          git rev-parse HEAD > "$J24I72_EVIDENCE/head.txt"
+          git rev-parse HEAD:research/j24i72_cold_owned_reader.py > "$J24I72_EVIDENCE/instrument-blob.txt"
+          git rev-parse HEAD:research/j24i72_detached_referee.py > "$J24I72_EVIDENCE/referee-blob.txt"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact current package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install . 'msgpack>=1.0' 'zstandard>=0.22' 'psutil>=5.9'
+          python -m pip freeze > "$J24I72_EVIDENCE/pip-freeze.txt"
+          python -m py_compile research/j24i72_cold_owned_reader.py research/j24i72_detached_referee.py
+      - name: Generate authentic Writer A/B/C; run fresh-process Reader comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24i72_cold_owned_reader.py 2>&1 | tee "$J24I72_EVIDENCE/experiment.log"
+          test -s "$J24I72_EVIDENCE/receipt.json"
+      - name: Detached physical, sample, ratio, and forged-receipt referee
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24i72_detached_referee.py "$J24I72_EVIDENCE" 2>&1 | tee "$J24I72_EVIDENCE/referee.log"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('evidence/j24i72')
+          receipt=json.loads((root/'receipt.json').read_text())
+          referee=json.loads((root/'detached-referee.json').read_text())
+          assert receipt['status']==referee['status']=='PASS'
+          assert receipt['head']==referee['head']
+          assert referee['product_credit']==0
+          assert not referee['imported_cmpct']
+          assert len(referee['adversarial_refusals'])==5
+          print('J24I72_PROSPECTIVE_HYPOTHESES', receipt['prospective_two_size_evidence'])
+          PY
+      - name: Descriptive import graph and constructor readout (J24I72b)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import statistics
+          from pathlib import Path
+          receipt=json.loads((Path('evidence/j24i72')/'receipt.json').read_text())
+          referee=json.loads((Path('evidence/j24i72')/'detached-referee.json').read_text())
+          assert receipt['status']==referee['status']=='PASS'
+          for size in ('4096','8192'):
+              c=receipt['cases'][size]
+              for archive in ('A','B'):
+                  for label in ('public','factored','owned','delete_only'):
+                      m=c['medians'][archive][label]
+                      print('J24I72B_PHASES',size,archive,label,
+                            'gross_ms=',round(m['whole_process_wall_ns']/1e6,3),
+                            'class_import_ms=',round(m['import_wall_ns']/1e6,3),
+                            'reader_constructor_ms=',round(m['constructor_wall_ns']/1e6,3),
+                            'open_proof_ms=',round(m['open_plus_proof_wall_ns']/1e6,3))
+              for label in ('public','factored','owned','delete_only'):
+                  raw=c['import_only_raw'][label]
+                  assert len(raw)==4
+                  print('J24I72B_IMPORT_ONLY',size,label,
+                        'gross_ms=',round(statistics.median(
+                            r['whole_process_wall_ns'] for r in raw)/1e6,3),
+                        'class_import_ms=',round(statistics.median(
+                            r['import_wall_ns'] for r in raw)/1e6,3))
+          PY
+      - name: Preserve original observations, physical archives and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24i72-fresh-owned-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/j24i72/
+          retention-days: 30
+          if-no-files-found: warn
