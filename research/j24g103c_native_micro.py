@@ -70,6 +70,8 @@ def main():
       'root':old,'new':new,
       'early_insert':new[:512]+b'!'+new[512:],
       'mid_insert':new[:len(new)//2]+b'!'+new[len(new)//2:],
+      'one_third_insert_POSTHOC':new[:len(new)//3]+b'!'+new[len(new)//3:],
+      'one_third_delete_POSTHOC':new[:len(new)//3]+new[len(new)//3+1:],
       'early_delete':new[:512]+new[513:],
       'unrelated_random':random.Random(240103+len(new)).randbytes(len(new))
      }
