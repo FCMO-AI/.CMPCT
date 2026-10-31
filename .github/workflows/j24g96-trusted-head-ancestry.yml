@@ -1,0 +1,78 @@
+name: J24G96 pinned ancestry O0 (science only)
+on:
+  push:
+    branches:
+      - agent/phased1-v031-j24g96-trusted-head-chain-o0-20261030
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: j24g96-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  detached-ancestry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Attest exact source and original artifact identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git hash-object research/j24g96_trusted_head_oracle.py research/j24g96_independent_referee.py
+          mkdir -p evidence/source
+      - name: Download exact original provider ZIPs (not repacked proxies)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for item in \
+            small-ubuntu:13011822204 \
+            small-windows:13012541254 \
+            deep-ubuntu:13007508236 \
+            deep-windows:13007244298; do
+            key="$(printf '%s' "$item" | cut -d: -f1)"
+            id="$(printf '%s' "$item" | cut -d: -f2)"
+            curl -fL --retry 3 --retry-delay 2 \
+              --connect-timeout 20 --max-time 120 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/FCMO-AI/.CMPCT/actions/artifacts/$id/zip" \
+              -o "evidence/source/$key.zip"
+          done
+          printf '%s\n' \
+            'd4d96daf8e831bb923e0c2c2a4b52c6bef4d7ad4616aadea220f18c7b5fe594d  evidence/source/small-ubuntu.zip' \
+            'f7fdc90fdc0d5ca67f3c520bc0d033dece602a2aa3d5ab6320ccb024f890186e  evidence/source/small-windows.zip' \
+            '19e600a5c1f1798eb2ffeafffc3dd4fbaa81f09fc83090c4610d3d1f2ed42e0b  evidence/source/deep-ubuntu.zip' \
+            'c697febe772527c0bb488d406325470837774b6df6c30aea191e4e383c61fcab  evidence/source/deep-windows.zip' \
+            | sha256sum -c -
+      - name: Execute detached prospective oracle and independently challenge receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/j24g96_trusted_head_oracle.py \
+            --small-ubuntu evidence/source/small-ubuntu.zip \
+            --small-windows evidence/source/small-windows.zip \
+            --deep-ubuntu evidence/source/deep-ubuntu.zip \
+            --deep-windows evidence/source/deep-windows.zip \
+            --output evidence/j24g96_result.json | tee evidence/oracle.log
+          python research/j24g96_independent_referee.py \
+            --small-ubuntu evidence/source/small-ubuntu.zip \
+            --small-windows evidence/source/small-windows.zip \
+            --deep-ubuntu evidence/source/deep-ubuntu.zip \
+            --deep-windows evidence/source/deep-windows.zip \
+            --result evidence/j24g96_result.json | tee evidence/referee.log
+          sha256sum evidence/source/*.zip evidence/j24g96_result.json \
+            research/j24g96_trusted_head_oracle.py \
+            research/j24g96_independent_referee.py > evidence/SHA256SUMS
+      - name: Retain source-exact science with failed attempts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j24g96-ancestry-${{ github.run_id }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
