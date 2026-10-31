@@ -118,8 +118,12 @@ def validate(receipt, evidence_root):
                         check(row["route"] == required_route[reader], "Reader route")
                     for metric in METRICS:
                         check(finite_number(row[metric]), "raw numeric")
-                    check(row["whole_process_wall_ns"] >
-                          row["constructor_wall_ns"], "impossible process time")
+                    check(row["whole_process_wall_ns"] >= (
+                        row["import_wall_ns"] + row["open_plus_proof_wall_ns"]),
+                        "child work exceeds parent process wall")
+                    before, after = row.get("import_hwm_kib"), row.get("operation_hwm_kib")
+                    if type(before) is int and type(after) is int:
+                        check(0 <= before <= after, "process HWM decreased")
                 medians = {metric: statistics.median(x[metric] for x in raw)
                            for metric in METRICS}
                 for metric in METRICS:
@@ -136,6 +140,8 @@ def validate(receipt, evidence_root):
                       "import control ownership")
                 check(finite_number(row["import_wall_ns"])
                       and finite_number(row["whole_process_wall_ns"]), "import number")
+                check(row["whole_process_wall_ns"] >= row["import_wall_ns"],
+                      "import exceeds parent process duration")
         gross = lambda arch, reader: independently_measured[arch][reader]["whole_process_wall_ns"]
         check(gross("A", "public") > 0 and gross("B", "public") > 0, "denominator")
         ratio_pub = gross("A", "owned") / gross("A", "public")
