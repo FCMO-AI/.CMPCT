@@ -9,12 +9,15 @@ from pathlib import Path
 import statistics
 import struct
 import sys
+import binascii
+import zlib
 
 import msgpack
 import zstandard
 
 FOOTER = struct.Struct("<8sBBBBQQQ32s")
 HEADER = struct.Struct("<8sHHQQQ32s")
+BLOB = struct.Struct("<4sBBHQQII32s")
 ROOT_PREREG = "9b2cf6ab6d02eee9ead8e58ab1d733ee2aedb9d5"
 SOURCE_PARENT = "347a62b443bf7c880ed2b86af5d8be7159ee2480"
 REFERENCE = "129edec976efe8bb604584517de39553487fec34"
@@ -74,6 +77,57 @@ def ancestors(raw: bytes, pos: int) -> list[dict]:
     raise AssertionError("footer-depth")
 
 
+def scan_physical_blob_records(raw: bytes, primary: dict, record_base: int) -> dict:
+    """Validate actual CMA4 headers and all natively supported uncompressed bodies.
+
+    This is independent of CMPCT imports. The unsupported-codec count is explicit;
+    no claim of strong logical digest validation is made for that subclass.
+    """
+    blobs = primary.get("blobs")
+    check(isinstance(blobs, list), "primary-blobs")
+    check(len(blobs) <= 100_000, "physical-record-bound")
+    decoded = 0
+    unsupported = {}
+    spans = []
+    for i, item in enumerate(blobs):
+        check(isinstance(item, list) and len(item) == 5, "blob-index-shape")
+        off, usize, csize, codec, meta_len = item
+        check(all(type(v) is int and v >= 0 for v in item), "blob-index-types")
+        check(usize <= 64_000_000 and csize <= 64_000_000 and meta_len <= 64_000_000,
+              "blob-index-size")
+        pos = record_base + off
+        end = pos + BLOB.size + meta_len + csize
+        check(record_base <= pos and end <= len(raw), "blob-physical-bounds")
+        (magic, physical_codec, flags, reserved, physical_usize, physical_csize,
+         physical_meta, crc, digest) = BLOB.unpack_from(raw, pos)
+        check(magic == b"CMA4" and flags == reserved == 0, "blob-header-magic/flags")
+        check((physical_codec, physical_usize, physical_csize, physical_meta) ==
+              (codec, usize, csize, meta_len), "blob-header-index-consistency")
+        spans.append((pos, end))
+        body = raw[pos+BLOB.size+meta_len:end]
+        try:
+            if codec == 0:
+                unpacked = body
+            elif codec == 1:
+                unpacked = zstandard.ZstdDecompressor().decompress(body, max_output_size=usize)
+            elif codec == 4:
+                unpacked = zlib.decompress(body, wbits=-15)
+            else:
+                unsupported[str(codec)] = unsupported.get(str(codec), 0) + 1
+                continue
+        except (zstandard.ZstdError, zlib.error, ValueError):
+            raise AssertionError("blob-decompression-"+str(i))
+        check(len(unpacked) == usize, "blob-uncompressed-size")
+        check(binascii.crc32(unpacked) & 0xffffffff == crc, "blob-CRC32")
+        check(hashlib.sha256(unpacked).digest() == digest, "blob-SHA256")
+        decoded += 1
+    spans.sort()
+    check(all(prev[1] <= next_[0] for prev, next_ in zip(spans, spans[1:])),
+          "overlapping-physical-records")
+    return {"total": len(blobs), "decoded_sha_crc_verified": decoded,
+            "unsupported_codec_counts": unsupported}
+
+
 def physical_check(a: bytes, b: bytes, c: bytes) -> dict:
     check(b.startswith(a), "checkpoint-not-append")
     check(len(b) == len(c) and c[:-1] == b[:-1] and c[-1] != b[-1],
@@ -87,6 +141,8 @@ def physical_check(a: bytes, b: bytes, c: bytes) -> dict:
     check(len(payload) == us and hashlib.sha256(payload).digest() == digest, "primary-index-sha")
     primary = msgpack.unpackb(payload, raw=False)
     check(isinstance(primary.get("files"), list), "primary-files")
+    verified_blobs = scan_physical_blob_records(a, primary, HEADER.size + cs)
+    check(verified_blobs["decoded_sha_crc_verified"] > 0, "no-verified-physical-records")
     a_hist = ancestors(a, len(a) - FOOTER.size)
     b_hist = ancestors(b, len(b) - FOOTER.size)
     check(len(a_hist) == 64 and len(b_hist) == 1, "footer-chain-length")
@@ -103,7 +159,8 @@ def physical_check(a: bytes, b: bytes, c: bytes) -> dict:
     check(sha(c[:len(a)]) == sha(a), "recovery-prefix-differs")
     return {"a_footers": len(a_hist), "b_terminal_checkpoint": True,
             "corrupt_b_tail_rejected": True, "source_root_files": len(primary["files"]),
-            "primary_sha256": sha(payload)}
+            "primary_sha256": sha(payload),
+            "physical_blobs": verified_blobs}
 
 
 def validate(receipt: dict, root: Path) -> dict:
