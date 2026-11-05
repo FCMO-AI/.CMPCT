@@ -28,6 +28,7 @@ class Builder:
         default_workers=max(1,min(8,os.cpu_count() or 1))
         self.encode_workers=max(1,int(os.environ.get('CMPCT_ENCODE_WORKERS',str(default_workers)))) if workers is None else max(1,int(workers))
         self.reproducible=bool(reproducible)
+        self.audio_fallback_no_modules=False
         if reproducible_epoch_ns is None:
             source_epoch=int(os.environ.get('SOURCE_DATE_EPOCH','0') or '0')
             reproducible_epoch_ns=max(0,source_epoch)*1_000_000_000
@@ -243,7 +244,7 @@ class Builder:
             total=len(comp)+len(meta)
             if best is None or total<best[0]:best=(total,codec,comp,meta)
 
-        if '.wav' in c.hints:
+        if '.wav' in c.hints and not self.audio_fallback_no_modules:
             wf=wavflac_compress(raw)
             if wf:
                 comp,meta=wf;consider(CODEC_WAVFLAC,comp,meta)
@@ -261,7 +262,15 @@ class Builder:
         if best and best[0]+16 < len(raw):return best[1],best[2],best[3]
         return CODEC_RAW,raw,b''
     def build(self,out:Path):
-        self.scan();self._build_micro_packs();self._prepare_deflate_reuse();self._train_dictionary()
+        self.scan()
+        # Probe once before parallel encoding so missing optional audio modules produce a stable
+        # generic-codec decision and an authenticated archive feature marker.
+        if any('.wav' in c.hints for c in self.cands.values()):
+            try:_audio_modules()
+            except ModuleNotFoundError as exc:
+                if exc.name not in ('numpy','soundfile'):raise
+                self.audio_fallback_no_modules=True
+        self._build_micro_packs();self._prepare_deflate_reuse();self._train_dictionary()
         # Candidate compression is parallel but materialization is not. ``Executor.map`` yields results
         # in the exact sorted-hash input order, so worker scheduling cannot perturb blob ids, offsets or
         # final bytes. A one-worker build is therefore a byte-for-byte oracle for the multithreaded path.
@@ -314,7 +323,9 @@ class Builder:
             if (uid,gid)!=common_owner:owner_overrides.append([i,uid,gid])
             if xa:xattrs.append([i,[[k,v] for k,v in sorted(xa.items())]])
         fsmeta={'owner':list(common_owner),'owner_overrides':owner_overrides,'xattrs':xattrs}
-        index={'v':VERSION,'files':files,'blobs':blobs,'recipes':recipes,'dict_blob':(mapref(self.dict_hash) if self.dict_hash else None),'fsmeta':fsmeta,'features':['micro-solid-packs','nested-container-packs','transitive-pack-integrity','dedup','hardlinks','sparse-files','content-defined-chunking','chunk-seeking','parallel-chunks','zstd','zstd-dictionary','wavflac','deflate-reuse','virtual-zip-hybrid-recompress','crc32-fastpath','sha256','dual-index','transaction-journal','uid-gid','xattrs']}
+        features=['micro-solid-packs','nested-container-packs','transitive-pack-integrity','dedup','hardlinks','sparse-files','content-defined-chunking','chunk-seeking','parallel-chunks','zstd','zstd-dictionary','wavflac','deflate-reuse','virtual-zip-hybrid-recompress','crc32-fastpath','sha256','dual-index','transaction-journal','uid-gid','xattrs']
+        if self.audio_fallback_no_modules:features.append('wav-generic-fallback:no-audio-modules')
+        index={'v':VERSION,'files':files,'blobs':blobs,'recipes':recipes,'dict_blob':(mapref(self.dict_hash) if self.dict_hash else None),'fsmeta':fsmeta,'features':features}
         ib=msgpack.packb(index,use_bin_type=True);ic=zc(ib,12);ih=sha(ib);data=b''.join(records)
         header=HDR.pack(MAGIC,VERSION,0,len(ic),len(ib),len(data),ih)
         footer=FTR.pack(FMAGIC,0,1,0,0,len(ic),len(ib),0,ih)
