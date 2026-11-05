@@ -108,7 +108,9 @@ def main():
         print(json.dumps(preflight_archive(Path(a.archive)), indent=2))
         return
 
-    from .codec import K_DIR
+    from .codec import (
+        CODEC_DEFLATE, CODEC_RAW, CODEC_WAVFLAC, CODEC_ZSTD, CODEC_ZSTDDICT, K_DIR,
+    )
     from .reader import CMPCT
 
     with CMPCT(Path(a.archive)) as ar:
@@ -120,6 +122,17 @@ def main():
                 "blobs": len(ar.blobs),
                 "virtual_archives": len(ar.recipes),
                 "features": ar.index.get("features", []),
+                "codec_counts": {
+                    name: sum(blob[3] == codec for blob in ar.blobs)
+                    for name, codec in (
+                        ("raw", CODEC_RAW),
+                        ("zstd", CODEC_ZSTD),
+                        ("wavflac", CODEC_WAVFLAC),
+                        ("zstd-dictionary", CODEC_ZSTDDICT),
+                        ("deflate", CODEC_DEFLATE),
+                    )
+                    if any(blob[3] == codec for blob in ar.blobs)
+                },
             }, indent=2))
         elif a.cmd == "list":
             for x in ar.files:
